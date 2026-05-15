@@ -55,7 +55,31 @@ class EmailAgent {
 
     return "Archivar o revisar más tarde";
   }
+  generateReplyProposal(email) {
+    const priority = this.detectPriority(email);
 
+    if (priority === "HIGH") {
+      return {
+        tone: "directo y prioritario",
+        draft: "Gracias por tu mensaje. Lo reviso con prioridad y te respondo lo antes posible.",
+        requiresApproval: true
+      };
+    }
+
+    if (priority === "MEDIUM") {
+      return {
+        tone: "profesional",
+        draft: "Gracias por la información. Lo reviso y te confirmo próximos pasos.",
+        requiresApproval: true
+      };
+    }
+
+    return {
+      tone: "breve",
+      draft: "Recibido, gracias. Lo reviso cuando sea posible.",
+      requiresApproval: true
+    };
+  }
   getStatus() {
     return {
       name: this.name,
