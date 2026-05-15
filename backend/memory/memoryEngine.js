@@ -34,8 +34,13 @@ class MemoryEngine {
 
     getRecentMemory() {
 
-        return this.shortTermMemory;
-    }
+    return this.shortTermMemory;
+}
+
+getShortTerm() {
+
+    return this.shortTermMemory;
+}
 
     searchMemory(keyword) {
 
