@@ -5,13 +5,14 @@ const OxkioEngine = require("./engine");
 const OxkioOrchestrator = require("./orchestrator");
 const OxkioSupervisor = require("./supervisor");
 const EmailAgent = require("../agents/emailAgent");
-
+const MemoryEngine = require("../memory/memoryEngine");
 class OxkioSystem {
 
   constructor() {
     this.engine = new OxkioEngine();
     this.orchestrator = new OxkioOrchestrator();
     this.supervisor = new OxkioSupervisor();
+    this.memory = new MemoryEngine();
 
     this.booted = false;
   }
@@ -32,12 +33,13 @@ class OxkioSystem {
     };
   }
 
-  getStatus() {
+   getStatus() {
     return {
       booted: this.booted,
       engine: this.engine.getSystemStatus(),
       orchestrator: this.orchestrator.getSystemOverview(),
-      supervisor: this.supervisor.getStatus()
+      supervisor: this.supervisor.getStatus(),
+      memory: this.memory.getStatus()
     };
   }
 
