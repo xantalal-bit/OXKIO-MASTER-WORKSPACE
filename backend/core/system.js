@@ -6,6 +6,8 @@ const OxkioOrchestrator = require("./orchestrator");
 const OxkioSupervisor = require("./supervisor");
 const EmailAgent = require("../agents/emailAgent");
 const MemoryEngine = require("../memory/memoryEngine");
+const LogEngine = require("../logs/logEngine");
+
 class OxkioSystem {
 
   constructor() {
@@ -13,6 +15,7 @@ class OxkioSystem {
     this.orchestrator = new OxkioOrchestrator();
     this.supervisor = new OxkioSupervisor();
     this.memory = new MemoryEngine();
+    this.logs = new LogEngine();
 
     this.booted = false;
   }
@@ -23,6 +26,11 @@ class OxkioSystem {
     this.orchestrator.registerAgent(emailAgent);
 
     this.booted = true;
+
+    this.logs.addLog(
+  "SYSTEM",
+  "Oxkio System V2 iniciado correctamente"
+);
 
     return {
       ok: true,
@@ -39,7 +47,8 @@ class OxkioSystem {
       engine: this.engine.getSystemStatus(),
       orchestrator: this.orchestrator.getSystemOverview(),
       supervisor: this.supervisor.getStatus(),
-      memory: this.memory.getStatus()
+      memory: this.memory.getStatus(),
+      logs: this.logs.getStatus(),
     };
   }
 
