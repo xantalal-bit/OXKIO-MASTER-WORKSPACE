@@ -1,0 +1,36 @@
+# SISTEMA
+.DS_Store
+Thumbs.db
+
+# NODE
+node_modules/
+
+# LOGS
+*.log
+
+# VARIABLES PRIVADAS
+.env
+
+# BACKUPS
+backups/
+*.zip
+
+# ARCHIVOS TEMPORALES
+tmp/
+temp/
+
+# VS CODE
+.vscode/
+
+# CACHE
+.cache/
+
+# WINDOWS
+desktop.ini
+
+# ARCHIVOS PESADOS
+*.exe
+*.iso
+
+# GIT
+.git/
