@@ -9,11 +9,13 @@ const RuleEngine = require("../core/ruleEngine");
 const ProposalEngine = require("../core/proposalEngine");
 const ApprovalQueue = require("../core/approvalQueue");
 const ActionExecutor = require("../core/actionExecutor");
+const ExecutionLogger = require("../core/executionLogger");
 
 const intentAnalyzer = new IntentAnalyzer();
 const ruleEngine = new RuleEngine();
 const proposalEngine = new ProposalEngine();
 const approvalQueue = new ApprovalQueue();
+const executionLogger = new ExecutionLogger();
 const actionExecutor = new ActionExecutor();
 
 const PORT = 3000;
@@ -331,6 +333,12 @@ if (req.url.startsWith("/api/execute-approved")) {
 
   const result = actionExecutor.execute(item);
 
+  executionLogger.add({
+  approvalId: id,
+  executionResult: result,
+  item
+});
+
   res.writeHead(200, {
     "Content-Type": "application/json"
   });
@@ -339,6 +347,21 @@ if (req.url.startsWith("/api/execute-approved")) {
     ok: result.ok,
     module: "action-executor",
     result
+  }, null, 2));
+
+  return;
+}
+if (req.url.startsWith("/api/execution-logs")) {
+
+  res.writeHead(200, {
+    "Content-Type": "application/json"
+  });
+
+  res.end(JSON.stringify({
+    ok: true,
+    module: "execution-logger",
+    logs: executionLogger.list(),
+    status: executionLogger.getStatus()
   }, null, 2));
 
   return;
