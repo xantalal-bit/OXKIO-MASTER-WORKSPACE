@@ -12,6 +12,8 @@ const ActionExecutor = require("../core/actionExecutor");
 const ExecutionLogger = require("../core/executionLogger");
 const GmailConnector = require("../integrations/gmail/connector");
 const systemConfig = require("../config/systemConfig");
+const WorkflowManager = require("../workflows/workflowManager");
+const SystemStateManager = require("../core/systemStateManager");
 
 const intentAnalyzer = new IntentAnalyzer();
 const ruleEngine = new RuleEngine();
@@ -21,6 +23,21 @@ const executionLogger = new ExecutionLogger();
 const actionExecutor = new ActionExecutor();
 const gmailConnector = new GmailConnector();
 gmailConnector.connect();
+const workflowManager = new WorkflowManager();
+const systemStateManager = new SystemStateManager();
+
+systemStateManager.updateIntegration(
+    "gmail",
+    "connected",
+    {
+        mode: systemConfig.gmail.mode
+    }
+);
+
+systemStateManager.updateWorkflow(
+    "emailWorkflow",
+    "available"
+);
 
 const PORT = 3000;
 
