@@ -7,10 +7,12 @@ const ExecutiveBrain = require("../core/executiveBrain");
 const MemoryEngine = require("../memory/memoryEngine");
 const RuleEngine = require("../core/ruleEngine");
 const ProposalEngine = require("../core/proposalEngine");
+const ApprovalQueue = require("../core/approvalQueue");
 
 const intentAnalyzer = new IntentAnalyzer();
 const ruleEngine = new RuleEngine();
 const proposalEngine = new ProposalEngine();
+const approvalQueue = new ApprovalQueue();
 
 const PORT = 3000;
 
@@ -127,9 +129,17 @@ if (req.url === "/api/status") {
   const message = url.searchParams.get("message");
 
  const brainResult = executiveBrain.think(message);
- const proposal = proposalEngine.generate(brainResult);
 const analysis = brainResult.analysis;
 
+const proposal = proposalEngine.generate(brainResult);
+
+const approvalItem = approvalQueue.add(
+  proposal,
+  {
+    message,
+    analysis
+  }
+);
  system.memory.saveShortTerm({
   type: "chat",
   message,
@@ -148,14 +158,15 @@ system.logs.addLog({
     "Content-Type": "application/json"
   });
 
- res.end(JSON.stringify({
+res.end(JSON.stringify({
   ok: true,
   module: "chat",
-  message,
-  analysis,
-  brainResult,
-  proposal,
-  response: {
+ message,
+analysis,
+brainResult,
+proposal,
+approvalItem,
+response: {
       summary: "He analizado tu solicitud.",
       intent: analysis.intent,
       urgency: analysis.urgency,
