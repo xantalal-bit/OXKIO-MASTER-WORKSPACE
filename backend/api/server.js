@@ -10,6 +10,7 @@ const ProposalEngine = require("../core/proposalEngine");
 const ApprovalQueue = require("../core/approvalQueue");
 const ActionExecutor = require("../core/actionExecutor");
 const ExecutionLogger = require("../core/executionLogger");
+const GmailConnector = require("../integrations/gmailConnector");
 
 const intentAnalyzer = new IntentAnalyzer();
 const ruleEngine = new RuleEngine();
@@ -17,6 +18,8 @@ const proposalEngine = new ProposalEngine();
 const approvalQueue = new ApprovalQueue();
 const executionLogger = new ExecutionLogger();
 const actionExecutor = new ActionExecutor();
+const gmailConnector = new GmailConnector();
+gmailConnector.connect();
 
 const PORT = 3000;
 
@@ -339,7 +342,9 @@ if (executionLogger.hasExecuted(id)) {
   });
 }
 
-  const result = actionExecutor.execute(item);
+ const result = actionExecutor.execute(item, {
+  gmailConnector
+});
 
   executionLogger.add({
   approvalId: id,

@@ -81,6 +81,68 @@
         },
         "resolvedAt": "2026-05-16T13:07:13.704Z"
       }
+    },
+    {
+      "id": "1778941048131",
+      "createdAt": "2026-05-16T14:17:28.132Z",
+      "approvalId": "ID_NUEVO",
+      "executionResult": {
+        "ok": false,
+        "error": "La acción no está aprobada"
+      }
+    },
+    {
+      "id": "1778941339501",
+      "createdAt": "2026-05-16T14:22:19.501Z",
+      "approvalId": "1778940990003",
+      "executionResult": {
+        "ok": true,
+        "executed": true,
+        "type": "email_draft",
+        "action": "draft_prepared",
+        "message": "Borrador de email aprobado y preparado para envío futuro.",
+        "draft": {
+          "subject": "Respuesta pendiente",
+          "body": "Hola,\n\nHe revisado el asunto y propongo avanzar con prioridad.\n\nQuedo atento a confirmación.\n\nUn saludo,"
+        },
+        "gmailResult": {
+          "ok": true,
+          "provider": "gmail",
+          "mode": "SAFE_DRAFT_ONLY",
+          "action": "draft_created_simulated",
+          "draft": {
+            "to": "",
+            "subject": "Respuesta pendiente",
+            "body": "Hola,\n\nHe revisado el asunto y propongo avanzar con prioridad.\n\nQuedo atento a confirmación.\n\nUn saludo,"
+          },
+          "message": "Borrador simulado creado. Envío real pendiente de integración OAuth."
+        },
+        "approvalId": "1778940990003"
+      },
+      "item": {
+        "id": "1778940990003",
+        "status": "approved",
+        "createdAt": "2026-05-16T14:16:30.004Z",
+        "proposal": {
+          "type": "email_draft",
+          "summary": "Borrador de email preparado para revisión.",
+          "subject": "Respuesta pendiente",
+          "body": "Hola,\n\nHe revisado el asunto y propongo avanzar con prioridad.\n\nQuedo atento a confirmación.\n\nUn saludo,",
+          "requiresApproval": true
+        },
+        "context": {
+          "message": "Preparar email urgente para cliente",
+          "analysis": {
+            "originalMessage": "Preparar email urgente para cliente",
+            "intent": "email",
+            "urgency": "high",
+            "actionType": "propose_email",
+            "requiresApproval": true,
+            "status": "ANALYZED"
+          }
+        },
+        "resolvedAt": "2026-05-16T14:21:49.732Z"
+      }
     }
   ]
 }

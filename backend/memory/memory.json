@@ -143,6 +143,22 @@
         },
         "timestamp": "2026-05-16T12:53:54.308Z"
       }
+    },
+    {
+      "timestamp": "2026-05-16T14:16:30.007Z",
+      "data": {
+        "type": "chat",
+        "message": "Preparar email urgente para cliente",
+        "analysis": {
+          "originalMessage": "Preparar email urgente para cliente",
+          "intent": "email",
+          "urgency": "high",
+          "actionType": "propose_email",
+          "requiresApproval": true,
+          "status": "ANALYZED"
+        },
+        "timestamp": "2026-05-16T14:16:30.007Z"
+      }
     }
   ],
   "longTermMemory": []

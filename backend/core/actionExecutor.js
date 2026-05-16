@@ -1,6 +1,6 @@
 class ActionExecutor {
 
-    execute(approvalItem) {
+    execute(approvalItem, integrations = {}) {
 
         if (!approvalItem || approvalItem.status !== "approved") {
             return {
@@ -19,11 +19,15 @@ class ActionExecutor {
         }
 
         if (proposal.type === "email_draft") {
-            return this.executeEmailDraft(proposal, approvalItem);
+           return this.executeEmailDraft(
+    proposal,
+    approvalItem,
+    integrations.gmailConnector
+);
         }
 
         if (proposal.type === "meeting_proposal") {
-            return this.executeMeetingProposal(proposal, approvalItem);
+            return this.executeMeetingProposal(proposal, approvalItem, integrations.gmailConnector);
         }
 
         if (proposal.type === "task_proposal") {
@@ -38,35 +42,29 @@ class ActionExecutor {
         };
     }
 
-    executeEmailDraft(proposal, approvalItem) {
-        return {
-            ok: true,
-            executed: true,
-            type: "email_draft",
-            action: "draft_prepared",
-            message: "Borrador de email aprobado y preparado para envío futuro.",
-            draft: {
-                subject: proposal.subject,
-                body: proposal.body
-            },
-            approvalId: approvalItem.id
-        };
-    }
+  executeEmailDraft(proposal, approvalItem, gmailConnector) {
 
-    executeMeetingProposal(proposal, approvalItem) {
-        return {
-            ok: true,
-            executed: true,
-            type: "meeting_proposal",
-            action: "meeting_prepared",
-            message: "Propuesta de reunión aprobada y preparada para agenda futura.",
-            meeting: {
-                title: proposal.title,
-                agenda: proposal.agenda
-            },
-            approvalId: approvalItem.id
-        };
-    }
+    const gmailResult = gmailConnector
+        ? gmailConnector.createDraft({
+            subject: proposal.subject,
+            body: proposal.body
+          })
+        : null;
+
+    return {
+        ok: true,
+        executed: true,
+        type: "email_draft",
+        action: "draft_prepared",
+        message: "Borrador de email aprobado y preparado para envío futuro.",
+        draft: {
+            subject: proposal.subject,
+            body: proposal.body
+        },
+        gmailResult,
+        approvalId: approvalItem.id
+    };
+}
 
     executeTaskProposal(proposal, approvalItem) {
         return {
