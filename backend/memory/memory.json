@@ -15,6 +15,22 @@
         },
         "timestamp": "2026-05-16T09:27:44.908Z"
       }
+    },
+    {
+      "timestamp": "2026-05-16T10:14:43.125Z",
+      "data": {
+        "type": "chat",
+        "message": "Preparar reunión urgente con cliente",
+        "analysis": {
+          "originalMessage": "Preparar reunión urgente con cliente",
+          "intent": "meeting",
+          "urgency": "high",
+          "actionType": "propose_meeting",
+          "requiresApproval": true,
+          "status": "ANALYZED"
+        },
+        "timestamp": "2026-05-16T10:14:43.124Z"
+      }
     }
   ],
   "longTermMemory": []

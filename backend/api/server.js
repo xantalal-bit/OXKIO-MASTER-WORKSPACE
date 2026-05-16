@@ -3,15 +3,20 @@ const OxkioSystem = require("../core/system");
 const EmailWorkflow = require("../workflows/emailWorkflow");
 const EmailAgent = require("../agents/emailAgent");
 const IntentAnalyzer = require("../core/intentAnalyzer");
+const ExecutiveBrain = require("../core/executiveBrain");
 const MemoryEngine = require("../memory/memoryEngine");
 
 const intentAnalyzer = new IntentAnalyzer();
-
 
 const PORT = 3000;
 
 const system = new OxkioSystem();
 system.boot();
+
+const executiveBrain = new ExecutiveBrain(
+  system.memory,
+  intentAnalyzer
+);
 
 function sendJson(res, statusCode, data) {
   res.writeHead(statusCode, {
@@ -116,7 +121,8 @@ if (req.url === "/api/status") {
 
   const message = url.searchParams.get("message");
 
-  const analysis = intentAnalyzer.analyze(message);
+ const brainResult = executiveBrain.think(message);
+const analysis = brainResult.analysis;
 
  system.memory.saveShortTerm({
   type: "chat",
@@ -136,12 +142,13 @@ system.logs.addLog({
     "Content-Type": "application/json"
   });
 
-  res.end(JSON.stringify({
-    ok: true,
-    module: "chat",
-    message,
-    analysis,
-    response: {
+ res.end(JSON.stringify({
+  ok: true,
+  module: "chat",
+  message,
+  analysis,
+  brainResult,
+  response: {
       summary: "He analizado tu solicitud.",
       intent: analysis.intent,
       urgency: analysis.urgency,
