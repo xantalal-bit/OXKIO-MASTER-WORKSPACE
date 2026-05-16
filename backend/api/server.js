@@ -155,6 +155,27 @@ system.logs.addLog({
 
   return;
 }
+if (req.url.startsWith("/api/search-memory")) {
+
+  const url = new URL(req.url, `http://${req.headers.host}`);
+
+  const keyword = url.searchParams.get("keyword") || "";
+
+  const results = system.memory.searchMemory(keyword);
+
+  res.writeHead(200, {
+    "Content-Type": "application/json"
+  });
+
+  res.end(JSON.stringify({
+    ok: true,
+    module: "search-memory",
+    keyword,
+    results
+  }, null, 2));
+
+  return;
+}
 if (req.url.startsWith("/api/memory")) {
 
   res.writeHead(200, {

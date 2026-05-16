@@ -80,16 +80,21 @@ class MemoryEngine {
         return this.shortTermMemory;
     }
 
-    searchMemory(keyword) {
+ searchMemory(keyword) {
 
-        return this.longTermMemory.filter(item =>
-            JSON.stringify(item.data)
-                .toLowerCase()
-                .includes(keyword.toLowerCase())
-        );
-    }
+    const allMemory = [
+        ...this.shortTermMemory,
+        ...this.longTermMemory
+    ];
 
-    getStatus() {
+    return allMemory.filter(item =>
+        JSON.stringify(item)
+            .toLowerCase()
+            .includes(keyword.toLowerCase())
+    );
+}
+
+getStatus() {
 
         return {
             shortTerm: this.shortTermMemory.length,
