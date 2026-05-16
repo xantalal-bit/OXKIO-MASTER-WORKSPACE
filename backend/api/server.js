@@ -8,11 +8,13 @@ const MemoryEngine = require("../memory/memoryEngine");
 const RuleEngine = require("../core/ruleEngine");
 const ProposalEngine = require("../core/proposalEngine");
 const ApprovalQueue = require("../core/approvalQueue");
+const ActionExecutor = require("../core/actionExecutor");
 
 const intentAnalyzer = new IntentAnalyzer();
 const ruleEngine = new RuleEngine();
 const proposalEngine = new ProposalEngine();
 const approvalQueue = new ApprovalQueue();
+const actionExecutor = new ActionExecutor();
 
 const PORT = 3000;
 
@@ -315,6 +317,28 @@ if (req.url.startsWith("/api/approval-history")) {
     module: "approval-queue",
     history: approvalQueue.getHistory(),
     status: approvalQueue.getStatus()
+  }, null, 2));
+
+  return;
+}
+if (req.url.startsWith("/api/execute-approved")) {
+
+  const url = new URL(req.url, `http://${req.headers.host}`);
+
+  const id = url.searchParams.get("id");
+
+  const item = approvalQueue.getHistory().find(item => item.id === id);
+
+  const result = actionExecutor.execute(item);
+
+  res.writeHead(200, {
+    "Content-Type": "application/json"
+  });
+
+  res.end(JSON.stringify({
+    ok: result.ok,
+    module: "action-executor",
+    result
   }, null, 2));
 
   return;
