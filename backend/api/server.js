@@ -10,7 +10,7 @@ const ProposalEngine = require("../core/proposalEngine");
 const ApprovalQueue = require("../core/approvalQueue");
 const ActionExecutor = require("../core/actionExecutor");
 const ExecutionLogger = require("../core/executionLogger");
-const GmailConnector = require("../integrations/gmailConnector");
+const GmailConnector = require("../integrations/gmail/connector");
 const systemConfig = require("../config/systemConfig");
 
 const intentAnalyzer = new IntentAnalyzer();
