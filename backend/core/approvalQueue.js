@@ -1,9 +1,17 @@
+const fs = require("fs");
+const path = require("path");
+
+const DATA_FILE = path.join(__dirname, "approvalQueue.json");
+
 class ApprovalQueue {
 
-    constructor() {
-        this.pending = [];
-        this.history = [];
-    }
+   constructor() {
+
+    this.pending = [];
+    this.history = [];
+
+    this.load();
+}
 
     add(proposal, context = {}) {
 
@@ -16,6 +24,7 @@ class ApprovalQueue {
         };
 
         this.pending.push(item);
+        this.save();
 
         return item;
     }
@@ -41,7 +50,7 @@ class ApprovalQueue {
         item.resolvedAt = new Date().toISOString();
 
         this.history.push(item);
-
+        this.save();
         return {
             ok: true,
             action: "approved",
@@ -66,6 +75,7 @@ class ApprovalQueue {
         item.resolvedAt = new Date().toISOString();
 
         this.history.push(item);
+        this.save();
 
         return {
             ok: true,
@@ -77,7 +87,36 @@ class ApprovalQueue {
     getHistory() {
         return this.history;
     }
+save() {
 
+    fs.writeFileSync(
+        DATA_FILE,
+        JSON.stringify({
+            pending: this.pending,
+            history: this.history
+        }, null, 2)
+    );
+}
+
+load() {
+
+    try {
+
+        if (fs.existsSync(DATA_FILE)) {
+
+            const raw = fs.readFileSync(DATA_FILE);
+
+            const data = JSON.parse(raw);
+
+            this.pending = data.pending || [];
+            this.history = data.history || [];
+        }
+
+    } catch (error) {
+
+        console.log("[ApprovalQueue] Error loading data", error);
+    }
+}
     getStatus() {
         return {
             pending: this.pending.length,

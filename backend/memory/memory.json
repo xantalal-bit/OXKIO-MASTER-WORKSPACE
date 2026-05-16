@@ -127,6 +127,22 @@
         },
         "timestamp": "2026-05-16T12:29:40.760Z"
       }
+    },
+    {
+      "timestamp": "2026-05-16T12:53:54.308Z",
+      "data": {
+        "type": "chat",
+        "message": "Preparar email urgente persistente",
+        "analysis": {
+          "originalMessage": "Preparar email urgente persistente",
+          "intent": "email",
+          "urgency": "high",
+          "actionType": "propose_email",
+          "requiresApproval": true,
+          "status": "ANALYZED"
+        },
+        "timestamp": "2026-05-16T12:53:54.308Z"
+      }
     }
   ],
   "longTermMemory": []

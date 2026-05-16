@@ -1,0 +1,28 @@
+{
+  "pending": [
+    {
+      "id": "1778936034306",
+      "status": "pending",
+      "createdAt": "2026-05-16T12:53:54.306Z",
+      "proposal": {
+        "type": "email_draft",
+        "summary": "Borrador de email preparado para revisión.",
+        "subject": "Respuesta pendiente",
+        "body": "Hola,\n\nHe revisado el asunto y propongo avanzar con prioridad.\n\nQuedo atento a confirmación.\n\nUn saludo,",
+        "requiresApproval": true
+      },
+      "context": {
+        "message": "Preparar email urgente persistente",
+        "analysis": {
+          "originalMessage": "Preparar email urgente persistente",
+          "intent": "email",
+          "urgency": "high",
+          "actionType": "propose_email",
+          "requiresApproval": true,
+          "status": "ANALYZED"
+        }
+      }
+    }
+  ],
+  "history": []
+}
