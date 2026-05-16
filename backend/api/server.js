@@ -6,10 +6,11 @@ const IntentAnalyzer = require("../core/intentAnalyzer");
 const ExecutiveBrain = require("../core/executiveBrain");
 const MemoryEngine = require("../memory/memoryEngine");
 const RuleEngine = require("../core/ruleEngine");
+const ProposalEngine = require("../core/proposalEngine");
 
 const intentAnalyzer = new IntentAnalyzer();
-
 const ruleEngine = new RuleEngine();
+const proposalEngine = new ProposalEngine();
 
 const PORT = 3000;
 
@@ -126,6 +127,7 @@ if (req.url === "/api/status") {
   const message = url.searchParams.get("message");
 
  const brainResult = executiveBrain.think(message);
+ const proposal = proposalEngine.generate(brainResult);
 const analysis = brainResult.analysis;
 
  system.memory.saveShortTerm({
@@ -152,6 +154,7 @@ system.logs.addLog({
   message,
   analysis,
   brainResult,
+  proposal,
   response: {
       summary: "He analizado tu solicitud.",
       intent: analysis.intent,
