@@ -9,7 +9,8 @@ class ActionExecutor {
             };
         }
 
-        const proposal = approvalItem.proposal;
+        const proposal =
+  approvalItem.proposal.proposal || approvalItem.proposal;
 
         if (!proposal) {
             return {
