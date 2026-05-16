@@ -11,6 +11,7 @@ const ApprovalQueue = require("../core/approvalQueue");
 const ActionExecutor = require("../core/actionExecutor");
 const ExecutionLogger = require("../core/executionLogger");
 const GmailConnector = require("../integrations/gmailConnector");
+const systemConfig = require("../config/systemConfig");
 
 const intentAnalyzer = new IntentAnalyzer();
 const ruleEngine = new RuleEngine();
@@ -386,5 +387,11 @@ if (req.url.startsWith("/api/execution-logs")) {
 });
 
 server.listen(PORT, () => {
-  console.log(`OXKIO API SERVER RUNNING ON PORT ${PORT}`);
+  console.log("=================================");
+  console.log("OXKIO API SERVER RUNNING");
+  console.log("App:", systemConfig.app.name);
+  console.log("Version:", systemConfig.app.version);
+  console.log("Safe Mode:", systemConfig.security.safeMode);
+  console.log("Gmail Mode:", systemConfig.gmail.mode);
+  console.log("=================================");
 });
