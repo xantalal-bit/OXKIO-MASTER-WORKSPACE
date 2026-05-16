@@ -1,5 +1,54 @@
 {
-  "pending": [],
+  "pending": [
+    {
+      "id": "1778954429696",
+      "status": "pending",
+      "createdAt": "2026-05-16T18:00:29.696Z",
+      "proposal": {
+        "type": "execution",
+        "proposal": {
+          "type": "email_draft",
+          "summary": "Borrador de email preparado para revisión.",
+          "subject": "Respuesta pendiente",
+          "body": "Hola,\n\nHe revisado el asunto y propongo avanzar con prioridad.\n\nQuedo atento a confirmación.\n\nUn saludo,",
+          "requiresApproval": true
+        }
+      },
+      "context": {}
+    },
+    {
+      "id": "1778954950773",
+      "status": "pending",
+      "createdAt": "2026-05-16T18:09:10.773Z",
+      "proposal": {
+        "type": "execution",
+        "proposal": {
+          "type": "email_draft",
+          "summary": "Borrador de email preparado para revisión.",
+          "subject": "Respuesta pendiente",
+          "body": "Hola,\n\nHe revisado el asunto y propongo avanzar con prioridad.\n\nQuedo atento a confirmación.\n\nUn saludo,",
+          "requiresApproval": true
+        }
+      },
+      "context": {}
+    },
+    {
+      "id": "1778955777794",
+      "status": "pending",
+      "createdAt": "2026-05-16T18:22:57.794Z",
+      "proposal": {
+        "type": "execution",
+        "proposal": {
+          "type": "email_draft",
+          "summary": "Borrador de email preparado para revisión.",
+          "subject": "Respuesta pendiente",
+          "body": "Hola,\n\nHe revisado el asunto y propongo avanzar con prioridad.\n\nQuedo atento a confirmación.\n\nUn saludo,",
+          "requiresApproval": true
+        }
+      },
+      "context": {}
+    }
+  ],
   "history": [
     {
       "id": "1778936034306",

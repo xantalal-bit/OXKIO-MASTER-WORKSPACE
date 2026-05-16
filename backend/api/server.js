@@ -61,6 +61,8 @@ function sendJson(res, statusCode, data) {
 
 const server = http.createServer((req, res) => {
 
+const pathname = req.url.split("?")[0];
+
 if (req.url === "/") {
 
   const fs = require("fs");
@@ -394,6 +396,73 @@ if (req.url.startsWith("/api/execution-logs")) {
     logs: executionLogger.list(),
     status: executionLogger.getStatus()
   }, null, 2));
+
+  return;
+}
+if (pathname === "/api/system-status") {
+
+    return sendJson(res, 200, {
+        ok: true,
+        system: systemStateManager.getState()
+    });
+
+}
+if (pathname === "/api/execute" && req.method === "POST") {
+
+  let body = "";
+
+  req.on("data", chunk => {
+    body += chunk.toString();
+  });
+
+  req.on("end", async () => {
+
+    try {
+
+      const data = JSON.parse(body);
+
+      const userMessage = data.message || "";
+
+      const intent = intentAnalyzer.analyze(userMessage);
+
+      const proposal = proposalEngine.generate({
+  analysis: intent,
+  decision: {
+    recommendation: "Generar propuesta",
+    requiresApproval: true
+  }
+});
+
+      approvalQueue.add({
+        type: "execution",
+        proposal
+      });
+
+      executionLogger.add({
+        type: "proposal-created",
+        proposal
+      });
+
+      return sendJson(res, 200, {
+        ok: true,
+        message: "Propuesta generada correctamente",
+        intent,
+        proposal,
+        approvalQueue: approvalQueue.getHistory()
+      });
+
+    } catch (error) {
+
+  console.error("[API EXECUTE ERROR]", error);
+
+  return sendJson(res, 500, {
+        ok: false,
+        error: error.message
+      });
+
+    }
+
+  });
 
   return;
 }

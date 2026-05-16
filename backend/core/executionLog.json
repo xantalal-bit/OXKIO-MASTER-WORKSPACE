@@ -143,6 +143,30 @@
         },
         "resolvedAt": "2026-05-16T14:21:49.732Z"
       }
+    },
+    {
+      "id": "1778954950774",
+      "createdAt": "2026-05-16T18:09:10.774Z",
+      "type": "proposal-created",
+      "proposal": {
+        "type": "email_draft",
+        "summary": "Borrador de email preparado para revisión.",
+        "subject": "Respuesta pendiente",
+        "body": "Hola,\n\nHe revisado el asunto y propongo avanzar con prioridad.\n\nQuedo atento a confirmación.\n\nUn saludo,",
+        "requiresApproval": true
+      }
+    },
+    {
+      "id": "1778955777795",
+      "createdAt": "2026-05-16T18:22:57.795Z",
+      "type": "proposal-created",
+      "proposal": {
+        "type": "email_draft",
+        "summary": "Borrador de email preparado para revisión.",
+        "subject": "Respuesta pendiente",
+        "body": "Hola,\n\nHe revisado el asunto y propongo avanzar con prioridad.\n\nQuedo atento a confirmación.\n\nUn saludo,",
+        "requiresApproval": true
+      }
     }
   ]
 }
