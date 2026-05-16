@@ -1,8 +1,9 @@
 class ExecutiveBrain {
 
-    constructor(memory, intentAnalyzer) {
+   constructor(memory, intentAnalyzer, ruleEngine) {
         this.memory = memory;
         this.intentAnalyzer = intentAnalyzer;
+        this.ruleEngine = ruleEngine;
     }
 
     think(message = "") {
@@ -11,19 +12,21 @@ class ExecutiveBrain {
 
         const relatedMemory = this.memory.searchMemory(message);
 
-        const decision = this.buildDecision(message, analysis, relatedMemory);
+        const matchedRules = this.ruleEngine.evaluate({ message, analysis, relatedMemory });
 
-        return {
-            message,
-            analysis,
-            relatedMemory,
-            decision,
-            status: "EXECUTIVE_BRAIN_OK"
-        };
+const decision = this.buildDecision(message, analysis, relatedMemory, matchedRules);
+
+       return {
+    message,
+    analysis,
+    relatedMemory,
+    matchedRules,
+    decision,
+    status: "EXECUTIVE_BRAIN_OK"
+};
     }
 
-    buildDecision(message, analysis, relatedMemory) {
-
+   buildDecision(message, analysis, relatedMemory, matchedRules = []) {
         let recommendation = "Responder de forma informativa.";
         let riskLevel = "low";
         let nextAction = "respond";
@@ -57,6 +60,10 @@ class ExecutiveBrain {
         if (relatedMemory.length > 0) {
             recommendation += " Se ha encontrado memoria relacionada.";
         }
+        if (matchedRules.length > 0) {
+    riskLevel = "medium";
+    recommendation += " Se han aplicado reglas ejecutivas.";
+}
 
         return {
             recommendation,

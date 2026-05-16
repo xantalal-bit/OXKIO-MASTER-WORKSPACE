@@ -5,8 +5,11 @@ const EmailAgent = require("../agents/emailAgent");
 const IntentAnalyzer = require("../core/intentAnalyzer");
 const ExecutiveBrain = require("../core/executiveBrain");
 const MemoryEngine = require("../memory/memoryEngine");
+const RuleEngine = require("../core/ruleEngine");
 
 const intentAnalyzer = new IntentAnalyzer();
+
+const ruleEngine = new RuleEngine();
 
 const PORT = 3000;
 
@@ -15,7 +18,8 @@ system.boot();
 
 const executiveBrain = new ExecutiveBrain(
   system.memory,
-  intentAnalyzer
+  intentAnalyzer,
+  ruleEngine
 );
 
 function sendJson(res, statusCode, data) {
@@ -162,6 +166,48 @@ system.logs.addLog({
 
   return;
 }
+if (req.url.startsWith("/api/add-rule")) {
+
+  const url = new URL(req.url, `http://${req.headers.host}`);
+
+  const keyword = url.searchParams.get("keyword") || "";
+  const description = url.searchParams.get("description") || "";
+
+  const result = ruleEngine.addRule({
+    keyword,
+    description
+  });
+
+  res.writeHead(200, {
+    "Content-Type": "application/json"
+  });
+
+  res.end(JSON.stringify({
+    ok: true,
+    module: "rules",
+    result,
+    rules: ruleEngine.getRules()
+  }, null, 2));
+
+  return;
+}
+
+if (req.url.startsWith("/api/rules")) {
+
+  res.writeHead(200, {
+    "Content-Type": "application/json"
+  });
+
+  res.end(JSON.stringify({
+    ok: true,
+    module: "rules",
+    rules: ruleEngine.getRules(),
+    status: ruleEngine.getStatus()
+  }, null, 2));
+
+  return;
+}
+
 if (req.url.startsWith("/api/search-memory")) {
 
   const url = new URL(req.url, `http://${req.headers.host}`);
