@@ -329,7 +329,15 @@ if (req.url.startsWith("/api/execute-approved")) {
 
   const id = url.searchParams.get("id");
 
-  const item = approvalQueue.getHistory().find(item => item.id === id);
+ const item = approvalQueue.getHistory().find(item => item.id === id);
+
+if (executionLogger.hasExecuted(id)) {
+
+  return sendJson(res, 400, {
+    ok: false,
+    error: "Esta aprobación ya fue ejecutada"
+  });
+}
 
   const result = actionExecutor.execute(item);
 

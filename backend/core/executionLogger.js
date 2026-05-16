@@ -10,23 +10,26 @@ class ExecutionLogger {
         this.load();
     }
 
-    add(entry) {
+   hasExecuted(approvalId) {
 
-        const log = {
-            id: Date.now().toString(),
-            createdAt: new Date().toISOString(),
-            ...entry
-        };
+    return this.logs.some(log =>
+        log.approvalId === approvalId
+    );
+}
 
-        this.logs.push(log);
-        this.save();
+add(entry) {
 
-        return log;
-    }
+    const log = {
+        id: Date.now().toString(),
+        createdAt: new Date().toISOString(),
+        ...entry
+    };
 
-    list() {
-        return this.logs;
-    }
+    this.logs.push(log);
+    this.save();
+
+    return log;
+}
 
     getStatus() {
         return {
