@@ -1,12 +1,46 @@
+const fs = require("fs");
+const path = require("path");
+
 class MemoryEngine {
 
     constructor() {
 
-        this.shortTermMemory = [];
-
-        this.longTermMemory = [];
+        this.memoryPath = path.join(__dirname, "memory.json");
 
         this.maxShortTerm = 20;
+
+        this.shortTermMemory = [];
+        this.longTermMemory = [];
+
+        this.loadMemory();
+    }
+
+    loadMemory() {
+
+        try {
+
+            const raw = fs.readFileSync(this.memoryPath);
+
+            const parsed = JSON.parse(raw);
+
+            this.shortTermMemory = parsed.shortTermMemory || [];
+            this.longTermMemory = parsed.longTermMemory || [];
+
+        } catch (error) {
+
+            console.log("No se pudo cargar memory.json");
+        }
+    }
+
+    persistMemory() {
+
+        fs.writeFileSync(
+            this.memoryPath,
+            JSON.stringify({
+                shortTermMemory: this.shortTermMemory,
+                longTermMemory: this.longTermMemory
+            }, null, 2)
+        );
     }
 
     saveShortTerm(data) {
@@ -22,6 +56,8 @@ class MemoryEngine {
 
             this.longTermMemory.push(moved);
         }
+
+        this.persistMemory();
     }
 
     saveLongTerm(data) {
@@ -30,17 +66,19 @@ class MemoryEngine {
             timestamp: new Date(),
             data
         });
+
+        this.persistMemory();
     }
 
     getRecentMemory() {
 
-    return this.shortTermMemory;
-}
+        return this.shortTermMemory;
+    }
 
-getShortTerm() {
+    getShortTerm() {
 
-    return this.shortTermMemory;
-}
+        return this.shortTermMemory;
+    }
 
     searchMemory(keyword) {
 
