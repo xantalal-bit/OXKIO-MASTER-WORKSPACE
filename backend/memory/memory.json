@@ -1,4 +1,21 @@
 {
-  "shortTermMemory": [],
+  "shortTermMemory": [
+    {
+      "timestamp": "2026-05-16T09:27:44.911Z",
+      "data": {
+        "type": "chat",
+        "message": "Recordar reunión con cliente mañana",
+        "analysis": {
+          "originalMessage": "Recordar reunión con cliente mañana",
+          "intent": "meeting",
+          "urgency": "low",
+          "actionType": "propose_meeting",
+          "requiresApproval": true,
+          "status": "ANALYZED"
+        },
+        "timestamp": "2026-05-16T09:27:44.908Z"
+      }
+    }
+  ],
   "longTermMemory": []
 }
