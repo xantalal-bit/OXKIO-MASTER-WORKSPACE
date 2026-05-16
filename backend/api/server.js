@@ -122,6 +122,7 @@ if (req.url === "/api/status") {
       logs: system.logs.getStatus()
     });
   }
+
  if (req.url.startsWith("/api/chat")) {
 
   const url = new URL(req.url, `http://${req.headers.host}`);
@@ -266,7 +267,43 @@ status: system.memory.getStatus()
       status: system.logs.getStatus()
     });
   }
+if (req.url.startsWith("/api/pending-approvals")) {
 
+  res.writeHead(200, {
+    "Content-Type": "application/json"
+  });
+
+  res.end(JSON.stringify({
+    ok: true,
+    module: "approval-queue",
+    pending: approvalQueue.listPending(),
+    status: approvalQueue.getStatus()
+  }, null, 2));
+
+  return;
+}
+
+if (req.url.startsWith("/api/approve")) {
+
+  const url = new URL(req.url, `http://${req.headers.host}`);
+
+  const id = url.searchParams.get("id");
+
+  const result = approvalQueue.approve(id);
+
+  res.writeHead(200, {
+    "Content-Type": "application/json"
+  });
+
+  res.end(JSON.stringify({
+    ok: result.ok,
+    module: "approval-queue",
+    result,
+    status: approvalQueue.getStatus()
+  }, null, 2));
+
+  return;
+}
   return sendJson(res, 404, {
     ok: false,
     error: "Endpoint no encontrado"

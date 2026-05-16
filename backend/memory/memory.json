@@ -95,6 +95,38 @@
         },
         "timestamp": "2026-05-16T11:45:06.391Z"
       }
+    },
+    {
+      "timestamp": "2026-05-16T12:25:21.640Z",
+      "data": {
+        "type": "chat",
+        "message": "Preparar email urgente para cliente",
+        "analysis": {
+          "originalMessage": "Preparar email urgente para cliente",
+          "intent": "email",
+          "urgency": "high",
+          "actionType": "propose_email",
+          "requiresApproval": true,
+          "status": "ANALYZED"
+        },
+        "timestamp": "2026-05-16T12:25:21.640Z"
+      }
+    },
+    {
+      "timestamp": "2026-05-16T12:29:40.760Z",
+      "data": {
+        "type": "chat",
+        "message": "Preparar email urgente para cliente",
+        "analysis": {
+          "originalMessage": "Preparar email urgente para cliente",
+          "intent": "email",
+          "urgency": "high",
+          "actionType": "propose_email",
+          "requiresApproval": true,
+          "status": "ANALYZED"
+        },
+        "timestamp": "2026-05-16T12:29:40.760Z"
+      }
     }
   ],
   "longTermMemory": []
