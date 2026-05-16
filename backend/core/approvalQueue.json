@@ -1,8 +1,9 @@
 {
-  "pending": [
+  "pending": [],
+  "history": [
     {
       "id": "1778936034306",
-      "status": "pending",
+      "status": "approved",
       "createdAt": "2026-05-16T12:53:54.306Z",
       "proposal": {
         "type": "email_draft",
@@ -21,8 +22,8 @@
           "requiresApproval": true,
           "status": "ANALYZED"
         }
-      }
+      },
+      "resolvedAt": "2026-05-16T13:07:13.704Z"
     }
-  ],
-  "history": []
+  ]
 }

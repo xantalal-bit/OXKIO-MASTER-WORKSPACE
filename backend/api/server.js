@@ -304,6 +304,21 @@ if (req.url.startsWith("/api/approve")) {
 
   return;
 }
+if (req.url.startsWith("/api/approval-history")) {
+
+  res.writeHead(200, {
+    "Content-Type": "application/json"
+  });
+
+  res.end(JSON.stringify({
+    ok: true,
+    module: "approval-queue",
+    history: approvalQueue.getHistory(),
+    status: approvalQueue.getStatus()
+  }, null, 2));
+
+  return;
+}
   return sendJson(res, 404, {
     ok: false,
     error: "Endpoint no encontrado"
