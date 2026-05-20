@@ -2,56 +2,165 @@
 <html lang="es">
 <head>
   <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>Oxkio - Aprobaciones</title>
+  <style>
+    :root{
+      --bg-900: #020617;
+      --panel: #07102a;
+      --muted: #cbd5e1;
+      --accent: #9ae6b4;
+      --accent-2: #60a5fa;
+      --card: rgba(255,255,255,0.03);
+      --glass: rgba(255,255,255,0.03);
+      --glass-2: rgba(9,12,20,0.6);
+      --radius: 12px;
+      --shadow: 0 8px 24px rgba(2,6,23,0.6);
+      font-family: Inter, system-ui, -apple-system, 'Segoe UI', Roboto, Arial;
+    }
+    html,body{height:100%;margin:0;background:linear-gradient(180deg,#020617 0%, #07112a 100%);color:var(--muted)}
+    .wrap{max-width:1100px;margin:36px auto;padding:28px;background:linear-gradient(180deg,rgba(255,255,255,0.02),transparent);border-radius:16px;box-shadow:var(--shadow);}
+    header{display:flex;align-items:center;gap:18px}
+    .logo{width:56px;height:56px;border-radius:10px;background:linear-gradient(135deg,var(--accent),var(--accent-2));display:flex;align-items:center;justify-content:center;color:#022; font-weight:700;box-shadow:0 6px 18px rgba(90,160,120,0.12)}
+    h1{margin:0;font-size:20px;color:white}
+    p.lead{margin:6px 0 0 0;color:#b6c7d8}
+
+    .meta{margin-top:18px;padding:16px;background:var(--panel);border-radius:12px;border:1px solid rgba(154,230,180,0.06)}
+    .meta h2{margin:0 0 8px 0;color:var(--accent)}
+    .meta ol{margin:0;padding-left:18px;color:var(--muted)}
+
+    .controls{display:flex;gap:12px;align-items:center;margin-top:18px}
+    .btn{background:transparent;border:1px solid rgba(255,255,255,0.06);color:var(--muted);padding:10px 14px;border-radius:10px;cursor:pointer}
+    .btn.primary{background:linear-gradient(90deg,var(--accent),var(--accent-2));color:#021;padding:10px 16px;border:none}
+    .btn.ghost{background:transparent;border:1px dashed rgba(255,255,255,0.04)}
+
+    #approvalsBox{margin-top:18px;display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:14px}
+    .card{background:var(--card);padding:16px;border-radius:12px;border:1px solid rgba(255,255,255,0.02);box-shadow:0 2px 10px rgba(2,6,23,0.5);min-height:120px;display:flex;flex-direction:column;justify-content:space-between}
+    .card .metaRow{display:flex;justify-content:space-between;gap:12px;align-items:center}
+    .card .title{font-weight:600;color:#fff}
+    .card .sub{color:var(--muted);font-size:13px;margin-top:6px}
+    .card .actions{display:flex;gap:8px;margin-top:12px}
+    .btn.small{padding:8px 10px;font-size:13px;border-radius:8px}
+    .btn.approve{background:linear-gradient(90deg,#38b2ac,#9ae6b4);color:#032}
+    .btn.execute{background:linear-gradient(90deg,#60a5fa,#7c3aed);color:#021}
+    .btn.danger{background:linear-gradient(90deg,#ff7b7b,#ffb199);color:#2b0202}
+
+    .empty{padding:30px;text-align:center;color:#9fb0c7}
+
+    /* Toast */
+    #toast{position:fixed;right:22px;bottom:22px;min-width:220px;padding:12px 16px;border-radius:10px;background:#041025;color:#dff6ea;box-shadow:0 8px 30px rgba(2,6,23,0.7);display:none}
+    @media (max-width:640px){.wrap{margin:16px;padding:16px}.logo{width:48px;height:48px}}
+  </style>
 </head>
-<body style="background:#020617;color:white;font-family:Arial;padding:30px;">
-  <h1>Centro de aprobaciones Oxkio</h1>
-  <p>Acciones pendientes de revisión humana antes de ejecutar.</p>
+<body>
+  <div class="wrap">
+    <header>
+      <div class="logo">OX</div>
+      <div>
+        <h1>Centro de aprobaciones — Oxkio</h1>
+        <p class="lead">Revisa y autoriza propuestas detectadas por el sistema antes de ejecutar acciones.</p>
+      </div>
+    </header>
 
-  <button onclick="loadApprovals()">Cargar aprobaciones</button>
+    <section class="meta" aria-label="Resumen del flujo">
+      <h2>Flujo: Gmail OAuth → analyze → approval → execute-approved</h2>
+      <ol>
+        <li>Usuario autoriza acceso vía Gmail OAuth; tokens se almacenan en backend.</li>
+        <li>El motor analiza correos y publica propuestas con estado <strong>pending</strong>.</li>
+        <li>Esta interfaz lista las propuestas desde <code>/api/pending-approvals</code> para revisión humana.</li>
+        <li>Aprobar llama <code>/api/approve?id=...</code> y registrar auditoría.</li>
+        <li>Ejecutar llama <code>/api/execute-approved?id=...</code> para finalizar la acción.</li>
+      </ol>
+    </section>
 
-  <div id="approvalsBox" style="margin-top:20px;"></div>
+    <div class="controls">
+      <button class="btn primary" onclick="loadApprovals()">Cargar aprobaciones</button>
+      <button class="btn ghost" onclick="loadApprovals(true)">Forzar refresco</button>
+      <div style="margin-left:auto;color:var(--muted);font-size:13px">Auto-refresh cada 10s</div>
+    </div>
+
+    <div id="approvalsBox" aria-live="polite"></div>
+  </div>
+
+  <div id="toast" role="status" aria-live="polite"></div>
 
   <script>
-    async function loadApprovals() {
-      const box = document.getElementById("approvalsBox");
-      box.innerHTML = "Cargando aprobaciones...";
-
-      const res = await fetch("/api/pending-approvals");
-      const data = await res.json();
-
-      if (!data.pending || data.pending.length === 0) {
-        box.innerHTML = "<p>No hay aprobaciones pendientes.</p>";
-        return;
-      }
-
-      box.innerHTML = data.pending.map(item => `
-        <div style="border:1px solid #475569;border-radius:12px;padding:15px;margin-bottom:12px;">
-          <strong>ID:</strong> ${item.id}<br>
-          <strong>Tipo:</strong> ${item.proposal?.type || "sin tipo"}<br>
-          <strong>Resumen:</strong> ${item.proposal?.summary || item.proposal?.proposal || "Sin resumen"}<br><br>
-          <button onclick="approveAction('${item.id}')">Aprobar</button>
-          <button onclick="executeAction('${item.id}')">Ejecutar</button>
-        </div>
-      `).join("");
+    function showToast(msg, timeout=3200){
+      const t = document.getElementById('toast');
+      t.textContent = msg;
+      t.style.display = 'block';
+      clearTimeout(t._h);
+      t._h = setTimeout(()=>{t.style.display='none'}, timeout);
     }
 
-    async function approveAction(id) {
-      const res = await fetch(`/api/approve?id=${id}`);
-      const data = await res.json();
-      alert(data.result?.ok ? "Aprobado" : data.result?.error || "Error al aprobar");
+    async function loadApprovals(force=false){
+      const box = document.getElementById('approvalsBox');
+      box.innerHTML = '<div class="empty">Cargando aprobaciones…</div>';
+      try{
+        const res = await fetch('/api/pending-approvals' + (force? '?_force=1':''));
+        if(!res.ok) throw new Error('Error de red');
+        const data = await res.json();
+
+        if(!data.pending || data.pending.length === 0){
+          box.innerHTML = '<div class="empty">No hay aprobaciones pendientes.</div>';
+          return;
+        }
+
+        box.innerHTML = data.pending.map(item => {
+          const tipo = item.proposal?.type || 'sin tipo';
+          const resumen = (item.proposal?.summary || item.proposal?.proposal || 'Sin resumen').replace(/\n/g,' ');
+          return `
+            <div class="card">
+              <div>
+                <div class="metaRow"><div class="title">ID: ${item.id}</div><div class="sub">${tipo}</div></div>
+                <div class="sub">${resumen}</div>
+              </div>
+              <div class="actions">
+                <button class="btn small approve" onclick="approveAction('${item.id}')">Aprobar</button>
+                <button class="btn small execute" onclick="executeAction('${item.id}')">Ejecutar</button>
+                <button class="btn small" onclick="viewRaw('${encodeURIComponent(JSON.stringify(item))}')">Detalles</button>
+              </div>
+            </div>
+          `;
+        }).join('');
+
+      }catch(err){
+        box.innerHTML = '<div class="empty">Error cargando aprobaciones.</div>';
+        showToast('Error cargando aprobaciones: ' + (err.message||err));
+      }
+    }
+
+    function viewRaw(encoded){
+      try{
+        const obj = JSON.parse(decodeURIComponent(encoded));
+        const w = window.open('','_blank','noopener');
+        w.document.write('<pre style="white-space:pre-wrap;font-family:monospace;padding:18px">'+JSON.stringify(obj,null,2)+'</pre>');
+      }catch(e){ showToast('No se pudo mostrar detalles'); }
+    }
+
+    async function approveAction(id){
+      if(!confirm('Confirmar aprobación de ' + id + '?')) return;
+      try{
+        const res = await fetch(`/api/approve?id=${id}`);
+        const data = await res.json();
+        if(data.result?.ok) showToast('Aprobado: ' + id);
+        else showToast('Error: ' + (data.result?.error || data.error || 'no se aprobó'));
+      }catch(err){ showToast('Error al aprobar: '+(err.message||err)); }
       loadApprovals();
     }
 
-    async function executeAction(id) {
-      const res = await fetch(`/api/execute-approved?id=${id}`);
-      const data = await res.json();
-      alert(data.result?.message || data.error || "Ejecutado");
+    async function executeAction(id){
+      if(!confirm('Ejecutar la acción aprobada ' + id + '?')) return;
+      try{
+        const res = await fetch(`/api/execute-approved?id=${id}`);
+        const data = await res.json();
+        showToast(data.result?.message || data.message || data.error || 'Ejecutado');
+      }catch(err){ showToast('Error al ejecutar: '+(err.message||err)); }
       loadApprovals();
     }
 
     loadApprovals();
-    setInterval(loadApprovals, 10000);
+    setInterval(()=>loadApprovals(),10000);
   </script>
 </body>
 </html>
