@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Oxkio - Aprobaciones</title>
+</head>
+<body style="background:#020617;color:white;font-family:Arial;padding:30px;">
+  <h1>Centro de aprobaciones Oxkio</h1>
+  <p>Acciones pendientes de revisión humana antes de ejecutar.</p>
+
+  <button onclick="loadApprovals()">Cargar aprobaciones</button>
+
+  <div id="approvalsBox" style="margin-top:20px;"></div>
+
+  <script>
+    async function loadApprovals() {
+      const box = document.getElementById("approvalsBox");
+      box.innerHTML = "Cargando aprobaciones...";
+
+      const res = await fetch("/api/pending-approvals");
+      const data = await res.json();
+
+      if (!data.pending || data.pending.length === 0) {
+        box.innerHTML = "<p>No hay aprobaciones pendientes.</p>";
+        return;
+      }
+
+      box.innerHTML = data.pending.map(item => `
+        <div style="border:1px solid #475569;border-radius:12px;padding:15px;margin-bottom:12px;">
+          <strong>ID:</strong> ${item.id}<br>
+          <strong>Tipo:</strong> ${item.proposal?.type || "sin tipo"}<br>
+          <strong>Resumen:</strong> ${item.proposal?.summary || item.proposal?.proposal || "Sin resumen"}<br><br>
+          <button onclick="approveAction('${item.id}')">Aprobar</button>
+          <button onclick="executeAction('${item.id}')">Ejecutar</button>
+        </div>
+      `).join("");
+    }
+
+    async function approveAction(id) {
+      const res = await fetch(`/api/approve?id=${id}`);
+      const data = await res.json();
+      alert(data.result?.ok ? "Aprobado" : data.result?.error || "Error al aprobar");
+      loadApprovals();
+    }
+
+    async function executeAction(id) {
+      const res = await fetch(`/api/execute-approved?id=${id}`);
+      const data = await res.json();
+      alert(data.result?.message || data.error || "Ejecutado");
+      loadApprovals();
+    }
+
+    loadApprovals();
+    setInterval(loadApprovals, 10000);
+  </script>
+</body>
+</html>

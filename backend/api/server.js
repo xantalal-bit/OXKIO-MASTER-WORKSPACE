@@ -277,6 +277,21 @@ if (req.url === "/") {
 
   return;
 }
+if (req.url === "/approvals") {
+
+  const fs = require("fs");
+  const path = require("path");
+
+  const approvalsPath = path.join(__dirname, "../../app/approvals.html");
+
+  res.writeHead(200, {
+    "Content-Type": "text/html"
+  });
+
+  res.end(fs.readFileSync(approvalsPath));
+
+  return;
+}
 if (req.url === "/app/logo.png") {
 
   const fs = require("fs");
