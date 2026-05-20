@@ -250,6 +250,89 @@
         "context": {},
         "resolvedAt": "2026-05-16T18:51:25.361Z"
       }
+    },
+    {
+      "id": "1779294998027",
+      "createdAt": "2026-05-20T16:36:38.027Z",
+      "approvalId": "1779294801300",
+      "executionResult": {},
+      "item": {
+        "id": "1779294801300",
+        "status": "approved",
+        "createdAt": "2026-05-20T16:33:21.300Z",
+        "proposal": {
+          "type": "email_draft",
+          "to": "\"José Lozano Galera a través de LinkedIn\" <newsletters-noreply@linkedin.com>",
+          "subject": "Re: Juan Carlos Alcaide, campeón del Marketing",
+          "body": "Hola,\n\nHe recibido tu correo. Lo reviso y te respondo en breve.\n\nUn saludo.",
+          "summary": "Borrador de respuesta preparado para revisión.",
+          "recommendation": "Crear borrador en Gmail sin enviar.",
+          "requiresApproval": true
+        },
+        "context": {
+          "source": "gmail",
+          "email": {
+            "from": "\"José Lozano Galera a través de LinkedIn\" <newsletters-noreply@linkedin.com>",
+            "subject": "Juan Carlos Alcaide, campeón del Marketing",
+            "date": "Wed, 20 May 2026 16:14:57 +0000 (UTC)",
+            "snippet": "Querido lector, Retomo el contacto, con usted, y le pido disculpas, por no… ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏"
+          }
+        },
+        "resolvedAt": "2026-05-20T16:35:18.311Z"
+      }
+    },
+    {
+      "id": "1779295328765",
+      "createdAt": "2026-05-20T16:42:08.765Z",
+      "approvalId": "NUEVO_ID",
+      "executionResult": {
+        "ok": false,
+        "error": "La acción no está aprobada"
+      }
+    },
+    {
+      "id": "1779295625676",
+      "createdAt": "2026-05-20T16:47:05.676Z",
+      "approvalId": "1779295377030",
+      "executionResult": {
+        "ok": true,
+        "executed": true,
+        "type": "email_draft",
+        "action": "gmail_real_draft_created",
+        "mode": "SAFE_DRAFT_ONLY",
+        "message": "Borrador real creado en Gmail. No se ha enviado.",
+        "draft": {
+          "id": "r-1463177608017021420",
+          "messageId": "19e4648a025995ec",
+          "to": "\"José Lozano Galera a través de LinkedIn\" <newsletters-noreply@linkedin.com>",
+          "subject": "Re: Juan Carlos Alcaide, campeón del Marketing"
+        },
+        "approvalId": "1779295377030"
+      },
+      "item": {
+        "id": "1779295377030",
+        "status": "approved",
+        "createdAt": "2026-05-20T16:42:57.030Z",
+        "proposal": {
+          "type": "email_draft",
+          "to": "\"José Lozano Galera a través de LinkedIn\" <newsletters-noreply@linkedin.com>",
+          "subject": "Re: Juan Carlos Alcaide, campeón del Marketing",
+          "body": "Hola,\n\nHe recibido tu correo. Lo reviso y te respondo en breve.\n\nUn saludo.",
+          "summary": "Borrador de respuesta preparado para revisión.",
+          "recommendation": "Crear borrador en Gmail sin enviar.",
+          "requiresApproval": true
+        },
+        "context": {
+          "source": "gmail",
+          "email": {
+            "from": "\"José Lozano Galera a través de LinkedIn\" <newsletters-noreply@linkedin.com>",
+            "subject": "Juan Carlos Alcaide, campeón del Marketing",
+            "date": "Wed, 20 May 2026 16:14:57 +0000 (UTC)",
+            "snippet": "Querido lector, Retomo el contacto, con usted, y le pido disculpas, por no… ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏"
+          }
+        },
+        "resolvedAt": "2026-05-20T16:46:45.517Z"
+      }
     }
   ]
 }

@@ -14,6 +14,10 @@ const GmailConnector = require("../integrations/gmail/connector");
 const systemConfig = require("../config/systemConfig");
 const WorkflowManager = require("../workflows/workflowManager");
 const SystemStateManager = require("../core/systemStateManager");
+const {
+  getAuthUrl,
+  getTokens
+} = require("../integrations/googleOAuth");
 
 const intentAnalyzer = new IntentAnalyzer();
 const ruleEngine = new RuleEngine();
@@ -59,10 +63,205 @@ function sendJson(res, statusCode, data) {
   res.end(JSON.stringify(data, null, 2));
 }
 
-const server = http.createServer((req, res) => {
+const server = http.createServer(async (req, res) => {
 
 const pathname = req.url.split("?")[0];
+if (pathname === "/oauth/google" && req.method === "GET") {
+  try {
+    const authUrl = getAuthUrl();
 
+    return sendJson(res, 200, {
+      ok: true,
+      authUrl
+    });
+  } catch (error) {
+    return sendJson(res, 500, {
+      ok: false,
+      error: error.message
+    });
+  }
+}
+
+if (pathname === "/oauth/google/callback" && req.method === "GET") {
+  try {
+    const fullUrl = new URL(req.url, `http://${req.headers.host}`);
+    const code = fullUrl.searchParams.get("code");
+
+    if (!code) {
+      return sendJson(res, 400, {
+        ok: false,
+        error: "Falta code OAuth"
+      });
+    }
+
+    await getTokens(code);
+
+return sendJson(res, 200, {
+  ok: true,
+  message: "OAuth Gmail conectado correctamente",
+  gmailConnected: true,
+  tokenSaved: true
+});
+  } catch (error) {
+    return sendJson(res, 500, {
+      ok: false,
+      error: error.message
+    });
+  }
+}
+if (pathname === "/api/gmail/inbox" && req.method === "GET") {
+  try {
+    const { getGmailClient } = require("../integrations/googleOAuth");
+    const gmail = getGmailClient();
+
+    const listResponse = await gmail.users.messages.list({
+      userId: "me",
+      maxResults: 5,
+      labelIds: ["INBOX"]
+    });
+
+    const messages = listResponse.data.messages || [];
+
+    const emails = [];
+
+    for (const msg of messages) {
+      const detail = await gmail.users.messages.get({
+        userId: "me",
+        id: msg.id,
+        format: "metadata",
+        metadataHeaders: ["From", "Subject", "Date"]
+      });
+
+      const headers = detail.data.payload.headers || [];
+
+      const getHeader = (name) => {
+        const found = headers.find(h => h.name.toLowerCase() === name.toLowerCase());
+        return found ? found.value : "";
+      };
+
+      emails.push({
+        id: msg.id,
+        threadId: detail.data.threadId,
+        from: getHeader("From"),
+        subject: getHeader("Subject"),
+        date: getHeader("Date"),
+        snippet: detail.data.snippet
+      });
+    }
+
+    return sendJson(res, 200, {
+      ok: true,
+      mode: "SAFE_READ_ONLY",
+      count: emails.length,
+      emails
+    });
+
+  } catch (error) {
+    return sendJson(res, 500, {
+      ok: false,
+      error: error.message
+    });
+  }
+}
+if (pathname === "/api/gmail/analyze" && req.method === "GET") {
+
+  try {
+
+    const { getGmailClient } = require("../integrations/googleOAuth");
+    const gmail = getGmailClient();
+
+    const listResponse = await gmail.users.messages.list({
+      userId: "me",
+      maxResults: 1,
+      labelIds: ["INBOX"]
+    });
+
+    const messages = listResponse.data.messages || [];
+
+    if (messages.length === 0) {
+      return sendJson(res, 200, {
+        ok: true,
+        message: "No hay correos en inbox"
+      });
+    }
+
+    const msg = messages[0];
+
+    const detail = await gmail.users.messages.get({
+      userId: "me",
+      id: msg.id,
+      format: "metadata",
+      metadataHeaders: ["From", "Subject", "Date"]
+    });
+
+    const headers = detail.data.payload.headers || [];
+
+    const getHeader = (name) => {
+      const found = headers.find(
+        h => h.name.toLowerCase() === name.toLowerCase()
+      );
+
+      return found ? found.value : "";
+    };
+
+    const emailData = {
+      from: getHeader("From"),
+      subject: getHeader("Subject"),
+      date: getHeader("Date"),
+      snippet: detail.data.snippet
+    };
+
+    const analysis = intentAnalyzer.analyze(
+      `${emailData.subject} ${emailData.snippet}`
+    );
+
+    const proposal = {
+  type: "email_draft",
+  to: emailData.from,
+  subject: `Re: ${emailData.subject}`,
+  body: "Hola,\n\nHe recibido tu correo. Lo reviso y te respondo en breve.\n\nUn saludo.",
+  summary: "Borrador de respuesta preparado para revisión.",
+  recommendation: "Crear borrador en Gmail sin enviar.",
+  requiresApproval: true
+};
+
+    const approvalItem = approvalQueue.add(
+      proposal,
+      {
+        source: "gmail",
+        email: emailData
+      }
+    );
+
+    return sendJson(res, 200, {
+  ok: true,
+  mode: "SAFE_PROPOSAL_ONLY",
+  emailPreview: {
+    from: emailData.from.split("<")[0].trim(),
+    subject: emailData.subject,
+    date: emailData.date
+  },
+  analysis: {
+    intent: analysis.intent,
+    urgency: analysis.urgency,
+    requiresApproval: analysis.requiresApproval
+  },
+  proposal: {
+  summary: proposal.summary || "Correo analizado correctamente",
+  recommendation: proposal.recommendation,
+  generatedAt: new Date().toISOString()
+},
+  approvalId: approvalItem.id
+});
+    } catch (error) {
+
+    return sendJson(res, 500, {
+      ok: false,
+      error: error.message
+    });
+
+  }
+}
 if (req.url === "/") {
 
   const fs = require("fs");
@@ -159,7 +358,6 @@ if (req.url === "/api/status") {
  const brainResult = executiveBrain.think(message);
 const analysis = brainResult.analysis;
 
-const proposal = proposalEngine.generate(brainResult);
 
 const approvalItem = approvalQueue.add(
   proposal,
@@ -362,7 +560,7 @@ if (executionLogger.hasExecuted(id)) {
   });
 }
 
- const result = actionExecutor.execute(item, {
+ const result = await actionExecutor.execute(item, {
   gmailConnector
 });
 
@@ -402,9 +600,11 @@ if (req.url.startsWith("/api/execution-logs")) {
 if (pathname === "/api/system-status") {
 
     return sendJson(res, 200, {
-        ok: true,
-        system: systemStateManager.getState()
-    });
+  ok: true,
+  message: "OAuth Gmail conectado correctamente",
+  gmailConnected: true,
+  tokenSaved: true
+});
 
 }
 if (pathname === "/api/execute" && req.method === "POST") {
@@ -425,7 +625,7 @@ if (pathname === "/api/execute" && req.method === "POST") {
 
       const intent = intentAnalyzer.analyze(userMessage);
 
-      const proposal = proposalEngine.generate({
+const proposal = proposalEngine.generate({
   analysis: intent,
   decision: {
     recommendation: "Generar propuesta",
