@@ -30,20 +30,44 @@
     .meta ol{margin:0;padding-left:18px;color:var(--muted)}
 
     .controls{display:flex;gap:12px;align-items:center;margin-top:18px}
-    .btn{background:transparent;border:1px solid rgba(255,255,255,0.06);color:var(--muted);padding:10px 14px;border-radius:10px;cursor:pointer}
-    .btn.primary{background:linear-gradient(90deg,var(--accent),var(--accent-2));color:#021;padding:10px 16px;border:none}
-    .btn.ghost{background:transparent;border:1px dashed rgba(255,255,255,0.04)}
+    .btn{background:transparent;border:1px solid rgba(255,255,255,0.06);color:var(--muted);padding:10px 14px;border-radius:10px;cursor:pointer;transition:all 0.3s cubic-bezier(0.4,0,0.2,1)}
+    .btn:hover{border-color:rgba(255,255,255,0.12);color:white}
+    .btn.primary{background:linear-gradient(90deg,var(--accent),var(--accent-2));color:#021;padding:10px 16px;border:none;transition:all 0.3s cubic-bezier(0.4,0,0.2,1)}
+    .btn.primary:hover{box-shadow:0 8px 24px rgba(154,230,180,0.3)}
+    .btn.ghost{background:transparent;border:1px dashed rgba(255,255,255,0.04);transition:all 0.3s cubic-bezier(0.4,0,0.2,1)}
+    .btn.ghost:hover{border-color:rgba(255,255,255,0.08);background:rgba(255,255,255,0.02)}
 
     #approvalsBox{margin-top:18px;display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:14px}
-    .card{background:var(--card);padding:16px;border-radius:12px;border:1px solid rgba(255,255,255,0.02);box-shadow:0 2px 10px rgba(2,6,23,0.5);min-height:120px;display:flex;flex-direction:column;justify-content:space-between}
+    .card{background:var(--card);padding:16px;border-radius:12px;border:1px solid rgba(255,255,255,0.02);box-shadow:0 2px 10px rgba(2,6,23,0.5);min-height:120px;display:flex;flex-direction:column;justify-content:space-between;transition:all 0.3s cubic-bezier(0.4,0,0.2,1)}
+    .card:hover{border-color:rgba(154,230,180,0.2);box-shadow:0 16px 32px rgba(154,230,180,0.08),0 8px 16px rgba(154,230,180,0.06),0 2px 10px rgba(2,6,23,0.5),inset 0 1px 2px rgba(255,255,255,0.05);transform:translateY(-1px)}
     .card .metaRow{display:flex;justify-content:space-between;gap:12px;align-items:center}
     .card .title{font-weight:600;color:#fff}
     .card .sub{color:var(--muted);font-size:13px;margin-top:6px}
     .card .actions{display:flex;gap:8px;margin-top:12px}
-    .btn.small{padding:8px 10px;font-size:13px;border-radius:8px}
-    .btn.approve{background:linear-gradient(90deg,#38b2ac,#9ae6b4);color:#032}
-    .btn.execute{background:linear-gradient(90deg,#60a5fa,#7c3aed);color:#021}
-    .btn.danger{background:linear-gradient(90deg,#ff7b7b,#ffb199);color:#2b0202}
+    .btn.small{padding:8px 10px;font-size:13px;border-radius:8px;transition:all 0.3s cubic-bezier(0.4,0,0.2,1)}
+    .btn.approve{background:linear-gradient(90deg,#38b2ac,#9ae6b4);color:#032;border:none;transition:all 0.3s cubic-bezier(0.4,0,0.2,1);box-shadow:0 4px 12px rgba(154,230,180,0.2)}
+    .btn.approve:hover{box-shadow:0 6px 20px rgba(154,230,180,0.35);transform:translateY(-1px)}
+    .btn.execute{background:linear-gradient(90deg,#60a5fa,#7c3aed);color:#021;border:none;transition:all 0.3s cubic-bezier(0.4,0,0.2,1);box-shadow:0 4px 12px rgba(96,165,250,0.2)}
+    .btn.execute:hover{box-shadow:0 6px 20px rgba(96,165,250,0.35);transform:translateY(-1px)}
+    .btn.danger{background:linear-gradient(90deg,#ff7b7b,#ffb199);color:#2b0202;transition:all 0.3s cubic-bezier(0.4,0,0.2,1);box-shadow:0 4px 12px rgba(255,123,123,0.2)}
+    .btn.danger:hover{box-shadow:0 6px 20px rgba(255,123,123,0.35);transform:translateY(-1px)}
+
+    .badge{display:inline-block;padding:6px 12px;border-radius:8px;font-size:10px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;border:1px solid;backdrop-filter:blur(4px);transition:all 0.3s cubic-bezier(0.4,0,0.2,1);box-shadow:0 4px 12px rgba(0,0,0,0.3)}
+    .badge.pending{background:linear-gradient(135deg,rgba(251,191,36,0.15),rgba(251,191,36,0.05));color:#fcd34d;border-color:rgba(251,191,36,0.4);box-shadow:0 0 12px rgba(251,191,36,0.2),inset 0 1px 0 rgba(255,255,255,0.1)}
+    .badge.pending:hover{background:linear-gradient(135deg,rgba(251,191,36,0.25),rgba(251,191,36,0.1));box-shadow:0 0 20px rgba(251,191,36,0.35),inset 0 1px 0 rgba(255,255,255,0.15)}
+    .badge.approved{background:linear-gradient(135deg,rgba(96,165,250,0.15),rgba(96,165,250,0.05));color:#93c5fd;border-color:rgba(96,165,250,0.4);box-shadow:0 0 12px rgba(96,165,250,0.2),inset 0 1px 0 rgba(255,255,255,0.1)}
+    .badge.approved:hover{background:linear-gradient(135deg,rgba(96,165,250,0.25),rgba(96,165,250,0.1));box-shadow:0 0 20px rgba(96,165,250,0.35),inset 0 1px 0 rgba(255,255,255,0.15)}
+    .badge.executed{background:linear-gradient(135deg,rgba(52,211,153,0.15),rgba(52,211,153,0.05));color:#6ee7b7;border-color:rgba(52,211,153,0.4);box-shadow:0 0 12px rgba(52,211,153,0.2),inset 0 1px 0 rgba(255,255,255,0.1)}
+    .badge.executed:hover{background:linear-gradient(135deg,rgba(52,211,153,0.25),rgba(52,211,153,0.1));box-shadow:0 0 20px rgba(52,211,153,0.35),inset 0 1px 0 rgba(255,255,255,0.15)}
+    .badge.unknown{background:linear-gradient(135deg,rgba(107,114,128,0.15),rgba(107,114,128,0.05));color:#d1d5db;border-color:rgba(107,114,128,0.4);box-shadow:0 0 12px rgba(107,114,128,0.2),inset 0 1px 0 rgba(255,255,255,0.1)}
+
+    #approvalsBox{margin-top:18px}
+    .status-section{margin-bottom:28px}
+    .section-title{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
+    .section-title h3{margin:0;color:var(--accent);font-size:14px;letter-spacing:.5px;text-transform:uppercase}
+    .section-count{background:rgba(154,230,180,0.1);border:1px solid rgba(154,230,180,0.2);color:var(--accent);padding:4px 10px;border-radius:6px;font-size:12px;font-weight:600}
+    .status-cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:14px}
+    .status-empty{padding:20px;text-align:center;color:#7a8a9a;font-size:13px;background:rgba(255,255,255,0.01);border:1px dashed rgba(255,255,255,0.04);border-radius:10px}
 
     .empty{padding:30px;text-align:center;color:#9fb0c7}
 
@@ -79,7 +103,29 @@
       <div style="margin-left:auto;color:var(--muted);font-size:13px">Auto-refresh cada 10s</div>
     </div>
 
-    <div id="approvalsBox" aria-live="polite"></div>
+    <div id="approvalsBox" aria-live="polite">
+      <div id="pendingSection" class="status-section">
+        <div class="section-title">
+          <h3>Pendientes</h3>
+          <span id="pendingCount" class="section-count">0</span>
+        </div>
+        <div id="pendingCards" class="status-cards"></div>
+      </div>
+      <div id="approvedSection" class="status-section">
+        <div class="section-title">
+          <h3>Aprobadas</h3>
+          <span id="approvedCount" class="section-count">0</span>
+        </div>
+        <div id="approvedCards" class="status-cards"></div>
+      </div>
+      <div id="executedSection" class="status-section">
+        <div class="section-title">
+          <h3>Ejecutadas</h3>
+          <span id="executedCount" class="section-count">0</span>
+        </div>
+        <div id="executedCards" class="status-cards"></div>
+      </div>
+    </div>
   </div>
 
   <div id="toast" role="status" aria-live="polite"></div>
@@ -94,38 +140,63 @@
     }
 
     async function loadApprovals(force=false){
-      const box = document.getElementById('approvalsBox');
-      box.innerHTML = '<div class="empty">Cargando aprobaciones…</div>';
+      const pendingCards = document.getElementById('pendingCards');
+      const approvedCards = document.getElementById('approvedCards');
+      const executedCards = document.getElementById('executedCards');
+      const pendingCount = document.getElementById('pendingCount');
+      const approvedCount = document.getElementById('approvedCount');
+      const executedCount = document.getElementById('executedCount');
+      
+      pendingCards.innerHTML = '<div class="status-empty">Cargando...</div>';
+      approvedCards.innerHTML = '';
+      executedCards.innerHTML = '';
+      
       try{
         const res = await fetch('/api/pending-approvals' + (force? '?_force=1':''));
         if(!res.ok) throw new Error('Error de red');
         const data = await res.json();
 
-        if(!data.pending || data.pending.length === 0){
-          box.innerHTML = '<div class="empty">No hay aprobaciones pendientes.</div>';
-          return;
-        }
+        const pending = data.pending?.filter(i => (i.status || '').toLowerCase() === 'pending') || [];
+        const approved = data.pending?.filter(i => (i.status || '').toLowerCase() === 'approved') || [];
+        const executed = data.pending?.filter(i => (i.status || '').toLowerCase() === 'executed') || [];
 
-        box.innerHTML = data.pending.map(item => {
+        pendingCount.textContent = pending.length;
+        approvedCount.textContent = approved.length;
+        executedCount.textContent = executed.length;
+
+        const renderCards = (items) => items.map(item => {
           const tipo = item.proposal?.type || 'sin tipo';
           const resumen = (item.proposal?.summary || item.proposal?.proposal || 'Sin resumen').replace(/\n/g,' ');
+          const st = (item.status || '').toLowerCase();
+          const showApprove = st === 'pending';
+          const showExecute = st === 'approved';
           return `
             <div class="card">
               <div>
                 <div class="metaRow"><div class="title">ID: ${item.id}</div><div class="sub">${tipo}</div></div>
+                <div class="sub" style="margin-top:6px;"><span class="badge ${st}">Pendiente</span></div>
                 <div class="sub">${resumen}</div>
               </div>
               <div class="actions">
-                <button class="btn small approve" onclick="approveAction('${item.id}')">Aprobar</button>
-                <button class="btn small execute" onclick="executeAction('${item.id}')">Ejecutar</button>
+                ${showApprove ? `<button class="btn small approve" onclick="approveAction('${item.id}')">Aprobar</button>` : ''}
+                ${showExecute ? `<button class="btn small execute" onclick="executeAction('${item.id}')">Ejecutar</button>` : ''}
                 <button class="btn small" onclick="viewRaw('${encodeURIComponent(JSON.stringify(item))}')">Detalles</button>
               </div>
             </div>
           `;
         }).join('');
 
+        pendingCards.innerHTML = pending.length > 0 ? renderCards(pending) : '<div class="status-empty">No hay elementos</div>';
+        approvedCards.innerHTML = approved.length > 0 ? renderCards(approved) : '<div class="status-empty">No hay elementos</div>';
+        executedCards.innerHTML = executed.length > 0 ? renderCards(executed) : '<div class="status-empty">No hay elementos</div>';
+
       }catch(err){
-        box.innerHTML = '<div class="empty">Error cargando aprobaciones.</div>';
+        pendingCards.innerHTML = '<div class="status-empty">Error cargando aprobaciones</div>';
+        approvedCards.innerHTML = '';
+        executedCards.innerHTML = '';
+        pendingCount.textContent = '0';
+        approvedCount.textContent = '0';
+        executedCount.textContent = '0';
         showToast('Error cargando aprobaciones: ' + (err.message||err));
       }
     }
