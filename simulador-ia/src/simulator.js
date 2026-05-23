@@ -24,7 +24,7 @@ const scenarios = {
       "Escalabilidad cloud"
     ]
   },
-  
+
   restaurant: {
     investment: "20000€ - 100000€",
     difficulty: "Alta",
@@ -38,6 +38,34 @@ const scenarios = {
     ]
    }
 };
+
+function detectScenario(text) {
+
+  const input = text.toLowerCase();
+
+  if (
+    input.includes("restaurante") ||
+    input.includes("restaurant")
+  ) {
+    return "restaurant";
+  }
+
+  if (
+    input.includes("tienda") ||
+    input.includes("ecommerce")
+  ) {
+    return "ecommerce";
+  }
+
+  if (
+    input.includes("saas") ||
+    input.includes("software")
+  ) {
+    return "saas";
+  }
+
+  return null;
+}
 
 function simulateBusiness(type) {
 
@@ -62,9 +90,16 @@ function simulateBusiness(type) {
 }
 
 const userInput = process.argv[2];
+const detectedScenario = detectScenario(userInput || "");
 
 if (!userInput) {
   console.log("Debes indicar un tipo de simulación.");
 } else {
-  console.log(simulateBusiness(userInput));
+  if (detectedScenario) {
+  console.log(simulateBusiness(detectedScenario));
+} else {
+  console.log({
+    error: "No se pudo detectar un escenario válido"
+  });
+}
 }
