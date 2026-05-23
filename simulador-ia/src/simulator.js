@@ -30,7 +30,7 @@ function detectScenario(text) {
   return null;
 }
 
-function exportSimulation(data) {
+function exportSimulation(data, originalPrompt) {
 
   const fileName =
     `simulation-${Date.now()}.json`;
@@ -46,6 +46,7 @@ function exportSimulation(data) {
   simulationId: Date.now(),
   createdAt: new Date().toISOString(),
   simulatorVersion: "0.1.0",
+  originalPrompt,
   data
 };
 
@@ -91,7 +92,7 @@ if (!userInput) {
 
   console.log(result);
 
-  exportSimulation(result);
+  exportSimulation(result, userInput);
 
 } else {
 
