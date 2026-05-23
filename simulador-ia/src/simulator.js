@@ -23,7 +23,20 @@ const scenarios = {
       "Captación B2B",
       "Escalabilidad cloud"
     ]
-  }
+  },
+  
+  restaurant: {
+    investment: "20000€ - 100000€",
+    difficulty: "Alta",
+    risk: "Alto",
+    time: "6-18 meses",
+    strategies: [
+      "Buena ubicación",
+      "Control de costes",
+      "Marketing local",
+      "Reservas online"
+    ]
+   }
 };
 
 function simulateBusiness(type) {
@@ -48,4 +61,10 @@ function simulateBusiness(type) {
   };
 }
 
-console.log(simulateBusiness("ecommerce"));
+const userInput = process.argv[2];
+
+if (!userInput) {
+  console.log("Debes indicar un tipo de simulación.");
+} else {
+  console.log(simulateBusiness(userInput));
+}
