@@ -27,6 +27,16 @@ function detectScenario(text) {
     return "saas";
   }
 
+  if (
+  input.includes("consultoría") ||
+  input.includes("consultoria") ||
+  input.includes("empresa") ||
+  input.includes("ceo") ||
+  input.includes("negocio")
+) {
+  return "consulting";
+}
+
   return null;
 }
 

@@ -45,11 +45,30 @@ scalabilityScore: 95
       "Marketing local",
       "Reservas online"
     ],
-    
+
     viabilityScore: 68,
 riskScore: 85,
 scalabilityScore: 55
-  }
+  },
+
+  consulting: {
+  investment: "5000€ - 30000€",
+  difficulty: "Media-Alta",
+  risk: "Medio",
+  time: "3-12 meses",
+
+  strategies: [
+    "Captación LinkedIn",
+    "Automatización IA",
+    "Servicios recurrentes",
+    "Marca profesional",
+    "Networking empresarial"
+  ],
+
+  viabilityScore: 84,
+  riskScore: 52,
+  scalabilityScore: 88
+}
 
 };
 
