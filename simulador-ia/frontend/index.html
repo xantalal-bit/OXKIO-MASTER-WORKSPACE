@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <title>Simulador IA</title>
+
+  <style>
+
+    body {
+      background: #0f172a;
+      color: white;
+      font-family: Arial, sans-serif;
+      padding: 40px;
+    }
+
+    .container {
+      max-width: 900px;
+      margin: auto;
+    }
+
+    h1 {
+      color: #38bdf8;
+    }
+
+    textarea {
+      width: 100%;
+      height: 120px;
+      padding: 15px;
+      border-radius: 12px;
+      border: none;
+      font-size: 16px;
+      margin-top: 20px;
+    }
+
+    button {
+      margin-top: 20px;
+      padding: 14px 24px;
+      border: none;
+      border-radius: 12px;
+      background: #38bdf8;
+      color: black;
+      font-size: 16px;
+      cursor: pointer;
+      font-weight: bold;
+    }
+
+    .result {
+      margin-top: 30px;
+      background: #1e293b;
+      padding: 20px;
+      border-radius: 16px;
+    }
+
+  </style>
+</head>
+
+<body>
+
+  <div class="container">
+
+    <h1>SIMULADOR IA</h1>
+
+    <p>
+      Simulación estratégica empresarial experimental
+    </p>
+
+    <textarea id="promptInput" placeholder="Ejemplo: quiero crear una consultoría IA para CEOs"></textarea>
+
+    <button onclick="runSimulation()">
+  Simular
+</button>
+
+    <div class="result" id="resultBox">
+
+      <h2>Resultado</h2>
+
+      <p>
+        Aquí aparecerá la simulación.
+      </p>
+
+    </div>
+
+  </div>
+
+  <script>
+
+function runSimulation() {
+
+  const input =
+    document.getElementById("promptInput").value.toLowerCase();
+
+  const resultBox =
+    document.getElementById("resultBox");
+
+  let result = "";
+
+  if (
+    input.includes("saas") ||
+    input.includes("software")
+  ) {
+
+    result = `
+      <h2>Resultado</h2>
+
+      <p><b>Proyecto:</b> SaaS</p>
+
+      <p><b>Viabilidad:</b> 72/100</p>
+
+      <p><b>Riesgo:</b> 82/100</p>
+
+      <p><b>Escalabilidad:</b> 95/100</p>
+
+      <p>
+        Excelente potencial de crecimiento
+        y escalabilidad.
+      </p>
+    `;
+
+  }
+
+  else if (
+    input.includes("consultoría") ||
+    input.includes("consultoria") ||
+    input.includes("ceo")
+  ) {
+
+    result = `
+      <h2>Resultado</h2>
+
+      <p><b>Proyecto:</b> Consulting IA</p>
+
+      <p><b>Viabilidad:</b> 84/100</p>
+
+      <p><b>Riesgo:</b> 52/100</p>
+
+      <p><b>Escalabilidad:</b> 88/100</p>
+
+      <p>
+        Modelo muy interesante para servicios
+        recurrentes y automatización IA.
+      </p>
+    `;
+
+  }
+
+  else {
+
+    result = `
+      <h2>Resultado</h2>
+
+      <p>
+        No se detectó un escenario válido.
+      </p>
+    `;
+
+  }
+
+  resultBox.innerHTML = result;
+}
+
+</script>
+
+</body>
+
+</html>
