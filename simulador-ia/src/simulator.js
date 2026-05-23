@@ -51,11 +51,9 @@ function exportSimulation(data) {
 
 fs.writeFileSync(
   exportPath,
-  JSON.stringify(exportData, null, 2)
+  JSON.stringify(exportData, null, 2),
+  "utf8"
 );
-
-  console.log("Simulación exportada:");
-  console.log(exportPath);
 }
 
 function simulateBusiness(type) {
