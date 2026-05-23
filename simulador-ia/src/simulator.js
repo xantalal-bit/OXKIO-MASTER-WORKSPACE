@@ -91,7 +91,44 @@ if (!userInput) {
   const result =
     simulateBusiness(detectedScenario);
 
-  console.log(result);
+ console.log("\n===== SIMULACIÓN IA =====\n");
+
+console.log("Proyecto:", result.project);
+
+console.log(
+  "Inversión estimada:",
+  result.estimatedInvestment
+);
+
+console.log(
+  "Dificultad:",
+  result.difficulty
+);
+
+console.log(
+  "Riesgo:",
+  result.risk
+);
+
+console.log(
+  "Tiempo estimado:",
+  result.estimatedTime
+);
+
+console.log("\nEstrategias:");
+
+result.recommendedStrategies.forEach(
+  strategy => {
+    console.log("-", strategy);
+  }
+);
+
+console.log(
+  "\nConclusión:",
+  result.conclusion
+);
+
+console.log("\n=========================\n");
 
   exportSimulation(result, userInput);
 
