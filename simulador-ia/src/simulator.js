@@ -68,6 +68,32 @@ function simulateBusiness(type) {
     };
   }
 
+  const recommendations = [];
+
+if (scenario.riskScore >= 80) {
+  recommendations.push(
+    "⚠️ Riesgo estratégico elevado"
+  );
+}
+
+if (scenario.scalabilityScore >= 90) {
+  recommendations.push(
+    "✅ Excelente potencial de escalabilidad"
+  );
+}
+
+if (scenario.viabilityScore >= 75) {
+  recommendations.push(
+    "✅ Proyecto con buena viabilidad inicial"
+  );
+}
+
+if (scenario.viabilityScore < 70) {
+  recommendations.push(
+    "⚠️ Requiere planificación detallada"
+  );
+}
+
   return {
     project: type,
     estimatedInvestment: scenario.investment,
@@ -79,6 +105,7 @@ function simulateBusiness(type) {
 viabilityScore: scenario.viabilityScore,
 riskScore: scenario.riskScore,
 scalabilityScore: scenario.scalabilityScore,
+strategicRecommendations: recommendations,
 
 conclusion:
   "Proyecto viable con planificación y supervisión adecuada."
@@ -133,6 +160,14 @@ console.log(
 console.log(
   "Tiempo estimado:",
   result.estimatedTime
+);
+
+console.log("\nRecomendaciones IA:");
+
+result.strategicRecommendations.forEach(
+  recommendation => {
+    console.log("-", recommendation);
+  }
 );
 
 console.log("\nEstrategias:");
