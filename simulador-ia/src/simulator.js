@@ -47,6 +47,7 @@ function exportSimulation(data, originalPrompt) {
   createdAt: new Date().toISOString(),
   simulatorVersion: "0.1.0",
   originalPrompt,
+  detectedScenario: data.project,
   data
 };
 
