@@ -42,10 +42,17 @@ function exportSimulation(data) {
     fileName
   );
 
-  fs.writeFileSync(
-    exportPath,
-    JSON.stringify(data, null, 2)
-  );
+  const exportData = {
+  simulationId: Date.now(),
+  createdAt: new Date().toISOString(),
+  simulatorVersion: "0.1.0",
+  data
+};
+
+fs.writeFileSync(
+  exportPath,
+  JSON.stringify(exportData, null, 2)
+);
 
   console.log("Simulación exportada:");
   console.log(exportPath);
