@@ -1,4 +1,6 @@
 const scenarios = require("./scenarios");
+const fs = require("fs");
+const path = require("path");
 
 function detectScenario(text) {
 
@@ -26,6 +28,27 @@ function detectScenario(text) {
   }
 
   return null;
+}
+
+function exportSimulation(data) {
+
+  const fileName =
+    `simulation-${Date.now()}.json`;
+
+  const exportPath = path.join(
+    __dirname,
+    "..",
+    "exports",
+    fileName
+  );
+
+  fs.writeFileSync(
+    exportPath,
+    JSON.stringify(data, null, 2)
+  );
+
+  console.log("Simulación exportada:");
+  console.log(exportPath);
 }
 
 function simulateBusiness(type) {
@@ -57,10 +80,20 @@ if (!userInput) {
   console.log("Debes indicar un tipo de simulación.");
 } else {
   if (detectedScenario) {
-  console.log(simulateBusiness(detectedScenario));
+
+  const result =
+    simulateBusiness(detectedScenario);
+
+  console.log(result);
+
+  exportSimulation(result);
+
 } else {
+
   console.log({
     error: "No se pudo detectar un escenario válido"
   });
+
 }
+
 }
