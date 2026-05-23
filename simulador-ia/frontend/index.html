@@ -95,70 +95,58 @@ function runSimulation() {
   const resultBox =
     document.getElementById("resultBox");
 
-  let result = "";
+  resultBox.innerHTML =
+  "<p>Simulando...</p>";
 
-  if (
-    input.includes("saas") ||
-    input.includes("software")
-  ) {
+fetch(
+  `http://localhost:3100/simulate?prompt=${encodeURIComponent(input)}`
+)
 
-    result = `
-      <h2>Resultado</h2>
+.then(response => response.json())
 
-      <p><b>Proyecto:</b> SaaS</p>
+.then(result => {
 
-      <p><b>Viabilidad:</b> 72/100</p>
+  resultBox.innerHTML = `
 
-      <p><b>Riesgo:</b> 82/100</p>
+    <h2>Resultado</h2>
 
-      <p><b>Escalabilidad:</b> 95/100</p>
+    <p>
+      <b>Proyecto:</b>
+      ${result.project}
+    </p>
 
-      <p>
-        Excelente potencial de crecimiento
-        y escalabilidad.
-      </p>
+    <p>
+      <b>Inversión:</b>
+      ${result.estimatedInvestment}
+    </p>
+
+    <p>
+      <b>Viabilidad:</b>
+      ${result.viabilityScore}/100
+    </p>
+
+    <p>
+      <b>Riesgo:</b>
+      ${result.riskScore}/100
+    </p>
+
+    <p>
+      <b>Escalabilidad:</b>
+      ${result.scalabilityScore}/100
+    </p>
+
+    <p>
+      <b>Dificultad:</b>
+      ${result.difficulty}
+    </p>
+
+    <p>
+      <b>Tiempo:</b>
+      ${result.estimatedTime}
+    </p>
+
     `;
-
-  }
-
-  else if (
-    input.includes("consultoría") ||
-    input.includes("consultoria") ||
-    input.includes("ceo")
-  ) {
-
-    result = `
-      <h2>Resultado</h2>
-
-      <p><b>Proyecto:</b> Consulting IA</p>
-
-      <p><b>Viabilidad:</b> 84/100</p>
-
-      <p><b>Riesgo:</b> 52/100</p>
-
-      <p><b>Escalabilidad:</b> 88/100</p>
-
-      <p>
-        Modelo muy interesante para servicios
-        recurrentes y automatización IA.
-      </p>
-    `;
-
-  }
-
-  else {
-
-    result = `
-      <h2>Resultado</h2>
-
-      <p>
-        No se detectó un escenario válido.
-      </p>
-    `;
-
-  }
-
-  resultBox.innerHTML = result;
+});
 }
 
 </script>
