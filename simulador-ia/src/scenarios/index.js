@@ -6,11 +6,15 @@ const scenarios = {
     risk: "Medio-Alto",
     time: "3-12 meses",
     strategies: [
-      "Marketing digital",
-      "SEO",
-      "Publicidad en redes",
-      "Automatización logística"
-    ]
+  "Marketing digital",
+  "SEO",
+  "Publicidad en redes",
+  "Automatización logística"
+],
+
+viabilityScore: 78,
+riskScore: 65,
+scalabilityScore: 80
   },
 
   saas: {
@@ -23,7 +27,11 @@ const scenarios = {
       "Suscripción mensual",
       "Captación B2B",
       "Escalabilidad cloud"
-    ]
+    ],
+
+    viabilityScore: 72,
+riskScore: 82,
+scalabilityScore: 95
   },
 
   restaurant: {
@@ -36,7 +44,11 @@ const scenarios = {
       "Control de costes",
       "Marketing local",
       "Reservas online"
-    ]
+    ],
+    
+    viabilityScore: 68,
+riskScore: 85,
+scalabilityScore: 55
   }
 
 };

@@ -75,8 +75,13 @@ function simulateBusiness(type) {
     risk: scenario.risk,
     estimatedTime: scenario.time,
     recommendedStrategies: scenario.strategies,
-    conclusion:
-      "Proyecto viable con planificación y supervisión adecuada."
+
+viabilityScore: scenario.viabilityScore,
+riskScore: scenario.riskScore,
+scalabilityScore: scenario.scalabilityScore,
+
+conclusion:
+  "Proyecto viable con planificación y supervisión adecuada."
   };
 }
 
@@ -98,6 +103,21 @@ console.log("Proyecto:", result.project);
 console.log(
   "Inversión estimada:",
   result.estimatedInvestment
+);
+
+console.log(
+  "\nViabilidad:",
+  result.viabilityScore + "/100"
+);
+
+console.log(
+  "Riesgo estratégico:",
+  result.riskScore + "/100"
+);
+
+console.log(
+  "Escalabilidad:",
+  result.scalabilityScore + "/100"
 );
 
 console.log(
