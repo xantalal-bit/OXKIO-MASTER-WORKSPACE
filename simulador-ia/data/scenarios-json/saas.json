@@ -1,0 +1,16 @@
+{
+  "project": "saas",
+  "estimatedInvestment": "10000€ - 50000€",
+  "difficulty": "Alta",
+  "risk": "Alto",
+  "estimatedTime": "6-24 meses",
+  "recommendedStrategies": [
+    "MVP rápido",
+    "Suscripción mensual",
+    "Captación B2B",
+    "Escalabilidad cloud"
+  ],
+  "viabilityScore": 72,
+  "riskScore": 82,
+  "scalabilityScore": 95
+}
