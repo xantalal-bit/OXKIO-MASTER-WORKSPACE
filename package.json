@@ -1,4 +1,7 @@
 {
+  "scripts": {
+    "simulador": "node simulador-ia/src/server.js"
+  },
   "dependencies": {
     "dotenv": "^17.4.2",
     "googleapis": "^171.4.0"
