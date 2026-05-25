@@ -1,0 +1,24 @@
+{
+  "project": "restaurant",
+
+  "estimatedInvestment": "20000€ - 100000€",
+
+  "difficulty": "Alta",
+
+  "risk": "Alto",
+
+  "estimatedTime": "6-18 meses",
+
+  "recommendedStrategies": [
+    "Buena ubicación",
+    "Control de costes",
+    "Marketing local",
+    "Reservas online"
+  ],
+
+  "viabilityScore": 68,
+
+  "riskScore": 85,
+
+  "scalabilityScore": 55
+}
