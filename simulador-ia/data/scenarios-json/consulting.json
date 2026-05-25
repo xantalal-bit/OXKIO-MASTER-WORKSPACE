@@ -1,0 +1,25 @@
+{
+  "project": "consulting",
+
+  "estimatedInvestment": "5000€ - 30000€",
+
+  "difficulty": "Media-Alta",
+
+  "risk": "Medio",
+
+  "estimatedTime": "3-12 meses",
+
+  "recommendedStrategies": [
+    "Captación LinkedIn",
+    "Automatización IA",
+    "Servicios recurrentes",
+    "Marca profesional",
+    "Networking empresarial"
+  ],
+
+  "viabilityScore": 84,
+
+  "riskScore": 52,
+
+  "scalabilityScore": 88
+}
