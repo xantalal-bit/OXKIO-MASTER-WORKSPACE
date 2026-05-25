@@ -5,6 +5,8 @@ const loadScenarios = require("./scenarioLoader");
 
 const scenarios = loadScenarios();
 
+const runAgents = require("./agents/agentOrchestrator");
+
 const PORT = 3100;
 
 function detectScenario(text) {
@@ -110,6 +112,9 @@ const server = http.createServer((req, res) => {
 
     const result =
       simulateBusiness(detectedScenario);
+
+      result.agentAnalysis =
+  runAgents(result);
 
     res.writeHead(200, {
       "Content-Type":
