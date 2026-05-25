@@ -63,6 +63,8 @@
 
     <h1>OXKIO SIMULADOR IA EXECUTIVE</h1>
 
+    <div id="scenariosBox"></div>
+
     <p>
       Simulación estratégica empresarial experimental
     </p>
@@ -86,6 +88,15 @@
   </div>
 
   <script>
+
+    fetch("http://localhost:3100/scenarios")
+  .then(response => response.json())
+  .then(scenarios => {
+    document.getElementById("scenariosBox").innerHTML =
+      "<p><b>Escenarios disponibles:</b> " +
+      scenarios.join(", ") +
+      "</p>";
+  });
 
 function runSimulation() {
 
