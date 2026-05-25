@@ -84,6 +84,22 @@ const server = http.createServer((req, res) => {
   const parsedUrl =
     url.parse(req.url, true);
 
+    if (parsedUrl.pathname === "/scenarios") {
+
+  res.writeHead(200, {
+    "Content-Type": "application/json",
+    "Access-Control-Allow-Origin": "*"
+  });
+
+  res.end(
+    JSON.stringify(
+      Object.keys(scenarios)
+    )
+  );
+
+  return;
+}
+
   if (parsedUrl.pathname === "/simulate") {
 
     const prompt =
