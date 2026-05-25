@@ -1,13 +1,26 @@
 const http = require("http");
 const url = require("url");
 
-const scenarios = require("./scenarios");
+const loadScenarios = require("./scenarioLoader");
+
+const scenarios = loadScenarios();
 
 const PORT = 3100;
 
 function detectScenario(text) {
 
   const input = text.toLowerCase();
+
+  const scenarioKeys = Object.keys(scenarios);
+
+  const directMatch =
+    scenarioKeys.find(key =>
+      input.includes(key)
+    );
+
+  if (directMatch) {
+    return directMatch;
+  }
 
   if (
     input.includes("restaurante") ||
