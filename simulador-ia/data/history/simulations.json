@@ -1,0 +1,192 @@
+[
+  {
+    "id": 1779989408022,
+    "createdAt": "2026-05-28T17:30:08.022Z",
+    "prompt": "quiero montar una consultoría IA",
+    "scenario": "consulting",
+    "result": {
+      "project": "consulting",
+      "difficulty": "Media-Alta",
+      "risk": "Medio",
+      "viabilityScore": 84,
+      "riskScore": 52,
+      "scalabilityScore": 88,
+      "agentAnalysis": {
+        "agents": [
+          {
+            "agent": "CEO Agent",
+            "focus": "visión estratégica y toma de decisiones",
+            "recommendations": [
+              "Priorizar validación comercial rápida.",
+              "Diseñar modelo escalable desde el inicio."
+            ]
+          },
+          {
+            "agent": "Risk Agent",
+            "focus": "riesgos y sostenibilidad",
+            "alerts": []
+          },
+          {
+            "agent": "Marketing Agent",
+            "focus": "crecimiento y captación",
+            "strategies": [
+              "Potenciar campañas digitales escalables.",
+              "Fortalecer marca personal en LinkedIn."
+            ]
+          },
+          {
+            "agent": "Finance Agent",
+            "focus": "análisis financiero y sostenibilidad económica",
+            "recommendations": [
+              "El proyecto presenta buena viabilidad financiera potencial.",
+              "El modelo puede beneficiarse de crecimiento escalable y economías de escala."
+            ]
+          }
+        ]
+      }
+    }
+  },
+  {
+    "id": 1779989403453,
+    "createdAt": "2026-05-28T17:30:03.453Z",
+    "prompt": "quiero montar una consultoría IA",
+    "scenario": "consulting",
+    "result": {
+      "project": "consulting",
+      "difficulty": "Media-Alta",
+      "risk": "Medio",
+      "viabilityScore": 84,
+      "riskScore": 52,
+      "scalabilityScore": 88,
+      "agentAnalysis": {
+        "agents": [
+          {
+            "agent": "CEO Agent",
+            "focus": "visión estratégica y toma de decisiones",
+            "recommendations": [
+              "Priorizar validación comercial rápida.",
+              "Diseñar modelo escalable desde el inicio."
+            ]
+          },
+          {
+            "agent": "Risk Agent",
+            "focus": "riesgos y sostenibilidad",
+            "alerts": []
+          },
+          {
+            "agent": "Marketing Agent",
+            "focus": "crecimiento y captación",
+            "strategies": [
+              "Potenciar campañas digitales escalables.",
+              "Fortalecer marca personal en LinkedIn."
+            ]
+          },
+          {
+            "agent": "Finance Agent",
+            "focus": "análisis financiero y sostenibilidad económica",
+            "recommendations": [
+              "El proyecto presenta buena viabilidad financiera potencial.",
+              "El modelo puede beneficiarse de crecimiento escalable y economías de escala."
+            ]
+          }
+        ]
+      }
+    }
+  },
+  {
+    "id": 1779989384542,
+    "createdAt": "2026-05-28T17:29:44.542Z",
+    "prompt": "quiero abrir un restaurante",
+    "scenario": "restaurant",
+    "result": {
+      "project": "restaurant",
+      "difficulty": "Alta",
+      "risk": "Alto",
+      "viabilityScore": 68,
+      "riskScore": 85,
+      "scalabilityScore": 55,
+      "agentAnalysis": {
+        "agents": [
+          {
+            "agent": "CEO Agent",
+            "focus": "visión estratégica y toma de decisiones",
+            "recommendations": [
+              "Reducir riesgo antes de escalar inversión."
+            ]
+          },
+          {
+            "agent": "Risk Agent",
+            "focus": "riesgos y sostenibilidad",
+            "alerts": [
+              "Riesgo estratégico elevado.",
+              "Escalabilidad limitada."
+            ]
+          },
+          {
+            "agent": "Marketing Agent",
+            "focus": "crecimiento y captación",
+            "strategies": [
+              "Impulsar marketing local y reseñas online."
+            ]
+          },
+          {
+            "agent": "Finance Agent",
+            "focus": "análisis financiero y sostenibilidad económica",
+            "recommendations": [
+              "Se recomienda mantener reservas financieras por alto riesgo."
+            ]
+          }
+        ]
+      }
+    }
+  },
+  {
+    "id": 1779989368555,
+    "createdAt": "2026-05-28T17:29:28.555Z",
+    "prompt": "quiero crear un saas para empresas",
+    "scenario": "saas",
+    "result": {
+      "project": "saas",
+      "difficulty": "Alta",
+      "risk": "Alto",
+      "viabilityScore": 72,
+      "riskScore": 82,
+      "scalabilityScore": 95,
+      "agentAnalysis": {
+        "agents": [
+          {
+            "agent": "CEO Agent",
+            "focus": "visión estratégica y toma de decisiones",
+            "recommendations": [
+              "Reducir riesgo antes de escalar inversión.",
+              "Diseñar modelo escalable desde el inicio."
+            ]
+          },
+          {
+            "agent": "Risk Agent",
+            "focus": "riesgos y sostenibilidad",
+            "alerts": [
+              "Riesgo estratégico elevado."
+            ]
+          },
+          {
+            "agent": "Marketing Agent",
+            "focus": "crecimiento y captación",
+            "strategies": [
+              "Potenciar campañas digitales escalables.",
+              "Priorizar captación B2B automatizada."
+            ]
+          },
+          {
+            "agent": "Finance Agent",
+            "focus": "análisis financiero y sostenibilidad económica",
+            "recommendations": [
+              "Se recomienda mantener reservas financieras por alto riesgo.",
+              "El modelo puede beneficiarse de crecimiento escalable y economías de escala."
+            ]
+          }
+        ]
+      }
+    }
+  }
+]
