@@ -3,16 +3,28 @@ const analyzeRisk = require("./riskAgent");
 const analyzeMarketing = require("./marketingAgent");
 const analyzeFinance = require("./financeAgent");
 
-
-function runAgents(simulation) {
+async function runAgents(
+  simulation,
+  prompt
+) {
 
   return {
+
     agents: [
-      analyzeAsCEO(simulation),
+
+      await analyzeAsCEO(
+        simulation,
+        prompt
+      ),
+
       analyzeRisk(simulation),
+
       analyzeMarketing(simulation),
+
       analyzeFinance(simulation)
+
     ]
+
   };
 
 }

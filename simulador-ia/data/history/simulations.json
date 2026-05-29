@@ -1,5 +1,291 @@
 [
   {
+    "id": 1780074500494,
+    "createdAt": "2026-05-29T17:08:20.494Z",
+    "prompt": "quiero una asesoría para CEOs",
+    "scenario": "consulting",
+    "result": {
+      "project": "consulting",
+      "difficulty": "Media-Alta",
+      "risk": "Medio",
+      "viabilityScore": 84,
+      "riskScore": 52,
+      "scalabilityScore": 88,
+      "agentAnalysis": {
+        "agents": [
+          {
+            "agent": "CEO Agent",
+            "focus": "visión estratégica y toma de decisiones",
+            "recommendations": [
+              "Análisis ejecutivo:  \nEl proyecto de consulting con viabilidad 84/100 y alta escalabilidad (88/100) presenta una sólida base para ofrecer asesoría a CEOs, aprovechando la demanda creciente de servicios especializados que integren tecnología y estrategia empresarial.\n\nRiesgos:  \nCon un riesgo moderado (52/100), los principales desafíos incluyen la saturación del mercado, la diferenciación frente a competidores y la necesidad de mantener actualización constante en tendencias tecnológicas y de negocio.\n\nOportunidad:  \nLa alta escalabilidad indica potencial para expansión rápida, especialmente si se incorporan elementos de automatización, IA y modelos SaaS para ofrecer asesorías personalizadas y escalables, maximizando el alcance y eficiencia.\n\nRecomendación estratégica:  \nEnfocar el desarrollo en una plataforma SaaS que combine IA para diagnósticos rápidos y recomendaciones personalizadas, apoyada en contenido exclusivo y networking de alto valor. Priorizar alianzas estratégicas y marketing dirigido a CEOs de startups y empresas en crecimiento para capturar nichos con alto presupuesto. Implementar métricas claras de éxito y feedback continuo para iterar el producto y minimizar riesgos."
+            ]
+          },
+          {
+            "agent": "Risk Agent",
+            "focus": "riesgos y sostenibilidad",
+            "alerts": []
+          },
+          {
+            "agent": "Marketing Agent",
+            "focus": "crecimiento y captación",
+            "strategies": [
+              "Potenciar campañas digitales escalables.",
+              "Fortalecer marca personal en LinkedIn."
+            ]
+          },
+          {
+            "agent": "Finance Agent",
+            "focus": "análisis financiero y sostenibilidad económica",
+            "recommendations": [
+              "El proyecto presenta buena viabilidad financiera potencial.",
+              "El modelo puede beneficiarse de crecimiento escalable y economías de escala."
+            ]
+          }
+        ]
+      }
+    }
+  },
+  {
+    "id": 1780074479331,
+    "createdAt": "2026-05-29T17:07:59.331Z",
+    "prompt": "quiero una IA para clínicas dentales",
+    "scenario": "saas",
+    "result": {
+      "project": "saas",
+      "difficulty": "Alta",
+      "risk": "Alto",
+      "viabilityScore": 72,
+      "riskScore": 82,
+      "scalabilityScore": 95,
+      "agentAnalysis": {
+        "agents": [
+          {
+            "agent": "CEO Agent",
+            "focus": "visión estratégica y toma de decisiones",
+            "recommendations": [
+              "Análisis Ejecutivo:  \nEl proyecto SaaS con IA para clínicas dentales presenta alta escalabilidad (95/100), lo que indica fuerte potencial de crecimiento y expansión en múltiples mercados. La viabilidad de 72/100 es razonable, pero el riesgo elevado (82/100) refleja posibles desafíos en adopción, regulación y desarrollo tecnológico.\n\nRiesgos:  \n- Alta competencia en SaaS y soluciones IA para salud.  \n- Barreras regulatorias y cumplimiento de normativas sanitarias.  \n- Dependencia de datos sensibles y privacidad de pacientes.  \n- Resistencia al cambio por parte de clínicas tradicionales.  \n\nOportunidad:  \n- Automatización y optimización de procesos administrativos y clínicos.  \n- Mejora en diagnóstico y tratamiento personalizado.  \n- Mercado dental en crecimiento con demanda de digitalización.  \n- Potencial integración con sistemas de gestión existentes.  \n\nRecomendación Estratégica:  \nPriorizar desarrollo modular y compliance regulatorio para mitigar riesgos. Enfocar MVP en funciones de alto valor inmediato (e.g., gestión citas, recordatorios, historial clínico). Establecer alianzas tempranas con clínicas para pilotaje y feedback. Invertir en educación y soporte para facilitar adopción. Buscar"
+            ]
+          },
+          {
+            "agent": "Risk Agent",
+            "focus": "riesgos y sostenibilidad",
+            "alerts": [
+              "Riesgo estratégico elevado."
+            ]
+          },
+          {
+            "agent": "Marketing Agent",
+            "focus": "crecimiento y captación",
+            "strategies": [
+              "Potenciar campañas digitales escalables.",
+              "Priorizar captación B2B automatizada."
+            ]
+          },
+          {
+            "agent": "Finance Agent",
+            "focus": "análisis financiero y sostenibilidad económica",
+            "recommendations": [
+              "Se recomienda mantener reservas financieras por alto riesgo.",
+              "El modelo puede beneficiarse de crecimiento escalable y economías de escala."
+            ]
+          }
+        ]
+      }
+    }
+  },
+  {
+    "id": 1780074455895,
+    "createdAt": "2026-05-29T17:07:35.895Z",
+    "prompt": "quiero una plataforma IA para despachos profesionales",
+    "scenario": "saas",
+    "result": {
+      "project": "saas",
+      "difficulty": "Alta",
+      "risk": "Alto",
+      "viabilityScore": 72,
+      "riskScore": 82,
+      "scalabilityScore": 95,
+      "agentAnalysis": {
+        "agents": [
+          {
+            "agent": "CEO Agent",
+            "focus": "visión estratégica y toma de decisiones",
+            "recommendations": [
+              "Análisis Ejecutivo:  \nEl proyecto SaaS para despachos profesionales con IA presenta alta escalabilidad (95/100), lo que indica un potencial significativo para crecer y adaptarse a diferentes mercados. La viabilidad (72/100) es favorable, aunque con margen de mejora, sugiriendo que el producto y modelo de negocio son sólidos pero requieren optimización. El riesgo elevado (82/100) señala incertidumbres importantes, posiblemente en adopción de mercado, competencia o desarrollo tecnológico.\n\nRiesgos:  \n- Resistencia al cambio en despachos tradicionales.  \n- Competencia de soluciones establecidas o emergentes.  \n- Complejidad en integración con sistemas existentes.  \n- Dependencia de calidad y precisión de la IA.  \n- Regulación y cumplimiento normativo.\n\nOportunidad:  \n- Automatización y optimización de procesos administrativos y legales.  \n- Reducción de costos y mejora en eficiencia operativa.  \n- Diferenciación mediante IA avanzada y personalización.  \n- Expansión a nichos contables, legales y consultoría.  \n- Crecimiento del mercado SaaS en servicios profesionales.\n\nRecomendación Estratégica:  \nPriorizar validación de producto con clientes clave para reducir riesgos. Invert"
+            ]
+          },
+          {
+            "agent": "Risk Agent",
+            "focus": "riesgos y sostenibilidad",
+            "alerts": [
+              "Riesgo estratégico elevado."
+            ]
+          },
+          {
+            "agent": "Marketing Agent",
+            "focus": "crecimiento y captación",
+            "strategies": [
+              "Potenciar campañas digitales escalables.",
+              "Priorizar captación B2B automatizada."
+            ]
+          },
+          {
+            "agent": "Finance Agent",
+            "focus": "análisis financiero y sostenibilidad económica",
+            "recommendations": [
+              "Se recomienda mantener reservas financieras por alto riesgo.",
+              "El modelo puede beneficiarse de crecimiento escalable y economías de escala."
+            ]
+          }
+        ]
+      }
+    }
+  },
+  {
+    "id": 1780072106898,
+    "createdAt": "2026-05-29T16:28:26.898Z",
+    "prompt": "quiero crear un saas de automatización para despachos profesionales en España",
+    "scenario": "saas",
+    "result": {
+      "project": "saas",
+      "difficulty": "Alta",
+      "risk": "Alto",
+      "viabilityScore": 72,
+      "riskScore": 82,
+      "scalabilityScore": 95,
+      "agentAnalysis": {
+        "agents": [
+          {
+            "agent": "CEO Agent",
+            "focus": "visión estratégica y toma de decisiones",
+            "recommendations": [
+              "Análisis ejecutivo:  \nEl mercado de despachos profesionales en España presenta una demanda creciente por soluciones que optimicen procesos y reduzcan tiempos administrativos. La alta escalabilidad (95/100) indica que tu SaaS puede crecer rápidamente y adaptarse a múltiples nichos dentro del sector. La viabilidad es buena (72/100), pero el riesgo elevado (82/100) apunta a desafíos en adopción, competencia y regulación.\n\nRiesgos:  \n- Alta competencia en SaaS de automatización.  \n- Barreras de adopción tecnológica en despachos tradicionales.  \n- Cumplimiento normativo y protección de datos (RGPD).  \n- Dependencia de integraciones con sistemas existentes.\n\nOportunidad:  \n- Digitalización acelerada en el sector legal, contable y fiscal.  \n- Escasa oferta de soluciones específicas para despachos profesionales en España.  \n- Potencial para crear ecosistema de servicios complementarios (consultoría, soporte).  \n- Posibilidad de diferenciación con IA para automatización inteligente.\n\nRecomendación estratégica:  \nEnfócate en validar rápidamente el producto con despachos clave para ajustar funcionalidad y UX. Invierte en cumplimiento normativo y seguridad desde el inicio. Explora alianzas"
+            ]
+          },
+          {
+            "agent": "Risk Agent",
+            "focus": "riesgos y sostenibilidad",
+            "alerts": [
+              "Riesgo estratégico elevado."
+            ]
+          },
+          {
+            "agent": "Marketing Agent",
+            "focus": "crecimiento y captación",
+            "strategies": [
+              "Potenciar campañas digitales escalables.",
+              "Priorizar captación B2B automatizada."
+            ]
+          },
+          {
+            "agent": "Finance Agent",
+            "focus": "análisis financiero y sostenibilidad económica",
+            "recommendations": [
+              "Se recomienda mantener reservas financieras por alto riesgo.",
+              "El modelo puede beneficiarse de crecimiento escalable y economías de escala."
+            ]
+          }
+        ]
+      }
+    }
+  },
+  {
+    "id": 1779992546615,
+    "createdAt": "2026-05-28T18:22:26.615Z",
+    "prompt": "quiero crear un saas de automatización para empresas",
+    "scenario": "saas",
+    "result": {
+      "project": "saas",
+      "difficulty": "Alta",
+      "risk": "Alto",
+      "viabilityScore": 72,
+      "riskScore": 82,
+      "scalabilityScore": 95,
+      "agentAnalysis": {
+        "agents": [
+          {
+            "agent": "CEO Agent",
+            "focus": "visión estratégica y toma de decisiones",
+            "recommendations": [
+              "No se pudo generar análisis IA."
+            ]
+          },
+          {
+            "agent": "Risk Agent",
+            "focus": "riesgos y sostenibilidad",
+            "alerts": [
+              "Riesgo estratégico elevado."
+            ]
+          },
+          {
+            "agent": "Marketing Agent",
+            "focus": "crecimiento y captación",
+            "strategies": [
+              "Potenciar campañas digitales escalables.",
+              "Priorizar captación B2B automatizada."
+            ]
+          },
+          {
+            "agent": "Finance Agent",
+            "focus": "análisis financiero y sostenibilidad económica",
+            "recommendations": [
+              "Se recomienda mantener reservas financieras por alto riesgo.",
+              "El modelo puede beneficiarse de crecimiento escalable y economías de escala."
+            ]
+          }
+        ]
+      }
+    }
+  },
+  {
+    "id": 1779992295005,
+    "createdAt": "2026-05-28T18:18:15.005Z",
+    "prompt": "quiero crear un saas de automatización para despachos profesionales",
+    "scenario": "saas",
+    "result": {
+      "project": "saas",
+      "difficulty": "Alta",
+      "risk": "Alto",
+      "viabilityScore": 72,
+      "riskScore": 82,
+      "scalabilityScore": 95,
+      "agentAnalysis": {
+        "agents": [
+          {
+            "agent": "CEO Agent",
+            "focus": "visión estratégica y toma de decisiones",
+            "recommendations": [
+              "No se pudo generar análisis IA."
+            ]
+          },
+          {
+            "agent": "Risk Agent",
+            "focus": "riesgos y sostenibilidad",
+            "alerts": [
+              "Riesgo estratégico elevado."
+            ]
+          },
+          {
+            "agent": "Marketing Agent",
+            "focus": "crecimiento y captación",
+            "strategies": [
+              "Potenciar campañas digitales escalables.",
+              "Priorizar captación B2B automatizada."
+            ]
+          },
+          {
+            "agent": "Finance Agent",
+            "focus": "análisis financiero y sostenibilidad económica",
+            "recommendations": [
+              "Se recomienda mantener reservas financieras por alto riesgo.",
+              "El modelo puede beneficiarse de crecimiento escalable y economías de escala."
+            ]
+          }
+        ]
+      }
+    }
+  },
+  {
     "id": 1779989408022,
     "createdAt": "2026-05-28T17:30:08.022Z",
     "prompt": "quiero montar una consultoría IA",

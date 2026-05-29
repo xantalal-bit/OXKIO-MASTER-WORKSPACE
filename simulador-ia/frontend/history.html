@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <title>Oxkio Executive History</title>
+
+  <style>
+
+    body {
+      margin: 0;
+      background: radial-gradient(circle at top, #1e293b, #020617);
+      color: white;
+      font-family: Arial, sans-serif;
+      padding: 40px;
+    }
+
+    .container {
+      max-width: 1200px;
+      margin: auto;
+    }
+
+    h1 {
+      color: #38bdf8;
+      font-size: 40px;
+      margin-bottom: 10px;
+    }
+
+    .subtitle {
+      color: #cbd5e1;
+      margin-bottom: 30px;
+      font-size: 18px;
+    }
+
+    .history-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+      gap: 24px;
+    }
+
+    .history-card {
+      background: linear-gradient(180deg, #0f172a, #020617);
+      border: 1px solid #334155;
+      border-radius: 20px;
+      padding: 22px;
+      box-shadow: 0 20px 40px rgba(0,0,0,0.25);
+    }
+
+    .history-card h2 {
+      color: #38bdf8;
+      margin-top: 0;
+      margin-bottom: 12px;
+    }
+
+    .prompt {
+      color: #e2e8f0;
+      margin-bottom: 20px;
+      line-height: 1.5;
+    }
+
+    .metric {
+      margin-bottom: 12px;
+    }
+
+    .metric span {
+      color: #94a3b8;
+      font-size: 14px;
+      display: block;
+      margin-bottom: 4px;
+    }
+
+    .metric strong {
+      color: #38bdf8;
+      font-size: 22px;
+    }
+
+    .date {
+      margin-top: 18px;
+      color: #64748b;
+      font-size: 13px;
+    }
+
+    .empty {
+      color: #94a3b8;
+      text-align: center;
+      padding: 50px;
+    }
+
+  </style>
+</head>
+
+<body>
+
+  <div class="container">
+
+    <h1>OXKIO EXECUTIVE MEMORY</h1>
+
+    <p class="subtitle">
+      Historial inteligente de simulaciones estratégicas y análisis multiagente.
+    </p>
+
+    <div id="historyContainer" class="history-grid">
+      <p class="empty">Cargando historial ejecutivo...</p>
+    </div>
+
+  </div>
+
+  <script>
+
+    fetch("http://localhost:3100/history")
+
+      .then(response => response.json())
+
+      .then(history => {
+
+        const container =
+          document.getElementById("historyContainer");
+
+        if (!history.length) {
+
+          container.innerHTML = `
+            <p class="empty">
+              No existen simulaciones guardadas.
+            </p>
+          `;
+
+          return;
+        }
+
+        container.innerHTML =
+          history.map(item => `
+
+            <div class="history-card">
+
+              <h2>
+                ${item.scenario.toUpperCase()}
+              </h2>
+
+              <div class="prompt">
+                "${item.prompt}"
+              </div>
+
+              <div class="metric">
+                <span>Viabilidad</span>
+                <strong>
+                  ${item.result.viabilityScore}/100
+                </strong>
+              </div>
+
+              <div class="metric">
+                <span>Riesgo</span>
+                <strong>
+                  ${item.result.riskScore}/100
+                </strong>
+              </div>
+
+              <div class="metric">
+                <span>Escalabilidad</span>
+                <strong>
+                  ${item.result.scalabilityScore}/100
+                </strong>
+              </div>
+
+              <div class="metric">
+                <span>Dificultad</span>
+                <strong>
+                  ${item.result.difficulty}
+                </strong>
+              </div>
+
+              <div class="date">
+                ${new Date(item.createdAt).toLocaleString()}
+              </div>
+
+            </div>
+
+          `).join("");
+
+      });
+
+  </script>
+
+</body>
+</html>

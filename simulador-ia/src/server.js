@@ -24,29 +24,48 @@ function detectScenario(text) {
 
   if (directMatch) return directMatch;
 
-  if (input.includes("restaurante") || input.includes("restaurant")) {
-    return "restaurant";
-  }
-
-  if (input.includes("tienda") || input.includes("ecommerce")) {
-    return "ecommerce";
-  }
-
-  if (input.includes("saas") || input.includes("software")) {
+  if (
+    input.includes("saas") ||
+    input.includes("software") ||
+    input.includes("plataforma") ||
+    input.includes("app") ||
+    input.includes("aplicación") ||
+    input.includes("automatizar") ||
+    input.includes("automatización") ||
+    input.includes("despachos") ||
+    input.includes("legaltech") ||
+    input.includes("healthtech") ||
+    input.includes("edtech") ||
+    input.includes("ia para")
+  ) {
     return "saas";
+  }
+
+  if (
+    input.includes("restaurante") ||
+    input.includes("restaurant") ||
+    input.includes("bar") ||
+    input.includes("cafetería") ||
+    input.includes("hostelería")
+  ) {
+    return "restaurant";
   }
 
   if (
     input.includes("consultoría") ||
     input.includes("consultoria") ||
+    input.includes("consultor") ||
     input.includes("empresa") ||
     input.includes("ceo") ||
-    input.includes("negocio")
+    input.includes("negocio") ||
+    input.includes("servicios profesionales") ||
+    input.includes("asesoría") ||
+    input.includes("asesoria")
   ) {
     return "consulting";
   }
 
-  return null;
+  return "consulting";
 }
 
 function simulateBusiness(type) {
@@ -71,7 +90,7 @@ function simulateBusiness(type) {
   };
 }
 
-const server = http.createServer((req, res) => {
+const server = http.createServer(async (req, res) => {
   const parsedUrl = url.parse(req.url, true);
 
   if (parsedUrl.pathname === "/") {
@@ -85,6 +104,18 @@ const server = http.createServer((req, res) => {
     res.end(html);
     return;
   }
+
+if (parsedUrl.pathname === "/history-ui") {
+  const historyPath = path.join(__dirname, "../frontend/history.html");
+  const html = fs.readFileSync(historyPath, "utf8");
+
+  res.writeHead(200, {
+    "Content-Type": "text/html; charset=utf-8"
+  });
+
+  res.end(html);
+  return;
+}
 
   if (parsedUrl.pathname === "/scenarios") {
     res.writeHead(200, {
@@ -104,7 +135,10 @@ const server = http.createServer((req, res) => {
     if (!result.error) {
 
   result.agentAnalysis =
-    runAgents(result);
+  await runAgents(
+    result,
+    prompt
+  );
 
   saveSimulation({
     prompt,

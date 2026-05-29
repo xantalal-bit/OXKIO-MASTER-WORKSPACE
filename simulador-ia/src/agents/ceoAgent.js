@@ -1,29 +1,29 @@
-function analyzeAsCEO(simulation) {
+const {
+  generateCEOAnalysis
+} = require("../openaiClient");
 
-  const recommendations = [];
+async function analyzeAsCEO(
+  simulation,
+  prompt
+) {
 
-  if (simulation.viabilityScore >= 80) {
-    recommendations.push(
-      "Priorizar validación comercial rápida."
+  const aiAnalysis =
+    await generateCEOAnalysis(
+      prompt,
+      simulation
     );
-  }
-
-  if (simulation.riskScore >= 80) {
-    recommendations.push(
-      "Reducir riesgo antes de escalar inversión."
-    );
-  }
-
-  if (simulation.scalabilityScore >= 85) {
-    recommendations.push(
-      "Diseñar modelo escalable desde el inicio."
-    );
-  }
 
   return {
+
     agent: "CEO Agent",
-    focus: "visión estratégica y toma de decisiones",
-    recommendations
+
+    focus:
+      "visión estratégica y toma de decisiones",
+
+    recommendations: [
+      aiAnalysis
+    ]
+
   };
 }
 
