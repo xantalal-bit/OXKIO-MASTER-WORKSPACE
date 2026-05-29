@@ -1,5 +1,53 @@
 [
   {
+    "id": 1780075594425,
+    "createdAt": "2026-05-29T17:26:34.425Z",
+    "prompt": "quiero crear una plataforma IA para automatizar despachos profesionales",
+    "scenario": "saas",
+    "result": {
+      "project": "saas",
+      "difficulty": "Alta",
+      "risk": "Alto",
+      "viabilityScore": 72,
+      "riskScore": 82,
+      "scalabilityScore": 95,
+      "agentAnalysis": {
+        "agents": [
+          {
+            "agent": "CEO Agent",
+            "focus": "visión estratégica y toma de decisiones",
+            "recommendations": [
+              "Análisis ejecutivo:\nEl proyecto SaaS para automatizar despachos profesionales con IA presenta alta escalabilidad (95/100), lo que indica un gran potencial de crecimiento y expansión en mercados diversos. La viabilidad (72/100) es sólida, pero requiere ajustes para optimizar la implementación técnica y operativa. El riesgo elevado (82/100) sugiere desafíos en adopción, competencia y ejecución.\n\nRiesgos:\n- Alta competencia en soluciones de automatización y IA.\n- Barreras de adopción tecnológica en despachos tradicionales.\n- Complejidad en integración con sistemas existentes.\n- Regulaciones y privacidad de datos profesionales.\n- Dependencia de calidad y precisión del modelo IA.\n\nOportunidad:\n- Mercado profesional con necesidad creciente de eficiencia operativa.\n- Reducción significativa de costos y tiempos para clientes.\n- Potencial para expandirse a múltiples sectores legales, contables y consultorías.\n- Diferenciación mediante personalización y actualización continua del motor IA.\n\nRecomendación estratégica:\nPriorizar validación de producto con pilotos en despachos clave para ajustar funcionalidad y UX. Invertir en integración flexible y en cumplimiento normativo riguroso. Fortalecer propuesta de valor con soporte y capacitación. Buscar"
+            ]
+          },
+          {
+            "agent": "Risk Agent",
+            "focus": "riesgos y sostenibilidad",
+            "alerts": [
+              "Riesgo estratégico elevado."
+            ]
+          },
+          {
+            "agent": "Marketing Agent",
+            "focus": "crecimiento y captación",
+            "strategies": [
+              "Potenciar campañas digitales escalables.",
+              "Priorizar captación B2B automatizada."
+            ]
+          },
+          {
+            "agent": "Finance Agent",
+            "focus": "análisis financiero y sostenibilidad económica",
+            "recommendations": [
+              "Se recomienda mantener reservas financieras por alto riesgo.",
+              "El modelo puede beneficiarse de crecimiento escalable y economías de escala."
+            ]
+          }
+        ]
+      }
+    }
+  },
+  {
     "id": 1780074500494,
     "createdAt": "2026-05-29T17:08:20.494Z",
     "prompt": "quiero una asesoría para CEOs",
