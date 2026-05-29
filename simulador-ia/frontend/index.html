@@ -196,6 +196,10 @@
   Generar Informe Ejecutivo
 </button>
 
+<button onclick="exportExecutivePDF()">
+  Exportar PDF Ejecutivo
+</button>
+
     <div class="result" id="resultBox">
       <h2>Resultado ejecutivo</h2>
       <p>Aquí aparecerá la simulación y el análisis multiagente.</p>
@@ -403,6 +407,17 @@ async function generateExecutiveReport() {
   }
 
 }
+
+function exportExecutivePDF() {
+  const prompt =
+    document.getElementById("promptInput").value;
+
+  const url =
+    `http://localhost:3100/report-pdf?prompt=${encodeURIComponent(prompt)}`;
+
+  window.open(url, "_blank");
+}
+
   </script>
 
 </body>

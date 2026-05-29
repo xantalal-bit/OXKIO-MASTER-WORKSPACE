@@ -10,6 +10,10 @@ const {
   getHistory
 } = require("./simulationHistory");
 
+const {
+  generateExecutivePDF
+} = require("./pdfGenerator");
+
 const scenarios = loadScenarios();
 
 const PORT = 3100;
@@ -156,6 +160,27 @@ if (parsedUrl.pathname === "/history-ui") {
     res.end(JSON.stringify(result));
     return;
   }
+
+if (parsedUrl.pathname === "/report-pdf") {
+  const prompt = parsedUrl.query.prompt || "";
+  const detectedScenario = detectScenario(prompt);
+  const result = simulateBusiness(detectedScenario);
+
+  if (!result.error) {
+    result.agentAnalysis =
+      await runAgents(
+        result,
+        prompt
+      );
+  }
+
+  generateExecutivePDF(
+    res,
+    result
+  );
+
+  return;
+}
 
 if (parsedUrl.pathname === "/history") {
 
