@@ -15,6 +15,10 @@ const {
   generateExecutivePDF
 } = require("./pdfGenerator");
 
+const {
+  generateExecutiveDecision
+} = require("./openaiClient");
+
 const scenarios = loadScenarios();
 
 const PORT = 3100;
@@ -204,6 +208,66 @@ if (parsedUrl.pathname === "/insights") {
   return;
 }
 
+if (parsedUrl.pathname === "/decision") {
+
+  const promptA =
+    parsedUrl.query.a || "";
+
+  const promptB =
+    parsedUrl.query.b || "";
+
+  const scenarioA =
+    detectScenario(promptA);
+
+  const scenarioB =
+    detectScenario(promptB);
+
+  const projectA =
+    simulateBusiness(scenarioA);
+
+  const projectB =
+    simulateBusiness(scenarioB);
+
+  const scoreA =
+    projectA.viabilityScore +
+    projectA.scalabilityScore -
+    projectA.riskScore;
+
+  const scoreB =
+    projectB.viabilityScore +
+    projectB.scalabilityScore -
+    projectB.riskScore;
+
+  const globalWinner =
+    scoreA > scoreB
+      ? "Proyecto A"
+      : "Proyecto B";
+
+  const decision =
+    await generateExecutiveDecision(
+      projectA,
+      projectB,
+      globalWinner
+    );
+
+  res.writeHead(200, {
+    "Content-Type": "application/json; charset=utf-8",
+    "Access-Control-Allow-Origin": "*"
+  });
+
+  res.end(
+    JSON.stringify({
+      projectA,
+      projectB,
+      scoreA,
+      scoreB,
+      globalWinner,
+      decision
+    })
+  );
+
+  return;
+}
 
 if (parsedUrl.pathname === "/history") {
 
