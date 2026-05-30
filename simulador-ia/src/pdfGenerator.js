@@ -1,9 +1,17 @@
 const PDFDocument = require("pdfkit");
 
+const path = require("path");
+
 function generateExecutivePDF(res, data) {
+
   const doc = new PDFDocument({
     margin: 50
   });
+
+const logoPath = path.join(
+    __dirname,
+    "../../app/favicon.png"
+  );
 
   res.writeHead(200, {
     "Content-Type": "application/pdf",
@@ -12,9 +20,24 @@ function generateExecutivePDF(res, data) {
 
   doc.pipe(res);
 
+  doc.image(logoPath, 50, 45, {
+    width: 55
+  });
+
+  doc.moveDown(2);
+
   doc
-    .fontSize(22)
+    .fontSize(24)
+    .fillColor("#0f172a")
     .text("OXKIO EXECUTIVE REPORT", {
+      align: "center"
+    });
+
+  doc
+    .moveDown(0.5)
+    .fontSize(11)
+    .fillColor("#475569")
+    .text("Confidential Executive Intelligence Report", {
       align: "center"
     });
 
@@ -80,13 +103,28 @@ function generateExecutivePDF(res, data) {
       align: "left"
     });
 
-  doc.moveDown();
+  doc.addPage();
+
+doc.image(logoPath, 50, 35, {
+  width: 35
+});
 
   doc
-    .fontSize(16)
-    .text("Comité IA", {
-      underline: true
+    .fontSize(20)
+    .fillColor("#0f172a")
+    .text("COMITÉ IA EXECUTIVE", {
+      align: "center"
     });
+
+  doc
+    .moveDown(0.5)
+    .fontSize(10)
+    .fillColor("#64748b")
+    .text("Análisis multiagente generado por Oxkio", {
+      align: "center"
+    });
+
+  doc.moveDown(2);
 
   if (
     data.agentAnalysis &&
@@ -124,6 +162,7 @@ function generateExecutivePDF(res, data) {
     .text("Generado por Oxkio Executive Intelligence Engine", {
       align: "center"
     });
+
 
   doc.end();
 }

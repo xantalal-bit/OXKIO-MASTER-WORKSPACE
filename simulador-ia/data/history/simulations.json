@@ -1,5 +1,629 @@
 [
   {
+    "id": 1780132624125,
+    "createdAt": "2026-05-30T09:17:04.125Z",
+    "prompt": "quiero realizar una automatización del flujo de un documento presupuesto para desglosarlo en diferentes partidas y sectores",
+    "scenario": "saas",
+    "result": {
+      "project": "saas",
+      "difficulty": "Alta",
+      "risk": "Alto",
+      "viabilityScore": 72,
+      "riskScore": 82,
+      "scalabilityScore": 95,
+      "agentAnalysis": {
+        "agents": [
+          {
+            "agent": "CEO Agent",
+            "focus": "visión estratégica y toma de decisiones",
+            "recommendations": [
+              "OPORTUNIDAD:\nAutomatizar el desglose de presupuestos mejora la eficiencia, reduce errores y facilita análisis detallados, potenciando la escalabilidad del SaaS.\n\nRIESGO:\nAlta complejidad técnica en la interpretación y separación automática de partidas puede generar errores y afectar la experiencia del usuario.\n\nRECOMENDACION:\nImplementar un MVP con reglas claras y validación manual inicial, luego incorporar IA para mejorar precisión y escalabilidad progresiva."
+            ]
+          },
+          {
+            "agent": "Risk Agent",
+            "focus": "riesgos y sostenibilidad",
+            "alerts": [
+              "Riesgo estratégico elevado."
+            ]
+          },
+          {
+            "agent": "Marketing Agent",
+            "focus": "crecimiento y captación",
+            "strategies": [
+              "Potenciar campañas digitales escalables.",
+              "Priorizar captación B2B automatizada."
+            ]
+          },
+          {
+            "agent": "Finance Agent",
+            "focus": "análisis financiero y sostenibilidad económica",
+            "recommendations": [
+              "Se recomienda mantener reservas financieras por alto riesgo.",
+              "El modelo puede beneficiarse de crecimiento escalable y economías de escala."
+            ]
+          }
+        ]
+      }
+    }
+  },
+  {
+    "id": 1780132622749,
+    "createdAt": "2026-05-30T09:17:02.749Z",
+    "prompt": "quiero realizar una automatización del flujo de un documento presupuesto para desglosarlo en diferentes partidas y sectores",
+    "scenario": "saas",
+    "result": {
+      "project": "saas",
+      "difficulty": "Alta",
+      "risk": "Alto",
+      "viabilityScore": 72,
+      "riskScore": 82,
+      "scalabilityScore": 95,
+      "agentAnalysis": {
+        "agents": [
+          {
+            "agent": "CEO Agent",
+            "focus": "visión estratégica y toma de decisiones",
+            "recommendations": [
+              "OPORTUNIDAD:\nAutomatizar el desglose de presupuestos mejora eficiencia, reduce errores y facilita análisis detallados por partidas y sectores.\n\nRIESGO:\nAlta complejidad técnica en integración y precisión del desglose, puede generar resistencia al cambio en usuarios.\n\nRECOMENDACION:\nImplementar un piloto con datos reales, usar IA para reconocimiento y clasificación automática, y capacitar al equipo para adopción gradual."
+            ]
+          },
+          {
+            "agent": "Risk Agent",
+            "focus": "riesgos y sostenibilidad",
+            "alerts": [
+              "Riesgo estratégico elevado."
+            ]
+          },
+          {
+            "agent": "Marketing Agent",
+            "focus": "crecimiento y captación",
+            "strategies": [
+              "Potenciar campañas digitales escalables.",
+              "Priorizar captación B2B automatizada."
+            ]
+          },
+          {
+            "agent": "Finance Agent",
+            "focus": "análisis financiero y sostenibilidad económica",
+            "recommendations": [
+              "Se recomienda mantener reservas financieras por alto riesgo.",
+              "El modelo puede beneficiarse de crecimiento escalable y economías de escala."
+            ]
+          }
+        ]
+      }
+    }
+  },
+  {
+    "id": 1780132104273,
+    "createdAt": "2026-05-30T09:08:24.273Z",
+    "prompt": "quiero realizar una automatización del flujo de un documento presupuesto para desglosarlo en diferentes partidas y sectores",
+    "scenario": "saas",
+    "result": {
+      "project": "saas",
+      "difficulty": "Alta",
+      "risk": "Alto",
+      "viabilityScore": 72,
+      "riskScore": 82,
+      "scalabilityScore": 95,
+      "agentAnalysis": {
+        "agents": [
+          {
+            "agent": "CEO Agent",
+            "focus": "visión estratégica y toma de decisiones",
+            "recommendations": [
+              "OPORTUNIDAD:\nAutomatizar el desglose de presupuestos mejora la precisión, ahorra tiempo y facilita la gestión financiera sectorizada.\n\nRIESGO:\nAlta complejidad en la interpretación de documentos y posible error en clasificación automática puede afectar la confiabilidad.\n\nRECOMENDACION:\nImplementar un MVP con reglas claras y validación manual al inicio, luego escalar con IA para mejorar precisión y reducir riesgos."
+            ]
+          },
+          {
+            "agent": "Risk Agent",
+            "focus": "riesgos y sostenibilidad",
+            "alerts": [
+              "Riesgo estratégico elevado."
+            ]
+          },
+          {
+            "agent": "Marketing Agent",
+            "focus": "crecimiento y captación",
+            "strategies": [
+              "Potenciar campañas digitales escalables.",
+              "Priorizar captación B2B automatizada."
+            ]
+          },
+          {
+            "agent": "Finance Agent",
+            "focus": "análisis financiero y sostenibilidad económica",
+            "recommendations": [
+              "Se recomienda mantener reservas financieras por alto riesgo.",
+              "El modelo puede beneficiarse de crecimiento escalable y economías de escala."
+            ]
+          }
+        ]
+      }
+    }
+  },
+  {
+    "id": 1780131805564,
+    "createdAt": "2026-05-30T09:03:25.564Z",
+    "prompt": "quiero crear una plataforma IA para automatizar despachos profesionales",
+    "scenario": "saas",
+    "result": {
+      "project": "saas",
+      "difficulty": "Alta",
+      "risk": "Alto",
+      "viabilityScore": 72,
+      "riskScore": 82,
+      "scalabilityScore": 95,
+      "agentAnalysis": {
+        "agents": [
+          {
+            "agent": "CEO Agent",
+            "focus": "visión estratégica y toma de decisiones",
+            "recommendations": [
+              "OPORTUNIDAD:\nAlta escalabilidad y demanda creciente en automatización para despachos profesionales.\n\nRIESGO:\nRiesgo elevado por competencia y complejidad en integración con sistemas legales y fiscales.\n\nRECOMENDACION:\nValidar nicho específico con pilotos, asegurar cumplimiento normativo y diferenciar con IA avanzada."
+            ]
+          },
+          {
+            "agent": "Risk Agent",
+            "focus": "riesgos y sostenibilidad",
+            "alerts": [
+              "Riesgo estratégico elevado."
+            ]
+          },
+          {
+            "agent": "Marketing Agent",
+            "focus": "crecimiento y captación",
+            "strategies": [
+              "Potenciar campañas digitales escalables.",
+              "Priorizar captación B2B automatizada."
+            ]
+          },
+          {
+            "agent": "Finance Agent",
+            "focus": "análisis financiero y sostenibilidad económica",
+            "recommendations": [
+              "Se recomienda mantener reservas financieras por alto riesgo.",
+              "El modelo puede beneficiarse de crecimiento escalable y economías de escala."
+            ]
+          }
+        ]
+      }
+    }
+  },
+  {
+    "id": 1780131390280,
+    "createdAt": "2026-05-30T08:56:30.280Z",
+    "prompt": "quiero crear una plataforma IA para automatizar despachos profesionales",
+    "scenario": "saas",
+    "result": {
+      "project": "saas",
+      "difficulty": "Alta",
+      "risk": "Alto",
+      "viabilityScore": 72,
+      "riskScore": 82,
+      "scalabilityScore": 95,
+      "agentAnalysis": {
+        "agents": [
+          {
+            "agent": "CEO Agent",
+            "focus": "visión estratégica y toma de decisiones",
+            "recommendations": [
+              "OPORTUNIDAD:\nAlta escalabilidad y demanda creciente de automatización en despachos profesionales.\n\nRIESGO:\nRiesgo elevado por competencia, complejidad técnica y adopción del mercado.\n\nRECOMENDACION:\nValidar rápidamente con clientes pilotos, enfocar en diferenciación y asegurar inversión en desarrollo ágil."
+            ]
+          },
+          {
+            "agent": "Risk Agent",
+            "focus": "riesgos y sostenibilidad",
+            "alerts": [
+              "Riesgo estratégico elevado."
+            ]
+          },
+          {
+            "agent": "Marketing Agent",
+            "focus": "crecimiento y captación",
+            "strategies": [
+              "Potenciar campañas digitales escalables.",
+              "Priorizar captación B2B automatizada."
+            ]
+          },
+          {
+            "agent": "Finance Agent",
+            "focus": "análisis financiero y sostenibilidad económica",
+            "recommendations": [
+              "Se recomienda mantener reservas financieras por alto riesgo.",
+              "El modelo puede beneficiarse de crecimiento escalable y economías de escala."
+            ]
+          }
+        ]
+      }
+    }
+  },
+  {
+    "id": 1780130305380,
+    "createdAt": "2026-05-30T08:38:25.380Z",
+    "prompt": "quiero crear una plataforma IA para automatizar despachos profesionales",
+    "scenario": "saas",
+    "result": {
+      "project": "saas",
+      "difficulty": "Alta",
+      "risk": "Alto",
+      "viabilityScore": 72,
+      "riskScore": 82,
+      "scalabilityScore": 95,
+      "agentAnalysis": {
+        "agents": [
+          {
+            "agent": "CEO Agent",
+            "focus": "visión estratégica y toma de decisiones",
+            "recommendations": [
+              "OPORTUNIDAD:  \nAlta escalabilidad y demanda creciente en automatización para despachos profesionales.\n\nRIESGO:  \nRiesgo elevado por complejidad técnica y posible resistencia al cambio en el sector.\n\nRECOMENDACION:  \nValidar mercado con pilotos, enfocarse en integración sencilla y asegurar soporte postventa."
+            ]
+          },
+          {
+            "agent": "Risk Agent",
+            "focus": "riesgos y sostenibilidad",
+            "alerts": [
+              "Riesgo estratégico elevado."
+            ]
+          },
+          {
+            "agent": "Marketing Agent",
+            "focus": "crecimiento y captación",
+            "strategies": [
+              "Potenciar campañas digitales escalables.",
+              "Priorizar captación B2B automatizada."
+            ]
+          },
+          {
+            "agent": "Finance Agent",
+            "focus": "análisis financiero y sostenibilidad económica",
+            "recommendations": [
+              "Se recomienda mantener reservas financieras por alto riesgo.",
+              "El modelo puede beneficiarse de crecimiento escalable y economías de escala."
+            ]
+          }
+        ]
+      }
+    }
+  },
+  {
+    "id": 1780129500028,
+    "createdAt": "2026-05-30T08:25:00.028Z",
+    "prompt": "quiero crear una plataforma IA para automatizar despachos profesionales",
+    "scenario": "saas",
+    "result": {
+      "project": "saas",
+      "difficulty": "Alta",
+      "risk": "Alto",
+      "viabilityScore": 72,
+      "riskScore": 82,
+      "scalabilityScore": 95,
+      "agentAnalysis": {
+        "agents": [
+          {
+            "agent": "CEO Agent",
+            "focus": "visión estratégica y toma de decisiones",
+            "recommendations": [
+              "OPORTUNIDAD:  \nAlta escalabilidad y demanda creciente en automatización de procesos para despachos profesionales.\n\nRIESGO:  \nElevado riesgo operativo y de adopción por resistencia al cambio y complejidad legal/regulatoria.\n\nRECOMENDACION:  \nValidar mercado con pilotos específicos, enfocar en cumplimiento normativo y ofrecer integración sencilla para acelerar adopción."
+            ]
+          },
+          {
+            "agent": "Risk Agent",
+            "focus": "riesgos y sostenibilidad",
+            "alerts": [
+              "Riesgo estratégico elevado."
+            ]
+          },
+          {
+            "agent": "Marketing Agent",
+            "focus": "crecimiento y captación",
+            "strategies": [
+              "Potenciar campañas digitales escalables.",
+              "Priorizar captación B2B automatizada."
+            ]
+          },
+          {
+            "agent": "Finance Agent",
+            "focus": "análisis financiero y sostenibilidad económica",
+            "recommendations": [
+              "Se recomienda mantener reservas financieras por alto riesgo.",
+              "El modelo puede beneficiarse de crecimiento escalable y economías de escala."
+            ]
+          }
+        ]
+      }
+    }
+  },
+  {
+    "id": 1780129296702,
+    "createdAt": "2026-05-30T08:21:36.702Z",
+    "prompt": "quiero crear una plataforma IA para automatizar despachos profesionales",
+    "scenario": "saas",
+    "result": {
+      "project": "saas",
+      "difficulty": "Alta",
+      "risk": "Alto",
+      "viabilityScore": 72,
+      "riskScore": 82,
+      "scalabilityScore": 95,
+      "agentAnalysis": {
+        "agents": [
+          {
+            "agent": "CEO Agent",
+            "focus": "visión estratégica y toma de decisiones",
+            "recommendations": [
+              "OPORTUNIDAD:\nAlta escalabilidad y demanda creciente en automatización para despachos profesionales.\n\nRIESGO:\nElevado riesgo debido a competencia, complejidad técnica y adaptación del mercado.\n\nRECOMENDACION:\nValidar prototipo con clientes clave y diferenciar con IA específica para mejorar adopción y reducir riesgos."
+            ]
+          },
+          {
+            "agent": "Risk Agent",
+            "focus": "riesgos y sostenibilidad",
+            "alerts": [
+              "Riesgo estratégico elevado."
+            ]
+          },
+          {
+            "agent": "Marketing Agent",
+            "focus": "crecimiento y captación",
+            "strategies": [
+              "Potenciar campañas digitales escalables.",
+              "Priorizar captación B2B automatizada."
+            ]
+          },
+          {
+            "agent": "Finance Agent",
+            "focus": "análisis financiero y sostenibilidad económica",
+            "recommendations": [
+              "Se recomienda mantener reservas financieras por alto riesgo.",
+              "El modelo puede beneficiarse de crecimiento escalable y economías de escala."
+            ]
+          }
+        ]
+      }
+    }
+  },
+  {
+    "id": 1780129268594,
+    "createdAt": "2026-05-30T08:21:08.594Z",
+    "prompt": "quiero crear una plataforma IA para automatizar despachos profesionales",
+    "scenario": "saas",
+    "result": {
+      "project": "saas",
+      "difficulty": "Alta",
+      "risk": "Alto",
+      "viabilityScore": 72,
+      "riskScore": 82,
+      "scalabilityScore": 95,
+      "agentAnalysis": {
+        "agents": [
+          {
+            "agent": "CEO Agent",
+            "focus": "visión estratégica y toma de decisiones",
+            "recommendations": [
+              "OPORTUNIDAD:  \nAlta escalabilidad y demanda creciente de automatización en despachos profesionales.\n\nRIESGO:  \nRiesgo elevado por competencia en IA y complejidad regulatoria en servicios profesionales.\n\nRECOMENDACION:  \nEnfocar en nichos específicos con necesidades claras, asegurar cumplimiento legal y diferenciar con IA propietaria."
+            ]
+          },
+          {
+            "agent": "Risk Agent",
+            "focus": "riesgos y sostenibilidad",
+            "alerts": [
+              "Riesgo estratégico elevado."
+            ]
+          },
+          {
+            "agent": "Marketing Agent",
+            "focus": "crecimiento y captación",
+            "strategies": [
+              "Potenciar campañas digitales escalables.",
+              "Priorizar captación B2B automatizada."
+            ]
+          },
+          {
+            "agent": "Finance Agent",
+            "focus": "análisis financiero y sostenibilidad económica",
+            "recommendations": [
+              "Se recomienda mantener reservas financieras por alto riesgo.",
+              "El modelo puede beneficiarse de crecimiento escalable y economías de escala."
+            ]
+          }
+        ]
+      }
+    }
+  },
+  {
+    "id": 1780129265601,
+    "createdAt": "2026-05-30T08:21:05.601Z",
+    "prompt": "quiero crear una plataforma IA para automatizar despachos profesionales",
+    "scenario": "saas",
+    "result": {
+      "project": "saas",
+      "difficulty": "Alta",
+      "risk": "Alto",
+      "viabilityScore": 72,
+      "riskScore": 82,
+      "scalabilityScore": 95,
+      "agentAnalysis": {
+        "agents": [
+          {
+            "agent": "CEO Agent",
+            "focus": "visión estratégica y toma de decisiones",
+            "recommendations": [
+              "OPORTUNIDAD:\nAlta escalabilidad y demanda creciente de automatización en despachos profesionales.\n\nRIESGO:\nRiesgo elevado por complejidad técnica y adopción del mercado tradicional.\n\nRECOMENDACION:\nValidar con pilotos en despachos clave y enfocar en usabilidad para reducir barreras de adopción."
+            ]
+          },
+          {
+            "agent": "Risk Agent",
+            "focus": "riesgos y sostenibilidad",
+            "alerts": [
+              "Riesgo estratégico elevado."
+            ]
+          },
+          {
+            "agent": "Marketing Agent",
+            "focus": "crecimiento y captación",
+            "strategies": [
+              "Potenciar campañas digitales escalables.",
+              "Priorizar captación B2B automatizada."
+            ]
+          },
+          {
+            "agent": "Finance Agent",
+            "focus": "análisis financiero y sostenibilidad económica",
+            "recommendations": [
+              "Se recomienda mantener reservas financieras por alto riesgo.",
+              "El modelo puede beneficiarse de crecimiento escalable y economías de escala."
+            ]
+          }
+        ]
+      }
+    }
+  },
+  {
+    "id": 1780128377690,
+    "createdAt": "2026-05-30T08:06:17.690Z",
+    "prompt": "quiero crear una plataforma IA para automatizar despachos profesionales",
+    "scenario": "saas",
+    "result": {
+      "project": "saas",
+      "difficulty": "Alta",
+      "risk": "Alto",
+      "viabilityScore": 72,
+      "riskScore": 82,
+      "scalabilityScore": 95,
+      "agentAnalysis": {
+        "agents": [
+          {
+            "agent": "CEO Agent",
+            "focus": "visión estratégica y toma de decisiones",
+            "recommendations": [
+              "OPORTUNIDAD:  \nAlta escalabilidad y demanda creciente en automatización para despachos profesionales mediante IA.\n\nRIESGO:  \nElevado riesgo por competencia, adopción tecnológica y barreras regulatorias en servicios profesionales.\n\nRECOMENDACION:  \nValidar mercado con pilotos, enfocar en nichos específicos y asegurar cumplimiento normativo desde el inicio."
+            ]
+          },
+          {
+            "agent": "Risk Agent",
+            "focus": "riesgos y sostenibilidad",
+            "alerts": [
+              "Riesgo estratégico elevado."
+            ]
+          },
+          {
+            "agent": "Marketing Agent",
+            "focus": "crecimiento y captación",
+            "strategies": [
+              "Potenciar campañas digitales escalables.",
+              "Priorizar captación B2B automatizada."
+            ]
+          },
+          {
+            "agent": "Finance Agent",
+            "focus": "análisis financiero y sostenibilidad económica",
+            "recommendations": [
+              "Se recomienda mantener reservas financieras por alto riesgo.",
+              "El modelo puede beneficiarse de crecimiento escalable y economías de escala."
+            ]
+          }
+        ]
+      }
+    }
+  },
+  {
+    "id": 1780127750812,
+    "createdAt": "2026-05-30T07:55:50.812Z",
+    "prompt": "quiero crear una plataforma IA para automatizar despachos profesionales",
+    "scenario": "saas",
+    "result": {
+      "project": "saas",
+      "difficulty": "Alta",
+      "risk": "Alto",
+      "viabilityScore": 72,
+      "riskScore": 82,
+      "scalabilityScore": 95,
+      "agentAnalysis": {
+        "agents": [
+          {
+            "agent": "CEO Agent",
+            "focus": "visión estratégica y toma de decisiones",
+            "recommendations": [
+              "OPORTUNIDAD:  \nAlta escalabilidad y demanda creciente en automatización para despachos profesionales.\n\nRIESGO:  \nElevado riesgo debido a complejidad técnica, regulación y competencia en IA aplicada.\n\nRECOMENDACION:  \nValidar rápidamente con pilotos en despachos clave, enfocando en cumplimiento legal y diferenciación tecnológica."
+            ]
+          },
+          {
+            "agent": "Risk Agent",
+            "focus": "riesgos y sostenibilidad",
+            "alerts": [
+              "Riesgo estratégico elevado."
+            ]
+          },
+          {
+            "agent": "Marketing Agent",
+            "focus": "crecimiento y captación",
+            "strategies": [
+              "Potenciar campañas digitales escalables.",
+              "Priorizar captación B2B automatizada."
+            ]
+          },
+          {
+            "agent": "Finance Agent",
+            "focus": "análisis financiero y sostenibilidad económica",
+            "recommendations": [
+              "Se recomienda mantener reservas financieras por alto riesgo.",
+              "El modelo puede beneficiarse de crecimiento escalable y economías de escala."
+            ]
+          }
+        ]
+      }
+    }
+  },
+  {
+    "id": 1780127744286,
+    "createdAt": "2026-05-30T07:55:44.286Z",
+    "prompt": "quiero crear una plataforma IA para automatizar despachos profesionales",
+    "scenario": "saas",
+    "result": {
+      "project": "saas",
+      "difficulty": "Alta",
+      "risk": "Alto",
+      "viabilityScore": 72,
+      "riskScore": 82,
+      "scalabilityScore": 95,
+      "agentAnalysis": {
+        "agents": [
+          {
+            "agent": "CEO Agent",
+            "focus": "visión estratégica y toma de decisiones",
+            "recommendations": [
+              "OPORTUNIDAD:\nAlta escalabilidad y demanda creciente de automatización en despachos profesionales mediante IA.\n\nRIESGO:\nElevado riesgo debido a complejidad técnica y posible resistencia al cambio en el sector.\n\nRECOMENDACION:\nValidar producto con pilotos en despachos clave y asegurar integración sencilla para facilitar adopción."
+            ]
+          },
+          {
+            "agent": "Risk Agent",
+            "focus": "riesgos y sostenibilidad",
+            "alerts": [
+              "Riesgo estratégico elevado."
+            ]
+          },
+          {
+            "agent": "Marketing Agent",
+            "focus": "crecimiento y captación",
+            "strategies": [
+              "Potenciar campañas digitales escalables.",
+              "Priorizar captación B2B automatizada."
+            ]
+          },
+          {
+            "agent": "Finance Agent",
+            "focus": "análisis financiero y sostenibilidad económica",
+            "recommendations": [
+              "Se recomienda mantener reservas financieras por alto riesgo.",
+              "El modelo puede beneficiarse de crecimiento escalable y economías de escala."
+            ]
+          }
+        ]
+      }
+    }
+  },
+  {
     "id": 1780126419008,
     "createdAt": "2026-05-30T07:33:39.008Z",
     "prompt": "quiero crear una plataforma IA para automatizar despachos profesionales",
