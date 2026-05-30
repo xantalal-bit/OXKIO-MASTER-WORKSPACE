@@ -509,6 +509,21 @@ async function compareProjects() {
   const projectB =
     await responseB.json();
 
+const viabilityWinner =
+  projectA.viabilityScore > projectB.viabilityScore
+    ? "Proyecto A"
+    : "Proyecto B";
+
+const riskWinner =
+  projectA.riskScore < projectB.riskScore
+    ? "Proyecto A"
+    : "Proyecto B";
+
+const scalabilityWinner =
+  projectA.scalabilityScore > projectB.scalabilityScore
+    ? "Proyecto A"
+    : "Proyecto B";
+
   resultBox.innerHTML = `
     <h2>Comparador Ejecutivo</h2>
 
@@ -532,16 +547,67 @@ async function compareProjects() {
 
     </div>
 
-    <h2>Recomendación preliminar</h2>
+    <h2>Ranking Ejecutivo</h2>
 
+<div class="agents-grid">
+
+  <div class="agent-card">
+    <h3>Puntuación Proyecto A</h3>
     <p>
       ${
-        projectA.viabilityScore + projectA.scalabilityScore - projectA.riskScore >
-        projectB.viabilityScore + projectB.scalabilityScore - projectB.riskScore
-          ? "Proyecto A presenta mejor equilibrio estratégico inicial."
-          : "Proyecto B presenta mejor equilibrio estratégico inicial."
+        projectA.viabilityScore +
+        projectA.scalabilityScore -
+        projectA.riskScore
       }
+      puntos
     </p>
+  </div>
+
+  <div class="agent-card">
+    <h3>Puntuación Proyecto B</h3>
+    <p>
+      ${
+        projectB.viabilityScore +
+        projectB.scalabilityScore -
+        projectB.riskScore
+      }
+      puntos
+    </p>
+  </div>
+
+</div>
+
+<h2>Ganadores por categoría</h2>
+
+<div class="agents-grid">
+
+  <div class="agent-card">
+    <h3>Viabilidad</h3>
+    <p>${viabilityWinner}</p>
+  </div>
+
+  <div class="agent-card">
+    <h3>Menor riesgo</h3>
+    <p>${riskWinner}</p>
+  </div>
+
+  <div class="agent-card">
+    <h3>Escalabilidad</h3>
+    <p>${scalabilityWinner}</p>
+  </div>
+
+</div>
+
+<h2>Recomendación CEO</h2>
+
+<p>
+  ${
+    projectA.viabilityScore + projectA.scalabilityScore - projectA.riskScore >
+    projectB.viabilityScore + projectB.scalabilityScore - projectB.riskScore
+      ? "Proyecto A presenta mejor equilibrio estratégico inicial."
+      : "Proyecto B presenta mejor equilibrio estratégico inicial."
+  }
+</p>
   `;
 }
 
