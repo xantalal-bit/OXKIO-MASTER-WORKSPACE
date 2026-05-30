@@ -510,6 +510,23 @@ async function compareProjects() {
     await responseB.json();
 
 const viabilityWinner =
+let winsA = 0;
+let winsB = 0;
+
+if (viabilityWinner === "Proyecto A") winsA++;
+else winsB++;
+
+if (riskWinner === "Proyecto A") winsA++;
+else winsB++;
+
+if (scalabilityWinner === "Proyecto A") winsA++;
+else winsB++;
+
+const globalWinner =
+  winsA > winsB
+    ? "Proyecto A"
+    : "Proyecto B";
+
   projectA.viabilityScore > projectB.viabilityScore
     ? "Proyecto A"
     : "Proyecto B";
@@ -599,6 +616,24 @@ const scalabilityWinner =
 </div>
 
 <h2>Recomendación CEO</h2>
+
+<div class="agent-card">
+
+  <h3>Decisión Ejecutiva</h3>
+
+  <p>
+    <b>Proyecto recomendado:</b> ${globalWinner}
+  </p>
+
+  <p>
+    ${globalWinner} gana ${globalWinner === "Proyecto A" ? winsA : winsB}
+    de 3 categorías estratégicas principales.
+  </p>
+
+  <p>
+    Esta recomendación se basa en viabilidad, riesgo y escalabilidad.
+  </p>
+</div>
 
 <p>
   ${
