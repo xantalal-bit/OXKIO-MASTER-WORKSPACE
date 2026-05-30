@@ -1,5 +1,231 @@
 [
   {
+    "id": 1780136224121,
+    "createdAt": "2026-05-30T10:17:04.121Z",
+    "prompt": "  crear una consultoría IA para CEOs",
+    "scenario": "consulting",
+    "result": {
+      "project": "consulting",
+      "difficulty": "Media-Alta",
+      "risk": "Medio",
+      "viabilityScore": 84,
+      "riskScore": 52,
+      "scalabilityScore": 88,
+      "agentAnalysis": {
+        "agents": [
+          {
+            "agent": "CEO Agent",
+            "focus": "visión estratégica y toma de decisiones",
+            "recommendations": [
+              "OPORTUNIDAD:  \nAlto potencial de mercado dada la creciente demanda de soluciones IA personalizadas para toma de decisiones estratégicas en CEOs.\n\nRIESGO:  \nCompetencia creciente y necesidad de diferenciación clara; dependencia de talento altamente especializado.\n\nRECOMENDACION:  \nEnfocar la propuesta en nichos específicos, desarrollar casos de uso claros y escalar mediante automatización y alianzas estratégicas."
+            ]
+          },
+          {
+            "agent": "Risk Agent",
+            "focus": "riesgos y sostenibilidad",
+            "alerts": []
+          },
+          {
+            "agent": "Marketing Agent",
+            "focus": "crecimiento y captación",
+            "strategies": [
+              "Potenciar campañas digitales escalables.",
+              "Fortalecer marca personal en LinkedIn."
+            ]
+          },
+          {
+            "agent": "Finance Agent",
+            "focus": "análisis financiero y sostenibilidad económica",
+            "recommendations": [
+              "El proyecto presenta buena viabilidad financiera potencial.",
+              "El modelo puede beneficiarse de crecimiento escalable y economías de escala."
+            ]
+          },
+          {
+            "agent": "Growth Agent",
+            "focus": "expansión y crecimiento empresarial",
+            "opportunities": [
+              "Preparar estrategia de expansión nacional e internacional.",
+              "Validar canales de adquisición escalables.",
+              "Crear red de partners y prescriptores."
+            ]
+          }
+        ]
+      }
+    }
+  },
+  {
+    "id": 1780136221969,
+    "createdAt": "2026-05-30T10:17:01.969Z",
+    "prompt": "  crear un SaaS IA para CEOs",
+    "scenario": "saas",
+    "result": {
+      "project": "saas",
+      "difficulty": "Alta",
+      "risk": "Alto",
+      "viabilityScore": 72,
+      "riskScore": 82,
+      "scalabilityScore": 95,
+      "agentAnalysis": {
+        "agents": [
+          {
+            "agent": "CEO Agent",
+            "focus": "visión estratégica y toma de decisiones",
+            "recommendations": [
+              "OPORTUNIDAD:\nAlta escalabilidad y demanda creciente de soluciones IA personalizadas para CEOs.\n\nRIESGO:\nElevado riesgo debido a competencia intensa y complejidad técnica en IA aplicada a decisiones ejecutivas.\n\nRECOMENDACION:\nValidar el producto con un nicho reducido de CEOs, enfocar en diferenciación clara y buscar alianzas estratégicas para mitigar riesgos."
+            ]
+          },
+          {
+            "agent": "Risk Agent",
+            "focus": "riesgos y sostenibilidad",
+            "alerts": [
+              "Riesgo estratégico elevado."
+            ]
+          },
+          {
+            "agent": "Marketing Agent",
+            "focus": "crecimiento y captación",
+            "strategies": [
+              "Potenciar campañas digitales escalables.",
+              "Priorizar captación B2B automatizada."
+            ]
+          },
+          {
+            "agent": "Finance Agent",
+            "focus": "análisis financiero y sostenibilidad económica",
+            "recommendations": [
+              "Se recomienda mantener reservas financieras por alto riesgo.",
+              "El modelo puede beneficiarse de crecimiento escalable y economías de escala."
+            ]
+          },
+          {
+            "agent": "Growth Agent",
+            "focus": "expansión y crecimiento empresarial",
+            "opportunities": [
+              "Preparar estrategia de expansión nacional e internacional.",
+              "Validar canales de adquisición escalables.",
+              "Diseñar estrategia SaaS de crecimiento recurrente."
+            ]
+          }
+        ]
+      }
+    }
+  },
+  {
+    "id": 1780135677740,
+    "createdAt": "2026-05-30T10:07:57.740Z",
+    "prompt": "  crear una consultoría IA para CEOs",
+    "scenario": "saas",
+    "result": {
+      "project": "saas",
+      "difficulty": "Alta",
+      "risk": "Alto",
+      "viabilityScore": 72,
+      "riskScore": 82,
+      "scalabilityScore": 95,
+      "agentAnalysis": {
+        "agents": [
+          {
+            "agent": "CEO Agent",
+            "focus": "visión estratégica y toma de decisiones",
+            "recommendations": [
+              "OPORTUNIDAD:\nAlta demanda de soluciones IA personalizadas para optimizar la toma de decisiones en CEOs.\n\nRIESGO:\nElevada competencia y rápida evolución tecnológica que puede dejar obsoleta la oferta.\n\nRECOMENDACION:\nEnfocar el producto en nichos específicos, invertir en actualización continua y establecer alianzas estratégicas para diferenciarse."
+            ]
+          },
+          {
+            "agent": "Risk Agent",
+            "focus": "riesgos y sostenibilidad",
+            "alerts": [
+              "Riesgo estratégico elevado."
+            ]
+          },
+          {
+            "agent": "Marketing Agent",
+            "focus": "crecimiento y captación",
+            "strategies": [
+              "Potenciar campañas digitales escalables.",
+              "Priorizar captación B2B automatizada."
+            ]
+          },
+          {
+            "agent": "Finance Agent",
+            "focus": "análisis financiero y sostenibilidad económica",
+            "recommendations": [
+              "Se recomienda mantener reservas financieras por alto riesgo.",
+              "El modelo puede beneficiarse de crecimiento escalable y economías de escala."
+            ]
+          },
+          {
+            "agent": "Growth Agent",
+            "focus": "expansión y crecimiento empresarial",
+            "opportunities": [
+              "Preparar estrategia de expansión nacional e internacional.",
+              "Validar canales de adquisición escalables.",
+              "Diseñar estrategia SaaS de crecimiento recurrente."
+            ]
+          }
+        ]
+      }
+    }
+  },
+  {
+    "id": 1780135676035,
+    "createdAt": "2026-05-30T10:07:56.035Z",
+    "prompt": "  crear un SaaS IA para CEOs",
+    "scenario": "saas",
+    "result": {
+      "project": "saas",
+      "difficulty": "Alta",
+      "risk": "Alto",
+      "viabilityScore": 72,
+      "riskScore": 82,
+      "scalabilityScore": 95,
+      "agentAnalysis": {
+        "agents": [
+          {
+            "agent": "CEO Agent",
+            "focus": "visión estratégica y toma de decisiones",
+            "recommendations": [
+              "OPORTUNIDAD:\nAlto potencial de mercado con escalabilidad significativa para soluciones IA dirigidas a CEOs, optimizando toma de decisiones y gestión estratégica.\n\nRIESGO:\nElevado riesgo asociado a la adopción tecnológica, competencia intensa y necesidad de validación rápida del producto.\n\nRECOMENDACION:\nEnfocar desarrollo en funcionalidades clave con validación continua, asegurar diferenciación clara y buscar alianzas estratégicas para acelerar adopción."
+            ]
+          },
+          {
+            "agent": "Risk Agent",
+            "focus": "riesgos y sostenibilidad",
+            "alerts": [
+              "Riesgo estratégico elevado."
+            ]
+          },
+          {
+            "agent": "Marketing Agent",
+            "focus": "crecimiento y captación",
+            "strategies": [
+              "Potenciar campañas digitales escalables.",
+              "Priorizar captación B2B automatizada."
+            ]
+          },
+          {
+            "agent": "Finance Agent",
+            "focus": "análisis financiero y sostenibilidad económica",
+            "recommendations": [
+              "Se recomienda mantener reservas financieras por alto riesgo.",
+              "El modelo puede beneficiarse de crecimiento escalable y economías de escala."
+            ]
+          },
+          {
+            "agent": "Growth Agent",
+            "focus": "expansión y crecimiento empresarial",
+            "opportunities": [
+              "Preparar estrategia de expansión nacional e internacional.",
+              "Validar canales de adquisición escalables.",
+              "Diseñar estrategia SaaS de crecimiento recurrente."
+            ]
+          }
+        ]
+      }
+    }
+  },
+  {
     "id": 1780133184875,
     "createdAt": "2026-05-30T09:26:24.875Z",
     "prompt": "quiero crear un saas b2b para ceos",

@@ -200,6 +200,25 @@
   Exportar PDF Ejecutivo
 </button>
 
+<div class="result">
+  <h2>Comparador Ejecutivo</h2>
+
+  <textarea
+    id="compareInputA"
+    placeholder="Proyecto A: ejemplo, crear un SaaS IA para CEOs">
+  </textarea>
+
+  <textarea
+    id="compareInputB"
+    placeholder="Proyecto B: ejemplo, crear una consultoría IA para CEOs">
+  </textarea>
+
+  <button onclick="compareProjects()">
+    Comparar Proyectos
+  </button>
+</div>
+
+
     <div class="result" id="resultBox">
       <h2>Resultado ejecutivo</h2>
       <p>Aquí aparecerá la simulación y el análisis multiagente.</p>
@@ -460,6 +479,72 @@ function exportExecutivePDF() {
 
   window.open(url, "_blank");
 }
+
+async function compareProjects() {
+  const inputA =
+    document.getElementById("compareInputA").value;
+
+  const inputB =
+    document.getElementById("compareInputB").value;
+
+  const resultBox =
+    document.getElementById("resultBox");
+
+  resultBox.innerHTML =
+    "<h2>Comparando proyectos...</h2>";
+
+  const responseA =
+    await fetch(
+      `http://localhost:3100/simulate?prompt=${encodeURIComponent(inputA)}`
+    );
+
+  const responseB =
+    await fetch(
+      `http://localhost:3100/simulate?prompt=${encodeURIComponent(inputB)}`
+    );
+
+  const projectA =
+    await responseA.json();
+
+  const projectB =
+    await responseB.json();
+
+  resultBox.innerHTML = `
+    <h2>Comparador Ejecutivo</h2>
+
+    <div class="agents-grid">
+
+      <div class="agent-card">
+        <h3>Proyecto A</h3>
+        <p><b>Tipo:</b> ${projectA.project}</p>
+        <p><b>Viabilidad:</b> ${projectA.viabilityScore}/100</p>
+        <p><b>Riesgo:</b> ${projectA.riskScore}/100</p>
+        <p><b>Escalabilidad:</b> ${projectA.scalabilityScore}/100</p>
+      </div>
+
+      <div class="agent-card">
+        <h3>Proyecto B</h3>
+        <p><b>Tipo:</b> ${projectB.project}</p>
+        <p><b>Viabilidad:</b> ${projectB.viabilityScore}/100</p>
+        <p><b>Riesgo:</b> ${projectB.riskScore}/100</p>
+        <p><b>Escalabilidad:</b> ${projectB.scalabilityScore}/100</p>
+      </div>
+
+    </div>
+
+    <h2>Recomendación preliminar</h2>
+
+    <p>
+      ${
+        projectA.viabilityScore + projectA.scalabilityScore - projectA.riskScore >
+        projectB.viabilityScore + projectB.scalabilityScore - projectB.riskScore
+          ? "Proyecto A presenta mejor equilibrio estratégico inicial."
+          : "Proyecto B presenta mejor equilibrio estratégico inicial."
+      }
+    </p>
+  `;
+}
+
 
   </script>
 

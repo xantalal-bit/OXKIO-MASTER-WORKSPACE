@@ -30,20 +30,14 @@ function detectScenario(text) {
   if (directMatch) return directMatch;
 
   if (
-    input.includes("saas") ||
-    input.includes("software") ||
-    input.includes("plataforma") ||
-    input.includes("app") ||
-    input.includes("aplicación") ||
-    input.includes("automatizar") ||
-    input.includes("automatización") ||
-    input.includes("despachos") ||
-    input.includes("legaltech") ||
-    input.includes("healthtech") ||
-    input.includes("edtech") ||
-    input.includes("ia para")
+    input.includes("consultoría") ||
+    input.includes("consultoria") ||
+    input.includes("consultor") ||
+    input.includes("asesoría") ||
+    input.includes("asesoria") ||
+    input.includes("servicios profesionales")
   ) {
-    return "saas";
+    return "consulting";
   }
 
   if (
@@ -57,15 +51,25 @@ function detectScenario(text) {
   }
 
   if (
-    input.includes("consultoría") ||
-    input.includes("consultoria") ||
-    input.includes("consultor") ||
+    input.includes("saas") ||
+    input.includes("software") ||
+    input.includes("plataforma") ||
+    input.includes("app") ||
+    input.includes("aplicación") ||
+    input.includes("automatizar") ||
+    input.includes("automatización") ||
+    input.includes("despachos") ||
+    input.includes("legaltech") ||
+    input.includes("healthtech") ||
+    input.includes("edtech")
+  ) {
+    return "saas";
+  }
+
+  if (
     input.includes("empresa") ||
     input.includes("ceo") ||
-    input.includes("negocio") ||
-    input.includes("servicios profesionales") ||
-    input.includes("asesoría") ||
-    input.includes("asesoria")
+    input.includes("negocio")
   ) {
     return "consulting";
   }
