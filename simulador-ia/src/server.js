@@ -7,7 +7,8 @@ const loadScenarios = require("./scenarioLoader");
 const runAgents = require("./agents/agentOrchestrator");
 const {
   saveSimulation,
-  getHistory
+  getHistory,
+  getExecutiveInsights
 } = require("./simulationHistory");
 
 const {
@@ -181,6 +182,24 @@ if (parsedUrl.pathname === "/report-pdf") {
 
   return;
 }
+
+if (parsedUrl.pathname === "/insights") {
+
+  const insights =
+    getExecutiveInsights();
+
+  res.writeHead(200, {
+    "Content-Type": "application/json; charset=utf-8",
+    "Access-Control-Allow-Origin": "*"
+  });
+
+  res.end(
+    JSON.stringify(insights)
+  );
+
+  return;
+}
+
 
 if (parsedUrl.pathname === "/history") {
 

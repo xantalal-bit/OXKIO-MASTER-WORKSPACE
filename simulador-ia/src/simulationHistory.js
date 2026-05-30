@@ -41,7 +41,46 @@ function getHistory() {
   return readHistory();
 }
 
+function getExecutiveInsights() {
+
+  const history = readHistory();
+
+  if (!history.length) {
+    return {
+      totalSimulations: 0,
+      mostSimulatedProject: null
+    };
+  }
+
+  const projects = {};
+
+  history.forEach(item => {
+
+    const project =
+      item.result &&
+      item.result.project
+        ? item.result.project
+        : "unknown";
+
+    projects[project] =
+      (projects[project] || 0) + 1;
+
+  });
+
+  const mostSimulatedProject =
+    Object.entries(projects)
+      .sort((a, b) => b[1] - a[1])[0][0];
+
+  return {
+    totalSimulations: history.length,
+    mostSimulatedProject,
+    projects
+  };
+}
+
+
 module.exports = {
   saveSimulation,
-  getHistory
+  getHistory,
+  getExecutiveInsights
 };
