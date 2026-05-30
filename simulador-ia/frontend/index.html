@@ -228,6 +228,37 @@ function getScoreClass(score) {
   return "red";
 }
 
+function renderExecutiveSummary(text) {
+  const opportunity =
+    text.match(/OPORTUNIDAD:\s*([\s\S]*?)(RIESGO:|RECOMENDACION:|$)/i);
+
+  const risk =
+    text.match(/RIESGO:\s*([\s\S]*?)(RECOMENDACION:|$)/i);
+
+  const recommendation =
+    text.match(/RECOMENDACION:\s*([\s\S]*)/i);
+
+  return `
+    <div class="agents-grid">
+      <div class="agent-card">
+        <h3>Oportunidad</h3>
+        <p>${opportunity ? opportunity[1].trim() : "-"}</p>
+      </div>
+
+      <div class="agent-card">
+        <h3>Riesgo principal</h3>
+        <p>${risk ? risk[1].trim() : "-"}</p>
+      </div>
+
+      <div class="agent-card">
+        <h3>Recomendación CEO</h3>
+        <p>${recommendation ? recommendation[1].trim() : "-"}</p>
+      </div>
+    </div>
+  `;
+}
+
+
     function renderAgentItems(agent) {
       const items =
         agent.recommendations ||
@@ -265,6 +296,16 @@ function getScoreClass(score) {
               ? result.agentAnalysis.agents
               : [];
 
+const ceoAgent =
+  agents.find(agent => agent.agent === "CEO Agent");
+
+const ceoSummary =
+  ceoAgent &&
+  ceoAgent.recommendations &&
+  ceoAgent.recommendations[0]
+    ? ceoAgent.recommendations[0]
+    : "Sin resumen ejecutivo disponible.";
+
           const agentCards = agents.map(agent => `
             <div class="agent-card">
               <h3>${agent.agent}</h3>
@@ -276,7 +317,9 @@ function getScoreClass(score) {
           resultBox.innerHTML = `
             <h2>Resultado ejecutivo</h2>
 
-            <p><b>Proyecto detectado:</b> ${result.project}</p>
+${renderExecutiveSummary(ceoSummary)}
+
+<p><b>Proyecto detectado:</b> ${result.project}</p>
 
             <div class="metrics">
               <div class="metric">

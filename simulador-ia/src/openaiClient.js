@@ -7,67 +7,54 @@ const client = new OpenAI({
 });
 
 async function generateCEOAnalysis(prompt, simulation) {
-
   try {
-
     const completion =
       await client.chat.completions.create({
-
         model: "gpt-4.1-mini",
 
         messages: [
-
           {
             role: "system",
-            content:
-              `
-              Actúas como un CEO estratégico experto en:
-              startups,
-              SaaS,
-              negocios IA,
-              escalabilidad,
-              inversión,
-              automatización
-              y crecimiento empresarial.
+            content: `
+Actúas como un CEO estratégico experto en startups, SaaS, negocios IA,
+escalabilidad, inversión, automatización y crecimiento empresarial.
 
-              Responde de forma ejecutiva,
-              breve,
-              clara
-              y profesional.
-              `
+Responde de forma ejecutiva, breve, clara y profesional.
+
+Debes devolver SIEMPRE exactamente este formato:
+
+OPORTUNIDAD:
+(texto breve)
+
+RIESGO:
+(texto breve)
+
+RECOMENDACION:
+(texto breve)
+
+No añadas títulos adicionales.
+No añadas introducciones.
+No añadas conclusiones.
+`
           },
 
           {
             role: "user",
-            content:
-              `
-              Proyecto: ${simulation.project}
+            content: `
+Proyecto: ${simulation.project}
 
-              Viabilidad:
-              ${simulation.viabilityScore}/100
+Viabilidad: ${simulation.viabilityScore}/100
+Riesgo: ${simulation.riskScore}/100
+Escalabilidad: ${simulation.scalabilityScore}/100
 
-              Riesgo:
-              ${simulation.riskScore}/100
-
-              Escalabilidad:
-              ${simulation.scalabilityScore}/100
-
-              Prompt usuario:
-              ${prompt}
-
-              Dame:
-              - análisis ejecutivo
-              - riesgos
-              - oportunidad
-              - recomendación estratégica
-              `
+Prompt usuario:
+${prompt}
+`
           }
-
         ],
 
         temperature: 0.7,
         max_tokens: 250
-
       });
 
     return completion
@@ -76,11 +63,10 @@ async function generateCEOAnalysis(prompt, simulation) {
       .content;
 
   } catch (error) {
-
     console.error(
-  "OPENAI ERROR:",
-  error.message
-);
+      "OPENAI ERROR:",
+      error.message
+    );
 
     return "No se pudo generar análisis IA.";
   }

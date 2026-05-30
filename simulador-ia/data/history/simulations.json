@@ -1,5 +1,149 @@
 [
   {
+    "id": 1780126419008,
+    "createdAt": "2026-05-30T07:33:39.008Z",
+    "prompt": "quiero crear una plataforma IA para automatizar despachos profesionales",
+    "scenario": "saas",
+    "result": {
+      "project": "saas",
+      "difficulty": "Alta",
+      "risk": "Alto",
+      "viabilityScore": 72,
+      "riskScore": 82,
+      "scalabilityScore": 95,
+      "agentAnalysis": {
+        "agents": [
+          {
+            "agent": "CEO Agent",
+            "focus": "visión estratégica y toma de decisiones",
+            "recommendations": [
+              "OPORTUNIDAD:\nAlta escalabilidad y demanda creciente en automatización para despachos profesionales.\n\nRIESGO:\nElevado riesgo por complejidad técnica y adopción del mercado.\n\nRECOMENDACION:\nValidar con clientes piloto, invertir en desarrollo ágil y asegurar soporte técnico robusto."
+            ]
+          },
+          {
+            "agent": "Risk Agent",
+            "focus": "riesgos y sostenibilidad",
+            "alerts": [
+              "Riesgo estratégico elevado."
+            ]
+          },
+          {
+            "agent": "Marketing Agent",
+            "focus": "crecimiento y captación",
+            "strategies": [
+              "Potenciar campañas digitales escalables.",
+              "Priorizar captación B2B automatizada."
+            ]
+          },
+          {
+            "agent": "Finance Agent",
+            "focus": "análisis financiero y sostenibilidad económica",
+            "recommendations": [
+              "Se recomienda mantener reservas financieras por alto riesgo.",
+              "El modelo puede beneficiarse de crecimiento escalable y economías de escala."
+            ]
+          }
+        ]
+      }
+    }
+  },
+  {
+    "id": 1780126416535,
+    "createdAt": "2026-05-30T07:33:36.535Z",
+    "prompt": "quiero crear una plataforma IA para automatizar despachos profesionales",
+    "scenario": "saas",
+    "result": {
+      "project": "saas",
+      "difficulty": "Alta",
+      "risk": "Alto",
+      "viabilityScore": 72,
+      "riskScore": 82,
+      "scalabilityScore": 95,
+      "agentAnalysis": {
+        "agents": [
+          {
+            "agent": "CEO Agent",
+            "focus": "visión estratégica y toma de decisiones",
+            "recommendations": [
+              "OPORTUNIDAD:\nAlta escalabilidad y demanda creciente de automatización en despachos profesionales.\n\nRIESGO:\nElevado riesgo debido a complejidad técnica y competencia en IA aplicada a servicios profesionales.\n\nRECOMENDACION:\nDesarrollar un MVP enfocado en nichos específicos, validar con usuarios y buscar alianzas estratégicas para mitigar riesgos."
+            ]
+          },
+          {
+            "agent": "Risk Agent",
+            "focus": "riesgos y sostenibilidad",
+            "alerts": [
+              "Riesgo estratégico elevado."
+            ]
+          },
+          {
+            "agent": "Marketing Agent",
+            "focus": "crecimiento y captación",
+            "strategies": [
+              "Potenciar campañas digitales escalables.",
+              "Priorizar captación B2B automatizada."
+            ]
+          },
+          {
+            "agent": "Finance Agent",
+            "focus": "análisis financiero y sostenibilidad económica",
+            "recommendations": [
+              "Se recomienda mantener reservas financieras por alto riesgo.",
+              "El modelo puede beneficiarse de crecimiento escalable y economías de escala."
+            ]
+          }
+        ]
+      }
+    }
+  },
+  {
+    "id": 1780081151453,
+    "createdAt": "2026-05-29T18:59:11.453Z",
+    "prompt": "quiero crear una plataforma IA para automatizar despachos profesionales",
+    "scenario": "saas",
+    "result": {
+      "project": "saas",
+      "difficulty": "Alta",
+      "risk": "Alto",
+      "viabilityScore": 72,
+      "riskScore": 82,
+      "scalabilityScore": 95,
+      "agentAnalysis": {
+        "agents": [
+          {
+            "agent": "CEO Agent",
+            "focus": "visión estratégica y toma de decisiones",
+            "recommendations": [
+              "Análisis ejecutivo:  \nLa plataforma SaaS con IA para automatizar despachos profesionales tiene alta escalabilidad (95/100), lo que indica un gran potencial de crecimiento y expansión. La viabilidad es moderada (72/100), sugiriendo que, aunque el modelo es factible, hay aspectos técnicos o de mercado que requieren ajuste. El riesgo es alto (82/100), reflejando desafíos en adopción, competencia y regulación.\n\nRiesgos:  \n- Barreras de adopción tecnológica en despachos tradicionales.  \n- Competencia de soluciones consolidadas y nuevas startups.  \n- Cumplimiento normativo y manejo de datos sensibles.  \n- Dependencia de calidad y precisión en modelos IA.\n\nOportunidad:  \n- Mercado en transformación digital creciente en servicios profesionales.  \n- Ahorro significativo de tiempo y costos para clientes.  \n- Posicionamiento como plataforma integral y confiable.  \n- Potencial para integraciones con otras herramientas SaaS.\n\nRecomendación estratégica:  \nEnfocar desarrollo en usabilidad y cumplimiento normativo para mitigar riesgos. Priorizar pilotos con clientes clave para validar valor y optimizar IA. Buscar alianzas estratégicas con asociaciones profesionales. Preparar ronda de inversión para"
+            ]
+          },
+          {
+            "agent": "Risk Agent",
+            "focus": "riesgos y sostenibilidad",
+            "alerts": [
+              "Riesgo estratégico elevado."
+            ]
+          },
+          {
+            "agent": "Marketing Agent",
+            "focus": "crecimiento y captación",
+            "strategies": [
+              "Potenciar campañas digitales escalables.",
+              "Priorizar captación B2B automatizada."
+            ]
+          },
+          {
+            "agent": "Finance Agent",
+            "focus": "análisis financiero y sostenibilidad económica",
+            "recommendations": [
+              "Se recomienda mantener reservas financieras por alto riesgo.",
+              "El modelo puede beneficiarse de crecimiento escalable y economías de escala."
+            ]
+          }
+        ]
+      }
+    }
+  },
+  {
     "id": 1780075594425,
     "createdAt": "2026-05-29T17:26:34.425Z",
     "prompt": "quiero crear una plataforma IA para automatizar despachos profesionales",
