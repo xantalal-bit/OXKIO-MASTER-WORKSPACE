@@ -2,6 +2,7 @@ const analyzeAsCEO = require("./ceoAgent");
 const analyzeRisk = require("./riskAgent");
 const analyzeMarketing = require("./marketingAgent");
 const analyzeFinance = require("./financeAgent");
+const analyzeGrowth = require("./growthAgent");
 
 async function runAgents(
   simulation,
@@ -21,7 +22,9 @@ async function runAgents(
 
       analyzeMarketing(simulation),
 
-      analyzeFinance(simulation)
+      analyzeFinance(simulation),
+
+analyzeGrowth(simulation)
 
     ]
 

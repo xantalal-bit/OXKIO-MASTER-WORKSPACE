@@ -1,5 +1,62 @@
 [
   {
+    "id": 1780133184875,
+    "createdAt": "2026-05-30T09:26:24.875Z",
+    "prompt": "quiero crear un saas b2b para ceos",
+    "scenario": "saas",
+    "result": {
+      "project": "saas",
+      "difficulty": "Alta",
+      "risk": "Alto",
+      "viabilityScore": 72,
+      "riskScore": 82,
+      "scalabilityScore": 95,
+      "agentAnalysis": {
+        "agents": [
+          {
+            "agent": "CEO Agent",
+            "focus": "visión estratégica y toma de decisiones",
+            "recommendations": [
+              "OPORTUNIDAD:\nMercado amplio y demandante con alta escalabilidad para soluciones SaaS dirigidas a CEOs.\n\nRIESGO:\nElevado riesgo por competencia intensa y necesidad de diferenciación clara.\n\nRECOMENDACION:\nFocalizar en una propuesta de valor única y validación temprana con clientes clave para mitigar riesgos."
+            ]
+          },
+          {
+            "agent": "Risk Agent",
+            "focus": "riesgos y sostenibilidad",
+            "alerts": [
+              "Riesgo estratégico elevado."
+            ]
+          },
+          {
+            "agent": "Marketing Agent",
+            "focus": "crecimiento y captación",
+            "strategies": [
+              "Potenciar campañas digitales escalables.",
+              "Priorizar captación B2B automatizada."
+            ]
+          },
+          {
+            "agent": "Finance Agent",
+            "focus": "análisis financiero y sostenibilidad económica",
+            "recommendations": [
+              "Se recomienda mantener reservas financieras por alto riesgo.",
+              "El modelo puede beneficiarse de crecimiento escalable y economías de escala."
+            ]
+          },
+          {
+            "agent": "Growth Agent",
+            "focus": "expansión y crecimiento empresarial",
+            "opportunities": [
+              "Preparar estrategia de expansión nacional e internacional.",
+              "Validar canales de adquisición escalables.",
+              "Diseñar estrategia SaaS de crecimiento recurrente."
+            ]
+          }
+        ]
+      }
+    }
+  },
+  {
     "id": 1780132624125,
     "createdAt": "2026-05-30T09:17:04.125Z",
     "prompt": "quiero realizar una automatización del flujo de un documento presupuesto para desglosarlo en diferentes partidas y sectores",
