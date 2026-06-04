@@ -509,37 +509,45 @@ async function compareProjects() {
   const projectB =
     await responseB.json();
 
-const viabilityWinner =
-let winsA = 0;
-let winsB = 0;
+  const viabilityWinner =
+    projectA.viabilityScore > projectB.viabilityScore
+      ? "Proyecto A"
+      : "Proyecto B";
 
-if (viabilityWinner === "Proyecto A") winsA++;
-else winsB++;
+  const riskWinner =
+    projectA.riskScore < projectB.riskScore
+      ? "Proyecto A"
+      : "Proyecto B";
 
-if (riskWinner === "Proyecto A") winsA++;
-else winsB++;
+  const scalabilityWinner =
+    projectA.scalabilityScore > projectB.scalabilityScore
+      ? "Proyecto A"
+      : "Proyecto B";
 
-if (scalabilityWinner === "Proyecto A") winsA++;
-else winsB++;
+  let winsA = 0;
+  let winsB = 0;
 
-const globalWinner =
-  winsA > winsB
-    ? "Proyecto A"
-    : "Proyecto B";
+  if (viabilityWinner === "Proyecto A") winsA++;
+  else winsB++;
 
-  projectA.viabilityScore > projectB.viabilityScore
-    ? "Proyecto A"
-    : "Proyecto B";
+  if (riskWinner === "Proyecto A") winsA++;
+  else winsB++;
 
-const riskWinner =
-  projectA.riskScore < projectB.riskScore
-    ? "Proyecto A"
-    : "Proyecto B";
+  if (scalabilityWinner === "Proyecto A") winsA++;
+  else winsB++;
 
-const scalabilityWinner =
-  projectA.scalabilityScore > projectB.scalabilityScore
-    ? "Proyecto A"
-    : "Proyecto B";
+  const globalWinner =
+    winsA > winsB
+      ? "Proyecto A"
+      : "Proyecto B";
+
+  const decisionResponse =
+    await fetch(
+      `http://localhost:3100/decision?a=${encodeURIComponent(inputA)}&b=${encodeURIComponent(inputB)}`
+    );
+
+  const decisionData =
+    await decisionResponse.json();
 
   resultBox.innerHTML = `
     <h2>Comparador Ejecutivo</h2>
@@ -566,86 +574,84 @@ const scalabilityWinner =
 
     <h2>Ranking Ejecutivo</h2>
 
-<div class="agents-grid">
+    <div class="agents-grid">
 
-  <div class="agent-card">
-    <h3>Puntuación Proyecto A</h3>
-    <p>
-      ${
-        projectA.viabilityScore +
-        projectA.scalabilityScore -
-        projectA.riskScore
-      }
-      puntos
-    </p>
-  </div>
+      <div class="agent-card">
+        <h3>Puntuación Proyecto A</h3>
+        <p>
+          ${
+            projectA.viabilityScore +
+            projectA.scalabilityScore -
+            projectA.riskScore
+          }
+          puntos
+        </p>
+      </div>
 
-  <div class="agent-card">
-    <h3>Puntuación Proyecto B</h3>
-    <p>
-      ${
-        projectB.viabilityScore +
-        projectB.scalabilityScore -
-        projectB.riskScore
-      }
-      puntos
-    </p>
-  </div>
+      <div class="agent-card">
+        <h3>Puntuación Proyecto B</h3>
+        <p>
+          ${
+            projectB.viabilityScore +
+            projectB.scalabilityScore -
+            projectB.riskScore
+          }
+          puntos
+        </p>
+      </div>
 
-</div>
+    </div>
 
-<h2>Ganadores por categoría</h2>
+    <h2>Ganadores por categoría</h2>
 
-<div class="agents-grid">
+    <div class="agents-grid">
 
-  <div class="agent-card">
-    <h3>Viabilidad</h3>
-    <p>${viabilityWinner}</p>
-  </div>
+      <div class="agent-card">
+        <h3>Viabilidad</h3>
+        <p>${viabilityWinner}</p>
+      </div>
 
-  <div class="agent-card">
-    <h3>Menor riesgo</h3>
-    <p>${riskWinner}</p>
-  </div>
+      <div class="agent-card">
+        <h3>Menor riesgo</h3>
+        <p>${riskWinner}</p>
+      </div>
 
-  <div class="agent-card">
-    <h3>Escalabilidad</h3>
-    <p>${scalabilityWinner}</p>
-  </div>
+      <div class="agent-card">
+        <h3>Escalabilidad</h3>
+        <p>${scalabilityWinner}</p>
+      </div>
 
-</div>
+    </div>
 
-<h2>Recomendación CEO</h2>
+    <h2>Executive Advisor GPT</h2>
 
-<div class="agent-card">
+    <div class="agent-card">
+      <pre style="white-space: pre-wrap; font-family: Arial, sans-serif;">
+${decisionData.decision}
+      </pre>
+    </div>
 
-  <h3>Decisión Ejecutiva</h3>
+    <h2>Decisión Ejecutiva</h2>
 
-  <p>
-    <b>Proyecto recomendado:</b> ${globalWinner}
-  </p>
+    <div class="agent-card">
 
-  <p>
-    ${globalWinner} gana ${globalWinner === "Proyecto A" ? winsA : winsB}
-    de 3 categorías estratégicas principales.
-  </p>
+      <h3>Proyecto recomendado</h3>
 
-  <p>
-    Esta recomendación se basa en viabilidad, riesgo y escalabilidad.
-  </p>
-</div>
+      <p>
+        <b>${globalWinner}</b>
+      </p>
 
-<p>
-  ${
-    projectA.viabilityScore + projectA.scalabilityScore - projectA.riskScore >
-    projectB.viabilityScore + projectB.scalabilityScore - projectB.riskScore
-      ? "Proyecto A presenta mejor equilibrio estratégico inicial."
-      : "Proyecto B presenta mejor equilibrio estratégico inicial."
-  }
-</p>
+      <p>
+        ${globalWinner} gana ${globalWinner === "Proyecto A" ? winsA : winsB}
+        de 3 categorías estratégicas principales.
+      </p>
+
+      <p>
+        Esta recomendación se basa en viabilidad, riesgo y escalabilidad.
+      </p>
+    </div>
   `;
 }
-
 
   </script>
 
