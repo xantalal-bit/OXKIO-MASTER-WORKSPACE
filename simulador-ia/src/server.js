@@ -16,6 +16,10 @@ const {
 } = require("./pdfGenerator");
 
 const {
+  generateComparisonPDF
+} = require("./comparisonPdfGenerator");
+
+const {
   generateExecutiveDecision
 } = require("./openaiClient");
 
@@ -277,6 +281,79 @@ if (parsedUrl.pathname === "/decision") {
   return;
 }
 
+if (parsedUrl.pathname === "/report-comparison-pdf") {
+  const promptA =
+    parsedUrl.query.a || "";
+
+  const promptB =
+    parsedUrl.query.b || "";
+
+  const scenarioA =
+    detectScenario(promptA);
+
+  const scenarioB =
+    detectScenario(promptB);
+
+  const projectA =
+    simulateBusiness(scenarioA);
+
+  const projectB =
+    simulateBusiness(scenarioB);
+
+  const scoreA =
+    projectA.viabilityScore +
+    projectA.scalabilityScore -
+    projectA.riskScore;
+
+  const scoreB =
+    projectB.viabilityScore +
+    projectB.scalabilityScore -
+    projectB.riskScore;
+
+  const viabilityWinner =
+    projectA.viabilityScore > projectB.viabilityScore
+      ? "Proyecto A"
+      : "Proyecto B";
+
+  const riskWinner =
+    projectA.riskScore < projectB.riskScore
+      ? "Proyecto A"
+      : "Proyecto B";
+
+  const scalabilityWinner =
+    projectA.scalabilityScore > projectB.scalabilityScore
+      ? "Proyecto A"
+      : "Proyecto B";
+
+  const globalWinner =
+    scoreA > scoreB
+      ? "Proyecto A"
+      : "Proyecto B";
+
+  const decision =
+    await generateExecutiveDecision(
+      projectA,
+      projectB,
+      globalWinner
+    );
+
+  generateComparisonPDF(
+    res,
+    {
+      projectA,
+      projectB,
+      scoreA,
+      scoreB,
+      viabilityWinner,
+      riskWinner,
+      scalabilityWinner,
+      globalWinner,
+      decision
+    }
+  );
+
+  return;
+}
 if (parsedUrl.pathname === "/history") {
 
   const history =
@@ -307,4 +384,5 @@ if (parsedUrl.pathname === "/history") {
 server.listen(PORT, () => {
   console.log(`Servidor Simulador IA en http://localhost:${PORT}`);
 });
+
 
