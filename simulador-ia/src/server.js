@@ -190,6 +190,7 @@ if (parsedUrl.pathname === "/report-pdf") {
       );
   }
 
+  
   generateExecutivePDF(
     res,
     result
