@@ -1,14 +1,30 @@
-const PDFDocument = require("pdfkit");
-
+﻿const PDFDocument = require("pdfkit");
 const path = require("path");
 
-function generateExecutivePDF(res, data) {
+function writeSection(doc, title, content) {
+  doc
+    .moveDown()
+    .fontSize(16)
+    .fillColor("#0f172a")
+    .text(title, {
+      underline: true
+    });
 
+  doc
+    .moveDown(0.4)
+    .fontSize(11)
+    .fillColor("#334155")
+    .text(content || "No disponible.", {
+      align: "left"
+    });
+}
+
+function generateExecutivePDF(res, data) {
   const doc = new PDFDocument({
     margin: 50
   });
 
-const logoPath = path.join(
+  const logoPath = path.join(
     __dirname,
     "../../app/favicon.png"
   );
@@ -45,42 +61,23 @@ const logoPath = path.join(
 
   doc
     .fontSize(12)
+    .fillColor("#334155")
     .text(`Fecha: ${new Date().toLocaleString()}`);
 
-  doc.moveDown();
+  writeSection(
+    doc,
+    "Proyecto",
+    data.project || "No especificado"
+  );
 
-  doc
-    .fontSize(16)
-    .text("Proyecto", {
-      underline: true
-    });
-
-  doc
-    .fontSize(12)
-    .text(data.project || "No especificado");
-
-  doc.moveDown();
-
-  doc
-    .fontSize(16)
-    .text("Indicadores Ejecutivos", {
-      underline: true
-    });
-
-  doc
-    .fontSize(12)
-    .text(`Viabilidad: ${data.viabilityScore}/100`)
-    .text(`Riesgo: ${data.riskScore}/100`)
-    .text(`Escalabilidad: ${data.scalabilityScore}/100`)
-    .text(`Dificultad: ${data.difficulty || "-"}`);
-
-  doc.moveDown();
-
-  doc
-    .fontSize(16)
-    .text("Resumen Ejecutivo", {
-      underline: true
-    });
+  writeSection(
+    doc,
+    "Indicadores Ejecutivos",
+    `Viabilidad: ${data.viabilityScore}/100
+Riesgo: ${data.riskScore}/100
+Escalabilidad: ${data.scalabilityScore}/100
+Dificultad: ${data.difficulty || "-"}`
+  );
 
   const ceoAgent =
     data.agentAnalysis &&
@@ -97,17 +94,24 @@ const logoPath = path.join(
       ? ceoAgent.recommendations[0]
       : "No hay resumen ejecutivo disponible.";
 
-  doc
-    .fontSize(12)
-    .text(summary, {
-      align: "left"
-    });
+  writeSection(
+    doc,
+    "Resumen Ejecutivo",
+    summary
+  );
+
+  writeSection(
+    doc,
+    "Executive Advisor GPT",
+    data.executiveAdvisor ||
+      "No hay decisión ejecutiva IA disponible."
+  );
 
   doc.addPage();
 
-doc.image(logoPath, 50, 35, {
-  width: 35
-});
+  doc.image(logoPath, 50, 35, {
+    width: 35
+  });
 
   doc
     .fontSize(20)
@@ -135,21 +139,25 @@ doc.image(logoPath, 50, 35, {
 
       doc
         .fontSize(13)
+        .fillColor("#0f172a")
         .text(agent.agent);
 
       doc
         .fontSize(11)
+        .fillColor("#334155")
         .text(`Foco: ${agent.focus}`);
 
       const items =
         agent.recommendations ||
         agent.alerts ||
         agent.strategies ||
+        agent.opportunities ||
         [];
 
       items.forEach(item => {
         doc
           .fontSize(10)
+          .fillColor("#334155")
           .text(`- ${item}`);
       });
     });
@@ -159,10 +167,10 @@ doc.image(logoPath, 50, 35, {
 
   doc
     .fontSize(10)
+    .fillColor("#64748b")
     .text("Generado por Oxkio Executive Intelligence Engine", {
       align: "center"
     });
-
 
   doc.end();
 }

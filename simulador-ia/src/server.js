@@ -181,6 +181,13 @@ if (parsedUrl.pathname === "/report-pdf") {
         result,
         prompt
       );
+
+    result.executiveAdvisor =
+      await generateExecutiveDecision(
+        result,
+        result,
+        "Proyecto analizado"
+      );
   }
 
   generateExecutivePDF(
@@ -299,3 +306,4 @@ if (parsedUrl.pathname === "/history") {
 server.listen(PORT, () => {
   console.log(`Servidor Simulador IA en http://localhost:${PORT}`);
 });
+
