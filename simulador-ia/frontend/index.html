@@ -216,6 +216,10 @@
   <button onclick="compareProjects()">
     Comparar Proyectos
   </button>
+
+  <button onclick="exportComparisonPDF()">
+    Exportar PDF Comparativo
+  </button>
 </div>
 
 
@@ -480,6 +484,19 @@ function exportExecutivePDF() {
   window.open(url, "_blank");
 }
 
+function exportComparisonPDF() {
+  const inputA =
+    document.getElementById("compareInputA").value;
+
+  const inputB =
+    document.getElementById("compareInputB").value;
+
+  const url =
+    `http://localhost:3100/report-comparison-pdf?a=${encodeURIComponent(inputA)}&b=${encodeURIComponent(inputB)}`;
+
+  window.open(url, "_blank");
+}
+
 async function compareProjects() {
   const inputA =
     document.getElementById("compareInputA").value;
@@ -657,3 +674,4 @@ ${decisionData.decision}
 
 </body>
 </html>
+
