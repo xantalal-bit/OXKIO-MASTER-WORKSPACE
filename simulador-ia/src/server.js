@@ -1,4 +1,4 @@
-﻿const http = require("http");
+const http = require("http");
 const url = require("url");
 const fs = require("fs");
 const path = require("path");
@@ -10,6 +10,12 @@ const {
   getHistory,
   getExecutiveInsights
 } = require("./simulationHistory");
+
+const {
+  readExecutiveMemory,
+  addMemoryItem,
+  getExecutiveMemorySummary
+} = require("./executiveMemory");
 
 const {
   generateExecutivePDF
@@ -353,6 +359,92 @@ if (parsedUrl.pathname === "/report-comparison-pdf") {
   );
 
   return;
+}
+if (parsedUrl.pathname === "/memory") {
+  res.writeHead(200, {
+    "Content-Type": "application/json; charset=utf-8",
+    "Access-Control-Allow-Origin": "*"
+  });
+
+  res.end(
+    JSON.stringify(readExecutiveMemory())
+  );
+
+  return;
+}
+
+if (parsedUrl.pathname === "/memory-summary") {
+  res.writeHead(200, {
+    "Content-Type": "application/json; charset=utf-8",
+    "Access-Control-Allow-Origin": "*"
+  });
+
+  res.end(
+    JSON.stringify(getExecutiveMemorySummary())
+  );
+
+  return;
+}
+
+if (parsedUrl.pathname === "/remember") {
+  const type =
+    parsedUrl.query.type || "";
+
+  const text =
+    parsedUrl.query.text || "";
+
+  if (!type || !text) {
+    res.writeHead(400, {
+      "Content-Type": "application/json; charset=utf-8",
+      "Access-Control-Allow-Origin": "*"
+    });
+
+    res.end(
+      JSON.stringify({
+        ok: false,
+        error: "Faltan parámetros type o text"
+      })
+    );
+
+    return;
+  }
+
+  try {
+    const item =
+      addMemoryItem(
+        type,
+        text
+      );
+
+    res.writeHead(200, {
+      "Content-Type": "application/json; charset=utf-8",
+      "Access-Control-Allow-Origin": "*"
+    });
+
+    res.end(
+      JSON.stringify({
+        ok: true,
+        item
+      })
+    );
+
+    return;
+
+  } catch (error) {
+    res.writeHead(400, {
+      "Content-Type": "application/json; charset=utf-8",
+      "Access-Control-Allow-Origin": "*"
+    });
+
+    res.end(
+      JSON.stringify({
+        ok: false,
+        error: error.message
+      })
+    );
+
+    return;
+  }
 }
 if (parsedUrl.pathname === "/history") {
 

@@ -1,0 +1,22 @@
+{
+  "goals": [
+    {
+      "id": 1780597853939,
+      "type": "goals",
+      "text": "Expandir Oxkio internacionalmente",
+      "createdAt": "2026-06-04T18:30:53.939Z",
+      "metadata": {}
+    }
+  ],
+  "decisions": [
+    {
+      "id": 1780598411550,
+      "type": "decisions",
+      "text": "Oxkio debe ser universal para todo tipo de CEO empresa o usuario",
+      "createdAt": "2026-06-04T18:40:11.550Z",
+      "metadata": {}
+    }
+  ],
+  "priorities": [],
+  "projects": []
+}
