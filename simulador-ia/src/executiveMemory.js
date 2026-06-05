@@ -89,6 +89,9 @@ function addMemoryItem(type, text, metadata = {}) {
 
   memory[type].unshift(item);
 
+  memory[type] =
+    memory[type].slice(0, 10);
+
   writeExecutiveMemory(memory);
 
   return item;
