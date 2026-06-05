@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="es">
 
 <head>
@@ -198,6 +198,10 @@
 
 <button onclick="exportExecutivePDF()">
   Exportar PDF Ejecutivo
+</button>
+
+<button onclick="showExecutiveMemory()">
+  Ver Memoria Executive
 </button>
 
 <div class="result">
@@ -497,6 +501,83 @@ function exportComparisonPDF() {
   window.open(url, "_blank");
 }
 
+async function showExecutiveMemory() {
+  const resultBox =
+    document.getElementById("resultBox");
+
+  resultBox.innerHTML =
+    "<h2>Cargando memoria ejecutiva...</h2>";
+
+  const response =
+    await fetch("http://localhost:3100/memory");
+
+  const memory =
+    await response.json();
+
+  const goals =
+    memory.goals || [];
+
+  const decisions =
+    memory.decisions || [];
+
+  const priorities =
+    memory.priorities || [];
+
+  const projects =
+    memory.projects || [];
+
+  function renderItems(items) {
+    if (!items.length) {
+      return "<p>No hay registros guardados.</p>";
+    }
+
+    return `
+      <ul>
+        ${items
+          .map(item => `<li>${item.text}</li>`)
+          .join("")}
+      </ul>
+    `;
+  }
+
+  resultBox.innerHTML = `
+    <h2>Executive Memory</h2>
+
+    <div class="agents-grid">
+      <div class="agent-card">
+        <h3>Objetivos</h3>
+        <p>${goals.length} registrados</p>
+      </div>
+
+      <div class="agent-card">
+        <h3>Decisiones</h3>
+        <p>${decisions.length} registradas</p>
+      </div>
+
+      <div class="agent-card">
+        <h3>Prioridades</h3>
+        <p>${priorities.length} registradas</p>
+      </div>
+
+      <div class="agent-card">
+        <h3>Proyectos</h3>
+        <p>${projects.length} registrados</p>
+      </div>
+    </div>
+
+    <h2>Objetivos guardados</h2>
+    ${renderItems(goals)}
+
+    <h2>Decisiones guardadas</h2>
+    ${renderItems(decisions)}
+
+    <h2>Prioridades guardadas</h2>
+    ${renderItems(priorities)}
+
+    <h2>Proyectos guardados</h2>
+    ${renderItems(projects)}
+  `;
+}
 async function compareProjects() {
   const inputA =
     document.getElementById("compareInputA").value;
