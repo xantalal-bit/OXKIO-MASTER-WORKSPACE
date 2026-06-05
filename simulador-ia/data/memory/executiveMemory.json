@@ -17,6 +17,18 @@
   ],
   "decisions": [
     {
+      "id": 1780684540337,
+      "type": "decisions",
+      "text": "DECISION:\nConfirmar la selección del Proyecto A para su desarrollo prioritario.\n\nMOTIVOS:\n- La viabilidad del Proyecto A (84) es superior, alineándose con el objetivo de consolidar Oxkio Core como núcleo universal.\n- El riesgo más bajo (52) minimiza la exposición a incertidumbres que podrían afectar la estabilidad del núcleo principal.\n- La alta escalabilidad (88) asegura que el proyecto pueda crecer y adaptarse, facilitando la posterior incorporación de módulos secundarios.\n\nCONDICION:\nMantener supervisión constante de los indicadores clave para detectar cualquier cambio en viabilidad, riesgo o escalabilidad que requiera ajustes estratégicos.\n\nSIGUIENTE PASO:\nEjecutar el plan detallado de desarrollo del Proyecto A, asignando recursos específicos y estableciendo métricas claras para medir progreso y resultados, garantizando la consolidación del núcleo antes de avanzar con nuevos módulos.",
+      "createdAt": "2026-06-05T18:35:40.337Z",
+      "metadata": {
+        "source": "advisor-auto-learning",
+        "globalWinner": "Proyecto A",
+        "projectA": "consulting",
+        "projectB": "saas"
+      }
+    },
+    {
       "id": 1780683022670,
       "type": "decisions",
       "text": "DECISION:\nSeleccionar el Proyecto A para su desarrollo.\n\nMOTIVOS:\n- Mayor viabilidad (84 vs 72) garantiza mejores probabilidades de éxito operativo.\n- Riesgo significativamente menor (52 vs 82) reduce la exposición a pérdidas y problemas.\n- Alta escalabilidad (88) permite crecimiento sostenible y generación de valor a largo plazo.\n\nCONDICION:\nSe debe mantener un monitoreo constante sobre indicadores clave para ajustar la estrategia si cambian las condiciones del mercado o internas.\n\nSIGUIENTE PASO:\nDesarrollar un plan detallado de ejecución para el Proyecto A, asignando recursos adecuados y estableciendo métricas de seguimiento claras.",

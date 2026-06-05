@@ -44,10 +44,10 @@ function detectScenario(text) {
   if (directMatch) return directMatch;
 
   if (
-    input.includes("consultoría") ||
+    input.includes("consultorÃ­a") ||
     input.includes("consultoria") ||
     input.includes("consultor") ||
-    input.includes("asesoría") ||
+    input.includes("asesorÃ­a") ||
     input.includes("asesoria") ||
     input.includes("servicios profesionales")
   ) {
@@ -58,8 +58,8 @@ function detectScenario(text) {
     input.includes("restaurante") ||
     input.includes("restaurant") ||
     input.includes("bar") ||
-    input.includes("cafetería") ||
-    input.includes("hostelería")
+    input.includes("cafeterÃ­a") ||
+    input.includes("hostelerÃ­a")
   ) {
     return "restaurant";
   }
@@ -69,9 +69,9 @@ function detectScenario(text) {
     input.includes("software") ||
     input.includes("plataforma") ||
     input.includes("app") ||
-    input.includes("aplicación") ||
+    input.includes("aplicaciÃ³n") ||
     input.includes("automatizar") ||
-    input.includes("automatización") ||
+    input.includes("automatizaciÃ³n") ||
     input.includes("despachos") ||
     input.includes("legaltech") ||
     input.includes("healthtech") ||
@@ -268,6 +268,17 @@ if (parsedUrl.pathname === "/decision") {
       globalWinner
     );
 
+  addMemoryItem(
+    "decisions",
+    decision,
+    {
+      source: "advisor-auto-learning",
+      globalWinner,
+      projectA: projectA.project,
+      projectB: projectB.project
+    }
+  );
+
   res.writeHead(200, {
     "Content-Type": "application/json; charset=utf-8",
     "Access-Control-Allow-Origin": "*"
@@ -402,7 +413,7 @@ if (parsedUrl.pathname === "/remember") {
     res.end(
       JSON.stringify({
         ok: false,
-        error: "Faltan parámetros type o text"
+        error: "Faltan parÃ¡metros type o text"
       })
     );
 
