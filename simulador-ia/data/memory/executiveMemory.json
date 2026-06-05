@@ -17,6 +17,13 @@
   ],
   "decisions": [
     {
+      "id": 1780683022670,
+      "type": "decisions",
+      "text": "DECISION:\nSeleccionar el Proyecto A para su desarrollo.\n\nMOTIVOS:\n- Mayor viabilidad (84 vs 72) garantiza mejores probabilidades de éxito operativo.\n- Riesgo significativamente menor (52 vs 82) reduce la exposición a pérdidas y problemas.\n- Alta escalabilidad (88) permite crecimiento sostenible y generación de valor a largo plazo.\n\nCONDICION:\nSe debe mantener un monitoreo constante sobre indicadores clave para ajustar la estrategia si cambian las condiciones del mercado o internas.\n\nSIGUIENTE PASO:\nDesarrollar un plan detallado de ejecución para el Proyecto A, asignando recursos adecuados y estableciendo métricas de seguimiento claras.",
+      "createdAt": "2026-06-05T18:10:22.670Z",
+      "metadata": {}
+    },
+    {
       "id": 1780598411550,
       "type": "decisions",
       "text": "Oxkio debe ser universal para todo tipo de CEO empresa o usuario",
