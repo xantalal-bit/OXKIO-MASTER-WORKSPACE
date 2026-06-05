@@ -1,6 +1,10 @@
-require("dotenv").config();
+﻿require("dotenv").config();
 
 const OpenAI = require("openai");
+
+const {
+  getExecutiveMemorySummary
+} = require("./executiveMemory");
 
 const client = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY
@@ -16,45 +20,43 @@ async function generateCEOAnalysis(prompt, simulation) {
           {
             role: "system",
             content: `
-Actúas como un CEO estratégico experto en startups, SaaS, negocios IA,
-escalabilidad, inversión, automatización y crecimiento empresarial.
+Actúas como CEO Advisor experto en estrategia empresarial.
 
 Responde de forma ejecutiva, breve, clara y profesional.
 
-Debes devolver SIEMPRE exactamente este formato:
+Formato recomendado:
 
 OPORTUNIDAD:
-(texto breve)
+(texto)
 
 RIESGO:
-(texto breve)
+(texto)
 
 RECOMENDACION:
-(texto breve)
-
-No añadas títulos adicionales.
-No añadas introducciones.
-No añadas conclusiones.
+(texto)
 `
           },
 
           {
             role: "user",
             content: `
-Proyecto: ${simulation.project}
-
-Viabilidad: ${simulation.viabilityScore}/100
-Riesgo: ${simulation.riskScore}/100
-Escalabilidad: ${simulation.scalabilityScore}/100
-
-Prompt usuario:
+Petición del usuario:
 ${prompt}
+
+Datos de simulación:
+Proyecto: ${simulation.project}
+Viabilidad: ${simulation.viabilityScore}
+Riesgo: ${simulation.riskScore}
+Escalabilidad: ${simulation.scalabilityScore}
+Dificultad: ${simulation.difficulty}
+
+Genera análisis ejecutivo.
 `
           }
         ],
 
-        temperature: 0.7,
-        max_tokens: 250
+        temperature: 0.5,
+        max_tokens: 260
       });
 
     return completion
@@ -64,7 +66,7 @@ ${prompt}
 
   } catch (error) {
     console.error(
-      "OPENAI ERROR:",
+      "OPENAI CEO ERROR:",
       error.message
     );
 
@@ -74,6 +76,17 @@ ${prompt}
 
 async function generateExecutiveDecision(projectA, projectB, globalWinner) {
   try {
+    const memorySummary =
+      getExecutiveMemorySummary();
+
+    const memoryContext = `
+MEMORIA EJECUTIVA ACTUAL:
+Objetivo principal: ${memorySummary.latestGoal ? memorySummary.latestGoal.text : "No definido"}
+Última decisión: ${memorySummary.latestDecision ? memorySummary.latestDecision.text : "No definida"}
+Prioridad principal: ${memorySummary.latestPriority ? memorySummary.latestPriority.text : "No definida"}
+Proyecto relevante: ${memorySummary.latestProject ? memorySummary.latestProject.text : "No definido"}
+`;
+
     const completion =
       await client.chat.completions.create({
         model: "gpt-4.1-mini",
@@ -85,6 +98,8 @@ async function generateExecutiveDecision(projectA, projectB, globalWinner) {
 Actúas como un comité ejecutivo experto en estrategia empresarial.
 
 Debes explicar decisiones de forma clara, breve y profesional.
+
+Debes tener en cuenta la memoria ejecutiva disponible cuando exista.
 
 Formato obligatorio:
 
@@ -122,13 +137,15 @@ Escalabilidad: ${projectB.scalabilityScore}
 Ganador calculado:
 ${globalWinner}
 
-Explica la decisión ejecutiva.
+${memoryContext}
+
+Explica la decisión ejecutiva teniendo en cuenta la memoria ejecutiva si aporta contexto relevante.
 `
           }
         ],
 
         temperature: 0.6,
-        max_tokens: 280
+        max_tokens: 340
       });
 
     return completion
