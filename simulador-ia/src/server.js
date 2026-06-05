@@ -44,10 +44,10 @@ function detectScenario(text) {
   if (directMatch) return directMatch;
 
   if (
-    input.includes("consultorÃ­a") ||
+    input.includes("consultorÃƒÂ­a") ||
     input.includes("consultoria") ||
     input.includes("consultor") ||
-    input.includes("asesorÃ­a") ||
+    input.includes("asesorÃƒÂ­a") ||
     input.includes("asesoria") ||
     input.includes("servicios profesionales")
   ) {
@@ -58,8 +58,8 @@ function detectScenario(text) {
     input.includes("restaurante") ||
     input.includes("restaurant") ||
     input.includes("bar") ||
-    input.includes("cafeterÃ­a") ||
-    input.includes("hostelerÃ­a")
+    input.includes("cafeterÃƒÂ­a") ||
+    input.includes("hostelerÃƒÂ­a")
   ) {
     return "restaurant";
   }
@@ -69,9 +69,9 @@ function detectScenario(text) {
     input.includes("software") ||
     input.includes("plataforma") ||
     input.includes("app") ||
-    input.includes("aplicaciÃ³n") ||
+    input.includes("aplicaciÃƒÂ³n") ||
     input.includes("automatizar") ||
-    input.includes("automatizaciÃ³n") ||
+    input.includes("automatizaciÃƒÂ³n") ||
     input.includes("despachos") ||
     input.includes("legaltech") ||
     input.includes("healthtech") ||
@@ -279,6 +279,17 @@ if (parsedUrl.pathname === "/decision") {
     }
   );
 
+  addMemoryItem(
+    "priorities",
+    `Revisar y ejecutar la decisión estratégica: ${globalWinner}`,
+    {
+      source: "advisor-priority-auto-learning",
+      globalWinner,
+      projectA: projectA.project,
+      projectB: projectB.project
+    }
+  );
+
   res.writeHead(200, {
     "Content-Type": "application/json; charset=utf-8",
     "Access-Control-Allow-Origin": "*"
@@ -413,7 +424,7 @@ if (parsedUrl.pathname === "/remember") {
     res.end(
       JSON.stringify({
         ok: false,
-        error: "Faltan parÃ¡metros type o text"
+        error: "Faltan parÃƒÂ¡metros type o text"
       })
     );
 

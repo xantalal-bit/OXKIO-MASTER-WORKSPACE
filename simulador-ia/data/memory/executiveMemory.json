@@ -17,6 +17,18 @@
   ],
   "decisions": [
     {
+      "id": 1780685526112,
+      "type": "decisions",
+      "text": "DECISION:\nMantener la priorización del Proyecto A para su desarrollo y consolidación como núcleo universal de Oxkio Core.\n\nMOTIVOS:\n- La viabilidad superior del Proyecto A (84) está alineada con el objetivo estratégico de consolidar un núcleo robusto antes de expandir funcionalidades.\n- El menor riesgo asociado (52) reduce la probabilidad de interrupciones o fallos que comprometan la estabilidad del sistema principal.\n- La alta escalabilidad (88) garantiza que el núcleo pueda adaptarse y crecer, facilitando la integración futura de módulos secundarios sin comprometer la estructura base.\n\nCONDICION:\nContinuar con la supervisión rigurosa de los indicadores clave de desempeño para detectar cualquier desviación que pueda requerir ajustes en la estrategia o reasignación de recursos.\n\nSIGUIENTE PASO:\nImplementar el plan de desarrollo del Proyecto A con un enfoque en la asignación eficiente de recursos y establecimiento de métricas claras de seguimiento, asegurando la consolidación efectiva del núcleo antes de considerar nuevas expansiones.",
+      "createdAt": "2026-06-05T18:52:06.112Z",
+      "metadata": {
+        "source": "advisor-auto-learning",
+        "globalWinner": "Proyecto A",
+        "projectA": "consulting",
+        "projectB": "saas"
+      }
+    },
+    {
       "id": 1780684540337,
       "type": "decisions",
       "text": "DECISION:\nConfirmar la selección del Proyecto A para su desarrollo prioritario.\n\nMOTIVOS:\n- La viabilidad del Proyecto A (84) es superior, alineándose con el objetivo de consolidar Oxkio Core como núcleo universal.\n- El riesgo más bajo (52) minimiza la exposición a incertidumbres que podrían afectar la estabilidad del núcleo principal.\n- La alta escalabilidad (88) asegura que el proyecto pueda crecer y adaptarse, facilitando la posterior incorporación de módulos secundarios.\n\nCONDICION:\nMantener supervisión constante de los indicadores clave para detectar cualquier cambio en viabilidad, riesgo o escalabilidad que requiera ajustes estratégicos.\n\nSIGUIENTE PASO:\nEjecutar el plan detallado de desarrollo del Proyecto A, asignando recursos específicos y estableciendo métricas claras para medir progreso y resultados, garantizando la consolidación del núcleo antes de avanzar con nuevos módulos.",
@@ -43,6 +55,19 @@
       "metadata": {}
     }
   ],
-  "priorities": [],
+  "priorities": [
+    {
+      "id": 1780685526119,
+      "type": "priorities",
+      "text": "Revisar y ejecutar la decisión estratégica: Proyecto A",
+      "createdAt": "2026-06-05T18:52:06.119Z",
+      "metadata": {
+        "source": "advisor-priority-auto-learning",
+        "globalWinner": "Proyecto A",
+        "projectA": "consulting",
+        "projectB": "saas"
+      }
+    }
+  ],
   "projects": []
 }
