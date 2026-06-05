@@ -1,6 +1,13 @@
 {
   "goals": [
     {
+      "id": 1780682157701,
+      "type": "goals",
+      "text": "Tipo: Prioridad\nTexto: Consolidar Oxkio Core como núcleo universal antes de añadir módulos secundarios",
+      "createdAt": "2026-06-05T17:55:57.701Z",
+      "metadata": {}
+    },
+    {
       "id": 1780597853939,
       "type": "goals",
       "text": "Expandir Oxkio internacionalmente",
