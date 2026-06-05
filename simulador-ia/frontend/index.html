@@ -179,7 +179,7 @@
     <h1>OXKIO SIMULADOR IA EXECUTIVE</h1>
 
     <p class="subtitle">
-      ComitÃƒÂ© ejecutivo multiagente para simulaciÃƒÂ³n estratÃƒÂ©gica empresarial.
+      Comit&eacute; ejecutivo multiagente para simulaci&oacute;n estrat&eacute;gica empresarial.
     </p>
 
     <div class="scenarios" id="scenariosBox">
@@ -189,7 +189,7 @@
     <textarea id="promptInput" placeholder="Ejemplo: quiero crear un SaaS B2B para CEOs"></textarea>
 
     <button onclick="runSimulation()">
-  Simular con ComitÃƒÂ© IA
+  Simular con Comit&eacute; IA
 </button>
 
 <button onclick="generateExecutiveReport()">
@@ -214,7 +214,7 @@
 
   <textarea
     id="compareInputB"
-    placeholder="Proyecto B: ejemplo, crear una consultorÃƒÂ­a IA para CEOs">
+    placeholder="Proyecto B: ejemplo, crear una consultor&iacute;a IA para CEOs">
   </textarea>
 
   <button onclick="compareProjects()">
@@ -229,7 +229,7 @@
 
     <div class="result" id="resultBox">
       <h2>Resultado ejecutivo</h2>
-      <p>AquÃƒÂ­ aparecerÃƒÂ¡ la simulaciÃƒÂ³n y el anÃƒÂ¡lisis multiagente.</p>
+      <p>Aqu&iacute; aparecer&aacute; la simulaci&oacute;n y el an&aacute;lisis multiagente.</p>
     </div>
 
   </div>
@@ -278,7 +278,7 @@ function renderExecutiveSummary(text) {
       </div>
 
       <div class="agent-card">
-        <h3>RecomendaciÃƒÂ³n CEO</h3>
+        <h3>Recomendaci&oacute;n CEO</h3>
         <p>${recommendation ? recommendation[1].trim() : "-"}</p>
       </div>
     </div>
@@ -294,7 +294,7 @@ function renderExecutiveSummary(text) {
         [];
 
       if (!items.length) {
-        return "<p>Sin observaciones especÃƒÂ­ficas.</p>";
+        return "<p>Sin observaciones espec&iacute;ficas.</p>";
       }
 
       return "<ul>" + items.map(item => `<li>${item}</li>`).join("") + "</ul>";
@@ -304,7 +304,7 @@ function renderExecutiveSummary(text) {
       const input = document.getElementById("promptInput").value;
       const resultBox = document.getElementById("resultBox");
 
-      resultBox.innerHTML = "<p>Simulando comitÃƒÂ© ejecutivo IA...</p>";
+      resultBox.innerHTML = "<p>Simulando comit&eacute; ejecutivo IA...</p>";
 
       fetch(`http://localhost:3100/simulate?prompt=${encodeURIComponent(input)}`)
         .then(response => response.json())
@@ -350,7 +350,7 @@ ${renderExecutiveSummary(ceoSummary)}
 
             <div class="metrics">
               <div class="metric">
-                <span>InversiÃƒÂ³n estimada</span>
+                <span>Inversi&oacute;n estimada</span>
                 <strong>${result.estimatedInvestment || "-"}</strong>
               </div>
 
@@ -406,7 +406,7 @@ ${renderExecutiveSummary(ceoSummary)}
               </div>
             </div>
 
-            <h2>ComitÃƒÂ© IA Executive</h2>
+            <h2>Comit&eacute; IA Executive</h2>
 
             <div class="agents-grid">
               ${agentCards}
@@ -447,7 +447,7 @@ async function generateExecutiveReport() {
       <h3>Proyecto</h3>
       <p>${data.project}</p>
 
-      <h3>Resumen EstratÃƒÂ©gico</h3>
+      <h3>Resumen Estrat&eacute;gico</h3>
       <p>
         ${ceoAgent.recommendations[0]}
       </p>
@@ -460,10 +460,10 @@ async function generateExecutiveReport() {
         <li>Escalabilidad: ${data.scalabilityScore}/100</li>
       </ul>
 
-      <h3>RecomendaciÃƒÂ³n</h3>
+      <h3>Recomendaci&oacute;n</h3>
 
       <p>
-        Revisar el anÃƒÂ¡lisis del CEO Agent y validar
+        Revisar el an&aacute;lisis del CEO Agent y validar
         comercialmente antes de ejecutar inversiones.
       </p>
 
@@ -565,18 +565,18 @@ async function showExecutiveMemory() {
       </div>
     </div>
 
-    <h2>AÃ±adir memoria ejecutiva</h2>
+    <h2>A&ntilde;adir memoria ejecutiva</h2>
 
     <select id="memoryType">
       <option value="goals">Objetivo</option>
-      <option value="decisions">DecisiÃ³n</option>
+      <option value="decisions">Decisi&oacute;n</option>
       <option value="priorities">Prioridad</option>
       <option value="projects">Proyecto</option>
     </select>
 
     <textarea
       id="memoryText"
-      placeholder="Escribe aquÃ­ el objetivo, decisiÃ³n, prioridad o proyecto que Oxkio debe recordar">
+      placeholder="Escribe aqu&iacute; el objetivo, decisi&oacute;n, prioridad o proyecto que Oxkio debe recordar">
     </textarea>
 
     <button onclick="saveExecutiveMemoryItem()">
@@ -620,7 +620,7 @@ async function saveAdvisorDecisionToMemory() {
     document.querySelector(".agent-card pre");
 
   if (!advisorBlock) {
-    alert("No hay decisión del Advisor para guardar.");
+    alert("No hay decision del Advisor para guardar.");
     return;
   }
 
@@ -628,7 +628,7 @@ async function saveAdvisorDecisionToMemory() {
     advisorBlock.innerText.trim();
 
   if (!decisionText) {
-    alert("La decisión del Advisor está vacía.");
+    alert("La decision del Advisor esta vacia.");
     return;
   }
 
@@ -636,7 +636,7 @@ async function saveAdvisorDecisionToMemory() {
     `http://localhost:3100/remember?type=decisions&text=${encodeURIComponent(decisionText)}`
   );
 
-  alert("Decisión guardada en Executive Memory.");
+  alert("Decision guardada en Executive Memory.");
 }
 async function compareProjects() {
   const inputA =
@@ -735,7 +735,7 @@ async function compareProjects() {
     <div class="agents-grid">
 
       <div class="agent-card">
-        <h3>PuntuaciÃƒÂ³n Proyecto A</h3>
+        <h3>Puntuaci&oacute;n Proyecto A</h3>
         <p>
           ${
             projectA.viabilityScore +
@@ -747,7 +747,7 @@ async function compareProjects() {
       </div>
 
       <div class="agent-card">
-        <h3>PuntuaciÃƒÂ³n Proyecto B</h3>
+        <h3>Puntuaci&oacute;n Proyecto B</h3>
         <p>
           ${
             projectB.viabilityScore +
@@ -760,7 +760,7 @@ async function compareProjects() {
 
     </div>
 
-    <h2>Ganadores por categorÃƒÂ­a</h2>
+    <h2>Ganadores por categor&iacute;a</h2>
 
     <div class="agents-grid">
 
@@ -789,11 +789,11 @@ ${decisionData.decision}
       </pre>
 
       <button onclick="saveAdvisorDecisionToMemory()">
-        Guardar decisión en memoria
+        Guardar decisi&oacute;n en memoria
       </button>
     </div>
 
-    <h2>DecisiÃƒÂ³n Ejecutiva</h2>
+    <h2>Decisi&oacute;n Ejecutiva</h2>
 
     <div class="agent-card">
 
@@ -805,11 +805,11 @@ ${decisionData.decision}
 
       <p>
         ${globalWinner} gana ${globalWinner === "Proyecto A" ? winsA : winsB}
-        de 3 categorÃƒÂ­as estratÃƒÂ©gicas principales.
+        de 3 categor&iacute;as estrat&eacute;gicas principales.
       </p>
 
       <p>
-        Esta recomendaciÃƒÂ³n se basa en viabilidad, riesgo y escalabilidad.
+        Esta recomendaci&oacute;n se basa en viabilidad, riesgo y escalabilidad.
       </p>
     </div>
   `;
