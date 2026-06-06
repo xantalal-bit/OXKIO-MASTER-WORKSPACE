@@ -599,7 +599,27 @@ async function showExecutiveDashboard() {
   </div>
 </div>
 
+<h2>Alertas Estrat&eacute;gicas</h2>
 
+<div class="agents-grid">
+  ${
+    dashboard.alerts && dashboard.alerts.alerts && dashboard.alerts.alerts.length
+      ? dashboard.alerts.alerts.map(alert => `
+        <div class="agent-card">
+          <h3>${alert.title}</h3>
+          <p><b>Nivel:</b> ${alert.level}</p>
+          <p>${alert.message}</p>
+          <p><b>Recomendaci&oacute;n:</b> ${alert.recommendation}</p>
+        </div>
+      `).join("")
+      : `
+        <div class="agent-card">
+          <h3>Sin alertas activas</h3>
+          <p>No se han detectado contradicciones estrat&eacute;gicas relevantes.</p>
+        </div>
+      `
+  }
+</div>
 
     <h2>Indicadores de Memoria</h2>
 
