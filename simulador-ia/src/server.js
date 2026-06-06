@@ -19,6 +19,8 @@ const generateExecutiveAlerts = require("./executiveAlerts");
 
 const trackExecutiveGoals = require("./executiveGoalTracker");
 
+const analyzeExecutiveConsistency = require("./executiveConsistency");
+
 const {
   readExecutiveMemory,
   addMemoryItem,
@@ -433,6 +435,9 @@ const alerts =
 const goalTracker =
   trackExecutiveGoals(memory);
 
+const consistency =
+  analyzeExecutiveConsistency(memory);
+
   res.writeHead(200, {
     "Content-Type": "application/json; charset=utf-8",
     "Access-Control-Allow-Origin": "*"
@@ -443,7 +448,8 @@ const goalTracker =
   ...dashboard,
   advisor,
   alerts,
-  goalTracker
+  goalTracker,
+  consistency
 })
   );
 
