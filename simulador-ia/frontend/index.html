@@ -621,6 +621,31 @@ async function showExecutiveDashboard() {
   }
 </div>
 
+<h2>Seguimiento de Objetivos Estrat&eacute;gicos</h2>
+
+<div class="agents-grid">
+  ${
+    dashboard.goalTracker &&
+    dashboard.goalTracker.trackedGoals &&
+    dashboard.goalTracker.trackedGoals.length
+      ? dashboard.goalTracker.trackedGoals.map(goal => `
+        <div class="agent-card">
+          <h3>${goal.theme}</h3>
+          <p><b>Estado:</b> ${goal.status}</p>
+          <p><b>Menciones:</b> ${goal.totalMentions}</p>
+          <p><b>Recomendaci&oacute;n:</b> ${goal.recommendation}</p>
+        </div>
+      `).join("")
+      : `
+        <div class="agent-card">
+          <h3>Sin objetivos detectados</h3>
+          <p>A&uacute;n no hay suficientes datos para seguimiento estrat&eacute;gico.</p>
+        </div>
+      `
+  }
+</div>
+
+
     <h2>Indicadores de Memoria</h2>
 
     <div class="metrics">
