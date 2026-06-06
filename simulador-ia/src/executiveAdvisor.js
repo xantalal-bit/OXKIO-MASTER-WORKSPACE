@@ -8,47 +8,70 @@ function buildExecutiveAction(dashboard) {
   const strategicFocus =
     dashboard.strategicFocus || "Sin foco estratégico definido";
 
+  const frequency =
+    dashboard.frequency || 0;
+
   let priority = "Media";
   let horizon = "30 días";
-  let action = "Revisar la memoria ejecutiva y registrar nuevas prioridades.";
+  let recommendedAction =
+    "Revisar la memoria ejecutiva y registrar nuevas prioridades.";
   let justification =
     "Aún no hay suficientes patrones consolidados para recomendar una acción estratégica fuerte.";
+  let riskOfNotActing =
+    "Pérdida de claridad estratégica y decisiones poco consistentes.";
+  let successIndicator =
+    "Mayor número de objetivos, decisiones y prioridades registradas.";
 
   if (confidence === "Alta") {
     priority = "Alta";
-    horizon = "7-15 días";
-    action =
-      `Ejecutar una acción concreta alineada con ${dominantPattern.toLowerCase()}.`;
+    horizon = "15 días";
+    recommendedAction =
+      `Consolidar el foco estratégico "${strategicFocus}" antes de iniciar nuevas expansiones.`;
     justification =
-      `El sistema detecta el patrón "${dominantPattern}" con confianza alta y foco estratégico en "${strategicFocus}".`;
+      `El patrón dominante "${dominantPattern}" aparece con confianza alta y frecuencia ${frequency}.`;
+    riskOfNotActing =
+      "Dispersión del desarrollo, pérdida de foco y retraso en la consolidación del núcleo principal.";
+    successIndicator =
+      "Núcleo estratégico validado, decisiones alineadas y prioridades estables.";
   }
 
   if (confidence === "Media") {
     priority = "Media";
     horizon = "15-30 días";
-    action =
+    recommendedAction =
       `Validar manualmente el patrón "${dominantPattern}" antes de convertirlo en plan operativo.`;
     justification =
-      `El patrón "${dominantPattern}" aparece, pero todavía requiere más datos para una decisión automática fuerte.`;
+      `El patrón aparece con confianza media y necesita más datos antes de ejecutar una acción fuerte.`;
+    riskOfNotActing =
+      "Tomar decisiones prematuras o basadas en señales todavía incompletas.";
+    successIndicator =
+      "Mayor repetición del patrón o confirmación manual del criterio estratégico.";
   }
 
   if (confidence === "Baja") {
     priority = "Baja";
     horizon = "30-60 días";
-    action =
-      "Registrar más decisiones, objetivos y prioridades antes de actuar.";
+    recommendedAction =
+      "Registrar más decisiones, objetivos y prioridades antes de ejecutar acciones.";
     justification =
-      "La señal estratégica todavía es débil y no conviene ejecutar acciones automáticas.";
+      "La señal estratégica todavía es débil.";
+    riskOfNotActing =
+      "Baja calidad del aprendizaje ejecutivo por falta de información suficiente.";
+    successIndicator =
+      "Memoria ejecutiva con más datos reales y patrones mejor definidos.";
   }
 
   return {
     generatedAt: new Date().toISOString(),
-    advisorStatus: "Executive Advisor Autónomo v1 activo",
-    recommendedAction: action,
-    justification,
+    advisorStatus: "Executive Advisor Autónomo v2 activo",
+    recommendedAction,
     priority,
     horizon,
+    justification,
+    riskOfNotActing,
+    successIndicator,
     confidence,
+    frequency,
     strategicFocus,
     dominantPattern,
     nextStep:
