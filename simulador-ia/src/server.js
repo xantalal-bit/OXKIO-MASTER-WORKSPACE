@@ -1,4 +1,4 @@
-const http = require("http");
+﻿const http = require("http");
 const url = require("url");
 const fs = require("fs");
 const path = require("path");
@@ -10,6 +10,8 @@ const {
   getHistory,
   getExecutiveInsights
 } = require("./simulationHistory");
+
+const generateExecutiveSummary = require("./executiveSummary");
 
 const {
   readExecutiveMemory,
@@ -403,6 +405,22 @@ if (parsedUrl.pathname === "/memory-summary") {
 
   res.end(
     JSON.stringify(getExecutiveMemorySummary())
+  );
+
+  return;
+}
+
+if (parsedUrl.pathname === "/executive-dashboard") {
+  const memory = readExecutiveMemory();
+  const dashboard = generateExecutiveSummary(memory);
+
+  res.writeHead(200, {
+    "Content-Type": "application/json; charset=utf-8",
+    "Access-Control-Allow-Origin": "*"
+  });
+
+  res.end(
+    JSON.stringify(dashboard)
   );
 
   return;
