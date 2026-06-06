@@ -645,6 +645,35 @@ async function showExecutiveDashboard() {
   }
 </div>
 
+<h2>Consistencia Estrat&eacute;gica</h2>
+
+<div class="agent-card">
+  <h3>Estado general</h3>
+  <p>${dashboard.consistency.overallStatus}</p>
+</div>
+
+<div class="agents-grid">
+  ${
+    dashboard.consistency &&
+    dashboard.consistency.contradictions &&
+    dashboard.consistency.contradictions.length
+      ? dashboard.consistency.contradictions.map(item => `
+        <div class="agent-card">
+          <h3>${item.title}</h3>
+          <p><b>Nivel:</b> ${item.level}</p>
+          <p>${item.message}</p>
+          <p><b>Recomendaci&oacute;n:</b> ${item.recommendation}</p>
+        </div>
+      `).join("")
+      : `
+        <div class="agent-card">
+          <h3>Sin contradicciones relevantes</h3>
+          <p>La memoria ejecutiva mantiene consistencia estrat&eacute;gica.</p>
+        </div>
+      `
+  }
+</div>
+
 
     <h2>Indicadores de Memoria</h2>
 
