@@ -1,5 +1,396 @@
 [
   {
+    "id": 1780683949638,
+    "createdAt": "2026-06-05T18:25:49.638Z",
+    "prompt": "  saas",
+    "scenario": "saas",
+    "result": {
+      "project": "saas",
+      "difficulty": "Alta",
+      "risk": "Alto",
+      "viabilityScore": 72,
+      "riskScore": 82,
+      "scalabilityScore": 95,
+      "agentAnalysis": {
+        "agents": [
+          {
+            "agent": "CEO Agent",
+            "focus": "visión estratégica y toma de decisiones",
+            "recommendations": [
+              "OPORTUNIDAD:  \nEl modelo SaaS presenta alta escalabilidad (95), lo que permite un crecimiento rápido y expansión en mercados globales con menores costos marginales. La viabilidad del proyecto es favorable (72), indicando una base sólida para desarrollo y lanzamiento.\n\nRIESGO:  \nEl riesgo elevado (82) y la alta dificultad del proyecto sugieren posibles desafíos técnicos, operativos o de mercado que podrían impactar la ejecución y sostenibilidad a corto plazo.\n\nRECOMENDACION:  \nImplementar un plan de mitigación de riesgos robusto, incluyendo pruebas piloto y validación continua del producto. Priorizar recursos en talento técnico especializado y establecer alianzas estratégicas para acelerar la adopción y reducir incertidumbres."
+            ]
+          },
+          {
+            "agent": "Risk Agent",
+            "focus": "riesgos y sostenibilidad",
+            "alerts": [
+              "Riesgo estratégico elevado."
+            ]
+          },
+          {
+            "agent": "Marketing Agent",
+            "focus": "crecimiento y captación",
+            "strategies": [
+              "Potenciar campañas digitales escalables.",
+              "Priorizar captación B2B automatizada."
+            ]
+          },
+          {
+            "agent": "Finance Agent",
+            "focus": "análisis financiero y sostenibilidad económica",
+            "recommendations": [
+              "Se recomienda mantener reservas financieras por alto riesgo.",
+              "El modelo puede beneficiarse de crecimiento escalable y economías de escala."
+            ]
+          },
+          {
+            "agent": "Growth Agent",
+            "focus": "expansión y crecimiento empresarial",
+            "opportunities": [
+              "Preparar estrategia de expansión nacional e internacional.",
+              "Validar canales de adquisición escalables.",
+              "Diseñar estrategia SaaS de crecimiento recurrente."
+            ]
+          }
+        ]
+      }
+    }
+  },
+  {
+    "id": 1780683946837,
+    "createdAt": "2026-06-05T18:25:46.837Z",
+    "prompt": "  consultoria ia",
+    "scenario": "consulting",
+    "result": {
+      "project": "consulting",
+      "difficulty": "Media-Alta",
+      "risk": "Medio",
+      "viabilityScore": 84,
+      "riskScore": 52,
+      "scalabilityScore": 88,
+      "agentAnalysis": {
+        "agents": [
+          {
+            "agent": "CEO Agent",
+            "focus": "visión estratégica y toma de decisiones",
+            "recommendations": [
+              "OPORTUNIDAD:  \nEl proyecto de consultoría en IA presenta una alta viabilidad (84) y una excelente escalabilidad (88), lo que indica un fuerte potencial para crecimiento y expansión en un mercado en auge.\n\nRIESGO:  \nEl riesgo moderado-alto (52) y la dificultad media-alta sugieren que existen desafíos técnicos y de implementación que podrían afectar los tiempos y costos del proyecto.\n\nRECOMENDACION:  \nPriorizar la asignación de recursos a la gestión de riesgos y desarrollo de capacidades técnicas, mientras se aprovecha la escalabilidad para captar clientes estratégicos. Implementar un plan de mitigación de riesgos claro y fases piloto para validar resultados antes de la expansión masiva."
+            ]
+          },
+          {
+            "agent": "Risk Agent",
+            "focus": "riesgos y sostenibilidad",
+            "alerts": []
+          },
+          {
+            "agent": "Marketing Agent",
+            "focus": "crecimiento y captación",
+            "strategies": [
+              "Potenciar campañas digitales escalables.",
+              "Fortalecer marca personal en LinkedIn."
+            ]
+          },
+          {
+            "agent": "Finance Agent",
+            "focus": "análisis financiero y sostenibilidad económica",
+            "recommendations": [
+              "El proyecto presenta buena viabilidad financiera potencial.",
+              "El modelo puede beneficiarse de crecimiento escalable y economías de escala."
+            ]
+          },
+          {
+            "agent": "Growth Agent",
+            "focus": "expansión y crecimiento empresarial",
+            "opportunities": [
+              "Preparar estrategia de expansión nacional e internacional.",
+              "Validar canales de adquisición escalables.",
+              "Crear red de partners y prescriptores."
+            ]
+          }
+        ]
+      }
+    }
+  },
+  {
+    "id": 1780682898593,
+    "createdAt": "2026-06-05T18:08:18.593Z",
+    "prompt": "  saas",
+    "scenario": "saas",
+    "result": {
+      "project": "saas",
+      "difficulty": "Alta",
+      "risk": "Alto",
+      "viabilityScore": 72,
+      "riskScore": 82,
+      "scalabilityScore": 95,
+      "agentAnalysis": {
+        "agents": [
+          {
+            "agent": "CEO Agent",
+            "focus": "visión estratégica y toma de decisiones",
+            "recommendations": [
+              "OPORTUNIDAD:  \nAlta escalabilidad permite rápido crecimiento y expansión global.\n\nRIESGO:  \nRiesgo elevado sugiere posibles problemas en adopción, competencia o monetización.\n\nRECOMENDACION:  \nEnfocar en validación temprana de mercado y optimizar modelo de ingresos para mitigar riesgos."
+            ]
+          },
+          {
+            "agent": "Risk Agent",
+            "focus": "riesgos y sostenibilidad",
+            "alerts": [
+              "Riesgo estratégico elevado."
+            ]
+          },
+          {
+            "agent": "Marketing Agent",
+            "focus": "crecimiento y captación",
+            "strategies": [
+              "Potenciar campañas digitales escalables.",
+              "Priorizar captación B2B automatizada."
+            ]
+          },
+          {
+            "agent": "Finance Agent",
+            "focus": "análisis financiero y sostenibilidad económica",
+            "recommendations": [
+              "Se recomienda mantener reservas financieras por alto riesgo.",
+              "El modelo puede beneficiarse de crecimiento escalable y economías de escala."
+            ]
+          },
+          {
+            "agent": "Growth Agent",
+            "focus": "expansión y crecimiento empresarial",
+            "opportunities": [
+              "Preparar estrategia de expansión nacional e internacional.",
+              "Validar canales de adquisición escalables.",
+              "Diseñar estrategia SaaS de crecimiento recurrente."
+            ]
+          }
+        ]
+      }
+    }
+  },
+  {
+    "id": 1780682897726,
+    "createdAt": "2026-06-05T18:08:17.726Z",
+    "prompt": "  consultoria IA",
+    "scenario": "consulting",
+    "result": {
+      "project": "consulting",
+      "difficulty": "Media-Alta",
+      "risk": "Medio",
+      "viabilityScore": 84,
+      "riskScore": 52,
+      "scalabilityScore": 88,
+      "agentAnalysis": {
+        "agents": [
+          {
+            "agent": "CEO Agent",
+            "focus": "visión estratégica y toma de decisiones",
+            "recommendations": [
+              "OPORTUNIDAD:\nAlta demanda en consultoría IA con fuerte potencial de escalabilidad y optimización de procesos para clientes.\n\nRIESGO:\nCompetencia creciente y dependencia de talento especializado; riesgo de rápida obsolescencia tecnológica.\n\nRECOMENDACION:\nInvertir en talento clave y desarrollo continuo de soluciones IA diferenciadas, enfocándose en nichos específicos para acelerar escalabilidad."
+            ]
+          },
+          {
+            "agent": "Risk Agent",
+            "focus": "riesgos y sostenibilidad",
+            "alerts": []
+          },
+          {
+            "agent": "Marketing Agent",
+            "focus": "crecimiento y captación",
+            "strategies": [
+              "Potenciar campañas digitales escalables.",
+              "Fortalecer marca personal en LinkedIn."
+            ]
+          },
+          {
+            "agent": "Finance Agent",
+            "focus": "análisis financiero y sostenibilidad económica",
+            "recommendations": [
+              "El proyecto presenta buena viabilidad financiera potencial.",
+              "El modelo puede beneficiarse de crecimiento escalable y economías de escala."
+            ]
+          },
+          {
+            "agent": "Growth Agent",
+            "focus": "expansión y crecimiento empresarial",
+            "opportunities": [
+              "Preparar estrategia de expansión nacional e internacional.",
+              "Validar canales de adquisición escalables.",
+              "Crear red de partners y prescriptores."
+            ]
+          }
+        ]
+      }
+    }
+  },
+  {
+    "id": 1780594577614,
+    "createdAt": "2026-06-04T17:36:17.614Z",
+    "prompt": "consultoria ia",
+    "scenario": "consulting",
+    "result": {
+      "project": "consulting",
+      "difficulty": "Media-Alta",
+      "risk": "Medio",
+      "viabilityScore": 84,
+      "riskScore": 52,
+      "scalabilityScore": 88,
+      "agentAnalysis": {
+        "agents": [
+          {
+            "agent": "CEO Agent",
+            "focus": "visión estratégica y toma de decisiones",
+            "recommendations": [
+              "OPORTUNIDAD:  \nAlta demanda de servicios de consultoría en IA con gran potencial de escalabilidad y adopción en múltiples sectores.\n\nRIESGO:  \nCompetencia creciente y dependencia de talento especializado que puede limitar la rápida expansión.\n\nRECOMENDACION:  \nEnfocar en desarrollo de propuestas de valor diferenciadas y automatización interna para maximizar eficiencia y atraer inversión."
+            ]
+          },
+          {
+            "agent": "Risk Agent",
+            "focus": "riesgos y sostenibilidad",
+            "alerts": []
+          },
+          {
+            "agent": "Marketing Agent",
+            "focus": "crecimiento y captación",
+            "strategies": [
+              "Potenciar campañas digitales escalables.",
+              "Fortalecer marca personal en LinkedIn."
+            ]
+          },
+          {
+            "agent": "Finance Agent",
+            "focus": "análisis financiero y sostenibilidad económica",
+            "recommendations": [
+              "El proyecto presenta buena viabilidad financiera potencial.",
+              "El modelo puede beneficiarse de crecimiento escalable y economías de escala."
+            ]
+          },
+          {
+            "agent": "Growth Agent",
+            "focus": "expansión y crecimiento empresarial",
+            "opportunities": [
+              "Preparar estrategia de expansión nacional e internacional.",
+              "Validar canales de adquisición escalables.",
+              "Crear red de partners y prescriptores."
+            ]
+          }
+        ]
+      }
+    }
+  },
+  {
+    "id": 1780140055219,
+    "createdAt": "2026-05-30T11:20:55.219Z",
+    "prompt": "  crear una consultoría IA para CEOs",
+    "scenario": "consulting",
+    "result": {
+      "project": "consulting",
+      "difficulty": "Media-Alta",
+      "risk": "Medio",
+      "viabilityScore": 84,
+      "riskScore": 52,
+      "scalabilityScore": 88,
+      "agentAnalysis": {
+        "agents": [
+          {
+            "agent": "CEO Agent",
+            "focus": "visión estratégica y toma de decisiones",
+            "recommendations": [
+              "OPORTUNIDAD:\nAlta demanda de asesoría especializada en IA para toma de decisiones estratégicas en CEOs.\n\nRIESGO:\nCompetencia creciente y necesidad de actualización constante en tecnología y mercado.\n\nRECOMENDACION:\nEnfocar en nichos específicos, ofrecer valor diferencial con casos de éxito y mantener actualización continua en IA."
+            ]
+          },
+          {
+            "agent": "Risk Agent",
+            "focus": "riesgos y sostenibilidad",
+            "alerts": []
+          },
+          {
+            "agent": "Marketing Agent",
+            "focus": "crecimiento y captación",
+            "strategies": [
+              "Potenciar campañas digitales escalables.",
+              "Fortalecer marca personal en LinkedIn."
+            ]
+          },
+          {
+            "agent": "Finance Agent",
+            "focus": "análisis financiero y sostenibilidad económica",
+            "recommendations": [
+              "El proyecto presenta buena viabilidad financiera potencial.",
+              "El modelo puede beneficiarse de crecimiento escalable y economías de escala."
+            ]
+          },
+          {
+            "agent": "Growth Agent",
+            "focus": "expansión y crecimiento empresarial",
+            "opportunities": [
+              "Preparar estrategia de expansión nacional e internacional.",
+              "Validar canales de adquisición escalables.",
+              "Crear red de partners y prescriptores."
+            ]
+          }
+        ]
+      }
+    }
+  },
+  {
+    "id": 1780140053713,
+    "createdAt": "2026-05-30T11:20:53.713Z",
+    "prompt": "  crear un SaaS IA para CEOs",
+    "scenario": "saas",
+    "result": {
+      "project": "saas",
+      "difficulty": "Alta",
+      "risk": "Alto",
+      "viabilityScore": 72,
+      "riskScore": 82,
+      "scalabilityScore": 95,
+      "agentAnalysis": {
+        "agents": [
+          {
+            "agent": "CEO Agent",
+            "focus": "visión estratégica y toma de decisiones",
+            "recommendations": [
+              "OPORTUNIDAD:\nAlto potencial de escalabilidad y demanda creciente de soluciones IA personalizadas para la toma de decisiones ejecutivas.\n\nRIESGO:\nElevado riesgo debido a la complejidad técnica, competencia en el mercado y necesidad de validación rápida con usuarios clave.\n\nRECOMENDACION:\nEnfocar en un MVP con funciones críticas para CEOs, validar con usuarios premium y asegurar inversión estratégica para acelerar desarrollo y adopción."
+            ]
+          },
+          {
+            "agent": "Risk Agent",
+            "focus": "riesgos y sostenibilidad",
+            "alerts": [
+              "Riesgo estratégico elevado."
+            ]
+          },
+          {
+            "agent": "Marketing Agent",
+            "focus": "crecimiento y captación",
+            "strategies": [
+              "Potenciar campañas digitales escalables.",
+              "Priorizar captación B2B automatizada."
+            ]
+          },
+          {
+            "agent": "Finance Agent",
+            "focus": "análisis financiero y sostenibilidad económica",
+            "recommendations": [
+              "Se recomienda mantener reservas financieras por alto riesgo.",
+              "El modelo puede beneficiarse de crecimiento escalable y economías de escala."
+            ]
+          },
+          {
+            "agent": "Growth Agent",
+            "focus": "expansión y crecimiento empresarial",
+            "opportunities": [
+              "Preparar estrategia de expansión nacional e internacional.",
+              "Validar canales de adquisición escalables.",
+              "Diseñar estrategia SaaS de crecimiento recurrente."
+            ]
+          }
+        ]
+      }
+    }
+  },
+  {
     "id": 1780137329907,
     "createdAt": "2026-05-30T10:35:29.907Z",
     "prompt": "  crear una consultoría IA para CEOs",
