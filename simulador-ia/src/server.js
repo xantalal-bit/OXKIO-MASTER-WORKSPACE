@@ -13,6 +13,8 @@ const {
 
 const generateExecutiveSummary = require("./executiveSummary");
 
+const buildExecutiveAction = require("./executiveAdvisor");
+
 const {
   readExecutiveMemory,
   addMemoryItem,
@@ -411,8 +413,15 @@ if (parsedUrl.pathname === "/memory-summary") {
 }
 
 if (parsedUrl.pathname === "/executive-dashboard") {
-  const memory = readExecutiveMemory();
-  const dashboard = generateExecutiveSummary(memory);
+
+  const memory =
+    readExecutiveMemory();
+
+  const dashboard =
+    generateExecutiveSummary(memory);
+
+  const advisor =
+    buildExecutiveAction(dashboard);
 
   res.writeHead(200, {
     "Content-Type": "application/json; charset=utf-8",
@@ -420,12 +429,14 @@ if (parsedUrl.pathname === "/executive-dashboard") {
   });
 
   res.end(
-    JSON.stringify(dashboard)
+    JSON.stringify({
+      ...dashboard,
+      advisor
+    })
   );
 
   return;
 }
-
 if (parsedUrl.pathname === "/remember") {
   const type =
     parsedUrl.query.type || "";
