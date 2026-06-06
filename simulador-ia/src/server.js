@@ -15,6 +15,8 @@ const generateExecutiveSummary = require("./executiveSummary");
 
 const buildExecutiveAction = require("./executiveAdvisor");
 
+const generateExecutiveAlerts = require("./executiveAlerts");
+
 const {
   readExecutiveMemory,
   addMemoryItem,
@@ -423,6 +425,9 @@ if (parsedUrl.pathname === "/executive-dashboard") {
   const advisor =
     buildExecutiveAction(dashboard);
 
+const alerts =
+  generateExecutiveAlerts(memory);
+
   res.writeHead(200, {
     "Content-Type": "application/json; charset=utf-8",
     "Access-Control-Allow-Origin": "*"
@@ -430,9 +435,10 @@ if (parsedUrl.pathname === "/executive-dashboard") {
 
   res.end(
     JSON.stringify({
-      ...dashboard,
-      advisor
-    })
+  ...dashboard,
+  advisor,
+  alerts
+})
   );
 
   return;
