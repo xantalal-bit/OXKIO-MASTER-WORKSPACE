@@ -555,6 +555,37 @@ async function showExecutiveDashboard() {
       <p>${dashboard.executiveRecommendation}</p>
     </div>
 
+<h2>Executive Advisor Aut&oacute;nomo</h2>
+
+<div class="agents-grid">
+  <div class="agent-card">
+    <h3>Acci&oacute;n Recomendada</h3>
+    <p>${dashboard.advisor.recommendedAction}</p>
+  </div>
+
+  <div class="agent-card">
+    <h3>Prioridad</h3>
+    <p>${dashboard.advisor.priority}</p>
+  </div>
+
+  <div class="agent-card">
+    <h3>Horizonte</h3>
+    <p>${dashboard.advisor.horizon}</p>
+  </div>
+
+  <div class="agent-card">
+    <h3>Siguiente Paso</h3>
+    <p>${dashboard.advisor.nextStep}</p>
+  </div>
+</div>
+
+<h2>Justificaci&oacute;n del Advisor</h2>
+
+<div class="agent-card">
+  <p>${dashboard.advisor.justification}</p>
+</div>
+
+
     <h2>Indicadores de Memoria</h2>
 
     <div class="metrics">
