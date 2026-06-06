@@ -40,11 +40,43 @@ function generateExecutiveSummary(memory) {
 
   const latestGoal = goals[0] || null;
   const latestProject = projects[0] || null;
+  const dominantPattern = insights.dominantPattern || null;
+
+  const strategicFocus =
+    topPriorities.length > 0
+      ? topPriorities[0][0]
+      : dominantPattern
+        ? dominantPattern.name
+        : "Sin foco estratégico definido todavía";
 
   return {
     generatedAt: new Date().toISOString(),
 
-    executiveStatus: "Memoria Ejecutiva Inteligente v2 activa",
+    status: "Memoria Ejecutiva Inteligente v2 activa",
+
+    strategicFocus,
+
+    dominantPattern: dominantPattern
+      ? dominantPattern.name
+      : null,
+
+    confidence: dominantPattern
+      ? dominantPattern.confidence
+      : "Sin datos suficientes",
+
+    frequency: dominantPattern
+      ? dominantPattern.frequency
+      : 0,
+
+    executiveConclusion:
+      insights.executiveConclusion,
+
+    executiveRecommendation:
+      dominantPattern
+        ? `Mantener la línea de ${dominantPattern.name.toLowerCase()} con confianza ${dominantPattern.confidence}.`
+        : topPriorities.length > 0
+          ? `Mantener el foco en la prioridad recurrente: ${topPriorities[0][0]}.`
+          : "Registrar más prioridades para mejorar la recomendación ejecutiva.",
 
     totals: {
       goals: goals.length,
@@ -53,25 +85,20 @@ function generateExecutiveSummary(memory) {
       projects: projects.length
     },
 
-    strategicSummary:
-      priorities.length > 0
-        ? `El foco ejecutivo actual se concentra en: ${normalizeText(priorities[0])}.`
-        : "Todavía no hay prioridades suficientes para generar un resumen estratégico.",
+    details: {
+      strategicSummary:
+        priorities.length > 0
+          ? `El foco ejecutivo actual se concentra en: ${normalizeText(priorities[0])}.`
+          : "Todavía no hay prioridades suficientes para generar un resumen estratégico.",
 
-    executiveInsights: insights,
+      executiveInsights: insights,
 
-    topDecisions,
-    topPriorities,
+      topDecisions,
+      topPriorities,
 
-    latestGoal,
-    latestProject,
-
-    recommendation:
-      insights.dominantPattern
-        ? `Recomendación ejecutiva: mantener la línea de ${insights.dominantPattern.name.toLowerCase()} con confianza ${insights.dominantPattern.confidence}.`
-        : topPriorities.length > 0
-          ? `Mantener el foco en la prioridad recurrente: ${topPriorities[0][0]}.`
-          : "Registrar más prioridades para mejorar la recomendación ejecutiva."
+      latestGoal,
+      latestProject
+    }
   };
 }
 
