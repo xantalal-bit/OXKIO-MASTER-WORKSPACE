@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="es">
 
 <head>
@@ -202,6 +202,10 @@
 
 <button onclick="showExecutiveMemory()">
   Ver Memoria Executive
+</button>
+
+<button onclick="showExecutiveDashboard()">
+  Executive Dashboard
 </button>
 
 <div class="result">
@@ -499,6 +503,82 @@ function exportComparisonPDF() {
     `http://localhost:3100/report-comparison-pdf?a=${encodeURIComponent(inputA)}&b=${encodeURIComponent(inputB)}`;
 
   window.open(url, "_blank");
+}
+
+async function showExecutiveDashboard() {
+  const resultBox =
+    document.getElementById("resultBox");
+
+  resultBox.innerHTML =
+    "<h2>Cargando Executive Dashboard...</h2>";
+
+  const response =
+    await fetch("http://localhost:3100/executive-dashboard");
+
+  const dashboard =
+    await response.json();
+
+  resultBox.innerHTML = `
+    <h2>Executive Dashboard</h2>
+
+    <div class="agents-grid">
+      <div class="agent-card">
+        <h3>Estado</h3>
+        <p>${dashboard.status}</p>
+      </div>
+
+      <div class="agent-card">
+        <h3>Foco Estrat&eacute;gico</h3>
+        <p>${dashboard.strategicFocus}</p>
+      </div>
+
+      <div class="agent-card">
+        <h3>Patr&oacute;n Dominante</h3>
+        <p>${dashboard.dominantPattern || "Sin patr&oacute;n dominante"}</p>
+      </div>
+
+      <div class="agent-card">
+        <h3>Confianza</h3>
+        <p>${dashboard.confidence}</p>
+      </div>
+    </div>
+
+    <h2>Conclusi&oacute;n Ejecutiva</h2>
+
+    <div class="agent-card">
+      <p>${dashboard.executiveConclusion}</p>
+    </div>
+
+    <h2>Recomendaci&oacute;n Ejecutiva</h2>
+
+    <div class="agent-card">
+      <p>${dashboard.executiveRecommendation}</p>
+    </div>
+
+    <h2>Indicadores de Memoria</h2>
+
+    <div class="metrics">
+      <div class="metric">
+        <span>Objetivos</span>
+        <strong>${dashboard.totals.goals}</strong>
+      </div>
+
+      <div class="metric">
+        <span>Decisiones</span>
+        <strong>${dashboard.totals.decisions}</strong>
+      </div>
+
+      <div class="metric">
+        <span>Prioridades</span>
+        <strong>${dashboard.totals.priorities}</strong>
+      </div>
+
+      <div class="metric">
+        <span>Proyectos</span>
+        <strong>${dashboard.totals.projects}</strong>
+      </div>
+    </div>
+  `;
 }
 
 async function showExecutiveMemory() {
