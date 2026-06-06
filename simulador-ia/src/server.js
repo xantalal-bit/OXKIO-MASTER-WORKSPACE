@@ -17,6 +17,8 @@ const buildExecutiveAction = require("./executiveAdvisor");
 
 const generateExecutiveAlerts = require("./executiveAlerts");
 
+const trackExecutiveGoals = require("./executiveGoalTracker");
+
 const {
   readExecutiveMemory,
   addMemoryItem,
@@ -428,6 +430,9 @@ if (parsedUrl.pathname === "/executive-dashboard") {
 const alerts =
   generateExecutiveAlerts(memory);
 
+const goalTracker =
+  trackExecutiveGoals(memory);
+
   res.writeHead(200, {
     "Content-Type": "application/json; charset=utf-8",
     "Access-Control-Allow-Origin": "*"
@@ -437,7 +442,8 @@ const alerts =
     JSON.stringify({
   ...dashboard,
   advisor,
-  alerts
+  alerts,
+  goalTracker
 })
   );
 
