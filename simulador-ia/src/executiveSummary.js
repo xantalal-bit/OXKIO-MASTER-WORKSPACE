@@ -1,3 +1,5 @@
+const generateExecutiveInsights = require("./executiveInsights");
+
 function normalizeText(item) {
   if (typeof item === "string") {
     return item;
@@ -34,12 +36,15 @@ function generateExecutiveSummary(memory) {
 
   const topDecisions = countRepeatedItems(decisions);
   const topPriorities = countRepeatedItems(priorities);
+  const insights = generateExecutiveInsights(memory);
 
   const latestGoal = goals[0] || null;
   const latestProject = projects[0] || null;
 
   return {
     generatedAt: new Date().toISOString(),
+
+    executiveStatus: "Memoria Ejecutiva Inteligente v2 activa",
 
     totals: {
       goals: goals.length,
@@ -53,6 +58,8 @@ function generateExecutiveSummary(memory) {
         ? `El foco ejecutivo actual se concentra en: ${normalizeText(priorities[0])}.`
         : "Todavía no hay prioridades suficientes para generar un resumen estratégico.",
 
+    executiveInsights: insights,
+
     topDecisions,
     topPriorities,
 
@@ -60,9 +67,11 @@ function generateExecutiveSummary(memory) {
     latestProject,
 
     recommendation:
-      topPriorities.length > 0
-        ? `Mantener el foco en la prioridad recurrente: ${topPriorities[0][0]}.`
-        : "Registrar más prioridades para mejorar la recomendación ejecutiva."
+      insights.dominantPattern
+        ? `Recomendación ejecutiva: mantener la línea de ${insights.dominantPattern.name.toLowerCase()} con confianza ${insights.dominantPattern.confidence}.`
+        : topPriorities.length > 0
+          ? `Mantener el foco en la prioridad recurrente: ${topPriorities[0][0]}.`
+          : "Registrar más prioridades para mejorar la recomendación ejecutiva."
   };
 }
 
