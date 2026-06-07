@@ -612,6 +612,46 @@ if (req.url.startsWith("/api/execution-logs")) {
 
   return;
 }
+
+if (pathname === "/api/simulator-executive-export" && req.method === "GET") {
+  try {
+    const response = await fetch(
+      "http://localhost:3100/executive-export"
+    );
+
+    const data = await response.json();
+
+    res.writeHead(200, {
+      "Content-Type": "application/json"
+    });
+
+    res.end(
+      JSON.stringify({
+        ok: true,
+        source: "Simulador IA Executive",
+        target: "Oxkio",
+        data
+      })
+    );
+
+    return;
+  } catch (error) {
+    res.writeHead(500, {
+      "Content-Type": "application/json"
+    });
+
+    res.end(
+      JSON.stringify({
+        ok: false,
+        message: "No se pudo conectar con Simulador IA",
+        error: error.message
+      })
+    );
+
+    return;
+  }
+}
+
 if (pathname === "/api/system-status") {
 
     return sendJson(res, 200, {
