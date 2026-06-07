@@ -635,7 +635,41 @@
     window.asignarCarpetaDocumento = asignarCarpetaDocumento;
     function renderResumen(pendientes, hechas, hoyCount, semanaCount, urgentesCount, retrasadasCount, renovCount) { document.getElementById("numHoy").textContent = hoyCount; document.getElementById("numSemana").textContent = semanaCount; document.getElementById("numUrgente").textContent = urgentesCount + retrasadasCount + renovCount; document.getElementById("numHechas").textContent = hechas; let texto = ""; if (renovCount > 0) texto = `Tienes ${renovCount} documento(s) o renovación(es) que requieren atención.`; else if (pendientes === 0) texto = "No tienes eventos pendientes. Buen momento para revisar correo, documentos o planificación."; else if (retrasadasCount > 0) texto = `Tienes ${retrasadasCount} evento(s) retrasado(s). Conviene resolverlos antes de añadir nuevas cargas.`; else if (urgentesCount > 0) texto = `Tienes ${urgentesCount} evento(s) de atención inmediata entre hoy y mañana.`; else if (hoyCount > 0) texto = `Hoy tienes ${hoyCount} evento(s) pendiente(s).`; else texto = `Esta semana tienes ${semanaCount} evento(s) pendiente(s).`; document.getElementById("resumenTexto").textContent = texto; }
     function renderCargaSemanal(semanaCount, retrasadasCount) { let texto = ""; if (retrasadasCount > 0) texto = "La semana viene condicionada por eventos retrasados. Conviene limpiar atraso antes de cargar más."; else if (semanaCount >= 7) texto = "Carga semanal alta. Oxkio detecta una semana intensa. Recomienda repartir o adelantar eventos."; else if (semanaCount >= 4) texto = "Carga semanal media. Hay margen, pero conviene ordenar prioridades."; else if (semanaCount > 0) texto = "Carga semanal controlada. Buena situación para ejecutar con calma."; else texto = "Semana vacía. Puedes usarla para planificación, documentación y preparación comercial."; document.getElementById("cargaSemanal").textContent = texto; return semanaCount >= 7; }
-    function renderSugerencia(pendientes, hoyCount, semanaCount, urgentesCount, retrasadasCount, cargaAlta, renovCount) { let texto = ""; if (renovCount > 0) texto = "Oxkio sugiere revisar primero las renovaciones y documentos próximos a vencer."; else if (retrasadasCount > 0) texto = "Oxkio sugiere cerrar primero lo retrasado, después lo de hoy y por último reorganizar la carga semanal."; else if (urgentesCount > 0) texto = "Oxkio sugiere resolver hoy los eventos urgentes antes de abrir nuevas líneas de trabajo."; else if (cargaAlta) texto = "Oxkio sugiere repartir la semana: adelanta una tarea sencilla y deja margen para imprevistos."; else if (hoyCount > 0) texto = "Oxkio sugiere completar lo de hoy y dejar preparada la siguiente acción importante."; else if (semanaCount > 0) texto = "Oxkio sugiere revisar la semana y adelantar un evento para descargar los próximos días."; else if (pendientes === 0) texto = "Oxkio sugiere aprovechar este hueco para revisar documentación, correo o captación de clientes."; else texto = "Oxkio sugiere revisar prioridades y fijar un evento clave para hoy."; document.getElementById("sugerencia").textContent = texto; }
+    function renderSugerencia(pendientes, hoyCount, semanaCount, urgentesCount, retrasadasCount, cargaAlta, renovCount) {
+
+  const estrategia = document.getElementById("estrategiaOxkio");
+
+  if (
+    estrategia &&
+    !estrategia.textContent.includes("Cargando") &&
+    estrategia.textContent.includes("Foco:")
+  ) {
+    document.getElementById("sugerencia").textContent =
+      "Oxkio recomienda revisar la prioridad estratégica activa y convertirla en una acción supervisada.";
+    return;
+  }
+
+  let texto = "";
+
+  if (renovCount > 0)
+    texto = "Oxkio sugiere revisar primero las renovaciones y documentos próximos a vencer.";
+  else if (retrasadasCount > 0)
+    texto = "Oxkio sugiere cerrar primero lo retrasado, después lo de hoy y por último reorganizar la carga semanal.";
+  else if (urgentesCount > 0)
+    texto = "Oxkio sugiere resolver hoy los eventos urgentes antes de abrir nuevas líneas de trabajo.";
+  else if (cargaAlta)
+    texto = "Oxkio sugiere repartir la semana: adelanta una tarea sencilla y deja margen para imprevistos.";
+  else if (hoyCount > 0)
+    texto = "Oxkio sugiere completar lo de hoy y dejar preparada la siguiente acción importante.";
+  else if (semanaCount > 0)
+    texto = "Oxkio sugiere revisar la semana y adelantar un evento para descargar los próximos días.";
+  else if (pendientes === 0)
+    texto = "Oxkio sugiere aprovechar este hueco para revisar documentación, correo o captación de clientes.";
+  else
+    texto = "Oxkio sugiere revisar prioridades y fijar un evento clave para hoy.";
+
+  document.getElementById("sugerencia").textContent = texto;
+}
     function applyModoCEO() { const visibleInCEO = ["resumenCard","sugerenciaCard","renovacionesCard","urgentesCard","hoyCard"]; const hideInCEO = ["configBox","controlCard","entradaRapidaCard","nuevoEventoCard","docsUploadCard","docsCard","docResumenCard","docsListaCard","correoCard","cargaCard","avisosCard","proximosCard","agendaCard"]; visibleInCEO.forEach(id => { const el = document.getElementById(id); if (el) el.style.display = "block"; }); if (modoCEO) hideInCEO.forEach(id => { const el = document.getElementById(id); if (el) el.style.display = "none"; }); else hideInCEO.forEach(id => { const el = document.getElementById(id); if (!el) return; if (id === "configBox") el.style.display = "none"; else el.style.display = "block"; }); }
     window.toggleModoCEO = function() { modoCEO = !modoCEO; setOxkioRespuesta(modoCEO ? "Modo CEO activado." : "Modo CEO desactivado."); applyModoCEO(); };
     window.toggleConfig = function() { if (modoCEO) return; configBox.classList.toggle("content-hidden"); };
@@ -667,6 +701,14 @@ console.log("Cargando inteligencia estratégica Oxkio...");
       <strong>Recomendación:</strong> ${data.recommendedAction || "-"}<br><br>
       <strong>Estado:</strong> ${data.consistency?.status || "-"}
     `;
+
+const sugerenciaBox = document.getElementById("sugerencia");
+
+if (sugerenciaBox) {
+  sugerenciaBox.textContent =
+    "Oxkio recomienda revisar la prioridad estratégica activa y convertirla en una acción supervisada.";
+}
+
   } catch (error) {
     box.textContent = "No se pudo cargar la inteligencia estratégica.";
   }
