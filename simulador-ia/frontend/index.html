@@ -674,6 +674,29 @@ async function showExecutiveDashboard() {
   }
 </div>
 
+<h2>Executive Approval Dashboard</h2>
+
+<div class="metrics">
+  <div class="metric">
+    <span>Acciones pendientes</span>
+    <strong>${dashboard.queue.pendingActions}</strong>
+  </div>
+
+  <div class="metric">
+    <span>Acciones aprobadas</span>
+    <strong>${dashboard.queue.approvedActions}</strong>
+  </div>
+
+  <div class="metric">
+    <span>Acciones rechazadas</span>
+    <strong>${dashboard.queue.rejectedActions}</strong>
+  </div>
+
+  <div class="metric">
+    <span>Total acciones</span>
+    <strong>${dashboard.queue.totalActions}</strong>
+  </div>
+</div>
 
     <h2>Indicadores de Memoria</h2>
 
