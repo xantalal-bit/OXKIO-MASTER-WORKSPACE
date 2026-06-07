@@ -194,6 +194,21 @@
   color: #450a0a;
 }
 
+.strategy-stable {
+  background: #22c55e;
+  color: #022c22;
+}
+
+.strategy-review {
+  background: #facc15;
+  color: #422006;
+}
+
+.strategy-critical {
+  background: #ef4444;
+  color: #450a0a;
+}
+
   </style>
 </head>
 
@@ -640,9 +655,19 @@ async function showExecutiveDashboard() {
   </div>
 
   <div class="agent-card">
-    <h3>Consistencia</h3>
-    <p>${dashboard.consistency.overallStatus}</p>
-  </div>
+  <h3>Consistencia</h3>
+  <p>
+    <span class="status-pill ${
+      dashboard.consistency.overallStatus.includes("Revisar")
+        ? "strategy-review"
+        : dashboard.consistency.overallStatus.includes("Crítico")
+          ? "strategy-critical"
+          : "strategy-stable"
+    }">
+      ${dashboard.consistency.overallStatus}
+    </span>
+  </p>
+</div>
 </div>
 
     <h2>Conclusi&oacute;n Ejecutiva</h2>
