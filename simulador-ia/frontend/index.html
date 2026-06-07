@@ -286,6 +286,39 @@ function setActionFilter(filter) {
   showExecutiveDashboard();
 }
 
+function getExecutiveHealth(dashboard) {
+  const pending =
+    dashboard.queue.pendingActions || 0;
+
+  const alerts =
+    dashboard.alerts.totalAlerts || 0;
+
+  const contradictions =
+    dashboard.consistency.totalContradictions || 0;
+
+  if (contradictions > 0 || alerts > 0) {
+    return {
+      label: "REVISAR",
+      className: "strategy-review",
+      message: "Hay señales estratégicas que requieren revisión."
+    };
+  }
+
+  if (pending > 0) {
+    return {
+      label: "PENDIENTE",
+      className: "status-pending",
+      message: "Hay acciones pendientes de aprobación."
+    };
+  }
+
+  return {
+    label: "ESTABLE",
+    className: "strategy-stable",
+    message: "No hay alertas críticas ni acciones pendientes."
+  };
+}
+
 function formatDate(value) {
   if (!value) {
     return "-";
@@ -585,6 +618,9 @@ async function showExecutiveDashboard() {
   const dashboard =
     await response.json();
 
+const executiveHealth =
+    getExecutiveHealth(dashboard);
+
   resultBox.innerHTML = `
     <h2>Executive Dashboard</h2>
 
@@ -609,6 +645,18 @@ async function showExecutiveDashboard() {
         <p>${dashboard.confidence}</p>
       </div>
     </div>
+
+<h2>Salud Ejecutiva Global</h2>
+
+<div class="agent-card">
+  <h3>Estado</h3>
+  <p>
+    <span class="status-pill ${executiveHealth.className}">
+      ${executiveHealth.label}
+    </span>
+  </p>
+  <p>${executiveHealth.message}</p>
+</div>
 
 <h2>Resumen Ejecutivo del D&iacute;a</h2>
 
