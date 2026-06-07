@@ -624,6 +624,10 @@ const executiveHealth =
   resultBox.innerHTML = `
     <h2>Executive Dashboard</h2>
 
+<button onclick="exportExecutiveDashboardPDF()">
+  Exportar PDF Ejecutivo
+</button>
+
     <div class="agents-grid">
       <div class="agent-card">
         <h3>Estado</h3>
@@ -645,6 +649,8 @@ const executiveHealth =
         <p>${dashboard.confidence}</p>
       </div>
     </div>
+
+
 
 <h2>Salud Ejecutiva Global</h2>
 
@@ -1080,6 +1086,13 @@ async function showExecutiveMemory() {
     <h2>Proyectos guardados</h2>
     ${renderItems(projects)}
   `;
+}
+
+function exportExecutiveDashboardPDF() {
+  window.open(
+    "http://localhost:3100/report-pdf",
+    "_blank"
+  );
 }
 
 async function approveExecutiveAction(id) {
