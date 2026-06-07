@@ -595,6 +595,32 @@ async function showExecutiveDashboard() {
       </div>
     </div>
 
+<h2>Resumen Ejecutivo del D&iacute;a</h2>
+
+<div class="agent-card">
+  <h3>Estado General</h3>
+  <p>
+    ${
+      dashboard.queue.pendingActions > 0
+        ? "Hay acciones pendientes de revisi&oacute;n."
+        : "No hay acciones pendientes. El sistema est&aacute; estable."
+    }
+  </p>
+
+  <p><b>Pendientes:</b> ${dashboard.queue.pendingActions}</p>
+  <p><b>Aprobadas:</b> ${dashboard.queue.approvedActions}</p>
+  <p><b>Rechazadas:</b> ${dashboard.queue.rejectedActions}</p>
+
+  <p>
+    <b>Recomendaci&oacute;n:</b>
+    ${
+      dashboard.queue.pendingActions > 0
+        ? "Revisar las acciones pendientes antes de continuar."
+        : "Mantener la estrategia actual y continuar consolidando el n&uacute;cleo ejecutivo."
+    }
+  </p>
+</div>
+
     <h2>Conclusi&oacute;n Ejecutiva</h2>
 
     <div class="agent-card">
