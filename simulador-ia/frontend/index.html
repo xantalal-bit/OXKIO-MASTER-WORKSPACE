@@ -874,6 +874,41 @@ const executiveHealth =
   }
 </div>
 
+<h2>KPI Ejecutivo</h2>
+
+<div class="metrics">
+  <div class="metric">
+    <span>Total acciones</span>
+    <strong>${dashboard.queue.totalActions}</strong>
+  </div>
+
+  <div class="metric">
+    <span>Pendientes</span>
+    <strong>${dashboard.queue.pendingActions}</strong>
+  </div>
+
+  <div class="metric">
+    <span>Aprobadas</span>
+    <strong>${dashboard.queue.approvedActions}</strong>
+  </div>
+
+  <div class="metric">
+    <span>Rechazadas</span>
+    <strong>${dashboard.queue.rejectedActions}</strong>
+  </div>
+</div>
+
+<div class="agent-card">
+  <h3>Ratio de aprobaci&oacute;n</h3>
+  <p>
+    ${
+      dashboard.queue.totalActions > 0
+        ? Math.round((dashboard.queue.approvedActions / dashboard.queue.totalActions) * 100) + "%"
+        : "Sin datos suficientes"
+    }
+  </p>
+</div>
+
 <h2>Executive Approval Dashboard</h2>
 
 <div class="metrics">
