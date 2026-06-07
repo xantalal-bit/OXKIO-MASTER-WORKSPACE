@@ -2,7 +2,7 @@
   {
     "id": 1780825752563,
     "createdAt": "2026-06-07T09:49:12.563Z",
-    "status": "pending_approval",
+    "status": "approved",
     "priority": "Alta",
     "title": "Probar persistencia de cola",
     "justification": "Verificar que actionQueue.json guarda datos",
@@ -10,6 +10,7 @@
     "confidence": "Alta",
     "horizon": "7 días",
     "nextStep": "Comprobar persistencia",
-    "approvalStatus": "pending"
+    "approvalStatus": "approved",
+    "approvedAt": "2026-06-07T10:10:10.109Z"
   }
 ]

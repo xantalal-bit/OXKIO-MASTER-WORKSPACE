@@ -22,7 +22,9 @@ const trackExecutiveGoals = require("./executiveGoalTracker");
 const analyzeExecutiveConsistency = require("./executiveConsistency");
 
 const {
-  getExecutiveQueue
+  getExecutiveQueue,
+  approveQueuedAction,
+  rejectQueuedAction
 } = require("./executiveActionQueue");
 
 const {
@@ -523,6 +525,28 @@ if (parsedUrl.pathname === "/remember") {
     return;
   }
 }
+
+if (parsedUrl.pathname === "/api/approve-action") {
+
+  const id = parsedUrl.query.id;
+
+  const result =
+    approveQueuedAction(id);
+
+  res.writeHead(200, {
+    "Content-Type": "application/json"
+  });
+
+  res.end(
+    JSON.stringify({
+      ok: !!result,
+      action: result
+    })
+  );
+
+  return;
+}
+
 if (parsedUrl.pathname === "/history") {
 
   const history =
