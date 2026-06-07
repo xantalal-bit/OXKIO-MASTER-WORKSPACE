@@ -670,6 +670,25 @@ async function showExecutiveDashboard() {
 </div>
 </div>
 
+<h2>Top Prioridades Ejecutivas</h2>
+
+<div class="agents-grid">
+  <div class="agent-card">
+    <h3>1. Foco principal</h3>
+    <p>${dashboard.strategicFocus}</p>
+  </div>
+
+  <div class="agent-card">
+    <h3>2. Patr&oacute;n dominante</h3>
+    <p>${dashboard.dominantPattern || "-"}</p>
+  </div>
+
+  <div class="agent-card">
+    <h3>3. Siguiente acci&oacute;n</h3>
+    <p>${dashboard.advisor.nextStep}</p>
+  </div>
+</div>
+
     <h2>Conclusi&oacute;n Ejecutiva</h2>
 
     <div class="agent-card">
