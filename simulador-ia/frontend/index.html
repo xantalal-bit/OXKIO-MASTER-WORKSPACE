@@ -966,6 +966,39 @@ ${
   <button onclick="setActionFilter('rejected')">Rechazadas</button>
 </div>
 
+<h2>Timeline Ejecutiva</h2>
+
+<div class="agents-grid">
+  ${
+    dashboard.queue &&
+    dashboard.queue.actions &&
+    dashboard.queue.actions.length
+      ? dashboard.queue.actions.slice(0, 5).map(action => `
+        <div class="agent-card">
+          <h3>${action.title}</h3>
+          <p><b>Creada:</b> ${formatDate(action.createdAt)}</p>
+          ${
+            action.approvedAt
+              ? `<p><b>Aprobada:</b> ${formatDate(action.approvedAt)}</p>`
+              : ""
+          }
+          ${
+            action.rejectedAt
+              ? `<p><b>Rechazada:</b> ${formatDate(action.rejectedAt)}</p>`
+              : ""
+          }
+          <p><b>Estado actual:</b> ${action.status}</p>
+        </div>
+      `).join("")
+      : `
+        <div class="agent-card">
+          <h3>Sin eventos</h3>
+          <p>No hay acciones registradas para construir timeline.</p>
+        </div>
+      `
+  }
+</div>
+
     <h2>Indicadores de Memoria</h2>
 
     <div class="metrics">
