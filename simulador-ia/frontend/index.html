@@ -698,6 +698,31 @@ async function showExecutiveDashboard() {
   </div>
 </div>
 
+<h2>&Uacute;ltimas Acciones Ejecutivas</h2>
+
+<div class="agents-grid">
+  ${
+    dashboard.queue &&
+    dashboard.queue.actions &&
+    dashboard.queue.actions.length
+      ? dashboard.queue.actions.slice(0, 5).map(action => `
+        <div class="agent-card">
+          <h3>${action.title}</h3>
+          <p><b>Estado:</b> ${action.status}</p>
+          <p><b>Prioridad:</b> ${action.priority}</p>
+          <p><b>Horizonte:</b> ${action.horizon || "-"}</p>
+          <p><b>Foco:</b> ${action.strategicFocus || "-"}</p>
+        </div>
+      `).join("")
+      : `
+        <div class="agent-card">
+          <h3>Sin acciones ejecutivas</h3>
+          <p>No hay acciones en la cola.</p>
+        </div>
+      `
+  }
+</div>
+
     <h2>Indicadores de Memoria</h2>
 
     <div class="metrics">
