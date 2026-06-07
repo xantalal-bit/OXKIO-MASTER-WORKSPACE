@@ -1,5 +1,19 @@
 [
   {
+    "id": 1780828123824,
+    "createdAt": "2026-06-07T10:28:43.824Z",
+    "status": "approved",
+    "priority": "Alta",
+    "title": "Acción pendiente para probar botones",
+    "justification": "Validar aprobación desde dashboard",
+    "strategicFocus": "Approval Dashboard v3",
+    "confidence": "Alta",
+    "horizon": "7 días",
+    "nextStep": "Pulsar aprobar o rechazar desde dashboard",
+    "approvalStatus": "approved",
+    "approvedAt": "2026-06-07T10:30:59.400Z"
+  },
+  {
     "id": 1780825752563,
     "createdAt": "2026-06-07T09:49:12.563Z",
     "status": "rejected",

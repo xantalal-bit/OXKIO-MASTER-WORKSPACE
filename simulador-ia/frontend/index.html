@@ -712,6 +712,19 @@ async function showExecutiveDashboard() {
           <p><b>Prioridad:</b> ${action.priority}</p>
           <p><b>Horizonte:</b> ${action.horizon || "-"}</p>
           <p><b>Foco:</b> ${action.strategicFocus || "-"}</p>
+${
+  action.status === "pending_approval"
+    ? `
+      <button onclick="approveExecutiveAction(${action.id})">
+        Aprobar
+      </button>
+
+      <button onclick="rejectExecutiveAction(${action.id})">
+        Rechazar
+      </button>
+    `
+    : ""
+}
         </div>
       `).join("")
       : `
@@ -843,6 +856,22 @@ async function showExecutiveMemory() {
     <h2>Proyectos guardados</h2>
     ${renderItems(projects)}
   `;
+}
+
+async function approveExecutiveAction(id) {
+  await fetch(
+    `http://localhost:3100/api/approve-action?id=${id}`
+  );
+
+  await showExecutiveDashboard();
+}
+
+async function rejectExecutiveAction(id) {
+  await fetch(
+    `http://localhost:3100/api/reject-action?id=${id}&reason=Rechazado desde dashboard`
+  );
+
+  await showExecutiveDashboard();
 }
 
 async function saveExecutiveMemoryItem() {
