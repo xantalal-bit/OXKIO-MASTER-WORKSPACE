@@ -1,4 +1,35 @@
-const queue = [];
+const fs = require("fs");
+const path = require("path");
+
+const queueFile =
+  path.join(
+    __dirname,
+    "../data/actionQueue.json"
+  );
+
+function loadQueue() {
+  try {
+    if (!fs.existsSync(queueFile)) {
+      return [];
+    }
+
+    return JSON.parse(
+      fs.readFileSync(queueFile, "utf8")
+    );
+  } catch {
+    return [];
+  }
+}
+
+function saveQueue(queue) {
+  fs.writeFileSync(
+    queueFile,
+    JSON.stringify(queue, null, 2),
+    "utf8"
+  );
+}
+
+const queue = loadQueue();
 
 function createExecutiveAction(advisor) {
   return {
@@ -22,6 +53,8 @@ function addExecutiveAction(advisor) {
 
   queue.unshift(action);
 
+  saveQueue(queue);
+
   return action;
 }
 
@@ -36,6 +69,8 @@ function approveQueuedAction(id) {
   action.status = "approved";
   action.approvalStatus = "approved";
   action.approvedAt = new Date().toISOString();
+
+  saveQueue(queue);
 
   return action;
 }
@@ -52,6 +87,8 @@ function rejectQueuedAction(id, reason = "Sin motivo especificado") {
   action.approvalStatus = "rejected";
   action.rejectedAt = new Date().toISOString();
   action.rejectionReason = reason;
+
+  saveQueue(queue);
 
   return action;
 }
