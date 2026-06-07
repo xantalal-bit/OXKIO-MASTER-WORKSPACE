@@ -21,6 +21,9 @@ const trackExecutiveGoals = require("./executiveGoalTracker");
 
 const analyzeExecutiveConsistency = require("./executiveConsistency");
 
+const buildExecutiveExportPackage =
+  require("./executiveExport");
+
 const {
   getExecutiveQueue,
   approveQueuedAction,
@@ -195,6 +198,40 @@ if (parsedUrl.pathname === "/history-ui") {
     res.end(JSON.stringify(result));
     return;
   }
+
+if (parsedUrl.pathname === "/executive-export") {
+
+  const dashboard =
+    generateExecutiveSummary(
+      readExecutiveMemory()
+    );
+
+  dashboard.advisor =
+    buildExecutiveAction(dashboard);
+
+  dashboard.queue =
+    getExecutiveQueue();
+
+  dashboard.consistency =
+    analyzeExecutiveConsistency(
+      readExecutiveMemory()
+    );
+
+  const exportPackage =
+    buildExecutiveExportPackage(
+      dashboard
+    );
+
+  res.writeHead(200, {
+    "Content-Type": "application/json"
+  });
+
+  res.end(
+    JSON.stringify(exportPackage, null, 2)
+  );
+
+  return;
+}
 
 if (parsedUrl.pathname === "/report-pdf") {
   const prompt = parsedUrl.query.prompt || "";
