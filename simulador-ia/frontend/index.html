@@ -169,6 +169,31 @@
       color: #f87171;
       font-weight: bold;
     }
+
+.status-pill {
+  display: inline-block;
+  padding: 6px 12px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: bold;
+  margin-bottom: 10px;
+}
+
+.status-pending {
+  background: #facc15;
+  color: #422006;
+}
+
+.status-approved {
+  background: #22c55e;
+  color: #022c22;
+}
+
+.status-rejected {
+  background: #ef4444;
+  color: #450a0a;
+}
+
   </style>
 </head>
 
@@ -239,6 +264,33 @@
   </div>
 
   <script>
+let actionFilter = "all";
+
+function setActionFilter(filter) {
+  actionFilter = filter;
+  showExecutiveDashboard();
+}
+
+function formatDate(value) {
+  if (!value) {
+    return "-";
+  }
+
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+
+  return date.toLocaleString("es-ES", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit"
+  });
+}
+
     fetch("http://localhost:3100/scenarios")
       .then(response => response.json())
       .then(scenarios => {
@@ -705,13 +757,36 @@ async function showExecutiveDashboard() {
     dashboard.queue &&
     dashboard.queue.actions &&
     dashboard.queue.actions.length
-      ? dashboard.queue.actions.slice(0, 5).map(action => `
+      ? dashboard.queue.actions
+  .filter(action =>
+    actionFilter === "all"
+      ? true
+      : action.status === actionFilter
+  )
+  .slice(0, 5).map(action => `
         <div class="agent-card">
           <h3>${action.title}</h3>
-          <p><b>Estado:</b> ${action.status}</p>
+          <p>
+  <span class="status-pill status-${action.status === "pending_approval" ? "pending" : action.status}">
+    ${action.status === "pending_approval" ? "PENDIENTE" : action.status.toUpperCase()}
+  </span>
+</p>
           <p><b>Prioridad:</b> ${action.priority}</p>
           <p><b>Horizonte:</b> ${action.horizon || "-"}</p>
           <p><b>Foco:</b> ${action.strategicFocus || "-"}</p>
+<p><b>Creada:</b> ${formatDate(action.createdAt)}</p>
+
+${
+  action.approvedAt
+    ? `<p><b>Aprobada:</b> ${formatDate(action.approvedAt)}</p>`
+    : ""
+}
+
+${
+  action.rejectedAt
+    ? `<p><b>Rechazada:</b> ${formatDate(action.rejectedAt)}</p>`
+    : ""
+}
 ${
   action.status === "pending_approval"
     ? `
@@ -734,6 +809,13 @@ ${
         </div>
       `
   }
+</div>
+
+<div style="margin-bottom: 18px;">
+  <button onclick="setActionFilter('all')">Todas</button>
+  <button onclick="setActionFilter('pending_approval')">Pendientes</button>
+  <button onclick="setActionFilter('approved')">Aprobadas</button>
+  <button onclick="setActionFilter('rejected')">Rechazadas</button>
 </div>
 
     <h2>Indicadores de Memoria</h2>
