@@ -547,6 +547,31 @@ if (parsedUrl.pathname === "/api/approve-action") {
   return;
 }
 
+if (parsedUrl.pathname === "/api/reject-action") {
+
+  const id =
+    parsedUrl.query.id;
+
+  const reason =
+    parsedUrl.query.reason || "Rechazado desde dashboard";
+
+  const result =
+    rejectQueuedAction(id, reason);
+
+  res.writeHead(200, {
+    "Content-Type": "application/json"
+  });
+
+  res.end(
+    JSON.stringify({
+      ok: !!result,
+      action: result
+    })
+  );
+
+  return;
+}
+
 if (parsedUrl.pathname === "/history") {
 
   const history =
