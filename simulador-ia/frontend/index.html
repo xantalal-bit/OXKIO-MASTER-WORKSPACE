@@ -621,6 +621,30 @@ async function showExecutiveDashboard() {
   </p>
 </div>
 
+<h2>Estado Estrat&eacute;gico</h2>
+
+<div class="agents-grid">
+  <div class="agent-card">
+    <h3>Foco actual</h3>
+    <p>${dashboard.strategicFocus}</p>
+  </div>
+
+  <div class="agent-card">
+    <h3>Patr&oacute;n dominante</h3>
+    <p>${dashboard.dominantPattern || "-"}</p>
+  </div>
+
+  <div class="agent-card">
+    <h3>Confianza</h3>
+    <p>${dashboard.confidence}</p>
+  </div>
+
+  <div class="agent-card">
+    <h3>Consistencia</h3>
+    <p>${dashboard.consistency.overallStatus}</p>
+  </div>
+</div>
+
     <h2>Conclusi&oacute;n Ejecutiva</h2>
 
     <div class="agent-card">
