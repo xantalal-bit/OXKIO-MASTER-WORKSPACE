@@ -558,7 +558,9 @@
 
   </div><button id="floatingVoiceBtn" class="floating-voice" title="Activar voz Oxkio" aria-label="Activar voz Oxkio"></button>
 
-  <script type="module">
+<script src="modules/strategic-intelligence/strategicSuggestions.js"></script>
+
+<script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
     import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
     import { getFirestore, collection, addDoc, getDocs, updateDoc, deleteDoc, doc, query, where } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
