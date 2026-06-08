@@ -698,19 +698,27 @@ console.log("Cargando inteligencia estratégica Oxkio...");
     }
 
     const data = result.data;
+const analysis = window.OxkioStrategicAnalyzer.analyzeStrategicData(data);
+const suggestions = window.OxkioStrategicSuggestions.buildStrategicSuggestions(data);
+const actions = window.OxkioStrategicActions.buildStrategicActions(analysis);
 
-    box.innerHTML = `
-      <strong>Foco:</strong> ${data.strategicFocus || "-"}<br><br>
-      <strong>Confianza:</strong> ${data.confidence || "-"}<br><br>
-      <strong>Recomendación:</strong> ${data.recommendedAction || "-"}<br><br>
-      <strong>Estado:</strong> ${data.consistency?.status || "-"}
-    `;
+box.innerHTML = `
+  <strong>Foco:</strong> ${data.strategicFocus || "-"}<br><br>
+  <strong>Nivel:</strong> ${analysis.level || "-"}<br><br>
+  <strong>Prioridad:</strong> ${analysis.priority || "-"}<br><br>
+  <strong>Confianza:</strong> ${data.confidence || "-"}<br><br>
+  <strong>Recomendación:</strong> ${data.recommendedAction || "-"}<br><br>
+  <strong>Estado:</strong> ${data.consistency?.status || "-"}<br><br>
+  <strong>Sugerencias:</strong><br>
+  ${suggestions.map(item => `- ${item}`).join("<br>")}<br><br>
+  <strong>Acciones:</strong><br>
+  ${actions.map(item => `- ${item}`).join("<br>")}
+`;
 
 const sugerenciaBox = document.getElementById("sugerencia");
 
 if (sugerenciaBox) {
-  sugerenciaBox.textContent =
-    "Oxkio recomienda revisar la prioridad estratégica activa y convertirla en una acción supervisada.";
+  sugerenciaBox.textContent = analysis.priority || "Revisar prioridad estratégica activa.";
 }
 
   } catch (error) {

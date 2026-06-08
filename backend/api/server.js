@@ -322,6 +322,41 @@ if (req.url === "/app/favicon.png") {
 
   return;
 }
+
+if (req.url.startsWith("/modules/strategic-intelligence/")) {
+
+  const fs = require("fs");
+  const path = require("path");
+
+  const requestedFile = req.url.replace("/modules/strategic-intelligence/", "");
+  const allowedFiles = [
+    "strategicAnalyzer.js",
+    "strategicSuggestions.js",
+    "strategicActions.js"
+  ];
+
+  if (!allowedFiles.includes(requestedFile)) {
+    return sendJson(res, 404, {
+      ok: false,
+      error: "Modulo no encontrado"
+    });
+  }
+
+  const modulePath = path.join(
+    __dirname,
+    "../../app/modules/strategic-intelligence",
+    requestedFile
+  );
+
+  res.writeHead(200, {
+    "Content-Type": "application/javascript"
+  });
+
+  res.end(fs.readFileSync(modulePath));
+
+  return;
+}
+
 if (req.url === "/api/status") {
   return sendJson(res, 200, {
     ok: true,
