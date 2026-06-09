@@ -357,6 +357,40 @@ if (req.url.startsWith("/modules/strategic-intelligence/")) {
   return;
 }
 
+if (req.url.startsWith("/modules/documents/")) {
+
+  const fs = require("fs");
+  const path = require("path");
+
+  const requestedFile = req.url.replace("/modules/documents/", "");
+  const allowedFiles = [
+    "documentClassifier.js",
+    "documentFolderAdvisor.js",
+    "documentDates.js"
+  ];
+
+  if (!allowedFiles.includes(requestedFile)) {
+    return sendJson(res, 404, {
+      ok: false,
+      error: "Modulo no encontrado"
+    });
+  }
+
+  const modulePath = path.join(
+    __dirname,
+    "../../app/modules/documents",
+    requestedFile
+  );
+
+  res.writeHead(200, {
+    "Content-Type": "application/javascript"
+  });
+
+  res.end(fs.readFileSync(modulePath));
+
+  return;
+}
+
 if (req.url === "/api/status") {
   return sendJson(res, 200, {
     ok: true,
