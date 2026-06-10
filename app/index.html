@@ -631,7 +631,7 @@
     function detectarCategoriaDocumento(fileName, mimeType) { return window.OxkioDocumentBridge.detectarCategoriaDocumento(fileName, mimeType); }
     function sugerirCarpeta(tipo) { return window.OxkioDocumentBridge.sugerirCarpeta(tipo); }
     function esTextoLeible(mimeType, fileName) { const m = (mimeType || "").toLowerCase(); const n = (fileName || "").toLowerCase(); return (m.startsWith("text/") || n.endsWith(".txt") || n.endsWith(".md") || n.endsWith(".csv") || n.endsWith(".json")); }
-    function extraerFechas(texto) { if (!texto) return []; const fechas = texto.match(/\b\d{2}\/\d{2}\/\d{4}\b/g) || []; return [...new Set(fechas)]; }
+    function extraerFechas(texto) { return window.OxkioDocumentBridge.extraerFechas(texto); }
     async function registrarIncidencia(tipo, descripcion) { if (!currentUser || !descripcion) return; await addDoc(collection(db, "incidencias"), { user: currentUser.uid, tipo, descripcion, estado: "pendiente", createdAt: Date.now() }); }
     async function registrarBitacora(texto) { if (!currentUser || !texto) return; await addDoc(collection(db, "bitacora"), { user: currentUser.uid, texto, createdAt: Date.now() }); }
     window.guardarIncidenciaManual = async function() { const texto = document.getElementById("nuevaIncidencia").value.trim(); if (!texto) return; await registrarIncidencia("manual", texto); await registrarBitacora(`Incidencia registrada: ${texto}`); document.getElementById("nuevaIncidencia").value = ""; await cargarIncidencias(); };
