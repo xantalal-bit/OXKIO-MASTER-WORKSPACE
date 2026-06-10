@@ -363,11 +363,13 @@ if (req.url.startsWith("/modules/documents/")) {
   const path = require("path");
 
   const requestedFile = req.url.replace("/modules/documents/", "");
+
   const allowedFiles = [
-    "documentClassifier.js",
-    "documentFolderAdvisor.js",
-    "documentDates.js"
-  ];
+  "documentClassifier.js",
+  "documentFolderAdvisor.js",
+  "documentDates.js",
+  "documentBridge.js"
+];
 
   if (!allowedFiles.includes(requestedFile)) {
     return sendJson(res, 404, {
