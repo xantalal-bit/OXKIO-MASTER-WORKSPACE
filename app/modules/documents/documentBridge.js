@@ -17,8 +17,17 @@ function extraerFechas(texto) {
   );
 }
 
+function testDocumentBridge() {
+  return {
+    ok: true,
+    module: "documents",
+    bridge: "active"
+  };
+}
+
 window.OxkioDocumentBridge = {
   detectarCategoriaDocumento,
   sugerirCarpeta,
-  extraerFechas
+  extraerFechas,
+  testDocumentBridge
 };
