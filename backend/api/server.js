@@ -393,6 +393,42 @@ if (req.url.startsWith("/modules/documents/")) {
   return;
 }
 
+if (req.url.startsWith("/modules/memory/")) {
+
+  const fs = require("fs");
+  const path = require("path");
+
+  const requestedFile = req.url.replace("/modules/memory/", "");
+  const allowedFiles = [
+    "memoryOperational.js",
+    "memoryStrategic.js",
+    "memoryHistory.js",
+    "memoryDecisions.js",
+    "memoryBridge.js"
+  ];
+
+  if (!allowedFiles.includes(requestedFile)) {
+    return sendJson(res, 404, {
+      ok: false,
+      error: "Modulo no encontrado"
+    });
+  }
+
+  const modulePath = path.join(
+    __dirname,
+    "../../app/modules/memory",
+    requestedFile
+  );
+
+  res.writeHead(200, {
+    "Content-Type": "application/javascript"
+  });
+
+  res.end(fs.readFileSync(modulePath));
+
+  return;
+}
+
 if (req.url === "/api/status") {
   return sendJson(res, 200, {
     ok: true,
