@@ -9,6 +9,8 @@ const defaultTools = require("../mcp/defaultTools");
 const ToolExecutor = require("../mcp/toolExecutor");
 const MemoryAgent = require("./tools/memoryAgent");
 
+const CalendarAgent = require("./tools/calendarAgent");
+
 function createAgentSystem() {
   const registry = new AgentRegistry();
 
@@ -20,8 +22,11 @@ function createAgentSystem() {
   const emailAgent = new EmailAgent();
   const memoryAgent = new MemoryAgent(toolExecutor);
 
+const calendarAgent = new CalendarAgent(toolExecutor);
+
   registry.register(emailAgent);
   registry.register(memoryAgent);
+registry.register(calendarAgent);
 
   const supervisorAgent = new SupervisorAgent(registry);
 
@@ -31,9 +36,10 @@ function createAgentSystem() {
     toolExecutor,
     supervisorAgent,
     agents: {
-      emailAgent,
-      memoryAgent
-    },
+  emailAgent,
+  memoryAgent,
+  calendarAgent
+},
     status: supervisorAgent.getStatus(),
     listAgents: () => supervisorAgent.listAgents(),
     listTools: () => toolsRegistry.getNames()

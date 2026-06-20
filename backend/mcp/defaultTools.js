@@ -20,6 +20,18 @@ const defaultTools = [
     requiresApproval: true
   },
   {
+    name: "calendar.create",
+    description: "Crear eventos de calendario bajo aprobación supervisada.",
+    status: "PLANNED",
+    requiresApproval: true
+  },
+  {
+    name: "calendar.update",
+    description: "Modificar eventos de calendario bajo aprobación supervisada.",
+    status: "PLANNED",
+    requiresApproval: true
+  },
+  {
     name: "memory.search",
     description: "Buscar información en la memoria de Oxkio.",
     status: "AVAILABLE",
