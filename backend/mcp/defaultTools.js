@@ -26,6 +26,12 @@ const defaultTools = [
     requiresApproval: false
   },
   {
+    name: "memory.write",
+    description: "Guardar información en la memoria de Oxkio.",
+    status: "AVAILABLE_SAFE_MODE",
+    requiresApproval: false
+  },
+  {
     name: "document.search",
     description: "Buscar documentos procesados por Oxkio.",
     status: "AVAILABLE",
