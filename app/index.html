@@ -390,6 +390,7 @@
   <div class="top-nav">
     <button class="nav-pill active" id="btnMenu" onclick="mostrarSeccion('menu')">Menú</button>
     <button class="nav-pill" id="btnOtros" onclick="mostrarSeccion('otros')">Otros</button>
+    <button class="nav-pill" id="btnProjects" onclick="mostrarSeccion('projects'); OxkioProjectManager.load()">Proyectos</button>
   </div>
 
   <div id="menuSection" class="section-shell active">
@@ -554,6 +555,14 @@
       <div id="agendaContent" class="content-hidden compact-gap"><div id="agenda">Sin datos</div></div>
     </div>
   </div>
+
+  <div id="projectsSection" class="section-shell">
+    <div class="card">
+      <div class="section-title">Project Manager</div>
+      <div class="subtle">Vista de proyectos en modo solo lectura.</div>
+      <div id="projectManagerList" class="compact-gap">Selecciona Proyectos para cargar la información.</div>
+    </div>
+  </div>
 </div>
 
   </div><button id="floatingVoiceBtn" class="floating-voice" title="Activar voz Oxkio" aria-label="Activar voz Oxkio"></button>
@@ -570,6 +579,7 @@
 <script src="modules/memory/memoryHistory.js"></script>
 <script src="modules/memory/memoryDecisions.js"></script>
 <script src="modules/memory/memoryBridge.js"></script>
+<script src="modules/projects/projectManager.js"></script>
 
 <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
@@ -793,7 +803,8 @@ applyModoCEO();
 } function hablarTexto(texto) { if (!("speechSynthesis" in window)) return; const utter = new SpeechSynthesisUtterance(texto); utter.lang = "es-ES"; speechSynthesis.cancel(); speechSynthesis.speak(utter); }
     window.iniciarVoz = function() { if (!currentUser) return; if (escuchando) return; const rec = getVoiceRecognition(); if (!rec) { setEstadoVoz("Este navegador no soporta voz.", false); setOxkioRespuesta("La voz no está disponible en este dispositivo o navegador."); return; } recognition = rec; escuchando = true; setEstadoVoz("Escuchando...", true); setOxkioRespuesta("Te escucho."); recognition.onresult = async (event) => { const texto = event.results[0][0].transcript; setEstadoVoz(`Oído: ${texto}`, false); await procesarComandoVoz(texto); }; recognition.onerror = () => { escuchando = false; setEstadoVoz("Error de voz.", false); setOxkioRespuesta("No he podido escuchar bien. Inténtalo otra vez."); }; recognition.onend = () => { escuchando = false; if (voiceStatus && voiceStatus.textContent === "Escuchando...") setEstadoVoz("Voz en espera.", false); else floatingVoiceBtn.classList.remove("listening"); }; recognition.start(); };
     floatingVoiceBtn.addEventListener("click", () => { window.iniciarVoz(); });
-    function mostrarSeccion(tipo){ const menuSection = document.getElementById("menuSection"); const otrosSection = document.getElementById("otrosSection"); const btnMenu = document.getElementById("btnMenu"); const btnOtros = document.getElementById("btnOtros"); if(tipo === "menu"){ menuSection.classList.add("active"); otrosSection.classList.remove("active"); btnMenu.classList.add("active"); btnOtros.classList.remove("active"); } else { otrosSection.classList.add("active"); menuSection.classList.remove("active"); btnOtros.classList.add("active"); btnMenu.classList.remove("active"); } }
+    function mostrarSeccion(tipo){ const sections = { menu: document.getElementById("menuSection"), otros: document.getElementById("otrosSection"), projects: document.getElementById("projectsSection") }; const buttons = { menu: document.getElementById("btnMenu"), otros: document.getElementById("btnOtros"), projects: document.getElementById("btnProjects") }; Object.entries(sections).forEach(([name, section]) => { if (section) section.classList.toggle("active", name === tipo); }); Object.entries(buttons).forEach(([name, button]) => { if (button) button.classList.toggle("active", name === tipo); }); }
+    window.mostrarSeccion = mostrarSeccion;
     showLoading();
     onAuthStateChanged(auth, async (u) => {
   if (u) {

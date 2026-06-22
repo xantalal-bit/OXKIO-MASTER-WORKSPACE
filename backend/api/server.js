@@ -14,6 +14,7 @@ const GmailConnector = require("../integrations/gmail/connector");
 const systemConfig = require("../config/systemConfig");
 const WorkflowManager = require("../workflows/workflowManager");
 const SystemStateManager = require("../core/systemStateManager");
+const ProjectManagerService = require("../projects/projectManagerService");
 const {
   getAuthUrl,
   getTokens
@@ -323,6 +324,21 @@ if (req.url === "/app/favicon.png") {
   return;
 }
 
+if (req.url === "/modules/projects/projectManager.js") {
+  const fs = require("fs");
+  const path = require("path");
+  const modulePath = path.join(
+    __dirname,
+    "../../app/modules/projects/projectManager.js"
+  );
+
+  res.writeHead(200, {
+    "Content-Type": "application/javascript; charset=utf-8"
+  });
+  res.end(fs.readFileSync(modulePath));
+  return;
+}
+
 if (req.url.startsWith("/modules/strategic-intelligence/")) {
 
   const fs = require("fs");
@@ -437,6 +453,22 @@ if (req.url === "/api/status") {
     details: system.getStatus(),
     timestamp: new Date().toISOString()
   });
+}
+
+if (pathname === "/api/projects" && req.method === "GET") {
+  try {
+    return sendJson(res, 200, {
+      ok: true,
+      readOnly: true,
+      projects: ProjectManagerService.getProjects()
+    });
+  } catch (error) {
+    return sendJson(res, 500, {
+      ok: false,
+      readOnly: true,
+      error: "No se pudo cargar la información de proyectos."
+    });
+  }
 }
 
   if (req.url === "/api/process-email") {
