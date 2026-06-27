@@ -1,0 +1,85 @@
+{
+  "version": "1.0",
+  "initiatives": [
+    {
+      "id": "initiative-1782551018711-zx1piz",
+      "title": "Continuar Business Hunter",
+      "description": "Generar oportunidades comerciales reales. Ayudar al trabajo profesional diario. Automatizar la captación de clientes. Construir el futuro Business Hunter Agent para OXKIO.",
+      "project": "Business Hunter",
+      "priority": "CRITICAL",
+      "status": "ACTIVE",
+      "createdAt": "2026-06-27T09:03:38.711Z",
+      "updatedAt": "2026-06-27T09:03:38.711Z",
+      "reason": "Iniciativa inicial generada desde el Roadmap Oficial de XANTALAL.",
+      "dependencies": [],
+      "notes": [
+        "Estado en Roadmap: En desarrollo."
+      ],
+      "origin": "ROADMAP"
+    },
+    {
+      "id": "initiative-1782551018711-y54iu9",
+      "title": "Continuar OXKIO Core",
+      "description": "Construir el Director Ejecutivo IA. Incluye: Arquitectura Multiagente. MCP. Memory. Knowledge Curator. Automatizaciones. Voz. Supervisor. Integraciones.",
+      "project": "OXKIO CORE",
+      "priority": "HIGH",
+      "status": "PLANNED",
+      "createdAt": "2026-06-27T09:03:38.711Z",
+      "updatedAt": "2026-06-27T09:03:38.711Z",
+      "reason": "Iniciativa inicial generada desde el Roadmap Oficial de XANTALAL.",
+      "dependencies": [],
+      "notes": [
+        "Estado en Roadmap: En desarrollo."
+      ],
+      "origin": "ROADMAP"
+    },
+    {
+      "id": "initiative-1782551018711-3waivw",
+      "title": "Continuar Profesor IA",
+      "description": "Crear contenido de calidad. Libro. Curso. Redes sociales. Marca personal. Difusión del ecosistema.",
+      "project": "Profesor IA",
+      "priority": "MEDIUM",
+      "status": "PLANNED",
+      "createdAt": "2026-06-27T09:03:38.711Z",
+      "updatedAt": "2026-06-27T09:03:38.711Z",
+      "reason": "Iniciativa inicial generada desde el Roadmap Oficial de XANTALAL.",
+      "dependencies": [],
+      "notes": [
+        "Estado en Roadmap: En desarrollo."
+      ],
+      "origin": "ROADMAP"
+    },
+    {
+      "id": "initiative-1782551018711-vqtlwi",
+      "title": "Continuar GIU",
+      "description": "Desarrollar herramientas profesionales especializadas para el entorno laboral y empresarial.",
+      "project": "GIU",
+      "priority": "LOW",
+      "status": "PLANNED",
+      "createdAt": "2026-06-27T09:03:38.711Z",
+      "updatedAt": "2026-06-27T09:03:38.711Z",
+      "reason": "Iniciativa inicial generada desde el Roadmap Oficial de XANTALAL.",
+      "dependencies": [],
+      "notes": [
+        "Estado en Roadmap: En pausa estratégica."
+      ],
+      "origin": "ROADMAP"
+    },
+    {
+      "id": "initiative-1782551018711-gr37gn",
+      "title": "Continuar XANTALALSHOP",
+      "description": "Convertirse en el portal oficial del Ecosistema XANTALAL. Presentar productos. Difundir contenidos. Centralizar documentación pública. Canal comercial.",
+      "project": "XANTALALSHOP",
+      "priority": "LOW",
+      "status": "PLANNED",
+      "createdAt": "2026-06-27T09:03:38.711Z",
+      "updatedAt": "2026-06-27T09:03:38.711Z",
+      "reason": "Iniciativa inicial generada desde el Roadmap Oficial de XANTALAL.",
+      "dependencies": [],
+      "notes": [
+        "Estado en Roadmap: Planificado."
+      ],
+      "origin": "ROADMAP"
+    }
+  ]
+}
