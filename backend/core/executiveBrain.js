@@ -52,7 +52,15 @@ const executiveContext = this.getExecutiveContext();
 let selectedAgent;
 
 try {
-    selectedAgent = this.dispatcher.selectAgent(analysis, executiveContext);
+    if (analysis.intent === "learn_project") {
+        selectedAgent = {
+            agent: "ExecutiveSupervisor",
+            reason: "El Supervisor coordina el aprendizaje de proyectos.",
+            confidence: 0.95
+        };
+    } else {
+        selectedAgent = this.dispatcher.selectAgent(analysis, executiveContext);
+    }
 } catch (error) {
     selectedAgent = {
         agent: "GeneralAssistant",
