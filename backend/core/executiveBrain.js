@@ -17,6 +17,12 @@ function normalizeSearchText(value) {
         .toLowerCase();
 }
 
+function summarizeHighlight(value) {
+    return String(value || "")
+        .replace(/\s+/g, " ")
+        .trim();
+}
+
 class ExecutiveBrain {
 
    constructor(memory, intentAnalyzer, ruleEngine) {
@@ -72,6 +78,9 @@ const projectName = projectToLearn || this.detectKnownProject(message);
 const projectKnowledge = projectName
     ? this.knowledgeCurator.searchKnowledge(projectName)
     : [];
+const projectKnowledgeSummary = projectKnowledge.length > 0
+    ? this.buildProjectKnowledgeSummary(projectName, projectKnowledge)
+    : null;
 
 let selectedAgent;
 
@@ -123,6 +132,7 @@ if (policyValidation.approved === false) {
     strategicMemory,
     knowledge,
     projectKnowledge,
+    projectKnowledgeSummary,
     policyValidation,
     executiveContext,
     projectToLearn,
@@ -142,6 +152,25 @@ if (policyValidation.approved === false) {
         return KNOWN_PROJECTS.find((projectName) => {
             return messageText.includes(normalizeSearchText(projectName));
         }) || null;
+    }
+
+    buildProjectKnowledgeSummary(projectName, projectKnowledge = []) {
+        const highlights = projectKnowledge
+            .map((item) => {
+                const summary = summarizeHighlight(item && item.summary);
+                const title = summarizeHighlight(item && item.title);
+                const content = summarizeHighlight(item && item.content);
+
+                return summary || title || content.split(/\s+/).slice(0, 20).join(" ");
+            })
+            .filter(Boolean)
+            .slice(0, 5);
+
+        return {
+            project: projectName,
+            documentsFound: projectKnowledge.length,
+            highlights
+        };
     }
 
    buildDecision(
