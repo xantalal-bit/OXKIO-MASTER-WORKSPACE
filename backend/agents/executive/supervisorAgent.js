@@ -4,6 +4,7 @@ const { readGovernanceSummary } = require("../../governance/governanceReader");
 const executiveAgenda = require("../../executive/executiveAgenda");
 const policyEngine = require("../../governance/policyEngine");
 const { ExecutiveStrategicMemory } = require("../../executive/strategicMemory");
+const { KnowledgeScheduler } = require("../../knowledge/knowledgeScheduler");
 
 class SupervisorAgent {
 
@@ -12,6 +13,7 @@ class SupervisorAgent {
     this.version = "2.0";
     this.registry = registry;
     this.strategicMemory = new ExecutiveStrategicMemory();
+    this.knowledgeScheduler = new KnowledgeScheduler();
     executiveAgenda.initializeAgendaFromGovernance();
   }
 
@@ -107,6 +109,22 @@ class SupervisorAgent {
 
   addStrategicArchitectureNote(input) {
     return this.strategicMemory.addArchitectureNote(input);
+  }
+
+  registerKnowledgePipeline(name, pipeline) {
+    return this.knowledgeScheduler.registerPipeline(name, pipeline);
+  }
+
+  runKnowledgePipeline(name) {
+    return this.knowledgeScheduler.run(name);
+  }
+
+  runAllKnowledgePipelines() {
+    return this.knowledgeScheduler.runAll();
+  }
+
+  getKnowledgeSchedulerStatus() {
+    return this.knowledgeScheduler.getStatus();
   }
 
 }
