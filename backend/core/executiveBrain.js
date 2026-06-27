@@ -138,6 +138,13 @@ if (policyValidation.approved === false) {
             recommendation = "Preparar revisión del documento o archivo indicado.";
         }
 
+        if (analysis.intent === "learn_project") {
+            nextAction = "learn_project";
+            recommendation = "Preparar aprendizaje supervisado del proyecto.";
+            requiresApproval = true;
+            riskLevel = "medium";
+        }
+
         if (relatedMemory.length > 0) {
             recommendation += " Se ha encontrado memoria relacionada.";
         }
