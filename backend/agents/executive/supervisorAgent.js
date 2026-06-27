@@ -278,6 +278,40 @@ class SupervisorAgent {
     return this.pendingApprovals;
   }
 
+  approveLearningApproval(approvalId) {
+    const record = this.pendingApprovals.find((approval) => approval.id === approvalId);
+
+    if (!record) {
+      return {
+        ok: false,
+        error: "Approval not found."
+      };
+    }
+
+    if (record.status !== "PENDING") {
+      return {
+        ok: false,
+        error: "Approval is not pending."
+      };
+    }
+
+    const approval = record.approval || {};
+    const result = this.learnProject(approval.projectName, approval.projectPath);
+    const approvedAt = new Date().toISOString();
+
+    record.status = "APPROVED";
+    record.approvedAt = approvedAt;
+    record.result = result;
+
+    return {
+      ok: true,
+      approvalId,
+      status: record.status,
+      approvedAt,
+      result
+    };
+  }
+
   prepareMultipleProjectLearning(projects) {
     const items = Array.isArray(projects) ? projects : [];
     const proposals = items.map((project) => this.prepareProjectLearning(project));
