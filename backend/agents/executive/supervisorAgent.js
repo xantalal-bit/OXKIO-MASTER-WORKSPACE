@@ -190,7 +190,19 @@ class SupervisorAgent {
   }
 
   detectProjectsToLearn(projects) {
-    if (!Array.isArray(projects)) {
+    let projectList = projects;
+
+    if (typeof projectList === "undefined") {
+      projectList = this.getProducts().map((product) => {
+        return {
+          projectName: product.name,
+          projectPath: product.path || null,
+          enabled: true
+        };
+      });
+    }
+
+    if (!Array.isArray(projectList)) {
       return {
         ok: false,
         totalProjects: 0,
@@ -204,7 +216,7 @@ class SupervisorAgent {
       };
     }
 
-    const disabledProjects = projects
+    const disabledProjects = projectList
       .filter((project) => {
         return !project || project.enabled === false;
       })
@@ -215,7 +227,7 @@ class SupervisorAgent {
           reason: "Project disabled."
         };
       });
-    const enabledProjects = projects.filter((project) => {
+    const enabledProjects = projectList.filter((project) => {
       return project && project.enabled !== false;
     });
     const prepared = this.prepareMultipleProjectLearning(enabledProjects);
@@ -235,7 +247,7 @@ class SupervisorAgent {
 
     return {
       ok: prepared.preparedProjects > 0,
-      totalProjects: projects.length,
+      totalProjects: projectList.length,
       candidates: prepared.preparedProjects,
       rejectedProjects: rejectedProjectsList.length,
       hasRejections: rejectedProjectsList.length > 0,
