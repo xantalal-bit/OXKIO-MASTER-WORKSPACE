@@ -2,6 +2,21 @@ const SupervisorAgent = require("../agents/executive/supervisorAgent");
 const ExecutiveDispatcher = require("./executiveDispatcher");
 const knowledgeCurator = require("../knowledge/knowledgeCurator");
 
+const KNOWN_PROJECTS = [
+    "Business Hunter",
+    "OXKIO",
+    "Profesor IA",
+    "GIU",
+    "XANTALAL"
+];
+
+function normalizeSearchText(value) {
+    return String(value || "")
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .toLowerCase();
+}
+
 class ExecutiveBrain {
 
    constructor(memory, intentAnalyzer, ruleEngine) {
@@ -48,6 +63,9 @@ class ExecutiveBrain {
         const knowledge = this.knowledgeCurator.searchKnowledge(message);
 
 const executiveContext = this.getExecutiveContext();
+const projectToLearn = analysis.intent === "learn_project"
+    ? this.detectProjectToLearn(message, executiveContext)
+    : null;
 
 let selectedAgent;
 
@@ -100,10 +118,19 @@ if (policyValidation.approved === false) {
     knowledge,
     policyValidation,
     executiveContext,
+    projectToLearn,
     selectedAgent,
     decision,
     status: "EXECUTIVE_BRAIN_OK"
 };
+    }
+
+    detectProjectToLearn(message, executiveContext) {
+        const messageText = normalizeSearchText(message);
+
+        return KNOWN_PROJECTS.find((projectName) => {
+            return messageText.includes(normalizeSearchText(projectName));
+        }) || null;
     }
 
    buildDecision(

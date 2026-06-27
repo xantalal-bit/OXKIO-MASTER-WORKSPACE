@@ -144,6 +144,35 @@ class SupervisorAgent {
     return this.knowledgeAcquisitionEngine.getStatus();
   }
 
+  prepareProjectLearning(input) {
+    const data = input || {};
+
+    if (!data.projectName) {
+      return {
+        ok: false,
+        error: "projectName is required.",
+        requiresApproval: false
+      };
+    }
+
+    if (!data.projectPath) {
+      return {
+        ok: false,
+        error: "projectPath is required.",
+        requiresApproval: false
+      };
+    }
+
+    return {
+      ok: true,
+      requiresApproval: true,
+      action: "learn_project",
+      projectName: data.projectName,
+      projectPath: data.projectPath,
+      preparedAt: new Date().toISOString()
+    };
+  }
+
   learnProject(projectName, projectPath) {
     if (!projectName || !projectPath) {
       return {
