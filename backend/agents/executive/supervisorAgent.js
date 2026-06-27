@@ -5,6 +5,7 @@ const executiveAgenda = require("../../executive/executiveAgenda");
 const policyEngine = require("../../governance/policyEngine");
 const { ExecutiveStrategicMemory } = require("../../executive/strategicMemory");
 const { KnowledgeScheduler } = require("../../knowledge/knowledgeScheduler");
+const { KnowledgeAcquisitionEngine } = require("../../knowledge/knowledgeAcquisitionEngine");
 const { SecurityInventory } = require("../../security/securityInventory");
 
 class SupervisorAgent {
@@ -15,6 +16,7 @@ class SupervisorAgent {
     this.registry = registry;
     this.strategicMemory = new ExecutiveStrategicMemory();
     this.knowledgeScheduler = new KnowledgeScheduler();
+    this.knowledgeAcquisitionEngine = new KnowledgeAcquisitionEngine();
     this.securityInventory = new SecurityInventory();
     executiveAgenda.initializeAgendaFromGovernance();
   }
@@ -127,6 +129,18 @@ class SupervisorAgent {
 
   getKnowledgeSchedulerStatus() {
     return this.knowledgeScheduler.getStatus();
+  }
+
+  registerDefaultKnowledgeSources(config) {
+    return this.knowledgeAcquisitionEngine.registerDefaultConnectors(config);
+  }
+
+  runKnowledgeAcquisition() {
+    return this.knowledgeAcquisitionEngine.runAll();
+  }
+
+  getKnowledgeAcquisitionStatus() {
+    return this.knowledgeAcquisitionEngine.getStatus();
   }
 
   addSecurityAsset(asset) {
