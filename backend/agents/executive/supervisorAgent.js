@@ -3,6 +3,7 @@
 const { readGovernanceSummary } = require("../../governance/governanceReader");
 const executiveAgenda = require("../../executive/executiveAgenda");
 const policyEngine = require("../../governance/policyEngine");
+const { ExecutiveStrategicMemory } = require("../../executive/strategicMemory");
 
 class SupervisorAgent {
 
@@ -10,6 +11,7 @@ class SupervisorAgent {
     this.name = "SupervisorAgent";
     this.version = "2.0";
     this.registry = registry;
+    this.strategicMemory = new ExecutiveStrategicMemory();
     executiveAgenda.initializeAgendaFromGovernance();
   }
 
@@ -81,6 +83,30 @@ class SupervisorAgent {
 
   validateDecision(context) {
     return policyEngine.validateDecision(context);
+  }
+
+  getStrategicMemory() {
+    return this.strategicMemory.listAll();
+  }
+
+  searchStrategicMemory(query) {
+    return this.strategicMemory.search(query);
+  }
+
+  addStrategicDecision(input) {
+    return this.strategicMemory.addDecision(input);
+  }
+
+  addStrategicLaw(input) {
+    return this.strategicMemory.addLaw(input);
+  }
+
+  addStrategicMilestone(input) {
+    return this.strategicMemory.addMilestone(input);
+  }
+
+  addStrategicArchitectureNote(input) {
+    return this.strategicMemory.addArchitectureNote(input);
   }
 
 }
