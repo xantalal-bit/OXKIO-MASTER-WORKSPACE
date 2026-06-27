@@ -7,6 +7,7 @@ const { ExecutiveStrategicMemory } = require("../../executive/strategicMemory");
 const { KnowledgeScheduler } = require("../../knowledge/knowledgeScheduler");
 const { KnowledgeAcquisitionEngine } = require("../../knowledge/knowledgeAcquisitionEngine");
 const ProjectFolderConnector = require("../../knowledge/connectors/projectFolderConnector");
+const { ProjectRegistry } = require("../../projects/projectRegistry");
 const { SecurityInventory } = require("../../security/securityInventory");
 
 class SupervisorAgent {
@@ -18,6 +19,7 @@ class SupervisorAgent {
     this.strategicMemory = new ExecutiveStrategicMemory();
     this.knowledgeScheduler = new KnowledgeScheduler();
     this.knowledgeAcquisitionEngine = new KnowledgeAcquisitionEngine();
+    this.projectRegistry = new ProjectRegistry();
     this.securityInventory = new SecurityInventory();
     executiveAgenda.initializeAgendaFromGovernance();
   }
@@ -144,6 +146,30 @@ class SupervisorAgent {
     return this.knowledgeAcquisitionEngine.getStatus();
   }
 
+  registerProject(project) {
+    return this.projectRegistry.registerProject(project);
+  }
+
+  listRegisteredProjects() {
+    return this.projectRegistry.listProjects();
+  }
+
+  getRegisteredProject(name) {
+    return this.projectRegistry.getProject(name);
+  }
+
+  updateRegisteredProject(name, data) {
+    return this.projectRegistry.updateProject(name, data);
+  }
+
+  removeRegisteredProject(name) {
+    return this.projectRegistry.removeProject(name);
+  }
+
+  getProjectRegistryStatus() {
+    return this.projectRegistry.getStatus();
+  }
+
   prepareProjectLearning(input) {
     const data = input || {};
 
@@ -193,7 +219,7 @@ class SupervisorAgent {
     let projectList = projects;
 
     if (typeof projectList === "undefined") {
-      projectList = this.getProducts().map((product) => {
+      projectList = this.listRegisteredProjects().map((product) => {
         return {
           projectName: product.name,
           projectPath: product.path || null,
