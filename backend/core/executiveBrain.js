@@ -1,5 +1,6 @@
 const SupervisorAgent = require("../agents/executive/supervisorAgent");
 const ExecutiveDispatcher = require("./executiveDispatcher");
+const knowledgeCurator = require("../knowledge/knowledgeCurator");
 
 class ExecutiveBrain {
 
@@ -12,6 +13,7 @@ class ExecutiveBrain {
             getStatus: () => []
         });
         this.dispatcher = new ExecutiveDispatcher();
+        this.knowledgeCurator = knowledgeCurator;
     }
 
     getExecutiveContext() {
@@ -43,6 +45,8 @@ class ExecutiveBrain {
 
         const strategicMemory = this.supervisor.searchStrategicMemory(message);
 
+        const knowledge = this.knowledgeCurator.searchKnowledge(message);
+
 const executiveContext = this.getExecutiveContext();
 
 let selectedAgent;
@@ -63,6 +67,7 @@ const decision = this.buildDecision(
     relatedMemory,
     matchedRules,
     strategicMemory,
+    knowledge,
     executiveContext,
     selectedAgent
 );
@@ -84,6 +89,7 @@ if (policyValidation.approved === false) {
     relatedMemory,
     matchedRules,
     strategicMemory,
+    knowledge,
     policyValidation,
     executiveContext,
     selectedAgent,
@@ -98,6 +104,7 @@ if (policyValidation.approved === false) {
         relatedMemory,
         matchedRules = [],
         strategicMemory = [],
+        knowledge = [],
         executiveContext = null,
         selectedAgent = null
     ) {
@@ -136,6 +143,9 @@ if (policyValidation.approved === false) {
         }
         if (strategicMemory.length > 0) {
             recommendation += " Se encontraron decisiones estratégicas relacionadas.";
+        }
+        if (knowledge.length > 0) {
+            recommendation += " Se encontró conocimiento relacionado.";
         }
         if (matchedRules.length > 0) {
     riskLevel = "medium";
