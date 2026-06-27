@@ -189,6 +189,37 @@ class SupervisorAgent {
     };
   }
 
+  detectProjectsToLearn(projects) {
+    if (!Array.isArray(projects)) {
+      return {
+        ok: false,
+        totalProjects: 0,
+        candidates: 0,
+        rejectedProjects: 0,
+        proposals: [],
+        error: "projects must be an array.",
+        detectedAt: new Date().toISOString()
+      };
+    }
+
+    const enabledProjects = projects.filter((project) => {
+      return project && project.enabled !== false;
+    });
+    const disabledProjects = projects.filter((project) => {
+      return !project || project.enabled === false;
+    });
+    const prepared = this.prepareMultipleProjectLearning(enabledProjects);
+
+    return {
+      ok: prepared.rejectedProjects === 0,
+      totalProjects: projects.length,
+      candidates: prepared.preparedProjects,
+      rejectedProjects: prepared.rejectedProjects + disabledProjects.length,
+      proposals: prepared.proposals,
+      detectedAt: new Date().toISOString()
+    };
+  }
+
   learnProject(projectName, projectPath) {
     if (!projectName || !projectPath) {
       return {
