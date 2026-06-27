@@ -67,12 +67,24 @@ const decision = this.buildDecision(
     selectedAgent
 );
 
+const policyValidation = this.supervisor.validateDecision({
+    type: analysis.intent,
+    recommendation: decision.recommendation,
+    selectedAgent
+});
+
+if (policyValidation.approved === false) {
+    decision.riskLevel = "medium";
+    decision.recommendation += ` Política aplicada: ${policyValidation.violatedPolicy}. ${policyValidation.recommendation}`;
+}
+
        return {
     message,
     analysis,
     relatedMemory,
     matchedRules,
     strategicMemory,
+    policyValidation,
     executiveContext,
     selectedAgent,
     decision,
