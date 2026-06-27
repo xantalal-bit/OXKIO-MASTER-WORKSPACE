@@ -21,6 +21,7 @@ class SupervisorAgent {
     this.knowledgeAcquisitionEngine = new KnowledgeAcquisitionEngine();
     this.projectRegistry = new ProjectRegistry();
     this.securityInventory = new SecurityInventory();
+    this.pendingApprovals = [];
     executiveAgenda.initializeAgendaFromGovernance();
   }
 
@@ -251,6 +252,30 @@ class SupervisorAgent {
       },
       createdAt: new Date().toISOString()
     };
+  }
+
+  queueProjectLearningApproval(projectName) {
+    const approval = this.createProjectLearningApproval(projectName);
+
+    if (!approval.ok) {
+      return approval;
+    }
+
+    const record = {
+      id: `approval-${Date.now()}-${this.pendingApprovals.length + 1}`,
+      type: "learn_project",
+      status: "PENDING",
+      approval,
+      createdAt: new Date().toISOString()
+    };
+
+    this.pendingApprovals.push(record);
+
+    return record;
+  }
+
+  listPendingApprovals() {
+    return this.pendingApprovals;
   }
 
   prepareMultipleProjectLearning(projects) {
