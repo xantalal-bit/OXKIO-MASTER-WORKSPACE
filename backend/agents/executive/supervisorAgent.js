@@ -170,6 +170,10 @@ class SupervisorAgent {
     return this.projectRegistry.getStatus();
   }
 
+  initializeProjectPaths(paths) {
+    return this.projectRegistry.initializeDefaultPaths(paths);
+  }
+
   prepareProjectLearning(input) {
     const data = input || {};
 
