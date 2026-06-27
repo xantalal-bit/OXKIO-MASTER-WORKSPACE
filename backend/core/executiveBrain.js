@@ -1,9 +1,34 @@
+const SupervisorAgent = require("../agents/executive/supervisorAgent");
+
 class ExecutiveBrain {
 
    constructor(memory, intentAnalyzer, ruleEngine) {
         this.memory = memory;
         this.intentAnalyzer = intentAnalyzer;
         this.ruleEngine = ruleEngine;
+        this.supervisor = new SupervisorAgent({
+            getAll: () => [],
+            getStatus: () => []
+        });
+    }
+
+    getExecutiveContext() {
+        try {
+            return {
+                governanceStatus: this.supervisor.getGovernanceStatus(),
+                currentPriority: this.supervisor.getCurrentPriority(),
+                currentFocus: this.supervisor.getCurrentFocus(),
+                recommendedInitiative: this.supervisor.recommendNextInitiative()
+            };
+        } catch (error) {
+            return {
+                governanceStatus: null,
+                currentPriority: null,
+                currentFocus: [],
+                recommendedInitiative: null,
+                error: error.message || String(error)
+            };
+        }
     }
 
     think(message = "") {
@@ -14,19 +39,22 @@ class ExecutiveBrain {
 
         const matchedRules = this.ruleEngine.evaluate({ message, analysis, relatedMemory });
 
-const decision = this.buildDecision(message, analysis, relatedMemory, matchedRules);
+const executiveContext = this.getExecutiveContext();
+
+const decision = this.buildDecision(message, analysis, relatedMemory, matchedRules, executiveContext);
 
        return {
     message,
     analysis,
     relatedMemory,
     matchedRules,
+    executiveContext,
     decision,
     status: "EXECUTIVE_BRAIN_OK"
 };
     }
 
-   buildDecision(message, analysis, relatedMemory, matchedRules = []) {
+   buildDecision(message, analysis, relatedMemory, matchedRules = [], executiveContext = null) {
         let recommendation = "Responder de forma informativa.";
         let riskLevel = "low";
         let nextAction = "respond";
@@ -64,6 +92,14 @@ const decision = this.buildDecision(message, analysis, relatedMemory, matchedRul
     riskLevel = "medium";
     recommendation += " Se han aplicado reglas ejecutivas.";
 }
+
+        if (executiveContext && executiveContext.currentPriority) {
+            recommendation += ` Prioridad oficial actual: ${executiveContext.currentPriority.product}.`;
+        }
+
+        if (executiveContext && executiveContext.recommendedInitiative) {
+            recommendation += ` Iniciativa recomendada: ${executiveContext.recommendedInitiative.title}.`;
+        }
 
         return {
             recommendation,
