@@ -35,3 +35,30 @@ desktop.ini
 # GIT
 .git/
 backend/auth/googleTokens.json
+
+# ==========================
+# XANTALAL DATA STORES
+# ==========================
+
+# Persistencia local
+**/*Store.json
+
+# Inventarios de seguridad
+backend/security/securityInventoryStore.json
+
+# Memoria estratégica
+backend/executive/strategicMemoryStore.json
+
+# Agenda ejecutiva persistente (activar cuando sea dinámica)
+# backend/executive/executiveAgendaStore.json
+
+# Base de conocimiento
+backend/knowledge/knowledgeStore.json
+
+# Datos de conectores
+backend/knowledge/connectors/data/
+
+# Bases de datos locales
+*.db
+*.sqlite
+*.sqlite3
