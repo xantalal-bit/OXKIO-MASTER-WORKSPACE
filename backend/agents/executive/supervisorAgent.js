@@ -6,6 +6,7 @@ const policyEngine = require("../../governance/policyEngine");
 const { ExecutiveStrategicMemory } = require("../../executive/strategicMemory");
 const { KnowledgeScheduler } = require("../../knowledge/knowledgeScheduler");
 const { KnowledgeAcquisitionEngine } = require("../../knowledge/knowledgeAcquisitionEngine");
+const ProjectFolderConnector = require("../../knowledge/connectors/projectFolderConnector");
 const { SecurityInventory } = require("../../security/securityInventory");
 
 class SupervisorAgent {
@@ -141,6 +142,32 @@ class SupervisorAgent {
 
   getKnowledgeAcquisitionStatus() {
     return this.knowledgeAcquisitionEngine.getStatus();
+  }
+
+  learnProject(projectName, projectPath) {
+    if (!projectName || !projectPath) {
+      return {
+        ok: false,
+        projectName: projectName || null,
+        projectPath: projectPath || null,
+        error: "projectName and projectPath are required.",
+        learnedAt: new Date().toISOString()
+      };
+    }
+
+    const connector = new ProjectFolderConnector({
+      projectPath
+    });
+
+    this.knowledgeAcquisitionEngine.registerConnector(connector);
+
+    return {
+      ok: true,
+      projectName,
+      projectPath,
+      result: this.knowledgeAcquisitionEngine.runConnector("ProjectFolderConnector"),
+      learnedAt: new Date().toISOString()
+    };
   }
 
   addSecurityAsset(asset) {
