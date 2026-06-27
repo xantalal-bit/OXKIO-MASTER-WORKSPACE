@@ -4,6 +4,44 @@ const knowledgeCurator = require("./knowledgeCurator");
 const { KnowledgeConnectorManager } = require("./knowledgeConnectorManager");
 const KnowledgeIngestionPipeline = require("./knowledgeIngestionPipeline");
 const { KnowledgeScheduler } = require("./knowledgeScheduler");
+const LearningHeroesConnector = require("./connectors/learningHeroesConnector");
+const LocalFolderConnector = require("./connectors/localFolderConnector");
+const PdfKnowledgeConnector = require("./connectors/pdfKnowledgeConnector");
+const DocxKnowledgeConnector = require("./connectors/docxKnowledgeConnector");
+const ProjectFolderConnector = require("./connectors/projectFolderConnector");
+
+const DEFAULT_CONNECTORS = [
+  {
+    name: "LearningHeroesConnector",
+    configKey: "learningHeroesFilePath",
+    Connector: LearningHeroesConnector,
+    buildConfig: (value) => ({ filePath: value })
+  },
+  {
+    name: "LocalFolderConnector",
+    configKey: "localFolderPath",
+    Connector: LocalFolderConnector,
+    buildConfig: (value) => ({ folderPath: value })
+  },
+  {
+    name: "PdfKnowledgeConnector",
+    configKey: "pdfFolderPath",
+    Connector: PdfKnowledgeConnector,
+    buildConfig: (value) => ({ folderPath: value })
+  },
+  {
+    name: "DocxKnowledgeConnector",
+    configKey: "docxFolderPath",
+    Connector: DocxKnowledgeConnector,
+    buildConfig: (value) => ({ folderPath: value })
+  },
+  {
+    name: "ProjectFolderConnector",
+    configKey: "projectPath",
+    Connector: ProjectFolderConnector,
+    buildConfig: (value) => ({ projectPath: value })
+  }
+];
 
 function normalizeText(value) {
   return String(value || "").trim();
@@ -109,6 +147,35 @@ class KnowledgeAcquisitionEngine {
     this.scheduler.registerPipeline(connectorName, this.pipeline);
 
     return registeredConnector;
+  }
+
+  registerDefaultConnectors(config) {
+    const input = config || {};
+    const registered = [];
+    const skipped = [];
+
+    DEFAULT_CONNECTORS.forEach((definition) => {
+      const value = normalizeText(input[definition.configKey]);
+
+      if (!value) {
+        skipped.push({
+          name: definition.name,
+          reason: `Missing config.${definition.configKey}`
+        });
+        return;
+      }
+
+      const connector = new definition.Connector(definition.buildConfig(value));
+      const registeredConnector = this.registerConnector(connector);
+
+      registered.push(registeredConnector.name);
+    });
+
+    return {
+      registered,
+      skipped,
+      total: registered.length
+    };
   }
 
   runConnector(name) {
