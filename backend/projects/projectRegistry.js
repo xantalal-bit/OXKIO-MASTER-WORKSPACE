@@ -199,6 +199,39 @@ class ProjectRegistry {
     };
   }
 
+  initializeDefaultPaths(paths) {
+    const input = paths || {};
+    const store = this.readStore();
+    const updatedProjects = [];
+    const skippedProjects = [];
+
+    DEFAULT_PROJECTS.forEach((projectName) => {
+      const index = store.projects.findIndex((project) => sameProjectName(project.name, projectName));
+      const projectPath = input[projectName];
+
+      if (index === -1 || !projectPath) {
+        skippedProjects.push(projectName);
+        return;
+      }
+
+      store.projects[index] = {
+        ...store.projects[index],
+        path: projectPath,
+        updatedAt: now()
+      };
+      updatedProjects.push(projectName);
+    });
+
+    this.writeStore(store);
+
+    return {
+      ok: updatedProjects.length > 0,
+      updatedProjects,
+      skippedProjects,
+      initializedAt: now()
+    };
+  }
+
   getStatus() {
     const projects = this.listProjects();
     const enabledProjects = projects.filter((project) => project.enabled);
