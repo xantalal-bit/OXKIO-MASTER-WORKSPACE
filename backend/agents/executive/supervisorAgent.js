@@ -2,6 +2,7 @@
 
 const { readGovernanceSummary } = require("../../governance/governanceReader");
 const executiveAgenda = require("../../executive/executiveAgenda");
+const policyEngine = require("../../governance/policyEngine");
 
 class SupervisorAgent {
 
@@ -76,6 +77,10 @@ class SupervisorAgent {
 
   listAgents() {
     return this.registry.getStatus();
+  }
+
+  validateDecision(context) {
+    return policyEngine.validateDecision(context);
   }
 
 }
