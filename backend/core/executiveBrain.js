@@ -1,4 +1,5 @@
 const SupervisorAgent = require("../agents/executive/supervisorAgent");
+const ExecutiveDispatcher = require("./executiveDispatcher");
 
 class ExecutiveBrain {
 
@@ -10,6 +11,7 @@ class ExecutiveBrain {
             getAll: () => [],
             getStatus: () => []
         });
+        this.dispatcher = new ExecutiveDispatcher();
     }
 
     getExecutiveContext() {
@@ -41,7 +43,26 @@ class ExecutiveBrain {
 
 const executiveContext = this.getExecutiveContext();
 
-const decision = this.buildDecision(message, analysis, relatedMemory, matchedRules, executiveContext);
+let selectedAgent;
+
+try {
+    selectedAgent = this.dispatcher.selectAgent(analysis, executiveContext);
+} catch (error) {
+    selectedAgent = {
+        agent: "GeneralAssistant",
+        reason: "Error al seleccionar agente.",
+        confidence: 0
+    };
+}
+
+const decision = this.buildDecision(
+    message,
+    analysis,
+    relatedMemory,
+    matchedRules,
+    executiveContext,
+    selectedAgent
+);
 
        return {
     message,
@@ -49,12 +70,20 @@ const decision = this.buildDecision(message, analysis, relatedMemory, matchedRul
     relatedMemory,
     matchedRules,
     executiveContext,
+    selectedAgent,
     decision,
     status: "EXECUTIVE_BRAIN_OK"
 };
     }
 
-   buildDecision(message, analysis, relatedMemory, matchedRules = [], executiveContext = null) {
+   buildDecision(
+        message,
+        analysis,
+        relatedMemory,
+        matchedRules = [],
+        executiveContext = null,
+        selectedAgent = null
+    ) {
         let recommendation = "Responder de forma informativa.";
         let riskLevel = "low";
         let nextAction = "respond";
@@ -99,6 +128,10 @@ const decision = this.buildDecision(message, analysis, relatedMemory, matchedRul
 
         if (executiveContext && executiveContext.recommendedInitiative) {
             recommendation += ` Iniciativa recomendada: ${executiveContext.recommendedInitiative.title}.`;
+        }
+
+        if (selectedAgent && selectedAgent.agent) {
+            recommendation += ` Agente recomendado: ${selectedAgent.agent}.`;
         }
 
         return {
