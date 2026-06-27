@@ -178,13 +178,35 @@ if (policyValidation.approved === false) {
     }
 
     buildProjectResponse(projectKnowledgeSummary) {
-        const highlights = Array.isArray(projectKnowledgeSummary.highlights)
-            ? projectKnowledgeSummary.highlights.join(", ")
+        const highlightsList = Array.isArray(projectKnowledgeSummary.highlights)
+            ? projectKnowledgeSummary.highlights.filter(Boolean)
+            : [];
+        const highlights = highlightsList.join(", ");
+        const normalizedHighlights = normalizeSearchText(highlights);
+        const pendingSignals = [
+            "proximo objetivo",
+            "siguiente desarrollo",
+            "prioridad",
+            "pendiente"
+        ];
+        const hasPendingSignals = pendingSignals.some((signal) => {
+            return normalizedHighlights.includes(signal);
+        });
+
+        if (highlightsList.length === 0) {
+            return {
+                project: projectKnowledgeSummary.project,
+                response: `Según el conocimiento disponible, ${projectKnowledgeSummary.project} tiene información registrada, pero todavía no hay puntos clave suficientes para resumir.`
+            };
+        }
+
+        const nextStepsSentence = hasPendingSignals
+            ? " Hay indicios de próximos pasos pendientes."
             : "";
 
         return {
             project: projectKnowledgeSummary.project,
-            response: `He encontrado ${projectKnowledgeSummary.documentsFound} documentos sobre ${projectKnowledgeSummary.project}. Los aspectos más importantes son: ${highlights}.`
+            response: `Según el conocimiento disponible, ${projectKnowledgeSummary.project} cuenta con ${projectKnowledgeSummary.documentsFound} documentos relevantes. Puntos clave: ${highlights}.${nextStepsSentence}`
         };
     }
 
