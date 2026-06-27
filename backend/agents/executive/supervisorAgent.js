@@ -228,6 +228,31 @@ class SupervisorAgent {
     });
   }
 
+  createProjectLearningApproval(projectName) {
+    const preparation = this.prepareRegisteredProjectLearning(projectName);
+
+    if (!preparation.ok) {
+      return preparation;
+    }
+
+    return {
+      ok: true,
+      approvalRequired: true,
+      action: "learn_project",
+      title: `Aprender proyecto: ${preparation.projectName}`,
+      description: `Oxkio ha preparado el aprendizaje supervisado del proyecto ${preparation.projectName}.`,
+      projectName: preparation.projectName,
+      projectPath: preparation.projectPath,
+      proposal: {
+        projectName: preparation.projectName,
+        projectPath: preparation.projectPath,
+        requiresApproval: preparation.requiresApproval,
+        action: preparation.action
+      },
+      createdAt: new Date().toISOString()
+    };
+  }
+
   prepareMultipleProjectLearning(projects) {
     const items = Array.isArray(projects) ? projects : [];
     const proposals = items.map((project) => this.prepareProjectLearning(project));
