@@ -81,6 +81,9 @@ const projectKnowledge = projectName
 const projectKnowledgeSummary = projectKnowledge.length > 0
     ? this.buildProjectKnowledgeSummary(projectName, projectKnowledge)
     : null;
+const projectResponse = projectKnowledgeSummary
+    ? this.buildProjectResponse(projectKnowledgeSummary)
+    : null;
 
 let selectedAgent;
 
@@ -133,6 +136,7 @@ if (policyValidation.approved === false) {
     knowledge,
     projectKnowledge,
     projectKnowledgeSummary,
+    projectResponse,
     policyValidation,
     executiveContext,
     projectToLearn,
@@ -170,6 +174,17 @@ if (policyValidation.approved === false) {
             project: projectName,
             documentsFound: projectKnowledge.length,
             highlights
+        };
+    }
+
+    buildProjectResponse(projectKnowledgeSummary) {
+        const highlights = Array.isArray(projectKnowledgeSummary.highlights)
+            ? projectKnowledgeSummary.highlights.join(", ")
+            : "";
+
+        return {
+            project: projectKnowledgeSummary.project,
+            response: `He encontrado ${projectKnowledgeSummary.documentsFound} documentos sobre ${projectKnowledgeSummary.project}. Los aspectos más importantes son: ${highlights}.`
         };
     }
 
