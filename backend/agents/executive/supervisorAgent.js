@@ -199,6 +199,31 @@ class SupervisorAgent {
     };
   }
 
+  prepareRegisteredProjectLearning(projectName) {
+    const project = this.getRegisteredProject(projectName);
+
+    if (!project) {
+      return {
+        ok: false,
+        error: "Project not found.",
+        requiresApproval: false
+      };
+    }
+
+    if (!project.path) {
+      return {
+        ok: false,
+        error: "Project path is not configured.",
+        requiresApproval: false
+      };
+    }
+
+    return this.prepareProjectLearning({
+      projectName: project.name,
+      projectPath: project.path
+    });
+  }
+
   prepareMultipleProjectLearning(projects) {
     const items = Array.isArray(projects) ? projects : [];
     const proposals = items.map((project) => this.prepareProjectLearning(project));
