@@ -41,6 +41,8 @@ class ExecutiveBrain {
 
         const matchedRules = this.ruleEngine.evaluate({ message, analysis, relatedMemory });
 
+        const strategicMemory = this.supervisor.searchStrategicMemory(message);
+
 const executiveContext = this.getExecutiveContext();
 
 let selectedAgent;
@@ -60,6 +62,7 @@ const decision = this.buildDecision(
     analysis,
     relatedMemory,
     matchedRules,
+    strategicMemory,
     executiveContext,
     selectedAgent
 );
@@ -69,6 +72,7 @@ const decision = this.buildDecision(
     analysis,
     relatedMemory,
     matchedRules,
+    strategicMemory,
     executiveContext,
     selectedAgent,
     decision,
@@ -81,6 +85,7 @@ const decision = this.buildDecision(
         analysis,
         relatedMemory,
         matchedRules = [],
+        strategicMemory = [],
         executiveContext = null,
         selectedAgent = null
     ) {
@@ -116,6 +121,9 @@ const decision = this.buildDecision(
 
         if (relatedMemory.length > 0) {
             recommendation += " Se ha encontrado memoria relacionada.";
+        }
+        if (strategicMemory.length > 0) {
+            recommendation += " Se encontraron decisiones estratégicas relacionadas.";
         }
         if (matchedRules.length > 0) {
     riskLevel = "medium";
