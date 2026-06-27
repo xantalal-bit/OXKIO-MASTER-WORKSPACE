@@ -196,25 +196,50 @@ class SupervisorAgent {
         totalProjects: 0,
         candidates: 0,
         rejectedProjects: 0,
+        hasRejections: false,
+        rejectedProjectsList: [],
         proposals: [],
         error: "projects must be an array.",
         detectedAt: new Date().toISOString()
       };
     }
 
+    const disabledProjects = projects
+      .filter((project) => {
+        return !project || project.enabled === false;
+      })
+      .map((project) => {
+        return {
+          projectName: project && project.projectName ? project.projectName : null,
+          projectPath: project && project.projectPath ? project.projectPath : null,
+          reason: "Project disabled."
+        };
+      });
     const enabledProjects = projects.filter((project) => {
       return project && project.enabled !== false;
     });
-    const disabledProjects = projects.filter((project) => {
-      return !project || project.enabled === false;
-    });
     const prepared = this.prepareMultipleProjectLearning(enabledProjects);
+    const invalidProjects = prepared.proposals
+      .map((proposal, index) => ({ proposal, index }))
+      .filter((item) => item.proposal.ok !== true)
+      .map((item) => {
+        const project = enabledProjects[item.index] || {};
+
+        return {
+          projectName: project.projectName || null,
+          projectPath: project.projectPath || null,
+          reason: item.proposal.error || "Invalid project."
+        };
+      });
+    const rejectedProjectsList = disabledProjects.concat(invalidProjects);
 
     return {
-      ok: prepared.rejectedProjects === 0,
+      ok: prepared.preparedProjects > 0,
       totalProjects: projects.length,
       candidates: prepared.preparedProjects,
-      rejectedProjects: prepared.rejectedProjects + disabledProjects.length,
+      rejectedProjects: rejectedProjectsList.length,
+      hasRejections: rejectedProjectsList.length > 0,
+      rejectedProjectsList,
       proposals: prepared.proposals,
       detectedAt: new Date().toISOString()
     };
