@@ -7,7 +7,7 @@ const KNOWN_PROJECTS = [
     "OXKIO",
     "Profesor IA",
     "GIU",
-    "XANTALAL"
+    "XANTALALSHOP"
 ];
 
 function normalizeSearchText(value) {
@@ -63,9 +63,15 @@ class ExecutiveBrain {
         const knowledge = this.knowledgeCurator.searchKnowledge(message);
 
 const executiveContext = this.getExecutiveContext();
-const projectToLearn = analysis.intent === "learn_project"
-    ? this.detectProjectToLearn(message, executiveContext)
-    : null;
+const projectToLearn = analysis.projectToLearn || (
+    analysis.intent === "learn_project"
+        ? this.detectProjectToLearn(message, executiveContext)
+        : null
+);
+const projectName = projectToLearn || this.detectKnownProject(message);
+const projectKnowledge = projectName
+    ? this.knowledgeCurator.searchKnowledge(projectName)
+    : [];
 
 let selectedAgent;
 
@@ -116,6 +122,7 @@ if (policyValidation.approved === false) {
     matchedRules,
     strategicMemory,
     knowledge,
+    projectKnowledge,
     policyValidation,
     executiveContext,
     projectToLearn,
@@ -126,6 +133,10 @@ if (policyValidation.approved === false) {
     }
 
     detectProjectToLearn(message, executiveContext) {
+        return this.detectKnownProject(message);
+    }
+
+    detectKnownProject(message) {
         const messageText = normalizeSearchText(message);
 
         return KNOWN_PROJECTS.find((projectName) => {
