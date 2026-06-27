@@ -173,6 +173,22 @@ class SupervisorAgent {
     };
   }
 
+  prepareMultipleProjectLearning(projects) {
+    const items = Array.isArray(projects) ? projects : [];
+    const proposals = items.map((project) => this.prepareProjectLearning(project));
+    const preparedProjects = proposals.filter((proposal) => proposal.ok === true);
+    const rejectedProjects = proposals.filter((proposal) => proposal.ok !== true);
+
+    return {
+      ok: rejectedProjects.length === 0,
+      totalProjects: items.length,
+      preparedProjects: preparedProjects.length,
+      rejectedProjects: rejectedProjects.length,
+      proposals,
+      preparedAt: new Date().toISOString()
+    };
+  }
+
   learnProject(projectName, projectPath) {
     if (!projectName || !projectPath) {
       return {
