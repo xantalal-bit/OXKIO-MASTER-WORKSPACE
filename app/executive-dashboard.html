@@ -1,0 +1,743 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>OXKIO - Executive Dashboard V2 UX</title>
+  <link rel="icon" type="image/png" href="favicon.png">
+  <style>
+    :root {
+      --bg: #07111f;
+      --surface: rgba(13, 26, 46, 0.92);
+      --surface-soft: rgba(28, 49, 80, 0.72);
+      --text: #edf5ff;
+      --muted: #9fb2ca;
+      --line: rgba(118, 146, 190, 0.28);
+      --accent: #38bdf8;
+      --accent-strong: #8b5cf6;
+      --warning: #f7b955;
+      --danger: #fb7185;
+      --ok: #4ade80;
+      --shadow: 0 18px 50px rgba(0, 0, 0, 0.34);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      font-family: Arial, Helvetica, sans-serif;
+      background:
+        radial-gradient(circle at top left, rgba(56, 189, 248, 0.20), transparent 34%),
+        radial-gradient(circle at top right, rgba(139, 92, 246, 0.18), transparent 30%),
+        linear-gradient(180deg, #07111f 0%, #0b1526 54%, #101827 100%);
+      color: var(--text);
+      line-height: 1.5;
+    }
+
+    .dashboard {
+      min-height: 100vh;
+    }
+
+    .topbar {
+      background: rgba(5, 12, 24, 0.88);
+      color: #ffffff;
+      border-bottom: 1px solid rgba(56, 189, 248, 0.36);
+      box-shadow: 0 18px 45px rgba(0, 0, 0, 0.25);
+    }
+
+    .topbar-inner {
+      width: min(1180px, calc(100% - 32px));
+      margin: 0 auto;
+      padding: 22px 0;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 20px;
+      flex-wrap: wrap;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .brand-mark {
+      width: 42px;
+      height: 42px;
+      border-radius: 10px;
+      border: 1px solid rgba(56, 189, 248, 0.30);
+      background: rgba(255, 255, 255, 0.05);
+      box-shadow: 0 0 24px rgba(56, 189, 248, 0.18);
+      object-fit: contain;
+      padding: 5px;
+    }
+
+    .brand-copy {
+      display: grid;
+      gap: 2px;
+    }
+
+    .brand-title {
+      margin: 0;
+      font-size: 28px;
+      font-weight: 700;
+      letter-spacing: 0;
+      color: #ffffff;
+      text-shadow: 0 0 18px rgba(56, 189, 248, 0.28);
+    }
+
+    .brand-subtitle {
+      margin: 0;
+      color: #b9d5ee;
+      font-size: 15px;
+    }
+
+    .client {
+      padding: 10px 14px;
+      border: 1px solid rgba(56, 189, 248, 0.30);
+      border-radius: 8px;
+      color: #eef6f5;
+      background: linear-gradient(135deg, rgba(56, 189, 248, 0.14), rgba(139, 92, 246, 0.12));
+      font-size: 14px;
+    }
+
+    main {
+      width: min(1180px, calc(100% - 32px));
+      margin: 0 auto;
+      padding: 24px 0 36px;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(12, 1fr);
+      gap: 16px;
+    }
+
+    .panel {
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      box-shadow: var(--shadow);
+      padding: 18px;
+      min-width: 0;
+      backdrop-filter: blur(14px);
+    }
+
+    .span-12 {
+      grid-column: span 12;
+    }
+
+    .span-6 {
+      grid-column: span 6;
+    }
+
+    .span-4 {
+      grid-column: span 4;
+    }
+
+    .greeting {
+      display: grid;
+      gap: 8px;
+      padding: 22px;
+      background:
+        linear-gradient(135deg, rgba(10, 25, 48, 0.96), rgba(21, 32, 62, 0.92)),
+        linear-gradient(90deg, rgba(56, 189, 248, 0.16), rgba(139, 92, 246, 0.14));
+      color: #ffffff;
+      border: 1px solid rgba(56, 189, 248, 0.28);
+    }
+
+    .greeting h2 {
+      margin: 0;
+      font-size: 24px;
+      line-height: 1.25;
+    }
+
+    .greeting p {
+      max-width: 760px;
+      margin: 0;
+      color: #cfe0f3;
+    }
+
+    .panel-header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 14px;
+    }
+
+    h2 {
+      margin: 0;
+      font-size: 18px;
+      line-height: 1.25;
+    }
+
+    .meta {
+      margin: 4px 0 0;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      min-height: 26px;
+      padding: 4px 9px;
+      border-radius: 999px;
+      background: rgba(148, 163, 184, 0.12);
+      color: var(--muted);
+      font-size: 12px;
+      white-space: nowrap;
+    }
+
+    .badge.ok {
+      background: rgba(74, 222, 128, 0.13);
+      color: var(--ok);
+    }
+
+    .badge.warn {
+      background: rgba(247, 185, 85, 0.14);
+      color: var(--warning);
+    }
+
+    .badge.danger {
+      background: rgba(251, 113, 133, 0.14);
+      color: var(--danger);
+    }
+
+    .executive-summary {
+      margin: 0;
+      padding: 16px;
+      border-radius: 8px;
+      background: var(--surface-soft);
+      color: var(--text);
+      font-size: 17px;
+      border: 1px solid rgba(56, 189, 248, 0.14);
+    }
+
+    .recommendation {
+      border-left: 4px solid var(--accent-strong);
+    }
+
+    .list {
+      display: grid;
+      gap: 10px;
+      margin: 0;
+      padding: 0;
+      list-style: none;
+    }
+
+    .item {
+      display: grid;
+      gap: 4px;
+      padding: 12px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: rgba(7, 17, 31, 0.36);
+    }
+
+    .item-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+    }
+
+    .item-title {
+      font-weight: 700;
+      overflow-wrap: anywhere;
+    }
+
+    .item-text {
+      margin: 0;
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    .commitments {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 10px;
+    }
+
+    .commitment {
+      border-left: 4px solid var(--accent);
+    }
+
+    .conversation {
+      display: grid;
+      gap: 12px;
+    }
+
+    .conversation-primary {
+      border: 1px solid rgba(56, 189, 248, 0.42);
+      box-shadow: 0 22px 60px rgba(0, 0, 0, 0.34), 0 0 34px rgba(56, 189, 248, 0.12);
+    }
+
+    .conversation-stage {
+      display: grid;
+      grid-template-columns: auto 1fr;
+      gap: 16px;
+      align-items: center;
+    }
+
+    .radio-mic {
+      position: relative;
+      width: 74px;
+      height: 92px;
+      border-radius: 14px;
+      border: 1px solid rgba(56, 189, 248, 0.34);
+      background: linear-gradient(180deg, rgba(15, 23, 42, 0.96), rgba(30, 41, 59, 0.90));
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.10), 0 18px 36px rgba(0, 0, 0, 0.28);
+    }
+
+    .radio-mic::before {
+      content: "";
+      position: absolute;
+      left: 17px;
+      top: 12px;
+      width: 40px;
+      height: 46px;
+      border-radius: 10px;
+      background:
+        linear-gradient(135deg, rgba(255, 255, 255, 0.40), transparent 28%),
+        linear-gradient(180deg, #7dd3fc, #2563eb);
+      box-shadow: 0 0 22px rgba(56, 189, 248, 0.46);
+    }
+
+    .radio-mic::after {
+      content: "";
+      position: absolute;
+      left: 28px;
+      bottom: 12px;
+      width: 18px;
+      height: 18px;
+      border-radius: 999px;
+      background: #4ade80;
+      box-shadow: 0 0 16px rgba(74, 222, 128, 0.78);
+    }
+
+    .future-tools {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .tool-chip {
+      display: inline-flex;
+      align-items: center;
+      min-height: 30px;
+      padding: 5px 10px;
+      border-radius: 999px;
+      border: 1px solid rgba(56, 189, 248, 0.20);
+      background: rgba(56, 189, 248, 0.08);
+      color: #cfe0f3;
+      font-size: 13px;
+    }
+
+    .input-row {
+      display: flex;
+      gap: 10px;
+    }
+
+    .input-row input {
+      flex: 1;
+      min-width: 0;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 16px;
+      font-size: 17px;
+      color: var(--text);
+      background: rgba(5, 12, 24, 0.72);
+    }
+
+    .input-row button {
+      border: 0;
+      border-radius: 8px;
+      padding: 12px 16px;
+      background: linear-gradient(135deg, #38bdf8, #6366f1);
+      color: #ffffff;
+      font-weight: 700;
+      cursor: default;
+      box-shadow: 0 12px 28px rgba(56, 189, 248, 0.22);
+    }
+
+    .note {
+      margin: 0;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .collapsed-section {
+      padding: 0;
+      overflow: hidden;
+    }
+
+    .collapsed-section summary {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 18px;
+      cursor: pointer;
+      list-style: none;
+    }
+
+    .collapsed-section summary::-webkit-details-marker {
+      display: none;
+    }
+
+    .collapsed-section summary::after {
+      content: "+";
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 28px;
+      height: 28px;
+      border-radius: 999px;
+      background: var(--surface-soft);
+      color: var(--accent-strong);
+      font-weight: 700;
+      flex: 0 0 auto;
+    }
+
+    .collapsed-section[open] summary::after {
+      content: "-";
+    }
+
+    .collapsed-content {
+      padding: 0 18px 18px;
+    }
+
+    @media (max-width: 900px) {
+      .span-6,
+      .span-4 {
+        grid-column: span 12;
+      }
+
+      .commitments {
+        grid-template-columns: repeat(2, 1fr);
+      }
+    }
+
+    @media (max-width: 600px) {
+      .topbar-inner,
+      main {
+        width: min(100% - 20px, 1180px);
+      }
+
+      .topbar-inner {
+        padding: 18px 0;
+      }
+
+      .brand-title {
+        font-size: 24px;
+      }
+
+      .panel {
+        padding: 14px;
+      }
+
+      .collapsed-section {
+        padding: 0;
+      }
+
+      .collapsed-section summary {
+        padding: 14px;
+      }
+
+      .collapsed-content {
+        padding: 0 14px 14px;
+      }
+
+      .panel-header,
+      .item-top,
+      .input-row,
+      .conversation-stage {
+        align-items: stretch;
+        flex-direction: column;
+      }
+
+      .conversation-stage {
+        grid-template-columns: 1fr;
+      }
+
+      .radio-mic {
+        width: 64px;
+        height: 82px;
+      }
+
+      .commitments {
+        grid-template-columns: 1fr;
+      }
+
+      .input-row button {
+        width: 100%;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="dashboard">
+    <header class="topbar">
+      <div class="topbar-inner">
+        <div class="brand">
+          <img class="brand-mark" src="logo.png" alt="OXKIO">
+          <div class="brand-copy">
+            <h1 class="brand-title">OXKIO</h1>
+            <p class="brand-subtitle">Director Ejecutivo IA</p>
+          </div>
+        </div>
+        <div class="client">Cliente Cero: José Antonio</div>
+      </div>
+    </header>
+
+    <main>
+      <section class="grid" aria-label="Executive Dashboard V2">
+        <article class="panel span-12 greeting">
+          <h2>Buenos días, José Antonio.</h2>
+          <p>OXKIO está listo para ayudarte a revisar lo importante, priorizar el día y mantener el foco sin sobrecargar la pantalla.</p>
+        </article>
+
+        <article class="panel span-6">
+          <div class="panel-header">
+            <div>
+              <h2>Estado general</h2>
+              <p class="meta">Resumen operativo inicial para uso diario.</p>
+            </div>
+            <span class="badge ok">Activo</span>
+          </div>
+          <p class="executive-summary">Hoy tienes compromisos próximos que conviene revisar y Business Hunter continúa siendo la prioridad operativa.</p>
+        </article>
+
+        <article class="panel span-6 recommendation">
+          <div class="panel-header">
+            <div>
+              <h2>Recomendación ejecutiva del día</h2>
+              <p class="meta">Foco sugerido para Cliente Cero.</p>
+            </div>
+            <span class="badge ok">Foco</span>
+          </div>
+          <p class="executive-summary">Empieza por confirmar compromisos críticos y después dedica el siguiente bloque a preparar acciones comerciales concretas.</p>
+        </article>
+
+        <article class="panel span-12 conversation-primary">
+          <div class="panel-header">
+            <div>
+              <h2>Entrada conversacional</h2>
+              <p class="meta">Pide a OXKIO un resumen, una prioridad o el siguiente paso.</p>
+            </div>
+            <span class="badge">Sin integración</span>
+          </div>
+          <div class="conversation">
+            <div class="conversation-stage">
+              <div class="radio-mic" aria-hidden="true"></div>
+              <div class="conversation">
+                <div class="input-row">
+                  <input type="text" value="estado del ecosistema" aria-label="Entrada conversacional de OXKIO">
+                  <button type="button">Enviar</button>
+                </div>
+                <div class="future-tools" aria-label="Capacidades futuras">
+                  <span class="tool-chip">Subir documentos</span>
+                  <span class="tool-chip">Analizar archivos</span>
+                  <span class="tool-chip">Consultar información</span>
+                </div>
+              </div>
+            </div>
+            <p class="note">Datos simulados. Esta versión no ejecuta acciones, no consulta servicios y no carga integraciones reales.</p>
+          </div>
+        </article>
+
+        <details class="panel span-6 collapsed-section">
+          <summary>
+            <span>
+              <h2>Agenda</h2>
+              <p class="meta">Hoy y próximos eventos.</p>
+            </span>
+            <span class="badge">Simulado</span>
+          </summary>
+          <div class="collapsed-content">
+            <ul class="list">
+              <li class="item">
+                <div class="item-top">
+                  <span class="item-title">Revisión diaria</span>
+                  <span class="badge ok">Hoy</span>
+                </div>
+                <p class="item-text">Repasar prioridades, compromisos y próximos pasos.</p>
+              </li>
+              <li class="item">
+                <div class="item-top">
+                  <span class="item-title">Bloque de planificación</span>
+                  <span class="badge">Próximo</span>
+                </div>
+                <p class="item-text">Ordenar acciones de Cliente Cero y seguimiento operativo.</p>
+              </li>
+            </ul>
+          </div>
+        </details>
+
+        <details class="panel span-6 collapsed-section">
+          <summary>
+            <span>
+              <h2>Compromisos Ejecutivos</h2>
+              <p class="meta">Renovaciones, vencimientos, pagos y obligaciones relevantes.</p>
+            </span>
+            <span class="badge warn">Atención</span>
+          </summary>
+          <div class="collapsed-content">
+            <div class="commitments">
+              <div class="item commitment">
+                <div class="item-top">
+                  <span class="item-title">Renovar certificado digital</span>
+                  <span class="badge danger">Alta</span>
+                </div>
+                <p class="item-text">Revisar vigencia y preparar renovación antes del vencimiento.</p>
+              </div>
+              <div class="item commitment">
+                <div class="item-top">
+                  <span class="item-title">Revisar dominios</span>
+                  <span class="badge warn">Media</span>
+                </div>
+                <p class="item-text">Comprobar fechas, titularidad, renovación y datos de contacto.</p>
+              </div>
+              <div class="item commitment">
+                <div class="item-top">
+                  <span class="item-title">Suscripciones IA</span>
+                  <span class="badge">Seguimiento</span>
+                </div>
+                <p class="item-text">Controlar pagos periódicos, utilidad y próximas renovaciones.</p>
+              </div>
+              <div class="item commitment">
+                <div class="item-top">
+                  <span class="item-title">Obligaciones fiscales</span>
+                  <span class="badge warn">Pendiente</span>
+                </div>
+                <p class="item-text">Mantener visibles fechas y documentación necesaria.</p>
+              </div>
+            </div>
+          </div>
+        </details>
+
+        <details class="panel span-4 collapsed-section">
+          <summary>
+            <span>
+              <h2>Gmail</h2>
+              <p class="meta">Resumen estático sin integración real.</p>
+            </span>
+            <span class="badge">Base</span>
+          </summary>
+          <div class="collapsed-content">
+            <ul class="list">
+              <li class="item">
+                <span class="item-title">Correos relevantes</span>
+                <p class="item-text">Pendiente de conectar cuando exista autorización.</p>
+              </li>
+              <li class="item">
+                <span class="item-title">Respuestas pendientes</span>
+                <p class="item-text">Vista preparada para alertas futuras.</p>
+              </li>
+            </ul>
+          </div>
+        </details>
+
+        <details class="panel span-4 collapsed-section">
+          <summary>
+            <span>
+              <h2>Documentos</h2>
+              <p class="meta">Acceso diario a documentación relevante.</p>
+            </span>
+            <span class="badge">Base</span>
+          </summary>
+          <div class="collapsed-content">
+            <ul class="list">
+              <li class="item">
+                <span class="item-title">Documentos recientes</span>
+                <p class="item-text">Espacio reservado para documentos de trabajo.</p>
+              </li>
+              <li class="item">
+                <span class="item-title">Pendientes de revisión</span>
+                <p class="item-text">Sin carga documental en esta versión.</p>
+              </li>
+            </ul>
+          </div>
+        </details>
+
+        <details class="panel span-4 collapsed-section">
+          <summary>
+            <span>
+              <h2>Business Hunter</h2>
+              <p class="meta">Seguimiento comercial básico.</p>
+            </span>
+            <span class="badge ok">Prioridad</span>
+          </summary>
+          <div class="collapsed-content">
+            <ul class="list">
+              <li class="item">
+                <span class="item-title">Objetivo actual</span>
+                <p class="item-text">Conseguir los primeros clientes reales.</p>
+              </li>
+              <li class="item">
+                <span class="item-title">Próximo paso</span>
+                <p class="item-text">Preparar acciones comerciales concretas.</p>
+              </li>
+            </ul>
+          </div>
+        </details>
+
+        <details class="panel span-6 collapsed-section">
+          <summary>
+            <span>
+              <h2>Profesor IA</h2>
+              <p class="meta">Estado básico de contenidos.</p>
+            </span>
+            <span class="badge">Seguimiento</span>
+          </summary>
+          <div class="collapsed-content">
+            <ul class="list">
+              <li class="item">
+                <span class="item-title">Contenidos en desarrollo</span>
+                <p class="item-text">Panel preparado para ver avances y bloqueos.</p>
+              </li>
+              <li class="item">
+                <span class="item-title">Recomendación de avance</span>
+                <p class="item-text">Mantener foco en piezas útiles para el Cliente Cero.</p>
+              </li>
+            </ul>
+          </div>
+        </details>
+
+        <details class="panel span-6 collapsed-section">
+          <summary>
+            <span>
+              <h2>Estado del Ecosistema</h2>
+              <p class="meta">Contexto visual básico de XANTALAL.</p>
+            </span>
+            <span class="badge ok">XANTALAL</span>
+          </summary>
+          <div class="collapsed-content">
+            <ul class="list">
+              <li class="item">
+                <div class="item-top">
+                  <span class="item-title">Proyecto activo</span>
+                  <span class="badge">OXKIO</span>
+                </div>
+                <p class="item-text">Cliente Cero: José Antonio.</p>
+              </li>
+              <li class="item">
+                <div class="item-top">
+                  <span class="item-title">Prioridad actual</span>
+                  <span class="badge ok">Business Hunter</span>
+                </div>
+                <p class="item-text">Estado mostrado sin modificar gobierno ni documentos oficiales.</p>
+              </li>
+            </ul>
+          </div>
+        </details>
+      </section>
+    </main>
+  </div>
+</body>
+</html>
