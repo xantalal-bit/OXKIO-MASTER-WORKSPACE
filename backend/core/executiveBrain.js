@@ -1,6 +1,7 @@
 const SupervisorAgent = require("../agents/executive/supervisorAgent");
 const ExecutiveDispatcher = require("./executiveDispatcher");
 const knowledgeCurator = require("../knowledge/knowledgeCurator");
+const ecosystemService = require("../ecosystem/ecosystemService");
 
 const KNOWN_PROJECTS = [
     "Business Hunter",
@@ -87,6 +88,12 @@ const projectResponse = projectKnowledgeSummary
 const projectRecommendation = projectKnowledgeSummary
     ? this.buildProjectRecommendation(projectKnowledgeSummary)
     : null;
+const ecosystemContext = {
+    ecosystemName: ecosystemService.getEcosystemName(),
+    ecosystemRoot: ecosystemService.getEcosystemRoot(),
+    governanceFolder: ecosystemService.getGovernanceFolder(),
+    governanceFiles: ecosystemService.getGovernanceFiles(),
+};
 
 let selectedAgent;
 
@@ -143,6 +150,7 @@ if (policyValidation.approved === false) {
     projectRecommendation,
     policyValidation,
     executiveContext,
+    ecosystemContext,
     projectToLearn,
     selectedAgent,
     decision,
