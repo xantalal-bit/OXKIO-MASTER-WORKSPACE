@@ -84,6 +84,9 @@ const projectKnowledgeSummary = projectKnowledge.length > 0
 const projectResponse = projectKnowledgeSummary
     ? this.buildProjectResponse(projectKnowledgeSummary)
     : null;
+const projectRecommendation = projectKnowledgeSummary
+    ? this.buildProjectRecommendation(projectKnowledgeSummary)
+    : null;
 
 let selectedAgent;
 
@@ -137,6 +140,7 @@ if (policyValidation.approved === false) {
     projectKnowledge,
     projectKnowledgeSummary,
     projectResponse,
+    projectRecommendation,
     policyValidation,
     executiveContext,
     projectToLearn,
@@ -207,6 +211,36 @@ if (policyValidation.approved === false) {
         return {
             project: projectKnowledgeSummary.project,
             response: `Según el conocimiento disponible, ${projectKnowledgeSummary.project} cuenta con ${projectKnowledgeSummary.documentsFound} documentos relevantes. Puntos clave: ${highlights}.${nextStepsSentence}`
+        };
+    }
+
+    buildProjectRecommendation(projectKnowledgeSummary) {
+        const highlights = Array.isArray(projectKnowledgeSummary.highlights)
+            ? projectKnowledgeSummary.highlights.join(" ")
+            : "";
+        const normalizedHighlights = normalizeSearchText(highlights);
+        const recommendations = [];
+
+        if (
+            normalizedHighlights.includes("proximo objetivo") ||
+            normalizedHighlights.includes("siguiente desarrollo")
+        ) {
+            recommendations.push("Se recomienda continuar con el siguiente objetivo identificado en el conocimiento del proyecto.");
+        }
+
+        if (normalizedHighlights.includes("pendiente")) {
+            recommendations.push("Existen tareas pendientes que deberían revisarse antes de iniciar nuevos desarrollos.");
+        }
+
+        if (normalizedHighlights.includes("operativo")) {
+            recommendations.push("El proyecto presenta una base estable sobre la que continuar el desarrollo.");
+        }
+
+        return {
+            project: projectKnowledgeSummary.project,
+            recommendation: recommendations.length > 0
+                ? recommendations.join(" ")
+                : "El conocimiento disponible no contiene recomendaciones ejecutivas automáticas."
         };
     }
 
