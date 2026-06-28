@@ -1,7 +1,8 @@
 const ecosystemConfig = {
   ecosystemName: "XANTALAL",
-  ecosystemRoot: "C:\\Users\\janta\\OneDrive\\Documentos\\XANTALAL",
-  governanceFolder: "C:\\Users\\janta\\OneDrive\\Documentos\\XANTALAL\\00_GOVERNANCE",
+  ecosystemRoot:
+    process.env.XANTALAL_ROOT || "C:\\Users\\janta\\OneDrive\\Documentos\\XANTALAL",
+  governanceFolder: "00_GOVERNANCE",
   governanceFiles: [
     "README.md",
     "00_GOVERNANCE/MANUAL_DE_GOBIERNO_XANTALAL.md",

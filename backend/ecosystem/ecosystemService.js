@@ -9,7 +9,7 @@ function getEcosystemRoot() {
 }
 
 function getGovernanceFolder() {
-  return ecosystemConfig.governanceFolder;
+  return ecosystemConfig.ecosystemRoot + "\\" + ecosystemConfig.governanceFolder;
 }
 
 function getGovernanceFiles() {
@@ -17,7 +17,12 @@ function getGovernanceFiles() {
 }
 
 function getConfiguration() {
-  return ecosystemConfig;
+  return {
+    ecosystemName: ecosystemConfig.ecosystemName,
+    ecosystemRoot: ecosystemConfig.ecosystemRoot,
+    governanceFolder: getGovernanceFolder(),
+    governanceFiles: ecosystemConfig.governanceFiles,
+  };
 }
 
 module.exports = {
