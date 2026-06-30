@@ -4,17 +4,23 @@ const { getAgenda } = require("./providers/agenda-provider");
 const { getGmail } = require("./providers/gmail-provider");
 const { getMemory } = require("./providers/memory-provider");
 const { getAutomations } = require("./providers/automations-provider");
+const { buildExecutiveSummary } = require("./executive-summary-builder");
 
 function getDashboardState() {
   const timestamp = new Date().toISOString();
 
-  return {
+  const dashboardState = {
     greeting: getGreeting(timestamp),
     executiveStatus: getExecutiveStatus(timestamp),
     agenda: getAgenda(timestamp),
     gmail: getGmail(timestamp),
     memory: getMemory(timestamp),
     automations: getAutomations(timestamp)
+  };
+
+  return {
+    ...dashboardState,
+    executiveSummary: buildExecutiveSummary(dashboardState)
   };
 }
 
