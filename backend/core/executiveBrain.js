@@ -57,7 +57,7 @@ class ExecutiveBrain {
         }
     }
 
-    think(message = "") {
+    think(message = "", executiveContextInput = null) {
 
         const analysis = this.intentAnalyzer.analyze(message);
 
@@ -69,10 +69,10 @@ class ExecutiveBrain {
 
         const knowledge = this.knowledgeCurator.searchKnowledge(message);
 
-const executiveContext = this.getExecutiveContext();
+const governanceExecutiveContext = this.getExecutiveContext();
 const projectToLearn = analysis.projectToLearn || (
     analysis.intent === "learn_project"
-        ? this.detectProjectToLearn(message, executiveContext)
+        ? this.detectProjectToLearn(message, governanceExecutiveContext)
         : null
 );
 const projectName = projectToLearn || this.detectKnownProject(message);
@@ -105,7 +105,7 @@ try {
             confidence: 0.95
         };
     } else {
-        selectedAgent = this.dispatcher.selectAgent(analysis, executiveContext);
+        selectedAgent = this.dispatcher.selectAgent(analysis, governanceExecutiveContext);
     }
 } catch (error) {
     selectedAgent = {
@@ -122,7 +122,7 @@ const decision = this.buildDecision(
     matchedRules,
     strategicMemory,
     knowledge,
-    executiveContext,
+    governanceExecutiveContext,
     selectedAgent
 );
 
@@ -149,7 +149,10 @@ if (policyValidation.approved === false) {
     projectResponse,
     projectRecommendation,
     policyValidation,
-    executiveContext,
+    executiveContext: {
+        governance: governanceExecutiveContext,
+        dashboard: executiveContextInput
+    },
     ecosystemContext,
     projectToLearn,
     selectedAgent,
