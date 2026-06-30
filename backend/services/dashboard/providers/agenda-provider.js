@@ -9,7 +9,7 @@ function createMockEvent() {
   };
 }
 
-function getAgenda() {
+function getMockAgenda() {
   const events = [createMockEvent()];
 
   return {
@@ -21,6 +21,11 @@ function getAgenda() {
   };
 }
 
+function getAgenda() {
+  return getMockAgenda();
+}
+
 module.exports = {
+  getMockAgenda,
   getAgenda
 };
