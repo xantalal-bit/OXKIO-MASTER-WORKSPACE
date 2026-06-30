@@ -15,6 +15,7 @@ const systemConfig = require("../config/systemConfig");
 const WorkflowManager = require("../workflows/workflowManager");
 const SystemStateManager = require("../core/systemStateManager");
 const ProjectManagerService = require("../projects/projectManagerService");
+const DashboardIntelligence = require("../services/dashboard/dashboard-intelligence");
 const {
   getAuthUrl,
   getTokens
@@ -453,6 +454,17 @@ if (req.url === "/api/status") {
     details: system.getStatus(),
     timestamp: new Date().toISOString()
   });
+}
+
+if (pathname === "/api/dashboard" && req.method === "GET") {
+  try {
+    return sendJson(res, 200, DashboardIntelligence.getDashboardState());
+  } catch (error) {
+    return sendJson(res, 500, {
+      ok: false,
+      error: "No se pudo generar el estado del dashboard."
+    });
+  }
 }
 
 if (pathname === "/api/projects" && req.method === "GET") {
