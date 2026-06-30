@@ -1,3 +1,5 @@
+const { listUpcomingEvents } = require("../../../integrations/calendar/connector");
+
 function createMockEvent() {
   return {
     id: "agenda-mock-1",
@@ -21,8 +23,20 @@ function getMockAgenda() {
   };
 }
 
-function getAgenda() {
-  return getMockAgenda();
+async function getAgenda() {
+  try {
+    const events = await listUpcomingEvents();
+
+    return {
+      title: "Agenda",
+      summary: "Agenda conectada con Google Calendar.",
+      nextEvent: events[0] || null,
+      events,
+      source: "google-calendar"
+    };
+  } catch (error) {
+    return getMockAgenda();
+  }
 }
 
 module.exports = {
