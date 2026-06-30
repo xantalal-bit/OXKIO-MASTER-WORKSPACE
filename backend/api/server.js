@@ -294,6 +294,21 @@ if (req.url === "/approvals") {
 
   return;
 }
+if (req.url === "/executive-dashboard.html") {
+
+  const fs = require("fs");
+  const path = require("path");
+
+  const dashboardPath = path.join(__dirname, "../../app/executive-dashboard.html");
+
+  res.writeHead(200, {
+    "Content-Type": "text/html; charset=utf-8"
+  });
+
+  res.end(fs.readFileSync(dashboardPath));
+
+  return;
+}
 if (req.url === "/app/logo.png") {
 
   const fs = require("fs");
@@ -309,7 +324,37 @@ if (req.url === "/app/logo.png") {
 
   return;
 }
+if (req.url === "/logo.png") {
+
+  const fs = require("fs");
+  const path = require("path");
+
+  const logoPath = path.join(__dirname, "../../app/logo.png");
+
+  res.writeHead(200, {
+    "Content-Type": "image/png"
+  });
+
+  res.end(fs.readFileSync(logoPath));
+
+  return;
+}
 if (req.url === "/app/favicon.png") {
+
+  const fs = require("fs");
+  const path = require("path");
+
+  const faviconPath = path.join(__dirname, "../../app/favicon.png");
+
+  res.writeHead(200, {
+    "Content-Type": "image/png"
+  });
+
+  res.end(fs.readFileSync(faviconPath));
+
+  return;
+}
+if (req.url === "/favicon.png") {
 
   const fs = require("fs");
   const path = require("path");

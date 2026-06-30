@@ -739,5 +739,204 @@
       </section>
     </main>
   </div>
+  <script>
+    function textOrFallback(value, fallback) {
+      return value === undefined || value === null || value === "" ? fallback : String(value);
+    }
+
+    function setText(element, value, fallback) {
+      if (!element) return;
+      element.textContent = textOrFallback(value, fallback);
+    }
+
+    function findPanelByTitle(title) {
+      return Array.from(document.querySelectorAll(".panel")).find((panel) => {
+        const heading = panel.querySelector("h2");
+        return heading && heading.textContent.trim() === title;
+      });
+    }
+
+    function formatStatus(status) {
+      const labels = {
+        READY: "Activo",
+        UNAVAILABLE: "No disponible",
+        SAFE_AGGREGATION_ONLY: "Agregacion segura"
+      };
+
+      return labels[status] || textOrFallback(status, "No disponible");
+    }
+
+    function formatAgendaItem(item, fallbackTitle, fallbackText) {
+      return {
+        title: textOrFallback(item && item.title, fallbackTitle),
+        badge: textOrFallback(item && (item.status || item.when), "Pendiente"),
+        text: textOrFallback(item && (item.description || item.startsAt), fallbackText)
+      };
+    }
+
+    function updateListItem(itemElement, data) {
+      if (!itemElement) return;
+      setText(itemElement.querySelector(".item-title"), data.title, "Informacion no disponible");
+      setText(itemElement.querySelector(".badge"), data.badge, "No disponible");
+      setText(itemElement.querySelector(".item-text"), data.text, "Informacion no disponible");
+    }
+
+    function updateSimpleItem(itemElement, title, text) {
+      if (!itemElement) return;
+      setText(itemElement.querySelector(".item-title"), title, "Informacion no disponible");
+      setText(itemElement.querySelector(".item-text"), text, "Informacion no disponible");
+    }
+
+    function applyDashboardState(state) {
+      const greetingPanel = document.querySelector(".greeting");
+      setText(
+        greetingPanel && greetingPanel.querySelector("h2"),
+        state.greeting && state.greeting.text,
+        "Informacion no disponible"
+      );
+      setText(
+        greetingPanel && greetingPanel.querySelector("p"),
+        state.executiveStatus && state.executiveStatus.focus,
+        "No se pudo cargar el resumen ejecutivo."
+      );
+
+      const statusPanel = findPanelByTitle("Estado general");
+      setText(
+        statusPanel && statusPanel.querySelector(".badge"),
+        state.executiveStatus && formatStatus(state.executiveStatus.health),
+        "No disponible"
+      );
+      setText(
+        statusPanel && statusPanel.querySelector(".executive-summary"),
+        state.executiveStatus && state.executiveStatus.focus,
+        "Informacion no disponible"
+      );
+
+      const recommendationPanel = findPanelByTitle("Recomendación ejecutiva del día");
+      setText(
+        recommendationPanel && recommendationPanel.querySelector(".executive-summary"),
+        state.executiveStatus && state.executiveStatus.focus,
+        "Informacion no disponible"
+      );
+
+      const agendaPanel = findPanelByTitle("Agenda");
+      const agendaItems = agendaPanel ? agendaPanel.querySelectorAll(".item") : [];
+      const today = (state.agenda && state.agenda.today) || [];
+      const next = (state.agenda && state.agenda.next) || [];
+      updateListItem(
+        agendaItems[0],
+        formatAgendaItem(today[0], "Agenda no disponible", "No se pudo cargar la agenda.")
+      );
+      updateListItem(
+        agendaItems[1],
+        formatAgendaItem(next[0], "Sin proximos eventos", "No hay eventos cargados en este momento.")
+      );
+
+      const gmailPanel = findPanelByTitle("Gmail");
+      const gmailItems = gmailPanel ? gmailPanel.querySelectorAll(".item") : [];
+      const inbox = (state.gmail && state.gmail.inbox) || {};
+      updateSimpleItem(
+        gmailItems[0],
+        "Correos relevantes",
+        `${textOrFallback(inbox.priority, 0)} prioritarios, ${textOrFallback(inbox.unread, 0)} sin leer.`
+      );
+      updateSimpleItem(
+        gmailItems[1],
+        "Respuestas pendientes",
+        `${textOrFallback(inbox.requiresReview, 0)} requieren revision.`
+      );
+
+      const documentsPanel = findPanelByTitle("Documentos");
+      const documentItems = documentsPanel ? documentsPanel.querySelectorAll(".item") : [];
+      const memory = state.memory || {};
+      const counters = memory.counters || {};
+      updateSimpleItem(
+        documentItems[0],
+        "Memoria operativa",
+        textOrFallback(memory.summary, "Informacion no disponible")
+      );
+      updateSimpleItem(
+        documentItems[1],
+        "Elementos registrados",
+        `${textOrFallback(counters.shortTermItems, 0)} operativos, ${textOrFallback(counters.strategicItems, 0)} estrategicos.`
+      );
+
+      const commitmentsPanel = findPanelByTitle("Compromisos Ejecutivos");
+      const commitmentItems = commitmentsPanel ? commitmentsPanel.querySelectorAll(".item") : [];
+      const automations = state.automations || {};
+      updateListItem(commitmentItems[0], {
+        title: "Automatizaciones activas",
+        badge: textOrFallback((automations.active || []).length, 0),
+        text: "Estado agregado desde Dashboard Intelligence."
+      });
+      updateListItem(commitmentItems[1], {
+        title: "Pendientes de aprobacion",
+        badge: textOrFallback(automations.pendingApproval, 0),
+        text: "Acciones pendientes de revision humana."
+      });
+      updateListItem(commitmentItems[2], {
+        title: "Ultima ejecucion",
+        badge: textOrFallback(automations.lastExecution, "Sin ejecucion"),
+        text: "Seguimiento preparado para automatizaciones futuras."
+      });
+      updateListItem(commitmentItems[3], {
+        title: "Estado de automatizaciones",
+        badge: "Base",
+        text: "Capa visual conectada sin ejecutar integraciones reales."
+      });
+    }
+
+    function createUnavailableDashboardState() {
+      return {
+        greeting: {
+          text: "Informacion no disponible"
+        },
+        executiveStatus: {
+          health: "UNAVAILABLE",
+          focus: "No se pudo cargar el estado del Dashboard. Intentalo de nuevo mas tarde."
+        },
+        agenda: {
+          today: [],
+          next: []
+        },
+        gmail: {
+          inbox: {
+            unread: 0,
+            priority: 0,
+            requiresReview: 0
+          }
+        },
+        memory: {
+          summary: "Informacion no disponible",
+          counters: {
+            shortTermItems: 0,
+            strategicItems: 0
+          }
+        },
+        automations: {
+          active: [],
+          pendingApproval: 0,
+          lastExecution: null
+        }
+      };
+    }
+
+    async function loadDashboardState() {
+      try {
+        const response = await fetch("/api/dashboard");
+
+        if (!response.ok) {
+          throw new Error("Dashboard API unavailable");
+        }
+
+        const state = await response.json();
+        applyDashboardState(state);
+      } catch (error) {
+        applyDashboardState(createUnavailableDashboardState());
+      }
+    }
+
+    document.addEventListener("DOMContentLoaded", loadDashboardState);
+  </script>
 </body>
 </html>
