@@ -503,7 +503,9 @@ if (req.url === "/api/status") {
 
 if (pathname === "/api/dashboard" && req.method === "GET") {
   try {
-    return sendJson(res, 200, DashboardIntelligence.getDashboardState());
+    const dashboardState = await DashboardIntelligence.getDashboardState();
+
+    return sendJson(res, 200, dashboardState);
   } catch (error) {
     return sendJson(res, 500, {
       ok: false,
