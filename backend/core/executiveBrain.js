@@ -95,6 +95,7 @@ const ecosystemContext = {
     governanceFiles: ecosystemService.getGovernanceFiles(),
 };
 const executiveMission = this.buildExecutiveMission(executiveContextInput);
+const executivePlan = this.buildExecutivePlan(executiveMission);
 
 let selectedAgent;
 
@@ -155,6 +156,7 @@ if (policyValidation.approved === false) {
         dashboard: executiveContextInput
     },
     executiveMission,
+    executivePlan,
     ecosystemContext,
     projectToLearn,
     selectedAgent,
@@ -212,6 +214,35 @@ if (policyValidation.approved === false) {
             priorities,
             risks,
             opportunities
+        };
+    }
+
+    buildExecutivePlan(executiveMission) {
+        const priorities = executiveMission && Array.isArray(executiveMission.priorities)
+            ? executiveMission.priorities
+            : [];
+        const nextSteps = [];
+        const hasAgendaPriority = priorities.some((priority) => {
+            return normalizeSearchText(priority).includes("agenda");
+        });
+        const hasEmailPriority = priorities.some((priority) => {
+            return normalizeSearchText(priority).includes("correo");
+        });
+
+        let currentStep = "Obtener contexto";
+
+        if (hasAgendaPriority) {
+            currentStep = "Revisar agenda";
+        }
+
+        if (hasEmailPriority) {
+            nextSteps.push("Revisar correo");
+        }
+
+        return {
+            currentStep,
+            nextSteps,
+            completedSteps: []
         };
     }
 
