@@ -1,11 +1,6 @@
 const http = require("http");
-const OxkioSystem = require("../core/system");
 const EmailWorkflow = require("../workflows/emailWorkflow");
 const EmailAgent = require("../agents/emailAgent");
-const IntentAnalyzer = require("../core/intentAnalyzer");
-const ExecutiveBrain = require("../core/executiveBrain");
-const MemoryEngine = require("../memory/memoryEngine");
-const RuleEngine = require("../core/ruleEngine");
 const ProposalEngine = require("../core/proposalEngine");
 const ApprovalQueue = require("../core/approvalQueue");
 const ActionExecutor = require("../core/actionExecutor");
@@ -17,12 +12,20 @@ const SystemStateManager = require("../core/systemStateManager");
 const ProjectManagerService = require("../projects/projectManagerService");
 const DashboardIntelligence = require("../services/dashboard/dashboard-intelligence");
 const {
+  getSystem,
+  getIntentAnalyzer,
+  getRuleEngine,
+  getExecutiveBrain
+} = require("../runtime/executive-runtime");
+const {
   getAuthUrl,
   getTokens
 } = require("../integrations/googleOAuth");
 
-const intentAnalyzer = new IntentAnalyzer();
-const ruleEngine = new RuleEngine();
+const system = getSystem();
+const intentAnalyzer = getIntentAnalyzer();
+const ruleEngine = getRuleEngine();
+const executiveBrain = getExecutiveBrain();
 const proposalEngine = new ProposalEngine();
 const approvalQueue = new ApprovalQueue();
 const executionLogger = new ExecutionLogger();
@@ -46,15 +49,6 @@ systemStateManager.updateWorkflow(
 );
 
 const PORT = 3000;
-
-const system = new OxkioSystem();
-system.boot();
-
-const executiveBrain = new ExecutiveBrain(
-  system.memory,
-  intentAnalyzer,
-  ruleEngine
-);
 
 function sendJson(res, statusCode, data) {
   res.writeHead(statusCode, {
