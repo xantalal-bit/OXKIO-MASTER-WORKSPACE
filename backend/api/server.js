@@ -570,6 +570,7 @@ if (pathname === "/api/projects" && req.method === "GET") {
 
  const brainResult = executiveBrain.think(message);
 const analysis = brainResult.analysis;
+const proposal = proposalEngine.generate(brainResult);
 
 
 const approvalItem = approvalQueue.add(
