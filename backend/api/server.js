@@ -65,6 +65,24 @@ function sendJson(res, statusCode, data) {
   res.end(JSON.stringify(data, null, 2));
 }
 
+function normalizeChatMessage(value = "") {
+  return String(value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .trim();
+}
+
+function isSimpleGreeting(message = "") {
+  return [
+    "hola",
+    "buenos dias",
+    "buenas tardes",
+    "buenas noches",
+    "buenas"
+  ].includes(normalizeChatMessage(message));
+}
+
 const server = http.createServer(async (req, res) => {
 
 const pathname = req.url.split("?")[0];
@@ -567,6 +585,28 @@ if (pathname === "/api/projects" && req.method === "GET") {
   const url = new URL(req.url, `http://${req.headers.host}`);
 
   const message = url.searchParams.get("message");
+
+  if (isSimpleGreeting(message)) {
+    try {
+      const dashboardState = await DashboardIntelligence.getDashboardState();
+      const executiveBriefing = dashboardState.executiveBriefing;
+
+      return sendJson(res, 200, {
+        ok: true,
+        module: "chat",
+        message,
+        source: "executiveBriefing",
+        executiveBriefing,
+        response: executiveBriefing.executiveResponse
+      });
+    } catch (error) {
+      return sendJson(res, 500, {
+        ok: false,
+        module: "chat",
+        error: "No se pudo construir el briefing ejecutivo."
+      });
+    }
+  }
 
  const brainResult = executiveBrain.think(message);
 const analysis = brainResult.analysis;
