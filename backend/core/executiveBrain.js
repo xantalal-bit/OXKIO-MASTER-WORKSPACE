@@ -96,6 +96,11 @@ const ecosystemContext = {
 };
 const executiveMission = this.buildExecutiveMission(executiveContextInput);
 const executivePlan = this.buildExecutivePlan(executiveMission);
+const executiveResponse = this.buildExecutiveResponse({
+    executiveMission,
+    executivePlan,
+    executiveContext: executiveContextInput
+});
 
 let selectedAgent;
 
@@ -157,6 +162,7 @@ if (policyValidation.approved === false) {
     },
     executiveMission,
     executivePlan,
+    executiveResponse,
     ecosystemContext,
     projectToLearn,
     selectedAgent,
@@ -243,6 +249,32 @@ if (policyValidation.approved === false) {
             currentStep,
             nextSteps,
             completedSteps: []
+        };
+    }
+
+    buildExecutiveResponse({ executiveMission, executivePlan, executiveContext }) {
+        const dashboard = executiveContext && executiveContext.dashboard
+            ? executiveContext.dashboard
+            : {};
+        const greeting = dashboard.greeting || {};
+        const title = greeting.title || "OXKIO";
+        const currentMission = executiveMission && executiveMission.currentMission
+            ? executiveMission.currentMission
+            : "obtener contexto ejecutivo";
+        const currentStep = executivePlan && executivePlan.currentStep
+            ? executivePlan.currentStep
+            : "Obtener contexto";
+        const recommendations = executivePlan && Array.isArray(executivePlan.nextSteps)
+            ? executivePlan.nextSteps
+            : [];
+        const missionText = currentMission
+            .replace(/[.]+$/, "")
+            .replace(/^./, (letter) => letter.toLowerCase());
+
+        return {
+            title,
+            message: `La misión actual es ${missionText}. El siguiente paso recomendado es ${currentStep.toLowerCase()}.`,
+            recommendations
         };
     }
 
