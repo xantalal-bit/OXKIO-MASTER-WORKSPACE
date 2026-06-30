@@ -787,16 +787,34 @@
       setText(itemElement.querySelector(".item-text"), text, "Informacion no disponible");
     }
 
+    function getExecutiveResponse(state) {
+      return state.executiveBriefing &&
+        state.executiveBriefing.executiveResponse
+        ? state.executiveBriefing.executiveResponse
+        : null;
+    }
+
+    function formatRecommendations(recommendations, fallback) {
+      if (!Array.isArray(recommendations) || recommendations.length === 0) {
+        return fallback;
+      }
+
+      return recommendations.join(" ");
+    }
+
     function applyDashboardState(state) {
+      const executiveResponse = getExecutiveResponse(state);
       const greetingPanel = document.querySelector(".greeting");
       setText(
         greetingPanel && greetingPanel.querySelector("h2"),
-        state.greeting && state.greeting.text,
+        (executiveResponse && executiveResponse.title) ||
+          (state.greeting && (state.greeting.text || state.greeting.title)),
         "Informacion no disponible"
       );
       setText(
         greetingPanel && greetingPanel.querySelector("p"),
-        state.executiveStatus && state.executiveStatus.focus,
+        (executiveResponse && executiveResponse.message) ||
+          (state.executiveStatus && (state.executiveStatus.focus || state.executiveStatus.summary)),
         "No se pudo cargar el resumen ejecutivo."
       );
 
@@ -808,14 +826,20 @@
       );
       setText(
         statusPanel && statusPanel.querySelector(".executive-summary"),
-        state.executiveStatus && state.executiveStatus.focus,
+        (executiveResponse && executiveResponse.message) ||
+          (state.executiveStatus && (state.executiveStatus.focus || state.executiveStatus.summary)),
         "Informacion no disponible"
       );
 
       const recommendationPanel = findPanelByTitle("Recomendación ejecutiva del día");
       setText(
         recommendationPanel && recommendationPanel.querySelector(".executive-summary"),
-        state.executiveStatus && state.executiveStatus.focus,
+        executiveResponse
+          ? formatRecommendations(
+              executiveResponse.recommendations,
+              executiveResponse.message
+            )
+          : (state.executiveStatus && (state.executiveStatus.focus || state.executiveStatus.summary)),
         "Informacion no disponible"
       );
 
