@@ -1,8 +1,7 @@
 function hasAgendaEvents(agenda) {
-  const today = agenda && Array.isArray(agenda.today) ? agenda.today : [];
-  const next = agenda && Array.isArray(agenda.next) ? agenda.next : [];
+  const events = agenda && Array.isArray(agenda.events) ? agenda.events : [];
 
-  return today.length > 0 || next.length > 0;
+  return Boolean(agenda && agenda.nextEvent) || events.length > 0;
 }
 
 function hasPendingGmail(gmail) {
