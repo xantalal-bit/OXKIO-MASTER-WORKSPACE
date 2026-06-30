@@ -94,6 +94,7 @@ const ecosystemContext = {
     governanceFolder: ecosystemService.getGovernanceFolder(),
     governanceFiles: ecosystemService.getGovernanceFiles(),
 };
+const executiveMission = this.buildExecutiveMission(executiveContextInput);
 
 let selectedAgent;
 
@@ -153,6 +154,7 @@ if (policyValidation.approved === false) {
         governance: governanceExecutiveContext,
         dashboard: executiveContextInput
     },
+    executiveMission,
     ecosystemContext,
     projectToLearn,
     selectedAgent,
@@ -163,6 +165,54 @@ if (policyValidation.approved === false) {
 
     detectProjectToLearn(message, executiveContext) {
         return this.detectKnownProject(message);
+    }
+
+    buildExecutiveMission(executiveContext) {
+        const priorities = [];
+        const risks = [];
+        const opportunities = [];
+        const dashboard = executiveContext && executiveContext.dashboard
+            ? executiveContext.dashboard
+            : {};
+        const agenda = dashboard.agenda || {};
+        const gmail = dashboard.gmail || {};
+        const summary = executiveContext ? executiveContext.executiveSummary : null;
+        const agendaEvents = Array.isArray(agenda.events)
+            ? agenda.events
+            : [];
+        const inbox = gmail.inbox || {};
+        const alerts = summary && Array.isArray(summary.alerts)
+            ? summary.alerts
+            : [];
+
+        if (agendaEvents.length > 0 || agenda.nextEvent) {
+            priorities.push("Revisar agenda");
+        }
+
+        if (
+            Number(inbox.unread || 0) > 0 ||
+            Number(inbox.priority || 0) > 0 ||
+            Number(inbox.requiresReview || 0) > 0
+        ) {
+            priorities.push("Revisar correo");
+        }
+
+        alerts.forEach((alert) => {
+            risks.push(String(alert));
+        });
+
+        if (summary && summary.recommendation) {
+            opportunities.push(summary.recommendation);
+        }
+
+        return {
+            currentMission: priorities.length > 0 || risks.length > 0 || opportunities.length > 0
+                ? "Mantener el foco ejecutivo con el contexto disponible."
+                : "Obtener contexto ejecutivo.",
+            priorities,
+            risks,
+            opportunities
+        };
     }
 
     detectKnownProject(message) {
