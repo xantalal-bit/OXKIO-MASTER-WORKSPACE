@@ -35,7 +35,8 @@ function getAuthUrl() {
     scope: [
       "https://www.googleapis.com/auth/gmail.readonly",
       "https://www.googleapis.com/auth/gmail.send",
-      "https://www.googleapis.com/auth/gmail.compose"
+      "https://www.googleapis.com/auth/gmail.compose",
+      "https://www.googleapis.com/auth/calendar.readonly"
     ]
   });
 }
@@ -61,11 +62,21 @@ function getGmailClient() {
   });
 }
 
+function getCalendarClient() {
+  loadTokens();
+
+  return google.calendar({
+    version: "v3",
+    auth: oauth2Client
+  });
+}
+
 module.exports = {
   getAuthUrl,
   getTokens,
   setCredentials,
   getGmailClient,
+  getCalendarClient,
   saveTokens,
   loadTokens
 };
