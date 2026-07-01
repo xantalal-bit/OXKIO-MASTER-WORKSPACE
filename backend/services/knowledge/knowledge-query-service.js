@@ -1,0 +1,28 @@
+'use strict';
+
+const { locateAsset } = require('./asset-locator');
+const { discoverKnowledge } = require('./discovery-engine');
+const { runKnowledgePipeline } = require('./knowledge-pipeline');
+
+function searchKnowledge(assetName) {
+  const knowledgeInventory = discoverKnowledge();
+  const assetLocation = locateAsset(assetName, knowledgeInventory);
+
+  if (!assetLocation.found) {
+    return {
+      found: false,
+    };
+  }
+
+  const asset = assetLocation.matches[0];
+
+  return {
+    found: true,
+    asset,
+    pipeline: runKnowledgePipeline(asset),
+  };
+}
+
+module.exports = {
+  searchKnowledge,
+};
