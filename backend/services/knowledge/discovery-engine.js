@@ -1,6 +1,8 @@
 'use strict';
 
+const { discoverTopLevelFolders } = require('./connectors/onedrive-connector');
 const { recognizeAssets } = require('./recognition-engine');
+const { buildKnowledgeInventory } = require('./knowledge-inventory');
 
 function discoverSource(source) {
   return {
@@ -32,8 +34,16 @@ function discoverAndRecognizeFolders(folders) {
   };
 }
 
+function discoverKnowledge() {
+  const folders = discoverTopLevelFolders().folders;
+  const discoveryResult = discoverAndRecognizeFolders(folders);
+
+  return buildKnowledgeInventory(discoveryResult);
+}
+
 module.exports = {
   discoverSource,
   discoverAllSources,
   discoverAndRecognizeFolders,
+  discoverKnowledge,
 };
