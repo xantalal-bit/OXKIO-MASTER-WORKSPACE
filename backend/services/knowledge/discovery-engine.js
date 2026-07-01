@@ -1,5 +1,7 @@
 'use strict';
 
+const { recognizeAssets } = require('./recognition-engine');
+
 function discoverSource(source) {
   return {
     sourceId: source.id,
@@ -17,7 +19,21 @@ function discoverAllSources(registry) {
   };
 }
 
+function discoverAndRecognizeFolders(folders) {
+  const assets = recognizeAssets(folders);
+  const recognizedCount = assets.filter((asset) => asset.recognized).length;
+
+  return {
+    version: '1.0',
+    totalFolders: folders.length,
+    recognizedCount,
+    unclassifiedCount: folders.length - recognizedCount,
+    assets,
+  };
+}
+
 module.exports = {
   discoverSource,
   discoverAllSources,
+  discoverAndRecognizeFolders,
 };
