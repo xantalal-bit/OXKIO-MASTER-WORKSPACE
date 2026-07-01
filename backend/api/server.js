@@ -592,59 +592,59 @@ if (pathname === "/api/projects" && req.method === "GET") {
 
   const message = url.searchParams.get("message");
   const queryType = matchExecutiveQuery(message);
-  const assetName = extractAssetSearchTerm(message);
 
-  if (assetName) {
-    try {
-      let result = searchKnowledge(assetName);
+  switch (queryType) {
+    case "knowledgeSearch": {
+      try {
+        const assetName = extractAssetSearchTerm(message);
+        let result = searchKnowledge(assetName);
 
-      if (!result.found && assetName.includes(" ")) {
-        result = searchKnowledge(assetName.replace(/\s+/g, "-"));
-      }
+        if (!result.found && assetName.includes(" ")) {
+          result = searchKnowledge(assetName.replace(/\s+/g, "-"));
+        }
 
-      if (result.found) {
-        const dashboardState = await DashboardIntelligence.getDashboardState();
-        const knowledgeInventory = dashboardState.knowledgeInventory || {};
-        const recommendation = knowledgeInventory.recommendation || {};
-        const pipeline = result.pipeline || {};
-        const catalog = pipeline.catalog || {};
+        if (result.found) {
+          const dashboardState = await DashboardIntelligence.getDashboardState();
+          const knowledgeInventory = dashboardState.knowledgeInventory || {};
+          const recommendation = knowledgeInventory.recommendation || {};
+          const pipeline = result.pipeline || {};
+          const catalog = pipeline.catalog || {};
+
+          return sendJson(res, 200, {
+            ok: true,
+            module: "chat",
+            message,
+            source: "documentCatalog",
+            response: {
+              title: "Catálogo documental del activo",
+              asset: result.asset.name,
+              folder: pipeline.folder,
+              summary: catalog.summary,
+              extensions: catalog.extensions,
+              recommendation: recommendation.message
+            }
+          });
+        }
 
         return sendJson(res, 200, {
           ok: true,
           module: "chat",
           message,
-          source: "documentCatalog",
+          source: "assetLocator",
           response: {
-            title: "Catálogo documental del activo",
-            asset: result.asset.name,
-            folder: pipeline.folder,
-            summary: catalog.summary,
-            extensions: catalog.extensions,
-            recommendation: recommendation.message
+            title: "Activo no encontrado",
+            matches: []
           }
         });
+      } catch (error) {
+        return sendJson(res, 500, {
+          ok: false,
+          module: "chat",
+          error: "No se pudo localizar el activo."
+        });
       }
-
-      return sendJson(res, 200, {
-        ok: true,
-        module: "chat",
-        message,
-        source: "assetLocator",
-        response: {
-          title: "Activo no encontrado",
-          matches: []
-        }
-      });
-    } catch (error) {
-      return sendJson(res, 500, {
-        ok: false,
-        module: "chat",
-        error: "No se pudo localizar el activo."
-      });
     }
-  }
 
-  switch (queryType) {
     case "morningBriefing": {
       try {
         const dashboardState = await DashboardIntelligence.getDashboardState();
