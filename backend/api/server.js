@@ -11,6 +11,7 @@ const WorkflowManager = require("../workflows/workflowManager");
 const SystemStateManager = require("../core/systemStateManager");
 const ProjectManagerService = require("../projects/projectManagerService");
 const DashboardIntelligence = require("../services/dashboard/dashboard-intelligence");
+const { matchExecutiveQuery } = require("../services/executive/executive-query-router");
 const {
   getSystem,
   getIntentAnalyzer,
@@ -57,60 +58,6 @@ function sendJson(res, statusCode, data) {
   });
 
   res.end(JSON.stringify(data, null, 2));
-}
-
-function normalizeChatMessage(value = "") {
-  return String(value || "")
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase()
-    .trim();
-}
-
-function isSimpleGreeting(message = "") {
-  return [
-    "hola",
-    "buenos dias",
-    "buenas tardes",
-    "buenas noches",
-    "buenas"
-  ].includes(normalizeChatMessage(message));
-}
-
-function normalizeChatIntent(message = "") {
-  return normalizeChatMessage(message)
-    .replace(/[^a-z0-9\s]/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-}
-
-function isTodayPlanQuestion(message = "") {
-  const normalized = normalizeChatIntent(message);
-
-  return normalized.includes("hago hoy") ||
-    normalized.includes("tengo que hacer hoy") ||
-    normalized.includes("plan de hoy") ||
-    normalized.includes("prioridades de hoy");
-}
-
-function isProjectAttentionQuestion(message = "") {
-  const normalized = normalizeChatIntent(message);
-
-  return normalized.includes("proyectos requieren atencion") ||
-    normalized === "proyectos" ||
-    normalized.includes("proyectos prioritarios") ||
-    normalized.includes("proyectos tengo") ||
-    normalized.includes("estado de proyectos") ||
-    normalized.includes("prioridades de proyectos");
-}
-
-function isKnownContextQuestion(message = "") {
-  const normalized = normalizeChatIntent(message);
-
-  return normalized.includes("conoces de mi") ||
-    normalized.includes("sabes de mi") ||
-    normalized === "que conoces" ||
-    normalized.includes("conoces sobre mi");
 }
 
 const server = http.createServer(async (req, res) => {
@@ -615,113 +562,116 @@ if (pathname === "/api/projects" && req.method === "GET") {
   const url = new URL(req.url, `http://${req.headers.host}`);
 
   const message = url.searchParams.get("message");
+  const queryType = matchExecutiveQuery(message);
 
-  if (isTodayPlanQuestion(message)) {
-    try {
-      const dashboardState = await DashboardIntelligence.getDashboardState();
-      const morningBriefing = dashboardState.morningBriefing || {};
+  switch (queryType) {
+    case "morningBriefing": {
+      try {
+        const dashboardState = await DashboardIntelligence.getDashboardState();
+        const morningBriefing = dashboardState.morningBriefing || {};
 
-      return sendJson(res, 200, {
-        ok: true,
-        module: "chat",
-        message,
-        source: "morningBriefing",
-        response: {
-          title: morningBriefing.title,
-          summary: morningBriefing.summary,
-          priorities: morningBriefing.priorities,
-          recommendations: morningBriefing.recommendations
-        }
-      });
-    } catch (error) {
-      return sendJson(res, 500, {
-        ok: false,
-        module: "chat",
-        error: "No se pudo construir el briefing ejecutivo del dia."
-      });
+        return sendJson(res, 200, {
+          ok: true,
+          module: "chat",
+          message,
+          source: "morningBriefing",
+          response: {
+            title: morningBriefing.title,
+            summary: morningBriefing.summary,
+            priorities: morningBriefing.priorities,
+            recommendations: morningBriefing.recommendations
+          }
+        });
+      } catch (error) {
+        return sendJson(res, 500, {
+          ok: false,
+          module: "chat",
+          error: "No se pudo construir el briefing ejecutivo del dia."
+        });
+      }
     }
-  }
 
-  if (isProjectAttentionQuestion(message)) {
-    try {
-      const dashboardState = await DashboardIntelligence.getDashboardState();
-      const knowledgeInventory = dashboardState.knowledgeInventory || {};
-      const summary = knowledgeInventory.summary || {};
-      const recommendation = knowledgeInventory.recommendation || {};
-      const assets = Array.isArray(knowledgeInventory.assets)
-        ? knowledgeInventory.assets.filter((asset) => asset.recognized)
-        : [];
+    case "projects": {
+      try {
+        const dashboardState = await DashboardIntelligence.getDashboardState();
+        const knowledgeInventory = dashboardState.knowledgeInventory || {};
+        const summary = knowledgeInventory.summary || {};
+        const recommendation = knowledgeInventory.recommendation || {};
+        const assets = Array.isArray(knowledgeInventory.assets)
+          ? knowledgeInventory.assets.filter((asset) => asset.recognized)
+          : [];
 
-      return sendJson(res, 200, {
-        ok: true,
-        module: "chat",
-        message,
-        source: "knowledgeInventory",
-        response: {
-          title: "Proyectos prioritarios",
-          summary: `Activos estratégicos detectados: ${summary.recognizedAssets || assets.length}.`,
-          projects: assets,
-          recommendation: recommendation.message
-        }
-      });
-    } catch (error) {
-      return sendJson(res, 500, {
-        ok: false,
-        module: "chat",
-        error: "No se pudo construir el inventario de conocimiento."
-      });
+        return sendJson(res, 200, {
+          ok: true,
+          module: "chat",
+          message,
+          source: "knowledgeInventory",
+          response: {
+            title: "Proyectos prioritarios",
+            summary: `Activos estratégicos detectados: ${summary.recognizedAssets || assets.length}.`,
+            projects: assets,
+            recommendation: recommendation.message
+          }
+        });
+      } catch (error) {
+        return sendJson(res, 500, {
+          ok: false,
+          module: "chat",
+          error: "No se pudo construir el inventario de conocimiento."
+        });
+      }
     }
-  }
 
-  if (isKnownContextQuestion(message)) {
-    try {
-      const dashboardState = await DashboardIntelligence.getDashboardState();
-      const knowledgeInventory = dashboardState.knowledgeInventory || {};
-      const recommendation = knowledgeInventory.recommendation || {};
-      const assets = Array.isArray(knowledgeInventory.assets)
-        ? knowledgeInventory.assets.filter((asset) => asset.recognized)
-        : [];
+    case "knowledgeInventory": {
+      try {
+        const dashboardState = await DashboardIntelligence.getDashboardState();
+        const knowledgeInventory = dashboardState.knowledgeInventory || {};
+        const recommendation = knowledgeInventory.recommendation || {};
+        const assets = Array.isArray(knowledgeInventory.assets)
+          ? knowledgeInventory.assets.filter((asset) => asset.recognized)
+          : [];
 
-      return sendJson(res, 200, {
-        ok: true,
-        module: "chat",
-        message,
-        source: "knowledgeInventory",
-        response: {
-          title: "Conocimiento disponible",
-          summary: `Proyectos estratégicos conocidos: ${assets.length}.`,
-          knownAssets: assets,
-          nextRecommendation: recommendation.message
-        }
-      });
-    } catch (error) {
-      return sendJson(res, 500, {
-        ok: false,
-        module: "chat",
-        error: "No se pudo construir el conocimiento disponible."
-      });
+        return sendJson(res, 200, {
+          ok: true,
+          module: "chat",
+          message,
+          source: "knowledgeInventory",
+          response: {
+            title: "Conocimiento disponible",
+            summary: `Proyectos estratégicos conocidos: ${assets.length}.`,
+            knownAssets: assets,
+            nextRecommendation: recommendation.message
+          }
+        });
+      } catch (error) {
+        return sendJson(res, 500, {
+          ok: false,
+          module: "chat",
+          error: "No se pudo construir el conocimiento disponible."
+        });
+      }
     }
-  }
 
-  if (isSimpleGreeting(message)) {
-    try {
-      const dashboardState = await DashboardIntelligence.getDashboardState();
-      const executiveBriefing = dashboardState.executiveBriefing;
+    case "greeting": {
+      try {
+        const dashboardState = await DashboardIntelligence.getDashboardState();
+        const executiveBriefing = dashboardState.executiveBriefing;
 
-      return sendJson(res, 200, {
-        ok: true,
-        module: "chat",
-        message,
-        source: "executiveBriefing",
-        executiveBriefing,
-        response: executiveBriefing.executiveResponse
-      });
-    } catch (error) {
-      return sendJson(res, 500, {
-        ok: false,
-        module: "chat",
-        error: "No se pudo construir el briefing ejecutivo."
-      });
+        return sendJson(res, 200, {
+          ok: true,
+          module: "chat",
+          message,
+          source: "executiveBriefing",
+          executiveBriefing,
+          response: executiveBriefing.executiveResponse
+        });
+      } catch (error) {
+        return sendJson(res, 500, {
+          ok: false,
+          module: "chat",
+          error: "No se pudo construir el briefing ejecutivo."
+        });
+      }
     }
   }
 
