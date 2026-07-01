@@ -6,9 +6,7 @@ const { getMemory } = require("./providers/memory-provider");
 const { getAutomations } = require("./providers/automations-provider");
 const { buildExecutiveSummary } = require("./executive-summary-builder");
 const { buildExecutiveState } = require("../executive/executive-orchestrator");
-const { discoverTopLevelFolders } = require("../knowledge/connectors/onedrive-connector");
-const { discoverAndRecognizeFolders } = require("../knowledge/discovery-engine");
-const { buildKnowledgeInventory } = require("../knowledge/knowledge-inventory");
+const { discoverKnowledge } = require("../knowledge/discovery-engine");
 const { getExecutiveBrain } = require("../../runtime/executive-runtime");
 
 async function getDashboardState() {
@@ -46,9 +44,7 @@ async function getDashboardState() {
     executiveBrain: getExecutiveBrain(),
     dashboardState: dashboardStateWithSummary
   });
-  const folders = discoverTopLevelFolders().folders;
-  const discoveryResult = discoverAndRecognizeFolders(folders);
-  const knowledgeInventory = buildKnowledgeInventory(discoveryResult);
+  const knowledgeInventory = discoverKnowledge();
 
   return {
     ...dashboardStateWithSummary,
