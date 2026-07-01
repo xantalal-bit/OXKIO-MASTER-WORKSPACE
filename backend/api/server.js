@@ -77,6 +77,18 @@ function isSimpleGreeting(message = "") {
   ].includes(normalizeChatMessage(message));
 }
 
+function isTodayPlanQuestion(message = "") {
+  const normalized = normalizeChatMessage(message)
+    .replace(/[^a-z0-9\s]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  return normalized.includes("hago hoy") ||
+    normalized.includes("tengo que hacer hoy") ||
+    normalized.includes("plan de hoy") ||
+    normalized.includes("prioridades de hoy");
+}
+
 const server = http.createServer(async (req, res) => {
 
 const pathname = req.url.split("?")[0];
@@ -579,6 +591,32 @@ if (pathname === "/api/projects" && req.method === "GET") {
   const url = new URL(req.url, `http://${req.headers.host}`);
 
   const message = url.searchParams.get("message");
+
+  if (isTodayPlanQuestion(message)) {
+    try {
+      const dashboardState = await DashboardIntelligence.getDashboardState();
+      const morningBriefing = dashboardState.morningBriefing || {};
+
+      return sendJson(res, 200, {
+        ok: true,
+        module: "chat",
+        message,
+        source: "morningBriefing",
+        response: {
+          title: morningBriefing.title,
+          summary: morningBriefing.summary,
+          priorities: morningBriefing.priorities,
+          recommendations: morningBriefing.recommendations
+        }
+      });
+    } catch (error) {
+      return sendJson(res, 500, {
+        ok: false,
+        module: "chat",
+        error: "No se pudo construir el briefing ejecutivo del dia."
+      });
+    }
+  }
 
   if (isSimpleGreeting(message)) {
     try {
