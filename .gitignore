@@ -62,3 +62,7 @@ backend/knowledge/connectors/data/
 *.db
 *.sqlite
 *.sqlite3
+
+# Knowledge store runtime
+backend/data/knowledge-store/objects/*.json
+!backend/data/knowledge-store/objects/.gitkeep
