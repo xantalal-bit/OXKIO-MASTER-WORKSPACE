@@ -6,6 +6,7 @@ const { getMemory } = require("./providers/memory-provider");
 const { getAutomations } = require("./providers/automations-provider");
 const { buildExecutiveSummary } = require("./executive-summary-builder");
 const { buildExecutiveState } = require("../executive/executive-orchestrator");
+const { buildMorningBriefing } = require("../executive/morning-briefing");
 const { discoverKnowledge } = require("../knowledge/discovery-engine");
 const { getExecutiveBrain } = require("../../runtime/executive-runtime");
 
@@ -45,11 +46,16 @@ async function getDashboardState() {
     dashboardState: dashboardStateWithSummary
   });
   const knowledgeInventory = discoverKnowledge();
-
-  return {
+  const dashboardStateWithIntelligence = {
     ...dashboardStateWithSummary,
     executiveBriefing,
     knowledgeInventory
+  };
+  const morningBriefing = buildMorningBriefing(dashboardStateWithIntelligence);
+
+  return {
+    ...dashboardStateWithIntelligence,
+    morningBriefing
   };
 }
 
