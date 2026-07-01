@@ -104,6 +104,15 @@ function isProjectAttentionQuestion(message = "") {
     normalized.includes("prioridades de proyectos");
 }
 
+function isKnownContextQuestion(message = "") {
+  const normalized = normalizeChatIntent(message);
+
+  return normalized.includes("conoces de mi") ||
+    normalized.includes("sabes de mi") ||
+    normalized === "que conoces" ||
+    normalized.includes("conoces sobre mi");
+}
+
 const server = http.createServer(async (req, res) => {
 
 const pathname = req.url.split("?")[0];
@@ -660,6 +669,36 @@ if (pathname === "/api/projects" && req.method === "GET") {
         ok: false,
         module: "chat",
         error: "No se pudo construir el inventario de conocimiento."
+      });
+    }
+  }
+
+  if (isKnownContextQuestion(message)) {
+    try {
+      const dashboardState = await DashboardIntelligence.getDashboardState();
+      const knowledgeInventory = dashboardState.knowledgeInventory || {};
+      const recommendation = knowledgeInventory.recommendation || {};
+      const assets = Array.isArray(knowledgeInventory.assets)
+        ? knowledgeInventory.assets.filter((asset) => asset.recognized)
+        : [];
+
+      return sendJson(res, 200, {
+        ok: true,
+        module: "chat",
+        message,
+        source: "knowledgeInventory",
+        response: {
+          title: "Conocimiento disponible",
+          summary: `Proyectos estratégicos conocidos: ${assets.length}.`,
+          knownAssets: assets,
+          nextRecommendation: recommendation.message
+        }
+      });
+    } catch (error) {
+      return sendJson(res, 500, {
+        ok: false,
+        module: "chat",
+        error: "No se pudo construir el conocimiento disponible."
       });
     }
   }
