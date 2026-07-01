@@ -1,0 +1,15 @@
+{
+  "source": "mock",
+  "path": "C:/temp/mock-document.md",
+  "name": "mock-document.md",
+  "extension": ".md",
+  "size": 123,
+  "lastModified": "2026-07-01T00:00:00.000Z",
+  "content": "hello",
+  "metadata": {
+    "reader": "text",
+    "version": "1.0"
+  },
+  "id": "1ca72d060bb0dd9b81b9a229c443906401ddc2d9",
+  "storedAt": "2026-07-01T17:23:11.752Z"
+}
