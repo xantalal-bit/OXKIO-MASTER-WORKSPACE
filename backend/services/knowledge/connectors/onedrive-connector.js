@@ -18,6 +18,25 @@ function getOneDriveStatus() {
   };
 }
 
+function discoverTopLevelFolders() {
+  const root = path.resolve(DEFAULT_ONEDRIVE_ROOT);
+  const folders = fs
+    .readdirSync(root, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory())
+    .map((entry) => ({
+      name: entry.name,
+      type: 'directory',
+    }))
+    .sort((left, right) => left.name.localeCompare(right.name));
+
+  return {
+    source: 'OneDrive',
+    root,
+    folders,
+  };
+}
+
 module.exports = {
   getOneDriveStatus,
+  discoverTopLevelFolders,
 };
