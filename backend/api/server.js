@@ -12,6 +12,7 @@ const SystemStateManager = require("../core/systemStateManager");
 const ProjectManagerService = require("../projects/projectManagerService");
 const DashboardIntelligence = require("../services/dashboard/dashboard-intelligence");
 const { matchExecutiveQuery } = require("../services/executive/executive-query-router");
+const { locateAsset } = require("../services/knowledge/asset-locator");
 const {
   getSystem,
   getIntentAnalyzer,
@@ -50,6 +51,34 @@ systemStateManager.updateWorkflow(
 );
 
 const PORT = 3000;
+
+function normalizeAssetSearchMessage(value = "") {
+  return String(value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function extractAssetSearchTerm(message = "") {
+  const normalized = normalizeAssetSearchMessage(message);
+  const prefixes = [
+    "busca ",
+    "buscar ",
+    "localizar ",
+    "encuentra ",
+    "donde esta ",
+  ];
+  const prefix = prefixes.find((candidate) => normalized.startsWith(candidate));
+
+  if (!prefix) {
+    return null;
+  }
+
+  return normalized.slice(prefix.length).trim();
+}
 
 function sendJson(res, statusCode, data) {
   res.writeHead(statusCode, {
@@ -563,6 +592,51 @@ if (pathname === "/api/projects" && req.method === "GET") {
 
   const message = url.searchParams.get("message");
   const queryType = matchExecutiveQuery(message);
+  const assetName = extractAssetSearchTerm(message);
+
+  if (assetName) {
+    try {
+      const dashboardState = await DashboardIntelligence.getDashboardState();
+      const knowledgeInventory = dashboardState.knowledgeInventory || {};
+      const recommendation = knowledgeInventory.recommendation || {};
+      let assetLocation = locateAsset(assetName, knowledgeInventory);
+
+      if (!assetLocation.found && assetName.includes(" ")) {
+        assetLocation = locateAsset(assetName.replace(/\s+/g, "-"), knowledgeInventory);
+      }
+
+      if (assetLocation.found) {
+        return sendJson(res, 200, {
+          ok: true,
+          module: "chat",
+          message,
+          source: "assetLocator",
+          response: {
+            title: "Activo localizado",
+            matches: assetLocation.matches,
+            recommendation: recommendation.message
+          }
+        });
+      }
+
+      return sendJson(res, 200, {
+        ok: true,
+        module: "chat",
+        message,
+        source: "assetLocator",
+        response: {
+          title: "Activo no encontrado",
+          matches: []
+        }
+      });
+    } catch (error) {
+      return sendJson(res, 500, {
+        ok: false,
+        module: "chat",
+        error: "No se pudo localizar el activo."
+      });
+    }
+  }
 
   switch (queryType) {
     case "morningBriefing": {
