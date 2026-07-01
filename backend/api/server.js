@@ -77,16 +77,31 @@ function isSimpleGreeting(message = "") {
   ].includes(normalizeChatMessage(message));
 }
 
-function isTodayPlanQuestion(message = "") {
-  const normalized = normalizeChatMessage(message)
+function normalizeChatIntent(message = "") {
+  return normalizeChatMessage(message)
     .replace(/[^a-z0-9\s]/g, " ")
     .replace(/\s+/g, " ")
     .trim();
+}
+
+function isTodayPlanQuestion(message = "") {
+  const normalized = normalizeChatIntent(message);
 
   return normalized.includes("hago hoy") ||
     normalized.includes("tengo que hacer hoy") ||
     normalized.includes("plan de hoy") ||
     normalized.includes("prioridades de hoy");
+}
+
+function isProjectAttentionQuestion(message = "") {
+  const normalized = normalizeChatIntent(message);
+
+  return normalized.includes("proyectos requieren atencion") ||
+    normalized === "proyectos" ||
+    normalized.includes("proyectos prioritarios") ||
+    normalized.includes("proyectos tengo") ||
+    normalized.includes("estado de proyectos") ||
+    normalized.includes("prioridades de proyectos");
 }
 
 const server = http.createServer(async (req, res) => {
@@ -614,6 +629,37 @@ if (pathname === "/api/projects" && req.method === "GET") {
         ok: false,
         module: "chat",
         error: "No se pudo construir el briefing ejecutivo del dia."
+      });
+    }
+  }
+
+  if (isProjectAttentionQuestion(message)) {
+    try {
+      const dashboardState = await DashboardIntelligence.getDashboardState();
+      const knowledgeInventory = dashboardState.knowledgeInventory || {};
+      const summary = knowledgeInventory.summary || {};
+      const recommendation = knowledgeInventory.recommendation || {};
+      const assets = Array.isArray(knowledgeInventory.assets)
+        ? knowledgeInventory.assets.filter((asset) => asset.recognized)
+        : [];
+
+      return sendJson(res, 200, {
+        ok: true,
+        module: "chat",
+        message,
+        source: "knowledgeInventory",
+        response: {
+          title: "Proyectos prioritarios",
+          summary: `Activos estratégicos detectados: ${summary.recognizedAssets || assets.length}.`,
+          projects: assets,
+          recommendation: recommendation.message
+        }
+      });
+    } catch (error) {
+      return sendJson(res, 500, {
+        ok: false,
+        module: "chat",
+        error: "No se pudo construir el inventario de conocimiento."
       });
     }
   }
