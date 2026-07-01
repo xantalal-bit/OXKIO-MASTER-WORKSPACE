@@ -13,6 +13,10 @@ const ProjectManagerService = require("../projects/projectManagerService");
 const DashboardIntelligence = require("../services/dashboard/dashboard-intelligence");
 const { matchExecutiveQuery } = require("../services/executive/executive-query-router");
 const { locateAsset } = require("../services/knowledge/asset-locator");
+const { discoverTopLevelFolders } = require("../services/knowledge/connectors/onedrive-connector");
+const { buildDocumentCatalog } = require("../services/knowledge/document-catalog");
+const { discoverDocuments } = require("../services/knowledge/document-discovery");
+const { locateDocuments } = require("../services/knowledge/document-locator");
 const {
   getSystem,
   getIntentAnalyzer,
@@ -606,14 +610,41 @@ if (pathname === "/api/projects" && req.method === "GET") {
       }
 
       if (assetLocation.found) {
+        const asset = assetLocation.matches[0];
+        const folders = discoverTopLevelFolders();
+        const documentLocation = locateDocuments(asset, folders);
+
+        if (!documentLocation.found) {
+          return sendJson(res, 200, {
+            ok: true,
+            module: "chat",
+            message,
+            source: "documentCatalog",
+            response: {
+              title: "Activo localizado sin carpeta documental",
+              asset: asset.name,
+              folder: null,
+              summary: null,
+              extensions: null,
+              recommendation: recommendation.message
+            }
+          });
+        }
+
+        const documentDiscovery = discoverDocuments(documentLocation.folder);
+        const documentCatalog = buildDocumentCatalog(documentDiscovery);
+
         return sendJson(res, 200, {
           ok: true,
           module: "chat",
           message,
-          source: "assetLocator",
+          source: "documentCatalog",
           response: {
-            title: "Activo localizado",
-            matches: assetLocation.matches,
+            title: "Catálogo documental del activo",
+            asset: asset.name,
+            folder: documentCatalog.folder,
+            summary: documentCatalog.summary,
+            extensions: documentCatalog.extensions,
             recommendation: recommendation.message
           }
         });
