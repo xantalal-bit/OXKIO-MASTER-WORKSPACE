@@ -46,6 +46,14 @@ function matchExecutiveQuery(message) {
     return 'projects';
   }
 
+  if (normalized.startsWith('busca ') ||
+    normalized.startsWith('buscar ') ||
+    normalized.startsWith('localizar ') ||
+    normalized.startsWith('encuentra ') ||
+    normalized.startsWith('donde esta ')) {
+    return 'knowledgeSearch';
+  }
+
   return 'unknown';
 }
 
