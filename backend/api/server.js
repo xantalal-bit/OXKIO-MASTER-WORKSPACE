@@ -12,11 +12,7 @@ const SystemStateManager = require("../core/systemStateManager");
 const ProjectManagerService = require("../projects/projectManagerService");
 const DashboardIntelligence = require("../services/dashboard/dashboard-intelligence");
 const { matchExecutiveQuery } = require("../services/executive/executive-query-router");
-const { locateAsset } = require("../services/knowledge/asset-locator");
-const { discoverTopLevelFolders } = require("../services/knowledge/connectors/onedrive-connector");
-const { buildDocumentCatalog } = require("../services/knowledge/document-catalog");
-const { discoverDocuments } = require("../services/knowledge/document-discovery");
-const { locateDocuments } = require("../services/knowledge/document-locator");
+const { searchKnowledge } = require("../services/knowledge/knowledge-query-service");
 const {
   getSystem,
   getIntentAnalyzer,
@@ -600,39 +596,18 @@ if (pathname === "/api/projects" && req.method === "GET") {
 
   if (assetName) {
     try {
-      const dashboardState = await DashboardIntelligence.getDashboardState();
-      const knowledgeInventory = dashboardState.knowledgeInventory || {};
-      const recommendation = knowledgeInventory.recommendation || {};
-      let assetLocation = locateAsset(assetName, knowledgeInventory);
+      let result = searchKnowledge(assetName);
 
-      if (!assetLocation.found && assetName.includes(" ")) {
-        assetLocation = locateAsset(assetName.replace(/\s+/g, "-"), knowledgeInventory);
+      if (!result.found && assetName.includes(" ")) {
+        result = searchKnowledge(assetName.replace(/\s+/g, "-"));
       }
 
-      if (assetLocation.found) {
-        const asset = assetLocation.matches[0];
-        const folders = discoverTopLevelFolders();
-        const documentLocation = locateDocuments(asset, folders);
-
-        if (!documentLocation.found) {
-          return sendJson(res, 200, {
-            ok: true,
-            module: "chat",
-            message,
-            source: "documentCatalog",
-            response: {
-              title: "Activo localizado sin carpeta documental",
-              asset: asset.name,
-              folder: null,
-              summary: null,
-              extensions: null,
-              recommendation: recommendation.message
-            }
-          });
-        }
-
-        const documentDiscovery = discoverDocuments(documentLocation.folder);
-        const documentCatalog = buildDocumentCatalog(documentDiscovery);
+      if (result.found) {
+        const dashboardState = await DashboardIntelligence.getDashboardState();
+        const knowledgeInventory = dashboardState.knowledgeInventory || {};
+        const recommendation = knowledgeInventory.recommendation || {};
+        const pipeline = result.pipeline || {};
+        const catalog = pipeline.catalog || {};
 
         return sendJson(res, 200, {
           ok: true,
@@ -641,10 +616,10 @@ if (pathname === "/api/projects" && req.method === "GET") {
           source: "documentCatalog",
           response: {
             title: "Catálogo documental del activo",
-            asset: asset.name,
-            folder: documentCatalog.folder,
-            summary: documentCatalog.summary,
-            extensions: documentCatalog.extensions,
+            asset: result.asset.name,
+            folder: pipeline.folder,
+            summary: catalog.summary,
+            extensions: catalog.extensions,
             recommendation: recommendation.message
           }
         });
