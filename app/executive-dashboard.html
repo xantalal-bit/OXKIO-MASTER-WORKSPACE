@@ -502,6 +502,26 @@
           <p>OXKIO está listo para ayudarte a revisar lo importante, priorizar el día y mantener el foco sin sobrecargar la pantalla.</p>
         </article>
 
+        <article class="panel span-12" id="morning-briefing-card">
+          <div class="panel-header">
+            <div>
+              <h2>Resumen Ejecutivo del Día</h2>
+              <p class="meta">Briefing operativo generado desde Dashboard Intelligence.</p>
+            </div>
+            <span class="badge ok">Briefing</span>
+          </div>
+          <p class="item-title" data-morning-briefing-title>Buenos días, José Antonio</p>
+          <p class="executive-summary" data-morning-briefing-summary>Información no disponible</p>
+          <div data-morning-briefing-priorities-block hidden>
+            <p class="meta">Prioridades</p>
+            <ul class="list" data-morning-briefing-priorities></ul>
+          </div>
+          <div data-morning-briefing-recommendations-block hidden>
+            <p class="meta">Recomendaciones</p>
+            <ul class="list" data-morning-briefing-recommendations></ul>
+          </div>
+        </article>
+
         <article class="panel span-6">
           <div class="panel-header">
             <div>
@@ -802,8 +822,58 @@
       return recommendations.join(" ");
     }
 
+    function renderTextList(listElement, blockElement, values) {
+      if (!listElement || !blockElement) return;
+      listElement.innerHTML = "";
+
+      if (!Array.isArray(values) || values.length === 0) {
+        blockElement.hidden = true;
+        return;
+      }
+
+      values.forEach((value) => {
+        const item = document.createElement("li");
+        item.className = "item";
+        const text = document.createElement("p");
+        text.className = "item-text";
+        text.textContent = textOrFallback(value, "Información no disponible");
+        item.appendChild(text);
+        listElement.appendChild(item);
+      });
+
+      blockElement.hidden = false;
+    }
+
+    function updateMorningBriefing(morningBriefing) {
+      const card = document.getElementById("morning-briefing-card");
+      if (!card) return;
+
+      const briefing = morningBriefing || {};
+      setText(
+        card.querySelector("[data-morning-briefing-title]"),
+        briefing.title,
+        "Buenos días, José Antonio"
+      );
+      setText(
+        card.querySelector("[data-morning-briefing-summary]"),
+        briefing.summary,
+        "Información no disponible"
+      );
+      renderTextList(
+        card.querySelector("[data-morning-briefing-priorities]"),
+        card.querySelector("[data-morning-briefing-priorities-block]"),
+        briefing.priorities
+      );
+      renderTextList(
+        card.querySelector("[data-morning-briefing-recommendations]"),
+        card.querySelector("[data-morning-briefing-recommendations-block]"),
+        briefing.recommendations
+      );
+    }
+
     function applyDashboardState(state) {
       const executiveResponse = getExecutiveResponse(state);
+      updateMorningBriefing(state.morningBriefing);
       const greetingPanel = document.querySelector(".greeting");
       setText(
         greetingPanel && greetingPanel.querySelector("h2"),
