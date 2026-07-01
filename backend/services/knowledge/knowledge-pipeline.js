@@ -6,6 +6,7 @@ const { discoverDocuments } = require('./document-discovery');
 const { locateDocuments } = require('./document-locator');
 const { buildKnowledgeCache } = require('./knowledge-cache-registry');
 const { curateDocument } = require('./universal-knowledge-curator');
+const { persistKnowledgeObject } = require('./knowledge-persistence-service');
 
 function runKnowledgePipeline(asset) {
   const folders = discoverTopLevelFolders();
@@ -18,6 +19,7 @@ function runKnowledgePipeline(asset) {
       catalog: null,
       cache: [],
       knowledgeObjects: [],
+      persistedKnowledge: [],
     };
   }
 
@@ -28,6 +30,9 @@ function runKnowledgePipeline(asset) {
     .map((document) => curateDocument(document))
     .filter((curation) => curation.supported)
     .map((curation) => curation.knowledgeObject);
+  const persistedKnowledge = knowledgeObjects.map((knowledgeObject) => (
+    persistKnowledgeObject(knowledgeObject)
+  ));
 
   return {
     asset,
@@ -35,6 +40,7 @@ function runKnowledgePipeline(asset) {
     catalog,
     cache,
     knowledgeObjects,
+    persistedKnowledge,
   };
 }
 
