@@ -3,6 +3,11 @@
 const form = document.getElementById('executiveChatForm');
 const input = document.getElementById('queryInput');
 const conversation = document.getElementById('conversation');
+const newConversationButton = document.getElementById('newConversationButton');
+
+function scrollToLatestMessage() {
+  conversation.scrollTop = conversation.scrollHeight;
+}
 
 function clearEmptyState() {
   const emptyState = conversation.querySelector('.empty-state');
@@ -10,6 +15,11 @@ function clearEmptyState() {
   if (emptyState) {
     emptyState.remove();
   }
+}
+
+function renderEmptyState() {
+  conversation.innerHTML = '';
+  conversation.appendChild(createElement('p', 'empty-state', 'Escribe una consulta ejecutiva.'));
 }
 
 function createElement(tagName, className, text) {
@@ -82,7 +92,8 @@ function renderExchange(query, data) {
     limitationsGroup,
   ].forEach((group) => exchange.appendChild(group));
 
-  conversation.prepend(exchange);
+  conversation.appendChild(exchange);
+  scrollToLatestMessage();
 }
 
 function setThinking(isThinking) {
@@ -93,7 +104,8 @@ function setThinking(isThinking) {
 
     if (!status) {
       status = createElement('p', 'status', 'Pensando...');
-      conversation.prepend(status);
+      conversation.appendChild(status);
+      scrollToLatestMessage();
     }
   } else if (status) {
     status.remove();
@@ -105,7 +117,8 @@ function setThinking(isThinking) {
 
 function renderError(message) {
   clearEmptyState();
-  conversation.prepend(createElement('p', 'error', message));
+  conversation.appendChild(createElement('p', 'error', message));
+  scrollToLatestMessage();
 }
 
 form.addEventListener('submit', async (event) => {
@@ -141,4 +154,10 @@ form.addEventListener('submit', async (event) => {
   } finally {
     setThinking(false);
   }
+});
+
+newConversationButton.addEventListener('click', () => {
+  renderEmptyState();
+  input.value = '';
+  input.focus();
 });
