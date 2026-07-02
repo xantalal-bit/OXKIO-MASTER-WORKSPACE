@@ -14,6 +14,10 @@ const DashboardIntelligence = require("../services/dashboard/dashboard-intellige
 const { matchExecutiveQuery } = require("../services/executive/executive-query-router");
 const { searchKnowledge } = require("../services/knowledge/knowledge-query-service");
 const {
+  handleExecutiveChatRequest,
+  isExecutiveChatRoute
+} = require("./routes/executive-chat");
+const {
   getSystem,
   getIntentAnalyzer,
   getRuleEngine,
@@ -92,6 +96,10 @@ function sendJson(res, statusCode, data) {
 const server = http.createServer(async (req, res) => {
 
 const pathname = req.url.split("?")[0];
+if (isExecutiveChatRoute(pathname, req.method)) {
+  return handleExecutiveChatRequest(req, res);
+}
+
 if (pathname === "/oauth/google" && req.method === "GET") {
   try {
     const authUrl = getAuthUrl();
