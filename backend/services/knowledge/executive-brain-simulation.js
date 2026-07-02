@@ -33,11 +33,51 @@ const queryProfiles = [
   },
 ];
 
+const stopWords = new Set([
+  'a',
+  'al',
+  'como',
+  'con',
+  'de',
+  'del',
+  'el',
+  'en',
+  'es',
+  'esa',
+  'ese',
+  'eso',
+  'esta',
+  'este',
+  'esto',
+  'existe',
+  'existen',
+  'la',
+  'las',
+  'lo',
+  'los',
+  'me',
+  'para',
+  'por',
+  'que',
+  'sin',
+  'sobre',
+  'un',
+  'una',
+  'y',
+]);
+
 function normalizeText(value) {
   return String(value || '')
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
     .toLowerCase();
+}
+
+function extractQueryTerms(query) {
+  return normalizeText(query)
+    .split(/\s+/)
+    .filter((term) => term.length > 2)
+    .filter((term) => !stopWords.has(term));
 }
 
 function readKnowledgeObjects(options) {
@@ -103,8 +143,7 @@ function flattenStructureText(knowledgeObject) {
 }
 
 function scoreKnowledgeObject(knowledgeObject, query, profile) {
-  const normalizedQuery = normalizeText(query);
-  const queryTerms = normalizedQuery.split(/\s+/).filter((term) => term.length > 2);
+  const queryTerms = extractQueryTerms(query);
   const documentType = getDocumentType(knowledgeObject);
   const name = normalizeText(knowledgeObject && knowledgeObject.identity ? knowledgeObject.identity.name : '');
   const raw = normalizeText(knowledgeObject && knowledgeObject.content ? knowledgeObject.content.raw : '');
@@ -182,7 +221,7 @@ function simulateExecutiveBrainQuery(query, options) {
   const profile = detectQueryProfile(query);
   const matches = knowledgeObjects
     .map((knowledgeObject) => scoreKnowledgeObject(knowledgeObject, query, profile))
-    .filter((match) => match.score > 0)
+    .filter((match) => match.score >= (profile.type === 'Generic' ? 3 : 1))
     .sort((left, right) => right.score - left.score);
   const sources = matches.slice(0, 5).map(buildSource);
 

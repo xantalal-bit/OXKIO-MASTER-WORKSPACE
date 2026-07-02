@@ -202,9 +202,9 @@ test('returns low confidence and no sources when no results are found', () => {
   const storeDirectory = createStoreFixture();
 
   try {
-    const result = simulateExecutiveBrainQuery('zebra quantum payroll', { storeDirectory });
+    const result = simulateExecutiveBrainQuery('consulta inexistente para validar respuesta sin resultados', { storeDirectory });
 
-    assert.equal(result.query, 'zebra quantum payroll');
+    assert.equal(result.query, 'consulta inexistente para validar respuesta sin resultados');
     assert.equal(typeof result.answer, 'string');
     assert.equal(result.confidence, 0.2);
     assert.deepEqual(result.sources, []);
