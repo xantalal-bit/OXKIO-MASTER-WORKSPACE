@@ -15,6 +15,19 @@ const recognizedAssets = {
     assetType: 'project',
     priority: 'high',
     domain: 'commercial',
+    aliases: ['business hunter', 'businesshunter'],
+  },
+  'BUSINESS HUNTER': {
+    assetType: 'project',
+    priority: 'high',
+    domain: 'commercial',
+    aliases: ['business-hunter', 'businesshunter'],
+  },
+  BUSINESSHUNTER: {
+    assetType: 'project',
+    priority: 'high',
+    domain: 'commercial',
+    aliases: ['business hunter', 'business-hunter'],
   },
   'PROFESOR-IA': {
     assetType: 'project',
