@@ -2,6 +2,7 @@
 
 const fs = require('fs');
 const path = require('path');
+const { rankKnowledgeObjects } = require('./knowledge-ranking-engine');
 
 const defaultStoreDirectory = path.resolve(__dirname, '../../data/knowledge-store/objects');
 
@@ -124,94 +125,56 @@ function getDocumentType(knowledgeObject) {
     : null;
 }
 
-function flattenStructureText(knowledgeObject) {
-  const structure = knowledgeObject
-    && knowledgeObject.metadata
-    ? knowledgeObject.metadata.documentStructure
-    : null;
+function getKnowledgeObjectId(knowledgeObject) {
+  const identity = knowledgeObject && knowledgeObject.identity ? knowledgeObject.identity : {};
 
-  if (!structure) {
-    return '';
-  }
-
-  return [
-    ...(Array.isArray(structure.headings) ? structure.headings.map((heading) => heading.title) : []),
-    ...(Array.isArray(structure.lists) ? structure.lists.map((item) => item.text) : []),
-    ...(Array.isArray(structure.links) ? structure.links.map((link) => link.url) : []),
-    ...(Array.isArray(structure.codeBlocks) ? structure.codeBlocks.map((block) => block.code) : []),
-  ].filter(Boolean).join(' ');
+  return knowledgeObject.id
+    || identity.id
+    || identity.path
+    || null;
 }
 
-function scoreKnowledgeObject(knowledgeObject, query, profile) {
-  const queryTerms = extractQueryTerms(query);
-  const documentType = getDocumentType(knowledgeObject);
-  const name = normalizeText(knowledgeObject && knowledgeObject.identity ? knowledgeObject.identity.name : '');
-  const raw = normalizeText(knowledgeObject && knowledgeObject.content ? knowledgeObject.content.raw : '');
-  const structure = normalizeText(flattenStructureText(knowledgeObject));
-  const reasons = [];
-  let score = 0;
-
-  if (documentType && profile.documentTypes.includes(documentType)) {
-    score += 5;
-    reasons.push(`documentTypeClassification matched ${documentType}`);
-  }
-
-  queryTerms.forEach((term) => {
-    if (name.includes(term)) {
-      score += 3;
-      reasons.push(`identity.name matched "${term}"`);
-    }
-
-    if (raw.includes(term)) {
-      score += 1;
-      reasons.push(`content.raw matched "${term}"`);
-    }
-
-    if (structure.includes(term)) {
-      score += 2;
-      reasons.push(`metadata.documentStructure matched "${term}"`);
-    }
-  });
-
+function buildRankingOptions(query, profile) {
   return {
-    knowledgeObject,
-    score,
-    reasons: Array.from(new Set(reasons)),
+    query,
+    documentTypes: profile && Array.isArray(profile.documentTypes) ? profile.documentTypes : [],
+    keywords: profile && Array.isArray(profile.keywords) ? profile.keywords : [],
+    structureTerms: profile && Array.isArray(profile.keywords) ? profile.keywords : [],
   };
 }
 
-function buildSource(match) {
-  const knowledgeObject = match.knowledgeObject;
+function buildSource(rankedEntry, knowledgeObject) {
   const identity = knowledgeObject.identity || {};
 
   return {
-    id: knowledgeObject.id || identity.id || null,
+    id: rankedEntry.id || getKnowledgeObjectId(knowledgeObject),
     name: identity.name || null,
     path: identity.path || null,
     type: getDocumentType(knowledgeObject) || 'Unknown',
-    score: match.score,
-    reasons: match.reasons,
+    score: rankedEntry.score,
+    rankingPosition: rankedEntry.rankingPosition,
+    reasons: rankedEntry.reasons,
   };
 }
 
-function buildAnswer(query, profile, matches) {
-  if (matches.length === 0) {
+function buildAnswer(query, profile, rankedMatches) {
+  if (rankedMatches.length === 0) {
     return `No se encontraron Knowledge Objects relevantes para "${query}" en el Knowledge Store.`;
   }
 
-  const topSources = matches.slice(0, 3).map((match) => buildSource(match));
+  const topSources = rankedMatches.slice(0, 3).map((match) => match.source);
   const names = topSources.map((source) => source.name).filter(Boolean).join(', ');
 
-  return `Consulta simulada sobre ${profile.type}. Se encontraron ${matches.length} Knowledge Objects relevantes. Fuentes principales: ${names || 'sin nombre disponible'}.`;
+  return `Consulta simulada sobre ${profile.type}. Se encontraron ${rankedMatches.length} Knowledge Objects relevantes. Fuentes principales: ${names || 'sin nombre disponible'}.`;
 }
 
-function calculateConfidence(matches) {
-  if (matches.length === 0) {
+function calculateConfidence(rankedMatches) {
+  if (rankedMatches.length === 0) {
     return 0.2;
   }
 
-  const topScore = matches[0].score;
-  const confidence = 0.35 + Math.min(topScore, 10) * 0.05 + Math.min(matches.length, 5) * 0.03;
+  const topScore = rankedMatches[0].score;
+  const confidence = 0.35 + Math.min(topScore, 10) * 0.05 + Math.min(rankedMatches.length, 5) * 0.03;
 
   return Number(Math.min(confidence, 0.9).toFixed(2));
 }
@@ -219,22 +182,29 @@ function calculateConfidence(matches) {
 function simulateExecutiveBrainQuery(query, options) {
   const knowledgeObjects = readKnowledgeObjects(options);
   const profile = detectQueryProfile(query);
-  const matches = knowledgeObjects
-    .map((knowledgeObject) => scoreKnowledgeObject(knowledgeObject, query, profile))
-    .filter((match) => match.score >= (profile.type === 'Generic' ? 3 : 1))
-    .sort((left, right) => right.score - left.score);
-  const sources = matches.slice(0, 5).map(buildSource);
+  const rankedObjects = rankKnowledgeObjects(knowledgeObjects, buildRankingOptions(query, profile));
+  const knowledgeObjectById = new Map(
+    knowledgeObjects.map((knowledgeObject) => [getKnowledgeObjectId(knowledgeObject), knowledgeObject]),
+  );
+  const rankedMatches = rankedObjects
+    .filter((entry) => entry.score > 0)
+    .map((entry) => ({
+      ...entry,
+      source: buildSource(entry, knowledgeObjectById.get(entry.id) || {}),
+    }));
+  const sources = rankedMatches.slice(0, 5).map((entry) => entry.source);
 
   return {
     query,
-    answer: buildAnswer(query, profile, matches),
-    confidence: calculateConfidence(matches),
+    answer: buildAnswer(query, profile, rankedMatches),
+    confidence: calculateConfidence(rankedMatches),
     sources,
     reasoningSummary: {
       queryType: profile.type,
       knowledgeObjectsRead: knowledgeObjects.length,
-      matchesFound: matches.length,
+      matchesFound: rankedMatches.length,
       rankingSignals: [
+        'knowledge-ranking-engine',
         'documentTypeClassification',
         'identity.name',
         'content.raw',
@@ -242,7 +212,7 @@ function simulateExecutiveBrainQuery(query, options) {
       ],
     },
     limitations: [
-      ...(matches.length === 0 ? ['No sufficient evidence was found in the Knowledge Store.'] : []),
+      ...(rankedMatches.length === 0 ? ['No sufficient evidence was found in the Knowledge Store.'] : []),
       'Simulation only: this is not the definitive Executive Brain.',
       'No AI is used.',
       'Only persisted Knowledge Objects are read.',

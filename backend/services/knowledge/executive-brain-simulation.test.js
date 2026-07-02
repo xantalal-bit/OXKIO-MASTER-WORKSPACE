@@ -146,6 +146,21 @@ test('supports Learning Heroes queries', () => {
   }
 });
 
+test('orders sources by ranking when multiple documents match', () => {
+  const storeDirectory = createStoreFixture();
+
+  try {
+    const result = simulateExecutiveBrainQuery('Learning Heroes roadmap', { storeDirectory });
+
+    assert.ok(result.sources.length >= 2);
+    assert.equal(result.sources[0].type, 'Learning');
+    assert.equal(result.sources[0].rankingPosition, 1);
+    assert.ok(result.sources[0].score >= result.sources[1].score);
+  } finally {
+    cleanupStoreFixture(storeDirectory);
+  }
+});
+
 test('supports Roadmap queries', () => {
   const storeDirectory = createStoreFixture();
 
