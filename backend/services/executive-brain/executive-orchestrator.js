@@ -3,6 +3,7 @@
 const { analyzeExecutiveQuery } = require('./query-analyzer');
 const { searchKnowledge } = require('../knowledge/knowledge-query-service');
 const { simulateExecutiveBrainQuery } = require('../knowledge/executive-brain-simulation');
+const { buildExecutiveResponse } = require('./executive-response-builder');
 
 function shouldUseKnowledgeQuery(analysis) {
   return Boolean(analysis && analysis.project);
@@ -24,6 +25,7 @@ function orchestrateExecutiveQuery(query, options) {
   const analyzer = dependencies.analyzeExecutiveQuery || analyzeExecutiveQuery;
   const knowledgeSearch = dependencies.searchKnowledge || searchKnowledge;
   const simulator = dependencies.simulateExecutiveBrainQuery || simulateExecutiveBrainQuery;
+  const responseBuilder = dependencies.buildExecutiveResponse || buildExecutiveResponse;
   const analysis = analyzer(query);
   let knowledgeQueryResult = null;
 
@@ -32,15 +34,22 @@ function orchestrateExecutiveQuery(query, options) {
   }
 
   const response = simulator(buildSimulationQuery(query, analysis), options && options.simulationOptions);
+  const executiveResponse = responseBuilder({
+    answer: response.answer,
+    confidence: response.confidence,
+    sources: response.sources,
+    reasoningSummary: response.reasoningSummary,
+    limitations: response.limitations,
+  });
 
   return {
     query,
     analysis,
-    response: response.answer,
-    confidence: Math.min(analysis.confidence, response.confidence),
-    sources: response.sources,
+    response: executiveResponse.executiveSummary,
+    confidence: Math.min(analysis.confidence, executiveResponse.confidence),
+    sources: executiveResponse.sources,
     limitations: [
-      ...response.limitations,
+      ...executiveResponse.limitations,
       ...(knowledgeQueryResult && knowledgeQueryResult.found === false
         ? [`Knowledge Query Service did not find project ${analysis.project}.`]
         : []),

@@ -9,6 +9,7 @@ test('orchestrates analyzer, knowledge query service, and simulation for project
     analyzer: 0,
     knowledgeSearch: 0,
     simulation: 0,
+    builder: 0,
   };
 
   const result = orchestrateExecutiveQuery('Resumen del roadmap de Oxkio', {
@@ -64,15 +65,31 @@ test('orchestrates analyzer, knowledge query service, and simulation for project
           limitations: ['Simulation only.'],
         };
       },
+      buildExecutiveResponse(input) {
+        calls.builder += 1;
+        assert.equal(input.answer, 'Respuesta simulada de roadmap.');
+        assert.equal(input.confidence, 0.72);
+        assert.equal(input.sources.length, 1);
+
+        return {
+          executiveSummary: 'Resumen ejecutivo de roadmap.',
+          keyFindings: ['Resumen ejecutivo de roadmap.'],
+          recommendation: 'Proceder con base en la evidencia disponible.',
+          confidence: 0.72,
+          sources: input.sources,
+          limitations: input.limitations,
+        };
+      },
     },
   });
 
   assert.equal(calls.analyzer, 1);
   assert.equal(calls.knowledgeSearch, 1);
   assert.equal(calls.simulation, 1);
+  assert.equal(calls.builder, 1);
   assert.equal(result.query, 'Resumen del roadmap de Oxkio');
   assert.equal(result.analysis.intent, 'roadmap');
-  assert.equal(result.response, 'Respuesta simulada de roadmap.');
+  assert.equal(result.response, 'Resumen ejecutivo de roadmap.');
   assert.equal(result.confidence, 0.72);
   assert.equal(result.sources.length, 1);
   assert.deepEqual(result.limitations, ['Simulation only.']);
@@ -112,12 +129,22 @@ test('does not call Knowledge Query Service when analyzer finds no project', () 
           limitations: ['No sufficient evidence was found in the Knowledge Store.'],
         };
       },
+      buildExecutiveResponse(input) {
+        return {
+          executiveSummary: 'Resumen ejecutivo de decisiones.',
+          keyFindings: ['Resumen ejecutivo de decisiones.'],
+          recommendation: 'Revisar la evidencia disponible y validar manualmente antes de ejecutar.',
+          confidence: input.confidence,
+          sources: input.sources,
+          limitations: input.limitations,
+        };
+      },
     },
   });
 
   assert.equal(knowledgeSearchCalled, false);
   assert.equal(result.analysis.intent, 'decisions');
-  assert.equal(result.response, 'Respuesta simulada de decisiones.');
+  assert.equal(result.response, 'Resumen ejecutivo de decisiones.');
   assert.equal(result.confidence, 0.66);
   assert.deepEqual(result.sources, []);
   assert.ok(result.limitations[0].includes('No sufficient evidence'));
@@ -137,6 +164,16 @@ test('returns the required orchestrator response shape with default components',
           sources: [],
           reasoningSummary: {},
           limitations: ['Simulation only.'],
+        };
+      },
+      buildExecutiveResponse(input) {
+        return {
+          executiveSummary: 'Resumen ejecutivo de documentacion.',
+          keyFindings: ['Resumen ejecutivo de documentacion.'],
+          recommendation: 'Revisar la evidencia disponible y validar manualmente antes de ejecutar.',
+          confidence: input.confidence,
+          sources: input.sources,
+          limitations: input.limitations,
         };
       },
     },
