@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Oxkio Executive</title>
+  <link rel="icon" type="image/png" href="/app/favicon.png">
+  <link rel="stylesheet" href="/css/executive-chat.css">
+</head>
+<body>
+  <main class="chat-shell">
+    <header class="chat-header">
+      <h1>Oxkio Executive</h1>
+    </header>
+
+    <section class="conversation" id="conversation" aria-live="polite">
+      <p class="empty-state">Escribe una consulta ejecutiva.</p>
+    </section>
+
+    <form class="composer" id="executiveChatForm">
+      <label class="visually-hidden" for="queryInput">Consulta</label>
+      <textarea
+        id="queryInput"
+        name="query"
+        rows="3"
+        placeholder="Pregunta sobre roadmaps, decisiones, tareas o conocimiento..."
+        required
+      ></textarea>
+      <button type="submit">Preguntar</button>
+    </form>
+  </main>
+
+  <script src="/js/executive-chat.js"></script>
+</body>
+</html>

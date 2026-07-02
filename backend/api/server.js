@@ -341,6 +341,51 @@ if (req.url === "/executive-dashboard.html") {
 
   return;
 }
+if (req.url === "/executive-chat.html") {
+
+  const fs = require("fs");
+  const path = require("path");
+
+  const chatPath = path.join(__dirname, "../../app/executive-chat.html");
+
+  res.writeHead(200, {
+    "Content-Type": "text/html; charset=utf-8"
+  });
+
+  res.end(fs.readFileSync(chatPath));
+
+  return;
+}
+if (req.url === "/js/executive-chat.js") {
+
+  const fs = require("fs");
+  const path = require("path");
+
+  const scriptPath = path.join(__dirname, "../../app/js/executive-chat.js");
+
+  res.writeHead(200, {
+    "Content-Type": "application/javascript; charset=utf-8"
+  });
+
+  res.end(fs.readFileSync(scriptPath));
+
+  return;
+}
+if (req.url === "/css/executive-chat.css") {
+
+  const fs = require("fs");
+  const path = require("path");
+
+  const stylePath = path.join(__dirname, "../../app/css/executive-chat.css");
+
+  res.writeHead(200, {
+    "Content-Type": "text/css; charset=utf-8"
+  });
+
+  res.end(fs.readFileSync(stylePath));
+
+  return;
+}
 if (req.url === "/app/logo.png") {
 
   const fs = require("fs");
