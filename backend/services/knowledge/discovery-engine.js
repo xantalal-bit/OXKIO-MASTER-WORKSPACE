@@ -34,8 +34,8 @@ function discoverAndRecognizeFolders(folders) {
   };
 }
 
-function discoverKnowledge() {
-  const folders = discoverTopLevelFolders().folders;
+function discoverKnowledge(options) {
+  const folders = discoverTopLevelFolders(options).folders;
   const discoveryResult = discoverAndRecognizeFolders(folders);
 
   return buildKnowledgeInventory(discoveryResult);

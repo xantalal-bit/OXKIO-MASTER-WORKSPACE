@@ -19,8 +19,11 @@ function locateAsset(assetName, knowledgeInventory) {
 
   const matches = assets.filter((asset) => {
     const name = normalizeAssetName(asset && asset.name);
+    const aliases = Array.isArray(asset && asset.aliases)
+      ? asset.aliases.map(normalizeAssetName)
+      : [];
 
-    return name.includes(query);
+    return name.includes(query) || aliases.some((alias) => alias.includes(query));
   });
 
   return {

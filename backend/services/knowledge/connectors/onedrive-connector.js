@@ -5,8 +5,12 @@ const path = require('path');
 
 const DEFAULT_ONEDRIVE_ROOT = 'C:\\Users\\janta\\OneDrive\\Documentos';
 
-function getOneDriveStatus() {
-  const root = path.resolve(DEFAULT_ONEDRIVE_ROOT);
+function resolveOneDriveRoot(options) {
+  return path.resolve((options && options.root) || process.env.KNOWLEDGE_DISCOVERY_ROOT || DEFAULT_ONEDRIVE_ROOT);
+}
+
+function getOneDriveStatus(options) {
+  const root = resolveOneDriveRoot(options);
   const available = fs.existsSync(root);
 
   return {
@@ -18,8 +22,8 @@ function getOneDriveStatus() {
   };
 }
 
-function discoverTopLevelFolders() {
-  const root = path.resolve(DEFAULT_ONEDRIVE_ROOT);
+function discoverTopLevelFolders(options) {
+  const root = resolveOneDriveRoot(options);
   const folders = fs
     .readdirSync(root, { withFileTypes: true })
     .filter((entry) => entry.isDirectory())

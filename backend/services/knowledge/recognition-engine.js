@@ -20,6 +20,25 @@ const recognizedAssets = {
     assetType: 'project',
     priority: 'high',
     domain: 'education',
+    aliases: ['learning heroes', 'learning-heroes', 'learningheroes'],
+  },
+  'LEARNING HEROES': {
+    assetType: 'knowledge-base',
+    priority: 'high',
+    domain: 'education',
+    aliases: ['learning-heroes', 'learningheroes', 'profesor-ia'],
+  },
+  'LEARNING-HEROES': {
+    assetType: 'knowledge-base',
+    priority: 'high',
+    domain: 'education',
+    aliases: ['learning heroes', 'learningheroes', 'profesor-ia'],
+  },
+  LEARNINGHEROES: {
+    assetType: 'knowledge-base',
+    priority: 'high',
+    domain: 'education',
+    aliases: ['learning heroes', 'learning-heroes', 'profesor-ia'],
   },
   'KNOWLEDGE-CURATOR': {
     assetType: 'project',
@@ -54,6 +73,7 @@ function recognizeAsset(folder) {
     assetType: asset.assetType,
     priority: asset.priority,
     domain: asset.domain,
+    aliases: asset.aliases || [],
     status: 'recognized',
   };
 }

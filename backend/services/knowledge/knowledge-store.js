@@ -11,9 +11,13 @@ function ensureStoreDirectory() {
 }
 
 function buildKnowledgeObjectId(knowledgeObject) {
+  const identityPath = knowledgeObject && knowledgeObject.identity
+    ? knowledgeObject.identity.path
+    : null;
+
   return crypto
     .createHash('sha1')
-    .update(String(knowledgeObject && knowledgeObject.path ? knowledgeObject.path : ''))
+    .update(String(identityPath || (knowledgeObject && knowledgeObject.path) || ''))
     .digest('hex');
 }
 

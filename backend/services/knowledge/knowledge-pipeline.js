@@ -24,22 +24,8 @@ function enrichKnowledgeObject(document, knowledgeObject) {
   };
 }
 
-function runKnowledgePipeline(asset) {
-  const folders = discoverTopLevelFolders();
-  const documentLocation = locateDocuments(asset, folders);
-
-  if (!documentLocation.found) {
-    return {
-      asset,
-      folder: null,
-      catalog: null,
-      cache: [],
-      knowledgeObjects: [],
-      persistedKnowledge: [],
-    };
-  }
-
-  const documentDiscovery = discoverDocuments(documentLocation.folder);
+function processDocumentFolder(asset, folder) {
+  const documentDiscovery = discoverDocuments(folder);
   const catalog = buildDocumentCatalog(documentDiscovery);
   const cache = buildKnowledgeCache(documentDiscovery.documents);
   const knowledgeObjects = documentDiscovery.documents
@@ -56,12 +42,30 @@ function runKnowledgePipeline(asset) {
 
   return {
     asset,
-    folder: documentLocation.folder,
+    folder,
     catalog,
     cache,
     knowledgeObjects,
     persistedKnowledge,
   };
+}
+
+function runKnowledgePipeline(asset, options) {
+  const folders = discoverTopLevelFolders(options);
+  const documentLocation = locateDocuments(asset, folders);
+
+  if (!documentLocation.found) {
+    return {
+      asset,
+      folder: null,
+      catalog: null,
+      cache: [],
+      knowledgeObjects: [],
+      persistedKnowledge: [],
+    };
+  }
+
+  return processDocumentFolder(asset, documentLocation.folder);
 }
 
 module.exports = {
