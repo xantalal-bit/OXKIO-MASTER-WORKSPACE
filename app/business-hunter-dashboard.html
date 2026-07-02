@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Business Hunter Executive</title>
+  <link rel="icon" type="image/png" href="/app/favicon.png">
+  <link rel="stylesheet" href="/css/business-hunter-dashboard.css">
+</head>
+<body>
+  <main class="dashboard-shell">
+    <header class="dashboard-header">
+      <div>
+        <p class="eyebrow">Executive Brain</p>
+        <h1>Business Hunter Executive</h1>
+      </div>
+      <p class="status" id="statusText">Cargando resumen ejecutivo...</p>
+    </header>
+
+    <section class="summary-panel" aria-live="polite">
+      <div class="summary-block">
+        <p class="label">Resumen ejecutivo</p>
+        <p class="summary-text" id="executiveSummary">Cargando datos...</p>
+      </div>
+
+      <div class="summary-block">
+        <p class="label">Recomendación</p>
+        <p class="summary-text" id="recommendation">Cargando datos...</p>
+      </div>
+
+      <div class="summary-meta">
+        <div class="summary-block">
+          <p class="label">Confianza</p>
+          <p class="metric" id="confidence">--</p>
+        </div>
+
+        <div class="summary-block">
+          <p class="label">Fuentes</p>
+          <ul class="sources" id="sourcesList">
+            <li>Cargando datos...</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script src="/js/business-hunter-dashboard.js"></script>
+</body>
+</html>
