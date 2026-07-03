@@ -189,6 +189,155 @@ test('passes optional private context to the executive orchestrator', async () =
   assert.equal(Object.hasOwn(payload.sources[0], 'path'), false);
 });
 
+test('builds Calendar private context for executive chat requests', async () => {
+  let providerInput = null;
+  let orchestratorCall = null;
+  const request = createRequest(JSON.stringify({
+    query: 'Que tengo hoy?',
+    calendar: {
+      enabled: true,
+      clientId: 'client-alpha',
+      userId: 'user-alpha',
+      expectedClientId: 'client-alpha',
+      authorization: { status: 'granted' },
+      sourceId: 'calendar-source-alpha',
+      range: 'today',
+      maxResults: 10,
+    },
+  }));
+  const response = createResponse();
+
+  await handleExecutiveChatRequest(request, response, {
+    dependencies: {
+      async buildCalendarPrivateContext(input) {
+        providerInput = input;
+
+        return {
+          privateContextMetadata: buildPrivateContext({
+            sourceType: 'calendar',
+            sourceId: 'calendar-source-alpha',
+            purpose: 'executive-briefing',
+          }),
+          expectedClientId: 'client-alpha',
+          privatePayload: {
+            source: 'calendar',
+            range: {
+              preset: 'today',
+              timeMin: '2026-07-03T00:00:00.000Z',
+              timeMax: '2026-07-04T00:00:00.000Z',
+              maxResults: 10,
+            },
+            events: [
+              {
+                id: 'event-1',
+                title: 'Evento privado ficticio',
+                start: '2026-07-03T10:00:00.000Z',
+                token: 'private-token',
+              },
+            ],
+          },
+        };
+      },
+      orchestrateExecutiveQuery(query, options) {
+        orchestratorCall = { query, options };
+
+        return {
+          query,
+          analysis: {
+            intent: 'briefing',
+            project: null,
+            documentTypes: [],
+            keywords: [],
+            filters: {},
+            priority: 'high',
+            confidence: 0.8,
+          },
+          response: 'Agenda privada autorizada: Evento privado ficticio.',
+          confidence: 0.7,
+          sources: [
+            {
+              id: 'source-1',
+              name: 'source.md',
+              path: 'C:\\private\\source.md',
+              type: 'Notes',
+            },
+          ],
+          privateContextUsed: true,
+          limitations: [],
+        };
+      },
+    },
+  });
+
+  const payload = response.getJson();
+
+  assert.equal(response.statusCode, 200);
+  assert.equal(providerInput.range, 'today');
+  assert.equal(orchestratorCall.query, 'Que tengo hoy?');
+  assert.equal(orchestratorCall.options.privateContextMetadata.sourceType, 'calendar');
+  assert.equal(orchestratorCall.options.privateContextRequiredPurpose, 'executive-briefing');
+  assert.equal(payload.privateContextUsed, true);
+  assert.equal(Object.hasOwn(payload.sources[0], 'path'), false);
+  assert.equal(JSON.stringify(payload).includes('private-token'), false);
+});
+
+test('passes weekly Calendar range to provider', async () => {
+  let providerInput = null;
+  const request = createRequest(JSON.stringify({
+    query: 'Que compromisos importantes tengo esta semana?',
+    calendar: {
+      enabled: true,
+      clientId: 'client-alpha',
+      userId: 'user-alpha',
+      expectedClientId: 'client-alpha',
+      authorization: { status: 'granted' },
+      range: 'next7Days',
+      maxResults: 10,
+    },
+  }));
+  const response = createResponse();
+
+  await handleExecutiveChatRequest(request, response, {
+    dependencies: {
+      async buildCalendarPrivateContext(input) {
+        providerInput = input;
+
+        return {
+          privateContextMetadata: buildPrivateContext({
+            sourceType: 'calendar',
+            purpose: 'executive-briefing',
+          }),
+          expectedClientId: 'client-alpha',
+          privatePayload: {
+            source: 'calendar',
+            range: {
+              preset: 'next7Days',
+              timeMin: '2026-07-03T08:00:00.000Z',
+              timeMax: '2026-07-10T08:00:00.000Z',
+              maxResults: 10,
+            },
+            events: [],
+          },
+        };
+      },
+      orchestrateExecutiveQuery(query) {
+        return {
+          query,
+          analysis: {},
+          response: 'Agenda privada autorizada: no hay eventos.',
+          confidence: 0.7,
+          sources: [],
+          privateContextUsed: true,
+          limitations: [],
+        };
+      },
+    },
+  });
+
+  assert.equal(response.statusCode, 200);
+  assert.equal(providerInput.range, 'next7Days');
+});
+
 test('rejects privateContextMetadata without privatePayload', async () => {
   const request = createRequest(JSON.stringify({
     query: 'Briefing privado',

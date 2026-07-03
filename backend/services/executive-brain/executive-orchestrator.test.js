@@ -291,6 +291,73 @@ test('uses authorized private context without adding it to global sources', () =
   assert.ok(builderInput.answer.includes('Contexto privado autorizado'));
 });
 
+test('uses authorized Calendar context to answer daily agenda queries', () => {
+  const result = orchestrateExecutiveQuery('Que tengo hoy?', {
+    privateContextMetadata: buildPrivateContext({
+      sourceType: 'calendar',
+      sourceId: 'calendar-source-alpha',
+      purpose: 'executive-briefing',
+    }),
+    expectedClientId: 'client-alpha',
+    privateContextRequiredPurpose: 'executive-briefing',
+    privatePayload: {
+      source: 'calendar',
+      range: {
+        preset: 'today',
+        timeMin: '2026-07-03T00:00:00.000Z',
+        timeMax: '2026-07-04T00:00:00.000Z',
+        maxResults: 10,
+      },
+      events: [
+        {
+          id: 'event-1',
+          title: 'Reunion ficticia de seguimiento',
+          start: '2026-07-03T10:00:00.000Z',
+          end: '2026-07-03T10:30:00.000Z',
+        },
+      ],
+    },
+    dependencies: {
+      analyzeExecutiveQuery() {
+        return {
+          intent: 'briefing',
+          project: null,
+          documentTypes: [],
+          keywords: ['agenda'],
+          filters: {},
+          priority: 'high',
+          confidence: 0.9,
+        };
+      },
+      simulateExecutiveBrainQuery() {
+        return {
+          query: 'Que tengo hoy?',
+          answer: 'Respuesta ejecutiva base.',
+          confidence: 0.7,
+          sources: [],
+          reasoningSummary: {},
+          limitations: [],
+        };
+      },
+      buildExecutiveResponse(input) {
+        return {
+          executiveSummary: input.answer,
+          keyFindings: [],
+          recommendation: '',
+          confidence: input.confidence,
+          sources: input.sources,
+          limitations: input.limitations,
+        };
+      },
+    },
+  });
+
+  assert.equal(result.privateContextUsed, true);
+  assert.match(result.response, /Agenda privada autorizada: Reunion ficticia de seguimiento/);
+  assert.deepEqual(result.sources, []);
+  assert.equal(JSON.stringify(result).includes('event-1'), false);
+});
+
 test('does not expose private payload counts for critical sensitivity', () => {
   const result = orchestrateExecutiveQuery('Prepara briefing critico', {
     privateContextMetadata: buildPrivateContext({ sensitivity: 'critical' }),

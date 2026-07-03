@@ -4,6 +4,7 @@ const {
   orchestrateExecutiveQuery,
   sanitizeExecutiveSources,
 } = require('../../services/executive-brain/executive-orchestrator');
+const { buildCalendarPrivateContext } = require('../../services/private-context/calendar-private-provider');
 
 function sendJson(res, statusCode, data) {
   res.writeHead(statusCode, {
@@ -38,8 +39,21 @@ function isExecutiveChatRoute(pathname, method) {
   return pathname === '/api/executive/chat' && method === 'POST';
 }
 
-function buildOrchestratorOptions(body) {
+async function buildOrchestratorOptions(body, dependencies = {}) {
+  const calendarProvider = dependencies.buildCalendarPrivateContext || buildCalendarPrivateContext;
   const options = {};
+
+  if (body.calendar && body.calendar.enabled === true) {
+    const calendarContext = await calendarProvider(body.calendar);
+
+    return {
+      ...options,
+      privateContextMetadata: calendarContext.privateContextMetadata,
+      expectedClientId: calendarContext.expectedClientId,
+      privatePayload: calendarContext.privatePayload,
+      privateContextRequiredPurpose: 'executive-briefing',
+    };
+  }
 
   if (Object.hasOwn(body, 'privateContextMetadata')) {
     options.privateContextMetadata = body.privateContextMetadata;
@@ -82,7 +96,9 @@ async function handleExecutiveChatRequest(req, res, options) {
       });
     }
 
-    return sendJson(res, 200, sanitizeExecutivePayload(orchestrator(query, buildOrchestratorOptions(body))));
+    const orchestratorOptions = await buildOrchestratorOptions(body, dependencies);
+
+    return sendJson(res, 200, sanitizeExecutivePayload(orchestrator(query, orchestratorOptions)));
   } catch (error) {
     return sendJson(res, 400, {
       ok: false,
@@ -92,6 +108,7 @@ async function handleExecutiveChatRequest(req, res, options) {
 }
 
 module.exports = {
+  buildOrchestratorOptions,
   handleExecutiveChatRequest,
   isExecutiveChatRoute,
 };

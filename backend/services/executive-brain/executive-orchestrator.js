@@ -57,9 +57,38 @@ function buildPrivateContextSummary(authorizedContext) {
     return 'Contexto privado autorizado considerado.';
   }
 
+  if (authorizedContext.sourceType === 'calendar') {
+    return buildCalendarContextSummary(authorizedContext.payload);
+  }
+
   const itemCount = countPayloadItems(authorizedContext.payload);
 
   return `Contexto privado autorizado considerado: ${itemCount} elemento(s).`;
+}
+
+function formatCalendarEvent(event) {
+  const title = event && typeof event.title === 'string' && event.title.trim()
+    ? event.title.trim()
+    : 'Evento sin titulo';
+  const start = event && typeof event.start === 'string' && event.start.trim()
+    ? event.start.trim()
+    : null;
+
+  return start ? `${title} (${start})` : title;
+}
+
+function buildCalendarContextSummary(payload) {
+  const events = payload && Array.isArray(payload.events) ? payload.events : [];
+
+  if (events.length === 0) {
+    return 'Agenda privada autorizada: no hay eventos en el rango solicitado.';
+  }
+
+  const visibleEvents = events.slice(0, 3).map(formatCalendarEvent);
+  const hiddenCount = Math.max(events.length - visibleEvents.length, 0);
+  const suffix = hiddenCount > 0 ? ` y ${hiddenCount} evento(s) mas.` : '.';
+
+  return `Agenda privada autorizada: ${visibleEvents.join('; ')}${suffix}`;
 }
 
 function sanitizeExecutiveSources(sources) {
