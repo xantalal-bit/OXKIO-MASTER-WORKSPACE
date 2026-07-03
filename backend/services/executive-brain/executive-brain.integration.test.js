@@ -106,6 +106,22 @@ function assertOrderedSources(sources) {
   });
 }
 
+function buildPrivateContext(overrides = {}) {
+  return {
+    clientId: 'client-alpha',
+    userId: 'user-alpha',
+    scope: 'private:user',
+    sensitivity: 'confidential',
+    sourceType: 'agenda-ficticia',
+    sourceId: 'agenda-source-alpha',
+    authorization: { status: 'granted' },
+    purpose: 'executive-context',
+    retentionPolicy: 'CLIENT_CONTROLLED',
+    promotionPolicy: 'NEVER_PROMOTE',
+    ...overrides,
+  };
+}
+
 test('executes the full Executive Brain flow with ranking and response building', () => {
   const fixture = createIntegrationFixture();
 
@@ -155,6 +171,7 @@ test('executes the full Executive Brain flow with ranking and response building'
       assert.ok(result.response.includes('Evidencia principal'));
       assert.ok(result.response.includes('Confianza'));
       assert.ok(result.sources.length > 0);
+      assert.equal(result.sources.some((source) => Object.hasOwn(source, 'path')), false);
       assertOrderedSources(result.sources);
       assert.ok(result.limitations.some((limitation) => limitation.includes('Simulation only')));
     }
@@ -173,3 +190,34 @@ test('executes the full Executive Brain flow with ranking and response building'
   }
 });
 
+test('executes Executive Brain flow with authorized private context without store writes', () => {
+  const emptyStore = fs.mkdtempSync(path.join(os.tmpdir(), 'executive-brain-private-store-'));
+  const privatePayload = {
+    events: [
+      { title: 'Evento privado ficticio', date: '2026-07-04' },
+      { title: 'Caducidad privada ficticia', date: '2026-07-05' },
+    ],
+  };
+
+  try {
+    const beforeFiles = fs.readdirSync(emptyStore);
+    const result = orchestrateExecutiveQuery('Prepara mi briefing privado de hoy', {
+      privateContextMetadata: buildPrivateContext(),
+      expectedClientId: 'client-alpha',
+      privatePayload,
+      simulationOptions: {
+        storeDirectory: emptyStore,
+      },
+    });
+    const afterFiles = fs.readdirSync(emptyStore);
+
+    assert.equal(result.privateContextUsed, true);
+    assert.ok(result.response.includes('Contexto privado autorizado considerado'));
+    assert.equal(result.response.includes('Evento privado ficticio'), false);
+    assert.equal(result.response.includes('Caducidad privada ficticia'), false);
+    assert.deepEqual(result.sources, []);
+    assert.deepEqual(afterFiles, beforeFiles);
+  } finally {
+    fs.rmSync(emptyStore, { recursive: true, force: true });
+  }
+});

@@ -35,6 +35,22 @@ function createResponse() {
   return response;
 }
 
+function buildPrivateContext(overrides = {}) {
+  return {
+    clientId: 'client-alpha',
+    userId: 'user-alpha',
+    scope: 'private:user',
+    sensitivity: 'confidential',
+    sourceType: 'agenda-ficticia',
+    sourceId: 'agenda-source-alpha',
+    authorization: { status: 'granted' },
+    purpose: 'executive-context',
+    retentionPolicy: 'CLIENT_CONTROLLED',
+    promotionPolicy: 'NEVER_PROMOTE',
+    ...overrides,
+  };
+}
+
 test('matches POST /api/executive/chat', () => {
   assert.equal(isExecutiveChatRoute('/api/executive/chat', 'POST'), true);
   assert.equal(isExecutiveChatRoute('/api/executive/chat', 'GET'), false);
@@ -64,7 +80,19 @@ test('returns orchestrator response for a valid query', async () => {
           },
           response: 'Respuesta simulada.',
           confidence: 0.7,
-          sources: [],
+          sources: [
+            {
+              id: 'source-1',
+              name: 'roadmap.md',
+              path: 'C:\\private\\roadmap.md',
+              token: 'secret-token',
+              credentials: 'secret-credentials',
+              type: 'Roadmap',
+              score: 5,
+              rankingPosition: 1,
+              reasons: ['matched'],
+            },
+          ],
           limitations: ['Simulation only.'],
         };
       },
@@ -84,6 +112,120 @@ test('returns orchestrator response for a valid query', async () => {
     'limitations',
   ]);
   assert.equal(payload.query, 'Resumen del roadmap de Oxkio');
+  assert.equal(payload.sources.length, 1);
+  assert.equal(Object.hasOwn(payload.sources[0], 'path'), false);
+  assert.equal(Object.hasOwn(payload.sources[0], 'token'), false);
+  assert.equal(Object.hasOwn(payload.sources[0], 'credentials'), false);
+});
+
+test('passes optional private context to the executive orchestrator', async () => {
+  let calledWith = null;
+  const privateContextMetadata = buildPrivateContext();
+  const privatePayload = {
+    events: [
+      {
+        title: 'Evento privado ficticio',
+        date: '2026-07-04',
+        token: 'private-token',
+        credentials: 'private-credentials',
+      },
+    ],
+  };
+  const request = createRequest(JSON.stringify({
+    query: 'Briefing privado',
+    privateContextMetadata,
+    expectedClientId: 'client-alpha',
+    privatePayload,
+  }));
+  const response = createResponse();
+
+  await handleExecutiveChatRequest(request, response, {
+    dependencies: {
+      orchestrateExecutiveQuery(query, options) {
+        calledWith = { query, options };
+
+        return {
+          query,
+          analysis: {
+            intent: 'briefing',
+            project: null,
+            documentTypes: [],
+            keywords: [],
+            filters: {},
+            priority: 'high',
+            confidence: 0.8,
+          },
+          response: 'Respuesta con contexto privado autorizado.',
+          confidence: 0.7,
+          sources: [
+            {
+              id: 'source-private',
+              name: 'private-related.md',
+              path: 'C:\\private\\private-related.md',
+              type: 'Notes',
+              score: 4,
+            },
+          ],
+          privateContextUsed: true,
+          limitations: [],
+        };
+      },
+    },
+  });
+
+  const payload = response.getJson();
+
+  assert.equal(response.statusCode, 200);
+  assert.equal(calledWith.query, 'Briefing privado');
+  assert.deepEqual(calledWith.options, {
+    privateContextMetadata,
+    expectedClientId: 'client-alpha',
+    privatePayload,
+  });
+  assert.equal(payload.privateContextUsed, true);
+  assert.equal(JSON.stringify(payload).includes('Evento privado ficticio'), false);
+  assert.equal(JSON.stringify(payload).includes('private-token'), false);
+  assert.equal(JSON.stringify(payload).includes('private-credentials'), false);
+  assert.equal(Object.hasOwn(payload.sources[0], 'path'), false);
+});
+
+test('rejects privateContextMetadata without privatePayload', async () => {
+  const request = createRequest(JSON.stringify({
+    query: 'Briefing privado',
+    privateContextMetadata: buildPrivateContext(),
+    expectedClientId: 'client-alpha',
+  }));
+  const response = createResponse();
+
+  await handleExecutiveChatRequest(request, response);
+
+  const payload = response.getJson();
+
+  assert.equal(response.statusCode, 400);
+  assert.equal(payload.ok, false);
+  assert.equal(payload.error, 'payload is required.');
+});
+
+test('rejects privatePayload without privateContextMetadata', async () => {
+  const request = createRequest(JSON.stringify({
+    query: 'Briefing privado',
+    expectedClientId: 'client-alpha',
+    privatePayload: {
+      events: [
+        { title: 'Evento privado ficticio', token: 'private-token' },
+      ],
+    },
+  }));
+  const response = createResponse();
+
+  await handleExecutiveChatRequest(request, response);
+
+  const payload = response.getJson();
+
+  assert.equal(response.statusCode, 400);
+  assert.equal(payload.ok, false);
+  assert.match(payload.error, /clientId must be a non-empty string/);
+  assert.equal(JSON.stringify(payload).includes('private-token'), false);
 });
 
 test('rejects missing query', async () => {

@@ -4,6 +4,22 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const { orchestrateExecutiveQuery } = require('./executive-orchestrator');
 
+function buildPrivateContext(overrides = {}) {
+  return {
+    clientId: 'client-alpha',
+    userId: 'user-alpha',
+    scope: 'private:user',
+    sensitivity: 'confidential',
+    sourceType: 'agenda-ficticia',
+    sourceId: 'agenda-source-alpha',
+    authorization: { status: 'granted' },
+    purpose: 'executive-context',
+    retentionPolicy: 'CLIENT_CONTROLLED',
+    promotionPolicy: 'NEVER_PROMOTE',
+    ...overrides,
+  };
+}
+
 test('orchestrates analyzer, knowledge query service, and simulation for project queries', () => {
   const calls = {
     analyzer: 0,
@@ -92,6 +108,7 @@ test('orchestrates analyzer, knowledge query service, and simulation for project
   assert.equal(result.response, 'Resumen ejecutivo de roadmap.');
   assert.equal(result.confidence, 0.72);
   assert.equal(result.sources.length, 1);
+  assert.equal(result.privateContextUsed, false);
   assert.deepEqual(result.limitations, ['Simulation only.']);
 });
 
@@ -147,6 +164,7 @@ test('does not call Knowledge Query Service when analyzer finds no project', () 
   assert.equal(result.response, 'Resumen ejecutivo de decisiones.');
   assert.equal(result.confidence, 0.66);
   assert.deepEqual(result.sources, []);
+  assert.equal(result.privateContextUsed, false);
   assert.ok(result.limitations[0].includes('No sufficient evidence'));
 });
 
@@ -185,4 +203,173 @@ test('returns the required orchestrator response shape with default components',
   assert.ok(Object.hasOwn(result, 'confidence'));
   assert.ok(Object.hasOwn(result, 'sources'));
   assert.ok(Object.hasOwn(result, 'limitations'));
+  assert.ok(Object.hasOwn(result, 'privateContextUsed'));
+  assert.equal(result.privateContextUsed, false);
+});
+
+test('uses authorized private context without adding it to global sources', () => {
+  const privatePayload = {
+    events: [
+      { title: 'Reunion ficticia critica', date: '2026-07-04' },
+      { title: 'Renovacion ficticia', date: '2026-07-05' },
+    ],
+  };
+  const originalPayload = structuredClone(privatePayload);
+  let builderInput = null;
+  let knowledgeSearchCalled = false;
+
+  const result = orchestrateExecutiveQuery('Prepara mi briefing de hoy', {
+    privateContextMetadata: buildPrivateContext(),
+    expectedClientId: 'client-alpha',
+    privatePayload,
+    dependencies: {
+      analyzeExecutiveQuery() {
+        return {
+          intent: 'briefing',
+          project: null,
+          documentTypes: [],
+          keywords: ['briefing'],
+          filters: {},
+          priority: 'high',
+          confidence: 0.9,
+        };
+      },
+      searchKnowledge() {
+        knowledgeSearchCalled = true;
+        return { found: true };
+      },
+      simulateExecutiveBrainQuery() {
+        return {
+          query: 'Prepara mi briefing de hoy',
+          answer: 'Respuesta ejecutiva base.',
+          confidence: 0.7,
+          sources: [
+            {
+              id: 'global-1',
+              name: 'governance.md',
+              path: 'C:\\private\\fixtures\\governance.md',
+              token: 'secret-token',
+              credentials: 'secret-credentials',
+              metadata: { internal: true },
+              type: 'Governance',
+              score: 5,
+            },
+          ],
+          reasoningSummary: {},
+          limitations: ['Simulation only.'],
+        };
+      },
+      buildExecutiveResponse(input) {
+        builderInput = input;
+
+        return {
+          executiveSummary: input.answer,
+          keyFindings: [input.answer],
+          recommendation: 'Revisar contexto autorizado.',
+          confidence: input.confidence,
+          sources: input.sources,
+          limitations: input.limitations,
+        };
+      },
+    },
+  });
+
+  assert.equal(knowledgeSearchCalled, false);
+  assert.equal(result.privateContextUsed, true);
+  assert.match(result.response, /Contexto privado autorizado considerado: 2 elemento\(s\)\./);
+  assert.doesNotMatch(result.response, /Reunion ficticia critica/);
+  assert.doesNotMatch(result.response, /Renovacion ficticia/);
+  assert.equal(result.sources.length, 1);
+  assert.equal(result.sources[0].id, 'global-1');
+  assert.equal(Object.hasOwn(result.sources[0], 'path'), false);
+  assert.equal(Object.hasOwn(result.sources[0], 'token'), false);
+  assert.equal(Object.hasOwn(result.sources[0], 'credentials'), false);
+  assert.equal(Object.hasOwn(result.sources[0], 'metadata'), false);
+  assert.equal(JSON.stringify(result.sources).includes('agenda-source-alpha'), false);
+  assert.equal(JSON.stringify(result).includes(JSON.stringify(privatePayload)), false);
+  assert.deepEqual(privatePayload, originalPayload);
+  assert.ok(builderInput.answer.includes('Contexto privado autorizado'));
+});
+
+test('does not expose private payload counts for critical sensitivity', () => {
+  const result = orchestrateExecutiveQuery('Prepara briefing critico', {
+    privateContextMetadata: buildPrivateContext({ sensitivity: 'critical' }),
+    expectedClientId: 'client-alpha',
+    privatePayload: {
+      items: [
+        { secret: 'dato sensible ficticio' },
+        { secret: 'otro dato sensible ficticio' },
+      ],
+    },
+    dependencies: {
+      analyzeExecutiveQuery() {
+        return {
+          intent: 'briefing',
+          project: null,
+          documentTypes: [],
+          keywords: [],
+          filters: {},
+          priority: 'high',
+          confidence: 0.9,
+        };
+      },
+      simulateExecutiveBrainQuery() {
+        return {
+          query: 'Prepara briefing critico',
+          answer: 'Respuesta ejecutiva base.',
+          confidence: 0.7,
+          sources: [],
+          reasoningSummary: {},
+          limitations: [],
+        };
+      },
+      buildExecutiveResponse(input) {
+        return {
+          executiveSummary: input.answer,
+          keyFindings: [],
+          recommendation: '',
+          confidence: input.confidence,
+          sources: input.sources,
+          limitations: input.limitations,
+        };
+      },
+    },
+  });
+
+  assert.equal(result.privateContextUsed, true);
+  assert.match(result.response, /Contexto privado autorizado considerado\./);
+  assert.doesNotMatch(result.response, /2 elemento/);
+  assert.doesNotMatch(result.response, /dato sensible ficticio/);
+});
+
+test('rejects private context without authorization', () => {
+  assert.throws(
+    () => orchestrateExecutiveQuery('Consulta privada', {
+      privateContextMetadata: buildPrivateContext({ authorization: { status: 'pending' } }),
+      expectedClientId: 'client-alpha',
+      privatePayload: { items: [] },
+    }),
+    /authorization must be granted/,
+  );
+});
+
+test('rejects incompatible private clientId and prevents client crossing', () => {
+  assert.throws(
+    () => orchestrateExecutiveQuery('Consulta privada', {
+      privateContextMetadata: buildPrivateContext({ clientId: 'client-alpha' }),
+      expectedClientId: 'client-beta',
+      privatePayload: { projects: [{ name: 'Proyecto ficticio privado' }] },
+    }),
+    /does not match/,
+  );
+});
+
+test('requires expectedClientId for private scopes', () => {
+  assert.throws(
+    () => orchestrateExecutiveQuery('Consulta privada', {
+      privateContextMetadata: buildPrivateContext(),
+      privatePayload: { items: [] },
+    }),
+    /expectedClientId is required for private scopes/,
+  );
 });

@@ -1,6 +1,9 @@
 'use strict';
 
-const { orchestrateExecutiveQuery } = require('../../services/executive-brain/executive-orchestrator');
+const {
+  orchestrateExecutiveQuery,
+  sanitizeExecutiveSources,
+} = require('../../services/executive-brain/executive-orchestrator');
 
 function sendJson(res, statusCode, data) {
   res.writeHead(statusCode, {
@@ -35,6 +38,35 @@ function isExecutiveChatRoute(pathname, method) {
   return pathname === '/api/executive/chat' && method === 'POST';
 }
 
+function buildOrchestratorOptions(body) {
+  const options = {};
+
+  if (Object.hasOwn(body, 'privateContextMetadata')) {
+    options.privateContextMetadata = body.privateContextMetadata;
+  }
+
+  if (Object.hasOwn(body, 'expectedClientId')) {
+    options.expectedClientId = body.expectedClientId;
+  }
+
+  if (Object.hasOwn(body, 'privatePayload')) {
+    options.privatePayload = body.privatePayload;
+  }
+
+  return options;
+}
+
+function sanitizeExecutivePayload(payload) {
+  if (!payload || typeof payload !== 'object') {
+    return payload;
+  }
+
+  return {
+    ...payload,
+    sources: sanitizeExecutiveSources(payload.sources),
+  };
+}
+
 async function handleExecutiveChatRequest(req, res, options) {
   const dependencies = options && options.dependencies ? options.dependencies : {};
   const orchestrator = dependencies.orchestrateExecutiveQuery || orchestrateExecutiveQuery;
@@ -50,7 +82,7 @@ async function handleExecutiveChatRequest(req, res, options) {
       });
     }
 
-    return sendJson(res, 200, orchestrator(query));
+    return sendJson(res, 200, sanitizeExecutivePayload(orchestrator(query, buildOrchestratorOptions(body))));
   } catch (error) {
     return sendJson(res, 400, {
       ok: false,
