@@ -211,6 +211,18 @@ Content-Type: application/json
 - ausencia de `path`, tokens y credenciales;
 - no cambios en Knowledge Store ni memoria.
 
+Si Google OAuth no esta configurado con `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` y `GOOGLE_REDIRECT_URI`, el endpoint debe responder de forma segura:
+
+```json
+{
+  "ok": false,
+  "error": "google_oauth_not_configured",
+  "message": "Google Calendar no está configurado todavía."
+}
+```
+
+La respuesta no debe incluir tokens, credenciales, rutas internas ni stack trace.
+
 ## Estado V1
 
 Calendar Readonly Provider Cliente Cero V1 queda integrado como primer proveedor privado real para el Executive Brain oficial.

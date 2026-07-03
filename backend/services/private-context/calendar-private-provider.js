@@ -1,6 +1,7 @@
 'use strict';
 
 const { listUpcomingEvents } = require('../../integrations/calendar/connector');
+const { assertGoogleOAuthConfigured } = require('../../integrations/googleOAuth');
 
 const MAX_RANGE_DAYS = 7;
 const MAX_EVENTS = 20;
@@ -104,8 +105,14 @@ function normalizeCalendarEvent(event = {}) {
 
 async function buildCalendarPrivateContext(input = {}, dependencies = {}) {
   const calendarReader = dependencies.listUpcomingEvents || listUpcomingEvents;
+  const oauthGuard = dependencies.assertGoogleOAuthConfigured || assertGoogleOAuthConfigured;
   const maxResults = clampMaxResults(input.maxResults);
   const range = resolveCalendarRange(input);
+
+  if (!dependencies.listUpcomingEvents) {
+    oauthGuard();
+  }
+
   const events = await calendarReader({
     calendarId: input.calendarId || 'primary',
     timeMin: range.timeMin,

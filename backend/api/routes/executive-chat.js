@@ -81,6 +81,21 @@ function sanitizeExecutivePayload(payload) {
   };
 }
 
+function sendSafeError(res, error) {
+  if (error && error.code === 'google_oauth_not_configured') {
+    return sendJson(res, 503, {
+      ok: false,
+      error: 'google_oauth_not_configured',
+      message: 'Google Calendar no está configurado todavía.',
+    });
+  }
+
+  return sendJson(res, 400, {
+    ok: false,
+    error: error.message || 'Invalid request.',
+  });
+}
+
 async function handleExecutiveChatRequest(req, res, options) {
   const dependencies = options && options.dependencies ? options.dependencies : {};
   const orchestrator = dependencies.orchestrateExecutiveQuery || orchestrateExecutiveQuery;
@@ -100,10 +115,7 @@ async function handleExecutiveChatRequest(req, res, options) {
 
     return sendJson(res, 200, sanitizeExecutivePayload(orchestrator(query, orchestratorOptions)));
   } catch (error) {
-    return sendJson(res, 400, {
-      ok: false,
-      error: error.message || 'Invalid request.',
-    });
+    return sendSafeError(res, error);
   }
 }
 

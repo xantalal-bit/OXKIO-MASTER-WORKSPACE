@@ -281,6 +281,115 @@ test('builds Calendar private context for executive chat requests', async () => 
   assert.equal(JSON.stringify(payload).includes('private-token'), false);
 });
 
+test('documented Calendar body remains valid with simulated provider', async () => {
+  let orchestratorOptions = null;
+  const request = createRequest(JSON.stringify({
+    query: 'Resume mi agenda de las proximas 24 horas.',
+    calendar: {
+      enabled: true,
+      clientId: 'cliente-cero',
+      userId: 'usuario-cliente-cero',
+      expectedClientId: 'cliente-cero',
+      authorization: { status: 'granted' },
+      range: 'next24Hours',
+      maxResults: 10,
+    },
+  }));
+  const response = createResponse();
+
+  await handleExecutiveChatRequest(request, response, {
+    dependencies: {
+      async buildCalendarPrivateContext(input) {
+        return {
+          privateContextMetadata: {
+            clientId: input.clientId,
+            userId: input.userId,
+            scope: 'private:user',
+            sensitivity: 'confidential',
+            sourceType: 'calendar',
+            sourceId: 'google-calendar-primary',
+            authorization: input.authorization,
+            purpose: 'executive-briefing',
+            retentionPolicy: 'CLIENT_CONTROLLED',
+            promotionPolicy: 'NEVER_PROMOTE',
+          },
+          expectedClientId: input.expectedClientId,
+          privatePayload: {
+            source: 'calendar',
+            range: {
+              preset: 'next24Hours',
+              timeMin: '2026-07-03T08:00:00.000Z',
+              timeMax: '2026-07-04T08:00:00.000Z',
+              maxResults: 10,
+            },
+            events: [],
+          },
+        };
+      },
+      orchestrateExecutiveQuery(query, options) {
+        orchestratorOptions = options;
+
+        return {
+          query,
+          analysis: {},
+          response: 'Agenda privada autorizada: no hay eventos.',
+          confidence: 0.7,
+          sources: [],
+          privateContextUsed: true,
+          limitations: [],
+        };
+      },
+    },
+  });
+
+  const payload = response.getJson();
+
+  assert.equal(response.statusCode, 200);
+  assert.equal(orchestratorOptions.expectedClientId, 'cliente-cero');
+  assert.equal(orchestratorOptions.privateContextMetadata.authorization.status, 'granted');
+  assert.equal(payload.privateContextUsed, true);
+});
+
+test('calendar enabled without OAuth config returns safe 503 error', async () => {
+  const request = createRequest(JSON.stringify({
+    query: 'Resume mi agenda de las proximas 24 horas.',
+    calendar: {
+      enabled: true,
+      clientId: 'cliente-cero',
+      userId: 'usuario-cliente-cero',
+      expectedClientId: 'cliente-cero',
+      authorization: { status: 'granted' },
+      range: 'next24Hours',
+      maxResults: 10,
+    },
+  }));
+  const response = createResponse();
+
+  await handleExecutiveChatRequest(request, response, {
+    dependencies: {
+      async buildCalendarPrivateContext() {
+        const error = new Error('Google OAuth is not configured. access_token secret-token stacktrace');
+        error.code = 'google_oauth_not_configured';
+        throw error;
+      },
+      orchestrateExecutiveQuery() {
+        throw new Error('orchestrator should not be called');
+      },
+    },
+  });
+
+  const payload = response.getJson();
+  const serialized = JSON.stringify(payload);
+
+  assert.equal(response.statusCode, 503);
+  assert.equal(payload.ok, false);
+  assert.equal(payload.error, 'google_oauth_not_configured');
+  assert.equal(payload.message, 'Google Calendar no está configurado todavía.');
+  assert.equal(serialized.includes('secret-token'), false);
+  assert.equal(serialized.includes('stacktrace'), false);
+  assert.equal(serialized.includes('access_token'), false);
+});
+
 test('passes weekly Calendar range to provider', async () => {
   let providerInput = null;
   const request = createRequest(JSON.stringify({

@@ -11,6 +11,28 @@ const oauth2Client = new google.auth.OAuth2(
   process.env.GOOGLE_REDIRECT_URI
 );
 
+function buildGoogleOAuthConfigError() {
+  const error = new Error("Google OAuth is not configured.");
+  error.code = "google_oauth_not_configured";
+  return error;
+}
+
+function getMissingGoogleOAuthConfig() {
+  return [
+    "GOOGLE_CLIENT_ID",
+    "GOOGLE_CLIENT_SECRET",
+    "GOOGLE_REDIRECT_URI"
+  ].filter((key) => !process.env[key] || !String(process.env[key]).trim());
+}
+
+function assertGoogleOAuthConfigured() {
+  if (getMissingGoogleOAuthConfig().length > 0) {
+    throw buildGoogleOAuthConfigError();
+  }
+
+  return true;
+}
+
 function saveTokens(tokens) {
   fs.writeFileSync(TOKENS_PATH, JSON.stringify(tokens, null, 2));
 }
@@ -29,6 +51,8 @@ function loadTokens() {
 }
 
 function getAuthUrl() {
+  assertGoogleOAuthConfigured();
+
   return oauth2Client.generateAuthUrl({
     access_type: "offline",
     prompt: "consent",
@@ -42,6 +66,8 @@ function getAuthUrl() {
 }
 
 async function getTokens(code) {
+  assertGoogleOAuthConfigured();
+
   const { tokens } = await oauth2Client.getToken(code);
   oauth2Client.setCredentials(tokens);
   saveTokens(tokens);
@@ -54,6 +80,7 @@ function setCredentials(tokens) {
 }
 
 function getGmailClient() {
+  assertGoogleOAuthConfigured();
   loadTokens();
 
   return google.gmail({
@@ -63,6 +90,7 @@ function getGmailClient() {
 }
 
 function getCalendarClient() {
+  assertGoogleOAuthConfigured();
   loadTokens();
 
   return google.calendar({
@@ -78,5 +106,7 @@ module.exports = {
   getGmailClient,
   getCalendarClient,
   saveTokens,
-  loadTokens
+  loadTokens,
+  getMissingGoogleOAuthConfig,
+  assertGoogleOAuthConfigured
 };

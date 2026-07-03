@@ -56,6 +56,19 @@ test('builds readonly Calendar private context with explicit range', async () =>
   assert.equal(context.privatePayload.events.length, 1);
 });
 
+test('rejects real Calendar reads when Google OAuth is not configured', async () => {
+  await assert.rejects(
+    () => buildCalendarPrivateContext(buildProviderInput(), {
+      assertGoogleOAuthConfigured() {
+        const error = new Error('Google OAuth is not configured.');
+        error.code = 'google_oauth_not_configured';
+        throw error;
+      },
+    }),
+    (error) => error.code === 'google_oauth_not_configured',
+  );
+});
+
 test('Calendar private context passes through G004/G005 adapter', async () => {
   const context = await buildCalendarPrivateContext(buildProviderInput(), {
     listUpcomingEvents() {
