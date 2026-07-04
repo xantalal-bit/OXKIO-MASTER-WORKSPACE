@@ -21,6 +21,63 @@ function buildSimulationQuery(query, analysis) {
   return Array.from(new Set(parts)).join(' ');
 }
 
+function normalizeQueryText(value) {
+  return String(value || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase();
+}
+
+function isTemporalAgendaQuery(query, analysis) {
+  const normalizedQuery = normalizeQueryText(query);
+  const keywords = analysis && Array.isArray(analysis.keywords)
+    ? analysis.keywords.map(normalizeQueryText)
+    : [];
+  const searchableText = `${normalizedQuery} ${keywords.join(' ')}`;
+
+  return [
+    'agenda',
+    'calendario',
+    'calendar',
+    'evento',
+    'eventos',
+    'reunion',
+    'reuniones',
+    'cita',
+    'citas',
+    'compromiso',
+    'compromisos',
+    'hoy',
+    'manana',
+    'semana',
+    'proximas 24',
+    'briefing',
+  ].some((term) => searchableText.includes(term));
+}
+
+function shouldPreferPrivateCalendarContext(query, analysis, authorizedContext) {
+  return Boolean(
+    authorizedContext
+      && authorizedContext.sourceType === 'calendar'
+      && isTemporalAgendaQuery(query, analysis),
+  );
+}
+
+function filterCalendarPrimaryLimitations(limitations) {
+  const noisyPatterns = [
+    /knowledge store/i,
+    /knowledge objects/i,
+    /simulation only/i,
+    /no ai is used/i,
+    /persisted knowledge objects/i,
+    /deterministic keyword/i,
+  ];
+
+  return Array.isArray(limitations)
+    ? limitations.filter((limitation) => !noisyPatterns.some((pattern) => pattern.test(String(limitation))))
+    : [];
+}
+
 function hasPrivateContextInput(options) {
   return Boolean(options && (
     Object.hasOwn(options, 'privateContextMetadata')
@@ -162,26 +219,39 @@ function orchestrateExecutiveQuery(query, options) {
   const privateContextSummary = authorizedPrivateContext
     ? buildPrivateContextSummary(authorizedPrivateContext)
     : null;
+  const preferPrivateCalendarContext = shouldPreferPrivateCalendarContext(query, analysis, authorizedPrivateContext);
+  const responseSources = preferPrivateCalendarContext ? [] : sanitizeExecutiveSources(response.sources);
+  const responseLimitations = preferPrivateCalendarContext
+    ? filterCalendarPrimaryLimitations(response.limitations)
+    : response.limitations;
+  const responseConfidence = preferPrivateCalendarContext
+    ? Math.max(analysis.confidence, 0.7)
+    : response.confidence;
   const executiveResponse = responseBuilder({
-    answer: privateContextSummary
-      ? `${response.answer} ${privateContextSummary}`
-      : response.answer,
-    confidence: response.confidence,
-    sources: sanitizeExecutiveSources(response.sources),
+    answer: preferPrivateCalendarContext
+      ? privateContextSummary
+      : (privateContextSummary
+        ? `${response.answer} ${privateContextSummary}`
+        : response.answer),
+    confidence: responseConfidence,
+    sources: responseSources,
     reasoningSummary: response.reasoningSummary,
-    limitations: response.limitations,
+    limitations: responseLimitations,
   });
+  const finalConfidence = preferPrivateCalendarContext
+    ? executiveResponse.confidence
+    : Math.min(analysis.confidence, executiveResponse.confidence);
 
   return {
     query,
     analysis,
     response: executiveResponse.executiveSummary,
-    confidence: Math.min(analysis.confidence, executiveResponse.confidence),
+    confidence: finalConfidence,
     sources: sanitizeExecutiveSources(executiveResponse.sources),
     privateContextUsed: Boolean(authorizedPrivateContext),
     limitations: [
       ...executiveResponse.limitations,
-      ...(knowledgeQueryResult && knowledgeQueryResult.found === false
+      ...(!preferPrivateCalendarContext && knowledgeQueryResult && knowledgeQueryResult.found === false
         ? [`Knowledge Query Service did not find project ${analysis.project}.`]
         : []),
     ],

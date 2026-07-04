@@ -288,6 +288,7 @@ test('uses authorized private context without adding it to global sources', () =
   assert.equal(JSON.stringify(result.sources).includes('agenda-source-alpha'), false);
   assert.equal(JSON.stringify(result).includes(JSON.stringify(privatePayload)), false);
   assert.deepEqual(privatePayload, originalPayload);
+  assert.ok(builderInput.answer.startsWith('Respuesta ejecutiva base.'));
   assert.ok(builderInput.answer.includes('Contexto privado autorizado'));
 });
 
@@ -357,7 +358,92 @@ test('uses authorized Calendar context to answer daily agenda queries', () => {
     result.response,
     /Agenda privada autorizada: tienes 1 evento hoy: Reunion ficticia de seguimiento a las 10:00\./,
   );
+  assert.doesNotMatch(result.response, /Respuesta ejecutiva base/);
   assert.deepEqual(result.sources, []);
+  assert.equal(JSON.stringify(result).includes('event-1'), false);
+});
+
+test('prioritizes authorized Calendar agenda over noisy Knowledge Store response', () => {
+  let builderInput = null;
+  const result = orchestrateExecutiveQuery('Que tengo hoy?', {
+    privateContextMetadata: buildPrivateContext({
+      sourceType: 'calendar',
+      sourceId: 'calendar-source-alpha',
+      purpose: 'executive-briefing',
+    }),
+    expectedClientId: 'client-alpha',
+    privateContextRequiredPurpose: 'executive-briefing',
+    privatePayload: {
+      source: 'calendar',
+      events: [
+        {
+          id: 'event-1',
+          title: 'Prueba Calendar Oxkio',
+          start: '2026-07-04T12:15:00+02:00',
+        },
+      ],
+    },
+    dependencies: {
+      analyzeExecutiveQuery() {
+        return {
+          intent: 'unknown',
+          project: null,
+          documentTypes: [],
+          keywords: ['hoy'],
+          filters: {},
+          priority: 'normal',
+          confidence: 0.45,
+        };
+      },
+      simulateExecutiveBrainQuery() {
+        return {
+          query: 'Que tengo hoy?',
+          answer: 'No se encontraron Knowledge Objects relevantes para "Que tengo hoy?" en el Knowledge Store.',
+          confidence: 0.2,
+          sources: [
+            {
+              id: 'global-noise',
+              name: 'knowledge-noise.md',
+              path: 'C:\\private\\knowledge-noise.md',
+              type: 'Notes',
+            },
+          ],
+          reasoningSummary: {},
+          limitations: [
+            'No sufficient evidence was found in the Knowledge Store.',
+            'Simulation only: this is not the definitive Executive Brain.',
+            'No AI is used.',
+            'Only persisted Knowledge Objects are read.',
+            'Answers are based on deterministic keyword and metadata matching.',
+          ],
+        };
+      },
+      buildExecutiveResponse(input) {
+        builderInput = input;
+
+        return {
+          executiveSummary: `${input.answer} ${input.confidence >= 0.5 ? 'Confianza media.' : 'Confianza baja.'}`,
+          keyFindings: [],
+          recommendation: '',
+          confidence: input.confidence,
+          sources: input.sources,
+          limitations: input.limitations,
+        };
+      },
+    },
+  });
+
+  assert.equal(result.privateContextUsed, true);
+  assert.equal(result.response, 'Agenda privada autorizada: tienes 1 evento hoy: Prueba Calendar Oxkio a las 12:15. Confianza media.');
+  assert.doesNotMatch(result.response, /No se encontraron Knowledge Objects/);
+  assert.doesNotMatch(result.response, /Knowledge Store/);
+  assert.doesNotMatch(result.response, /Confianza baja/);
+  assert.equal(builderInput.confidence, 0.7);
+  assert.equal(result.confidence, 0.7);
+  assert.deepEqual(result.sources, []);
+  assert.deepEqual(result.limitations, []);
+  assert.deepEqual(builderInput.sources, []);
+  assert.deepEqual(builderInput.limitations, []);
   assert.equal(JSON.stringify(result).includes('event-1'), false);
 });
 
