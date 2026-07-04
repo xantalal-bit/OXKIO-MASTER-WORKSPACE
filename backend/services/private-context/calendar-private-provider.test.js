@@ -4,6 +4,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const {
   MAX_EVENTS,
+  assertCalendarPrivateIdentity,
   buildCalendarPrivateContext,
   normalizeCalendarEvent,
   resolveCalendarRange,
@@ -15,7 +16,7 @@ function buildProviderInput(overrides = {}) {
     clientId: 'client-alpha',
     userId: 'user-alpha',
     expectedClientId: 'client-alpha',
-    authorization: { status: 'granted' },
+    authorization: { status: 'granted', provider: 'google-oauth' },
     sourceId: 'calendar-source-alpha',
     range: 'next24Hours',
     now: '2026-07-03T08:00:00.000Z',
@@ -54,6 +55,74 @@ test('builds readonly Calendar private context with explicit range', async () =>
   assert.equal(context.privateContextMetadata.promotionPolicy, 'NEVER_PROMOTE');
   assert.equal(context.privatePayload.source, 'calendar');
   assert.equal(context.privatePayload.events.length, 1);
+});
+
+test('rejects Calendar private context without explicit identity', async () => {
+  await assert.rejects(
+    () => buildCalendarPrivateContext({ enabled: true, now: '2026-07-03T08:00:00.000Z' }, {
+      listUpcomingEvents() {
+        throw new Error('calendar should not be read without explicit identity');
+      },
+    }),
+    (error) => (
+      error.code === 'calendar_private_identity_required'
+        && error.message === 'calendar_private_identity_required'
+    ),
+  );
+});
+
+test('requires granted google-oauth authorization for Calendar private identity', () => {
+  assert.throws(
+    () => assertCalendarPrivateIdentity(buildProviderInput({
+      authorization: { status: 'granted' },
+    })),
+    (error) => error.code === 'calendar_private_identity_required',
+  );
+});
+
+test('builds readonly Calendar private context from explicit identity', async () => {
+  const context = await buildCalendarPrivateContext(buildProviderInput({
+    authorization: { status: 'granted', provider: 'google-oauth' },
+  }), {
+    listUpcomingEvents() {
+      return [];
+    },
+  });
+
+  assert.equal(context.privateContextMetadata.clientId, 'client-alpha');
+  assert.equal(context.privateContextMetadata.userId, 'user-alpha');
+  assert.equal(context.privateContextMetadata.authorization.status, 'granted');
+  assert.equal(context.privateContextMetadata.authorization.provider, 'google-oauth');
+  assert.equal(context.expectedClientId, 'client-alpha');
+  assert.equal(context.privateContextMetadata.sourceType, 'calendar');
+  assert.equal(context.privateContextMetadata.purpose, 'executive-briefing');
+  assert.equal(context.privateContextMetadata.promotionPolicy, 'NEVER_PROMOTE');
+
+  const adapted = preparePrivateContextAdapter({
+    privateContext: context.privateContextMetadata,
+    expectedClientId: context.expectedClientId,
+    payload: context.privatePayload,
+    requiredPurpose: 'executive-briefing',
+  });
+
+  assert.equal(adapted.private, true);
+  assert.equal(adapted.persistable, false);
+  assert.equal(adapted.promotable, false);
+  assert.equal(adapted.promotionPolicy, 'NEVER_PROMOTE');
+  assert.equal(adapted.payload.events.length, 0);
+});
+
+test('keeps explicit Calendar private metadata when provided', async () => {
+  const context = await buildCalendarPrivateContext(buildProviderInput(), {
+    listUpcomingEvents() {
+      return [];
+    },
+  });
+
+  assert.equal(context.privateContextMetadata.clientId, 'client-alpha');
+  assert.equal(context.privateContextMetadata.userId, 'user-alpha');
+  assert.equal(context.privateContextMetadata.authorization.status, 'granted');
+  assert.equal(context.expectedClientId, 'client-alpha');
 });
 
 test('rejects real Calendar reads when Google OAuth is not configured', async () => {

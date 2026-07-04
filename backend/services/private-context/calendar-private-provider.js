@@ -44,6 +44,29 @@ function clampMaxResults(value) {
   return Math.min(value, MAX_EVENTS);
 }
 
+function hasGrantedGoogleOAuthAuthorization(authorization) {
+  return Boolean(
+    authorization
+      && typeof authorization === 'object'
+      && authorization.status === 'granted'
+      && authorization.provider === 'google-oauth',
+  );
+}
+
+function assertCalendarPrivateIdentity(input = {}) {
+  if (
+    !isValidText(input.clientId)
+    || !isValidText(input.userId)
+    || !isValidText(input.expectedClientId)
+    || !hasGrantedGoogleOAuthAuthorization(input.authorization)
+  ) {
+    throw buildProviderError(
+      'calendar_private_identity_required',
+      'calendar_private_identity_required',
+    );
+  }
+}
+
 function startOfDay(date) {
   const start = new Date(date);
   start.setHours(0, 0, 0, 0);
@@ -106,6 +129,7 @@ function normalizeCalendarEvent(event = {}) {
 async function buildCalendarPrivateContext(input = {}, dependencies = {}) {
   const calendarReader = dependencies.listUpcomingEvents || listUpcomingEvents;
   const oauthGuard = dependencies.assertGoogleOAuthConfigured || assertGoogleOAuthConfigured;
+  assertCalendarPrivateIdentity(input);
   const maxResults = clampMaxResults(input.maxResults);
   const range = resolveCalendarRange(input);
 
@@ -125,8 +149,8 @@ async function buildCalendarPrivateContext(input = {}, dependencies = {}) {
 
   return {
     privateContextMetadata: {
-      clientId: input.clientId,
-      userId: input.userId,
+      clientId: input.clientId.trim(),
+      userId: input.userId.trim(),
       scope: 'private:user',
       sensitivity: input.sensitivity || 'confidential',
       sourceType: 'calendar',
@@ -136,7 +160,7 @@ async function buildCalendarPrivateContext(input = {}, dependencies = {}) {
       retentionPolicy: 'CLIENT_CONTROLLED',
       promotionPolicy: 'NEVER_PROMOTE',
     },
-    expectedClientId: input.expectedClientId,
+    expectedClientId: input.expectedClientId.trim(),
     privatePayload: {
       source: 'calendar',
       range: {
@@ -151,6 +175,7 @@ async function buildCalendarPrivateContext(input = {}, dependencies = {}) {
 module.exports = {
   MAX_EVENTS,
   MAX_RANGE_DAYS,
+  assertCalendarPrivateIdentity,
   buildCalendarPrivateContext,
   normalizeCalendarEvent,
   resolveCalendarRange,

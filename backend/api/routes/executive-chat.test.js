@@ -199,7 +199,7 @@ test('builds Calendar private context for executive chat requests', async () => 
       clientId: 'client-alpha',
       userId: 'user-alpha',
       expectedClientId: 'client-alpha',
-      authorization: { status: 'granted' },
+      authorization: { status: 'granted', provider: 'google-oauth' },
       sourceId: 'calendar-source-alpha',
       range: 'today',
       maxResults: 10,
@@ -290,7 +290,7 @@ test('documented Calendar body remains valid with simulated provider', async () 
       clientId: 'cliente-cero',
       userId: 'usuario-cliente-cero',
       expectedClientId: 'cliente-cero',
-      authorization: { status: 'granted' },
+      authorization: { status: 'granted', provider: 'google-oauth' },
       range: 'next24Hours',
       maxResults: 10,
     },
@@ -350,6 +350,33 @@ test('documented Calendar body remains valid with simulated provider', async () 
   assert.equal(payload.privateContextUsed, true);
 });
 
+test('calendar enabled without explicit private identity returns safe error', async () => {
+  const request = createRequest(JSON.stringify({
+    query: 'Que tengo hoy?',
+    calendar: {
+      enabled: true,
+    },
+  }));
+  const response = createResponse();
+
+  await handleExecutiveChatRequest(request, response, {
+    dependencies: {
+      orchestrateExecutiveQuery(query, options) {
+        throw new Error('orchestrator should not be called');
+      },
+    },
+  });
+
+  const payload = response.getJson();
+  const serialized = JSON.stringify(payload);
+
+  assert.equal(response.statusCode, 400);
+  assert.equal(payload.ok, false);
+  assert.equal(payload.error, 'calendar_private_identity_required');
+  assert.equal(serialized.includes('access_token'), false);
+  assert.equal(serialized.includes('googleTokens'), false);
+});
+
 test('calendar enabled without OAuth config returns safe 503 error', async () => {
   const request = createRequest(JSON.stringify({
     query: 'Resume mi agenda de las proximas 24 horas.',
@@ -358,7 +385,7 @@ test('calendar enabled without OAuth config returns safe 503 error', async () =>
       clientId: 'cliente-cero',
       userId: 'usuario-cliente-cero',
       expectedClientId: 'cliente-cero',
-      authorization: { status: 'granted' },
+      authorization: { status: 'granted', provider: 'google-oauth' },
       range: 'next24Hours',
       maxResults: 10,
     },
@@ -399,7 +426,7 @@ test('passes weekly Calendar range to provider', async () => {
       clientId: 'client-alpha',
       userId: 'user-alpha',
       expectedClientId: 'client-alpha',
-      authorization: { status: 'granted' },
+      authorization: { status: 'granted', provider: 'google-oauth' },
       range: 'next7Days',
       maxResults: 10,
     },
