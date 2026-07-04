@@ -63,7 +63,35 @@ function shouldPreferPrivateCalendarContext(query, analysis, authorizedContext) 
   );
 }
 
-function filterCalendarPrimaryLimitations(limitations) {
+function isEmailQuery(query, analysis) {
+  const normalizedQuery = normalizeQueryText(query);
+  const keywords = analysis && Array.isArray(analysis.keywords)
+    ? analysis.keywords.map(normalizeQueryText)
+    : [];
+  const searchableText = `${normalizedQuery} ${keywords.join(' ')}`;
+
+  return [
+    'correo',
+    'correos',
+    'email',
+    'emails',
+    'gmail',
+    'inbox',
+    'bandeja',
+    'mensaje',
+    'mensajes',
+  ].some((term) => searchableText.includes(term));
+}
+
+function shouldPreferPrivateGmailContext(query, analysis, authorizedContext) {
+  return Boolean(
+    authorizedContext
+      && authorizedContext.sourceType === 'gmail'
+      && isEmailQuery(query, analysis),
+  );
+}
+
+function filterPrivatePrimaryLimitations(limitations) {
   const noisyPatterns = [
     /knowledge store/i,
     /knowledge objects/i,
@@ -118,6 +146,10 @@ function buildPrivateContextSummary(authorizedContext) {
     return buildCalendarContextSummary(authorizedContext.payload);
   }
 
+  if (authorizedContext.sourceType === 'gmail') {
+    return buildGmailContextSummary(authorizedContext.payload);
+  }
+
   const itemCount = countPayloadItems(authorizedContext.payload);
 
   return `Contexto privado autorizado considerado: ${itemCount} elemento(s).`;
@@ -154,6 +186,32 @@ function buildCalendarContextSummary(payload) {
   const eventWord = events.length === 1 ? 'evento' : 'eventos';
 
   return `Agenda privada autorizada: tienes ${events.length} ${eventWord} hoy: ${visibleEvents.join('; ')}${suffix}`;
+}
+
+function formatGmailMessage(message) {
+  const subject = message && typeof message.subject === 'string' && message.subject.trim()
+    ? message.subject.trim()
+    : 'Sin asunto';
+  const from = message && typeof message.from === 'string' && message.from.trim()
+    ? message.from.trim()
+    : 'remitente desconocido';
+
+  return `${subject} de ${from}`;
+}
+
+function buildGmailContextSummary(payload) {
+  const messages = payload && Array.isArray(payload.messages) ? payload.messages : [];
+
+  if (messages.length === 0) {
+    return 'Correo privado autorizado: no hay correos recientes en el rango solicitado.';
+  }
+
+  const visibleMessages = messages.slice(0, 3).map(formatGmailMessage);
+  const hiddenCount = Math.max(messages.length - visibleMessages.length, 0);
+  const suffix = hiddenCount > 0 ? ` y ${hiddenCount} correo(s) mas.` : '.';
+  const messageWord = messages.length === 1 ? 'correo reciente' : 'correos recientes';
+
+  return `Correo privado autorizado: tienes ${messages.length} ${messageWord}: ${visibleMessages.join('; ')}${suffix}`;
 }
 
 function sanitizeExecutiveSources(sources) {
@@ -220,15 +278,17 @@ function orchestrateExecutiveQuery(query, options) {
     ? buildPrivateContextSummary(authorizedPrivateContext)
     : null;
   const preferPrivateCalendarContext = shouldPreferPrivateCalendarContext(query, analysis, authorizedPrivateContext);
-  const responseSources = preferPrivateCalendarContext ? [] : sanitizeExecutiveSources(response.sources);
-  const responseLimitations = preferPrivateCalendarContext
-    ? filterCalendarPrimaryLimitations(response.limitations)
+  const preferPrivateGmailContext = shouldPreferPrivateGmailContext(query, analysis, authorizedPrivateContext);
+  const preferPrivateContext = preferPrivateCalendarContext || preferPrivateGmailContext;
+  const responseSources = preferPrivateContext ? [] : sanitizeExecutiveSources(response.sources);
+  const responseLimitations = preferPrivateContext
+    ? filterPrivatePrimaryLimitations(response.limitations)
     : response.limitations;
-  const responseConfidence = preferPrivateCalendarContext
+  const responseConfidence = preferPrivateContext
     ? Math.max(analysis.confidence, 0.7)
     : response.confidence;
   const executiveResponse = responseBuilder({
-    answer: preferPrivateCalendarContext
+    answer: preferPrivateContext
       ? privateContextSummary
       : (privateContextSummary
         ? `${response.answer} ${privateContextSummary}`
@@ -238,7 +298,7 @@ function orchestrateExecutiveQuery(query, options) {
     reasoningSummary: response.reasoningSummary,
     limitations: responseLimitations,
   });
-  const finalConfidence = preferPrivateCalendarContext
+  const finalConfidence = preferPrivateContext
     ? executiveResponse.confidence
     : Math.min(analysis.confidence, executiveResponse.confidence);
 
@@ -251,7 +311,7 @@ function orchestrateExecutiveQuery(query, options) {
     privateContextUsed: Boolean(authorizedPrivateContext),
     limitations: [
       ...executiveResponse.limitations,
-      ...(!preferPrivateCalendarContext && knowledgeQueryResult && knowledgeQueryResult.found === false
+      ...(!preferPrivateContext && knowledgeQueryResult && knowledgeQueryResult.found === false
         ? [`Knowledge Query Service did not find project ${analysis.project}.`]
         : []),
     ],

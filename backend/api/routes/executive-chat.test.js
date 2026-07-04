@@ -30,7 +30,8 @@ function createResponse() {
     response.statusCode = statusCode;
     response.headers = headers;
   };
-  response.getJson = () => JSON.parse(Buffer.concat(chunks).toString('utf8'));
+  response.getRawBody = () => Buffer.concat(chunks).toString('utf8');
+  response.getJson = () => JSON.parse(response.getRawBody());
 
   return response;
 }
@@ -112,6 +113,7 @@ test('returns orchestrator response for a valid query', async () => {
     'limitations',
   ]);
   assert.equal(payload.query, 'Resumen del roadmap de Oxkio');
+  assert.equal(response.headers['Content-Type'], 'application/json; charset=utf-8');
   assert.equal(payload.sources.length, 1);
   assert.equal(Object.hasOwn(payload.sources[0], 'path'), false);
   assert.equal(Object.hasOwn(payload.sources[0], 'token'), false);
@@ -348,6 +350,189 @@ test('documented Calendar body remains valid with simulated provider', async () 
   assert.equal(orchestratorOptions.expectedClientId, 'cliente-cero');
   assert.equal(orchestratorOptions.privateContextMetadata.authorization.status, 'granted');
   assert.equal(payload.privateContextUsed, true);
+});
+
+test('gmail enabled without explicit private identity returns safe error', async () => {
+  const request = createRequest(JSON.stringify({
+    query: 'Que correos tengo',
+    gmail: {
+      enabled: true,
+    },
+  }));
+  const response = createResponse();
+
+  await handleExecutiveChatRequest(request, response, {
+    dependencies: {
+      orchestrateExecutiveQuery() {
+        throw new Error('orchestrator should not be called');
+      },
+    },
+  });
+
+  const payload = response.getJson();
+  const serialized = JSON.stringify(payload);
+
+  assert.equal(response.statusCode, 400);
+  assert.equal(payload.ok, false);
+  assert.equal(payload.error, 'gmail_private_identity_required');
+  assert.equal(serialized.includes('access_token'), false);
+  assert.equal(serialized.includes('googleTokens'), false);
+});
+
+test('builds Gmail private context for executive chat requests', async () => {
+  let providerInput = null;
+  let orchestratorCall = null;
+  const request = createRequest(JSON.stringify({
+    query: 'Que correos tengo',
+    gmail: {
+      enabled: true,
+      clientId: 'cliente-cero',
+      userId: 'usuario-cliente-cero',
+      expectedClientId: 'cliente-cero',
+      authorization: { status: 'granted', provider: 'google-oauth' },
+      maxMessages: 3,
+    },
+  }));
+  const response = createResponse();
+
+  await handleExecutiveChatRequest(request, response, {
+    dependencies: {
+      async buildGmailPrivateContext(input) {
+        providerInput = input;
+
+        return {
+          privateContextMetadata: {
+            clientId: input.clientId,
+            userId: input.userId,
+            scope: 'private:user',
+            sensitivity: 'confidential',
+            sourceType: 'gmail',
+            sourceId: 'gmail-primary',
+            authorization: input.authorization,
+            purpose: 'executive-briefing',
+            retentionPolicy: 'CLIENT_CONTROLLED',
+            promotionPolicy: 'NEVER_PROMOTE',
+          },
+          expectedClientId: input.expectedClientId,
+          privatePayload: {
+            source: 'gmail',
+            messages: [
+              {
+                id: 'msg-private-1',
+                threadId: 'thread-private-1',
+                from: 'Remitente A',
+                subject: 'Asunto A',
+                date: '2026-07-04T09:00:00.000Z',
+                snippet: 'Snippet privado',
+              },
+            ],
+            maxMessages: input.maxMessages,
+          },
+        };
+      },
+      orchestrateExecutiveQuery(query, options) {
+        orchestratorCall = { query, options };
+
+        return {
+          query,
+          analysis: {},
+          response: 'Correo privado autorizado: tienes 1 correo reciente: Asunto A de Remitente A.',
+          confidence: 0.7,
+          sources: [],
+          privateContextUsed: true,
+          limitations: [],
+        };
+      },
+    },
+  });
+
+  const payload = response.getJson();
+  const serialized = JSON.stringify(payload);
+
+  assert.equal(response.statusCode, 200);
+  assert.equal(response.headers['Content-Type'], 'application/json; charset=utf-8');
+  assert.equal(providerInput.maxMessages, 3);
+  assert.equal(orchestratorCall.query, 'Que correos tengo');
+  assert.equal(orchestratorCall.options.privateContextMetadata.sourceType, 'gmail');
+  assert.equal(orchestratorCall.options.privateContextRequiredPurpose, 'executive-briefing');
+  assert.equal(payload.privateContextUsed, true);
+  assert.deepEqual(payload.sources, []);
+  assert.equal(serialized.includes('msg-private-1'), false);
+  assert.equal(serialized.includes('thread-private-1'), false);
+  assert.equal(serialized.includes('Snippet privado'), false);
+});
+
+test('preserves UTF-8 characters in Gmail executive chat response', async () => {
+  const request = createRequest(JSON.stringify({
+    query: 'Que correos tengo',
+    gmail: {
+      enabled: true,
+      clientId: 'cliente-cero',
+      userId: 'usuario-cliente-cero',
+      expectedClientId: 'cliente-cero',
+      authorization: { status: 'granted', provider: 'google-oauth' },
+      maxMessages: 1,
+    },
+  }));
+  const response = createResponse();
+
+  await handleExecutiveChatRequest(request, response, {
+    dependencies: {
+      async buildGmailPrivateContext(input) {
+        return {
+          privateContextMetadata: {
+            clientId: input.clientId,
+            userId: input.userId,
+            scope: 'private:user',
+            sensitivity: 'confidential',
+            sourceType: 'gmail',
+            sourceId: 'gmail-primary',
+            authorization: input.authorization,
+            purpose: 'executive-briefing',
+            retentionPolicy: 'CLIENT_CONTROLLED',
+            promotionPolicy: 'NEVER_PROMOTE',
+          },
+          expectedClientId: input.expectedClientId,
+          privatePayload: {
+            source: 'gmail',
+            messages: [
+              {
+                id: 'msg-private-utf8',
+                threadId: 'thread-private-utf8',
+                from: 'Jose Garcia',
+                subject: 'Presupuesto',
+                date: '2026-07-04T09:00:00.000Z',
+                snippet: 'No se expone',
+              },
+            ],
+            maxMessages: input.maxMessages,
+          },
+        };
+      },
+      orchestrateExecutiveQuery(query) {
+        return {
+          query,
+          analysis: {},
+          response: 'Correo privado autorizado: tienes 1 correo reciente: más detalle de García por 25€ ✅.',
+          confidence: 0.7,
+          sources: [],
+          privateContextUsed: true,
+          limitations: [],
+        };
+      },
+    },
+  });
+
+  const rawBody = response.getRawBody();
+  const payload = JSON.parse(rawBody);
+
+  assert.equal(response.statusCode, 200);
+  assert.equal(response.headers['Content-Type'], 'application/json; charset=utf-8');
+  assert.match(rawBody, /más/);
+  assert.match(rawBody, /García/);
+  assert.match(rawBody, /25€/);
+  assert.match(rawBody, /✅/);
+  assert.equal(payload.response, 'Correo privado autorizado: tienes 1 correo reciente: más detalle de García por 25€ ✅.');
 });
 
 test('calendar enabled without explicit private identity returns safe error', async () => {

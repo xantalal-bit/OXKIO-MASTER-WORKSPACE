@@ -5,10 +5,11 @@ const {
   sanitizeExecutiveSources,
 } = require('../../services/executive-brain/executive-orchestrator');
 const { buildCalendarPrivateContext } = require('../../services/private-context/calendar-private-provider');
+const { buildGmailPrivateContext } = require('../../services/private-context/gmail-private-provider');
 
 function sendJson(res, statusCode, data) {
   res.writeHead(statusCode, {
-    'Content-Type': 'application/json',
+    'Content-Type': 'application/json; charset=utf-8',
     'Access-Control-Allow-Origin': '*',
   });
 
@@ -41,6 +42,7 @@ function isExecutiveChatRoute(pathname, method) {
 
 async function buildOrchestratorOptions(body, dependencies = {}) {
   const calendarProvider = dependencies.buildCalendarPrivateContext || buildCalendarPrivateContext;
+  const gmailProvider = dependencies.buildGmailPrivateContext || buildGmailPrivateContext;
   const options = {};
 
   if (body.calendar && body.calendar.enabled === true) {
@@ -51,6 +53,18 @@ async function buildOrchestratorOptions(body, dependencies = {}) {
       privateContextMetadata: calendarContext.privateContextMetadata,
       expectedClientId: calendarContext.expectedClientId,
       privatePayload: calendarContext.privatePayload,
+      privateContextRequiredPurpose: 'executive-briefing',
+    };
+  }
+
+  if (body.gmail && body.gmail.enabled === true) {
+    const gmailContext = await gmailProvider(body.gmail);
+
+    return {
+      ...options,
+      privateContextMetadata: gmailContext.privateContextMetadata,
+      expectedClientId: gmailContext.expectedClientId,
+      privatePayload: gmailContext.privatePayload,
       privateContextRequiredPurpose: 'executive-briefing',
     };
   }

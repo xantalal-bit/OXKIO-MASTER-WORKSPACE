@@ -447,6 +447,124 @@ test('prioritizes authorized Calendar agenda over noisy Knowledge Store response
   assert.equal(JSON.stringify(result).includes('event-1'), false);
 });
 
+test('prioritizes authorized Gmail over noisy Knowledge Store response without exposing message ids', () => {
+  let builderInput = null;
+  const result = orchestrateExecutiveQuery('Que correos tengo', {
+    privateContextMetadata: buildPrivateContext({
+      sourceType: 'gmail',
+      sourceId: 'gmail-primary',
+      purpose: 'executive-briefing',
+      authorization: { status: 'granted', provider: 'google-oauth' },
+    }),
+    expectedClientId: 'client-alpha',
+    privateContextRequiredPurpose: 'executive-briefing',
+    privatePayload: {
+      source: 'gmail',
+      messages: [
+        {
+          id: 'msg-private-1',
+          threadId: 'thread-private-1',
+          from: 'Remitente A',
+          subject: 'Asunto A',
+          date: '2026-07-04T09:00:00.000Z',
+          snippet: 'Snippet privado A',
+        },
+        {
+          id: 'msg-private-2',
+          threadId: 'thread-private-2',
+          from: 'Remitente B',
+          subject: 'Asunto B',
+          date: '2026-07-04T10:00:00.000Z',
+          snippet: 'Snippet privado B',
+        },
+        {
+          id: 'msg-private-3',
+          threadId: 'thread-private-3',
+          from: 'Remitente C',
+          subject: 'Asunto C',
+          date: '2026-07-04T11:00:00.000Z',
+          snippet: 'Snippet privado C',
+        },
+        {
+          id: 'msg-private-4',
+          threadId: 'thread-private-4',
+          from: 'Remitente D',
+          subject: 'Asunto D',
+          date: '2026-07-04T12:00:00.000Z',
+          snippet: 'Snippet privado D',
+        },
+      ],
+    },
+    dependencies: {
+      analyzeExecutiveQuery() {
+        return {
+          intent: 'unknown',
+          project: null,
+          documentTypes: [],
+          keywords: ['correos'],
+          filters: {},
+          priority: 'normal',
+          confidence: 0.45,
+        };
+      },
+      simulateExecutiveBrainQuery() {
+        return {
+          query: 'Que correos tengo',
+          answer: 'No se encontraron Knowledge Objects relevantes para "Que correos tengo" en el Knowledge Store.',
+          confidence: 0.2,
+          sources: [
+            {
+              id: 'global-noise',
+              name: 'knowledge-noise.md',
+              path: 'C:\\private\\knowledge-noise.md',
+              type: 'Notes',
+            },
+          ],
+          reasoningSummary: {},
+          limitations: [
+            'No sufficient evidence was found in the Knowledge Store.',
+            'Simulation only: this is not the definitive Executive Brain.',
+            'Only persisted Knowledge Objects are read.',
+          ],
+        };
+      },
+      buildExecutiveResponse(input) {
+        builderInput = input;
+
+        return {
+          executiveSummary: `${input.answer} ${input.confidence >= 0.5 ? 'Confianza media.' : 'Confianza baja.'}`,
+          keyFindings: [],
+          recommendation: '',
+          confidence: input.confidence,
+          sources: input.sources,
+          limitations: input.limitations,
+        };
+      },
+    },
+  });
+
+  assert.equal(result.privateContextUsed, true);
+  assert.equal(
+    result.response,
+    'Correo privado autorizado: tienes 4 correos recientes: Asunto A de Remitente A; Asunto B de Remitente B; Asunto C de Remitente C y 1 correo(s) mas. Confianza media.',
+  );
+  assert.doesNotMatch(result.response, /No se encontraron Knowledge Objects/);
+  assert.doesNotMatch(result.response, /Knowledge Store/);
+  assert.doesNotMatch(result.response, /Asunto D/);
+  assert.doesNotMatch(result.response, /msg-private-1/);
+  assert.doesNotMatch(result.response, /thread-private-1/);
+  assert.doesNotMatch(result.response, /Snippet privado/);
+  assert.equal(builderInput.confidence, 0.7);
+  assert.equal(result.confidence, 0.7);
+  assert.deepEqual(result.sources, []);
+  assert.deepEqual(result.limitations, []);
+  assert.deepEqual(builderInput.sources, []);
+  assert.deepEqual(builderInput.limitations, []);
+  assert.equal(JSON.stringify(result).includes('msg-private-1'), false);
+  assert.equal(JSON.stringify(result).includes('thread-private-1'), false);
+  assert.equal(JSON.stringify(result).includes('Snippet privado'), false);
+});
+
 test('formats multiple Calendar events for executive agenda without adding sources', () => {
   const result = orchestrateExecutiveQuery('Que tengo hoy?', {
     privateContextMetadata: buildPrivateContext({

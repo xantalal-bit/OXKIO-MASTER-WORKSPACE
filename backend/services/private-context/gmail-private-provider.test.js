@@ -162,6 +162,23 @@ test('normalizes Gmail messages by whitelist', () => {
   assert.equal(JSON.stringify(message).includes('secret.pdf'), false);
 });
 
+test('normalizes Gmail messages without altering Unicode text', () => {
+  const message = normalizeGmailMessage(buildGmailMessage({
+    snippet: 'Necesito más detalle ✅',
+    payload: {
+      headers: [
+        { name: 'From', value: 'José García <jose@example.test>' },
+        { name: 'Subject', value: 'Presupuesto 25€ 🚀' },
+        { name: 'Date', value: 'Sat, 04 Jul 2026 10:00:00 +0200' },
+      ],
+    },
+  }));
+
+  assert.equal(message.from, 'José García <jose@example.test>');
+  assert.equal(message.subject, 'Presupuesto 25€ 🚀');
+  assert.equal(message.snippet, 'Necesito más detalle ✅');
+});
+
 test('does not mutate Gmail input data', async () => {
   const rawMessage = buildGmailMessage();
   const originalMessage = structuredClone(rawMessage);
