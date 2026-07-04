@@ -353,7 +353,89 @@ test('uses authorized Calendar context to answer daily agenda queries', () => {
   });
 
   assert.equal(result.privateContextUsed, true);
-  assert.match(result.response, /Agenda privada autorizada: Reunion ficticia de seguimiento/);
+  assert.match(
+    result.response,
+    /Agenda privada autorizada: tienes 1 evento hoy: Reunion ficticia de seguimiento a las 10:00\./,
+  );
+  assert.deepEqual(result.sources, []);
+  assert.equal(JSON.stringify(result).includes('event-1'), false);
+});
+
+test('formats multiple Calendar events for executive agenda without adding sources', () => {
+  const result = orchestrateExecutiveQuery('Que tengo hoy?', {
+    privateContextMetadata: buildPrivateContext({
+      sourceType: 'calendar',
+      sourceId: 'calendar-source-alpha',
+      purpose: 'executive-briefing',
+    }),
+    expectedClientId: 'client-alpha',
+    privateContextRequiredPurpose: 'executive-briefing',
+    privatePayload: {
+      source: 'calendar',
+      events: [
+        {
+          id: 'event-1',
+          title: 'Evento A',
+          start: '2026-07-04T10:00:00+02:00',
+        },
+        {
+          id: 'event-2',
+          title: 'Evento B',
+          start: '2026-07-04T12:15:00+02:00',
+        },
+        {
+          id: 'event-3',
+          title: 'Evento C',
+          start: '2026-07-04T15:30:00+02:00',
+        },
+        {
+          id: 'event-4',
+          title: 'Evento D',
+          start: '2026-07-04T18:45:00+02:00',
+        },
+      ],
+    },
+    dependencies: {
+      analyzeExecutiveQuery() {
+        return {
+          intent: 'briefing',
+          project: null,
+          documentTypes: [],
+          keywords: ['agenda'],
+          filters: {},
+          priority: 'high',
+          confidence: 0.9,
+        };
+      },
+      simulateExecutiveBrainQuery() {
+        return {
+          query: 'Que tengo hoy?',
+          answer: 'Respuesta ejecutiva base.',
+          confidence: 0.7,
+          sources: [],
+          reasoningSummary: {},
+          limitations: [],
+        };
+      },
+      buildExecutiveResponse(input) {
+        return {
+          executiveSummary: input.answer,
+          keyFindings: [],
+          recommendation: '',
+          confidence: input.confidence,
+          sources: input.sources,
+          limitations: input.limitations,
+        };
+      },
+    },
+  });
+
+  assert.equal(result.privateContextUsed, true);
+  assert.match(
+    result.response,
+    /Agenda privada autorizada: tienes 4 eventos hoy: Evento A a las 10:00; Evento B a las 12:15; Evento C a las 15:30 y 1 evento\(s\) mas\./,
+  );
+  assert.doesNotMatch(result.response, /Evento D/);
   assert.deepEqual(result.sources, []);
   assert.equal(JSON.stringify(result).includes('event-1'), false);
 });
