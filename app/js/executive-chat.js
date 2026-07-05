@@ -11,11 +11,14 @@ const gmailMaxMessages = document.getElementById('gmailMaxMessages');
 const privateContextStatus = document.getElementById('privateContextStatus');
 const privateContextDetails = document.getElementById('privateContextDetails');
 const askButton = document.getElementById('askButton');
+const voiceButton = document.querySelector('.voice-button');
 const PRIVATE_CONTEXT_IDENTITY = {
   clientId: 'cliente-cero',
   userId: 'usuario-cliente-cero',
   expectedClientId: 'cliente-cero',
 };
+let voiceRecognition = null;
+let isVoiceListening = false;
 
 function scrollToLatestMessage(target = conversation.lastElementChild) {
   window.requestAnimationFrame(() => {
@@ -164,6 +167,149 @@ function renderError(message) {
   scrollToLatestMessage();
 }
 
+function setVoiceButtonState(state) {
+  if (!voiceButton) {
+    return;
+  }
+
+  voiceButton.classList.remove('is-listening', 'is-processing');
+  voiceButton.dataset.voiceState = state;
+
+  if (state === 'listening') {
+    voiceButton.classList.add('is-listening');
+    voiceButton.dataset.voiceLabel = 'Escuchando';
+    voiceButton.title = 'Detener voz';
+    voiceButton.setAttribute('aria-label', 'Detener voz');
+    return;
+  }
+
+  if (state === 'processing') {
+    voiceButton.classList.add('is-processing');
+    voiceButton.dataset.voiceLabel = 'Procesando';
+    voiceButton.title = 'Procesando voz';
+    voiceButton.setAttribute('aria-label', 'Procesando voz');
+    return;
+  }
+
+  voiceButton.dataset.voiceLabel = '';
+  voiceButton.title = 'Voz';
+  voiceButton.setAttribute('aria-label', 'Voz');
+}
+
+function getVoiceRecognition() {
+  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+
+  if (!SpeechRecognition) {
+    return null;
+  }
+
+  const recognition = new SpeechRecognition();
+
+  recognition.lang = 'es-ES';
+  recognition.interimResults = false;
+  recognition.continuous = false;
+  recognition.maxAlternatives = 1;
+
+  return recognition;
+}
+
+function normalizeVoiceTranscript(text) {
+  return String(text || '').replace(/\b(oxio|oskio|ostio|hostio|oxkio)\b/gi, 'Oxkio');
+}
+
+function insertVoiceTranscript(transcript) {
+  const text = normalizeVoiceTranscript(transcript).trim();
+
+  if (!text) {
+    return;
+  }
+
+  input.value = input.value.trim()
+    ? `${input.value.trim()} ${text}`
+    : text;
+  input.focus();
+  input.setSelectionRange(input.value.length, input.value.length);
+}
+
+function stopVoiceInput() {
+  if (voiceRecognition && isVoiceListening) {
+    voiceRecognition.stop();
+  }
+}
+
+function startVoiceInput() {
+  const recognition = getVoiceRecognition();
+  let didReceiveResult = false;
+  let didFail = false;
+
+  if (!recognition) {
+    renderError('La voz no esta disponible en este navegador.');
+    return;
+  }
+
+  voiceRecognition = recognition;
+
+  recognition.onstart = () => {
+    isVoiceListening = true;
+    setVoiceButtonState('listening');
+  };
+
+  recognition.onresult = (event) => {
+    didReceiveResult = true;
+    setVoiceButtonState('processing');
+
+    const result = event.results && event.results[0] && event.results[0][0];
+
+    insertVoiceTranscript(result && result.transcript);
+  };
+
+  recognition.onerror = (event) => {
+    didFail = true;
+
+    if (event && event.error === 'not-allowed') {
+      renderError('Permiso de microfono denegado.');
+      return;
+    }
+
+    if (event && event.error === 'no-speech') {
+      renderError('No he detectado voz. Intentalo de nuevo.');
+      return;
+    }
+
+    if (event && event.error !== 'aborted') {
+      renderError('No he podido transcribir la voz.');
+    }
+  };
+
+  recognition.onend = () => {
+    isVoiceListening = false;
+    voiceRecognition = null;
+    setVoiceButtonState('normal');
+
+    if (!didReceiveResult && !didFail) {
+      input.focus();
+    }
+  };
+
+  try {
+    recognition.start();
+  } catch (error) {
+    isVoiceListening = false;
+    voiceRecognition = null;
+    setVoiceButtonState('normal');
+    renderError('No he podido iniciar la voz.');
+  }
+}
+
+function toggleVoiceInput() {
+  if (isVoiceListening) {
+    stopVoiceInput();
+    return;
+  }
+
+  startVoiceInput();
+}
+
 function getPrivateIdentity() {
   return {
     ...PRIVATE_CONTEXT_IDENTITY,
@@ -282,5 +428,10 @@ newConversationButton.addEventListener('click', () => {
 [calendarEnabled, gmailEnabled].forEach((control) => {
   control.addEventListener('change', updatePrivateContextStatus);
 });
+
+if (voiceButton) {
+  voiceButton.addEventListener('click', toggleVoiceInput);
+  setVoiceButtonState('normal');
+}
 
 updatePrivateContextStatus();

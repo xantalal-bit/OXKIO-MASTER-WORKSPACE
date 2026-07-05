@@ -428,6 +428,44 @@ button {
   box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.08), 0 12px 26px rgba(37, 99, 235, 0.28);
 }
 
+.voice-button::after {
+  content: attr(data-voice-label);
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 7px);
+  min-width: max-content;
+  padding: 3px 7px;
+  border: 1px solid rgba(118, 146, 190, 0.24);
+  border-radius: 999px;
+  color: var(--muted);
+  background: rgba(5, 12, 24, 0.84);
+  font-size: 11px;
+  line-height: 1.2;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateX(-50%);
+  transition: opacity 160ms ease;
+}
+
+.voice-button.is-listening,
+.voice-button.is-processing {
+  color: #ffffff;
+}
+
+.voice-button.is-listening {
+  background: linear-gradient(135deg, #0f766e, #2563eb);
+  box-shadow: 0 0 0 1px rgba(125, 211, 252, 0.16), 0 0 0 6px rgba(56, 189, 248, 0.10);
+}
+
+.voice-button.is-processing {
+  background: linear-gradient(135deg, #334155, #2563eb);
+}
+
+.voice-button.is-listening::after,
+.voice-button.is-processing::after {
+  opacity: 1;
+}
+
 .voice-button span {
   position: absolute;
   left: 50%;
