@@ -294,8 +294,13 @@ function buildGmailContextSummary(payload) {
   const hiddenCount = Math.max(messages.length - visibleMessages.length, 0);
   const suffix = hiddenCount > 0 ? ` y ${hiddenCount} correo(s) mas.` : '.';
   const messageWord = messages.length === 1 ? 'correo reciente' : 'correos recientes';
+  const bulletMessages = visibleMessages.map((message, index) => {
+    const isLastVisibleMessage = index === visibleMessages.length - 1;
 
-  return `Correo privado autorizado: tienes ${messages.length} ${messageWord}: ${visibleMessages.join('; ')}${suffix}`;
+    return `- ${message}${isLastVisibleMessage ? suffix : ''}`;
+  }).join('\n');
+
+  return `Correo privado autorizado: tienes ${messages.length} ${messageWord}:\n${bulletMessages}`;
 }
 
 function sanitizeExecutiveSources(sources) {

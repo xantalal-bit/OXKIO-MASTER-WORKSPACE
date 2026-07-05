@@ -604,8 +604,11 @@ test('builds a combined Calendar and Gmail answer for mixed private queries', ()
   assert.equal(result.privateContextUsed, true);
   assert.equal(
     result.response,
-    'Agenda privada autorizada: tienes 4 eventos hoy: Evento privado A a las 10:00; Evento privado B a las 12:15; Evento privado C a las 15:30 y 1 evento(s) mas. Correo privado autorizado: tienes 4 correos recientes: Correo privado A de Remitente privado; Correo privado B de Remitente B; Correo privado C de Remitente C y 1 correo(s) mas. Confianza media.',
+    'Agenda privada autorizada: tienes 4 eventos hoy: Evento privado A a las 10:00; Evento privado B a las 12:15; Evento privado C a las 15:30 y 1 evento(s) mas. Correo privado autorizado: tienes 4 correos recientes:\n- Correo privado A de Remitente privado\n- Correo privado B de Remitente B\n- Correo privado C de Remitente C y 1 correo(s) mas. Confianza media.',
   );
+  assert.match(result.response, /\n- Correo privado A de Remitente privado/);
+  assert.match(result.response, /\n- Correo privado B de Remitente B/);
+  assert.match(result.response, /\n- Correo privado C de Remitente C/);
   assert.doesNotMatch(result.response, /No se encontraron Knowledge Objects/);
   assert.doesNotMatch(result.response, /Knowledge Store/);
   assert.doesNotMatch(result.response, /Evento privado D/);
@@ -879,8 +882,11 @@ test('prioritizes authorized Gmail over noisy Knowledge Store response without e
   assert.equal(result.privateContextUsed, true);
   assert.equal(
     result.response,
-    'Correo privado autorizado: tienes 4 correos recientes: Asunto A de Remitente A; Asunto B de Remitente B; Asunto C de Remitente C y 1 correo(s) mas. Confianza media.',
+    'Correo privado autorizado: tienes 4 correos recientes:\n- Asunto A de Remitente A\n- Asunto B de Remitente B\n- Asunto C de Remitente C y 1 correo(s) mas. Confianza media.',
   );
+  assert.match(result.response, /\n- Asunto A de Remitente A/);
+  assert.match(result.response, /\n- Asunto B de Remitente B/);
+  assert.match(result.response, /\n- Asunto C de Remitente C/);
   assert.doesNotMatch(result.response, /No se encontraron Knowledge Objects/);
   assert.doesNotMatch(result.response, /Knowledge Store/);
   assert.doesNotMatch(result.response, /Asunto D/);
