@@ -4,6 +4,18 @@ const form = document.getElementById('executiveChatForm');
 const input = document.getElementById('queryInput');
 const conversation = document.getElementById('conversation');
 const newConversationButton = document.getElementById('newConversationButton');
+const calendarEnabled = document.getElementById('calendarEnabled');
+const gmailEnabled = document.getElementById('gmailEnabled');
+const calendarRange = document.getElementById('calendarRange');
+const gmailMaxMessages = document.getElementById('gmailMaxMessages');
+const privateContextStatus = document.getElementById('privateContextStatus');
+const privateContextDetails = document.getElementById('privateContextDetails');
+const askButton = document.getElementById('askButton');
+const PRIVATE_CONTEXT_IDENTITY = {
+  clientId: 'cliente-cero',
+  userId: 'usuario-cliente-cero',
+  expectedClientId: 'cliente-cero',
+};
 
 function scrollToLatestMessage() {
   conversation.scrollTop = conversation.scrollHeight;
@@ -19,7 +31,15 @@ function clearEmptyState() {
 
 function renderEmptyState() {
   conversation.innerHTML = '';
-  conversation.appendChild(createElement('p', 'empty-state', 'Escribe una consulta ejecutiva.'));
+  const emptyState = createElement('div', 'empty-state');
+
+  emptyState.appendChild(createElement('p', 'empty-title', 'Hola, soy Oxkio.'));
+  emptyState.appendChild(createElement(
+    'p',
+    null,
+    'Pregunta por tu agenda, correo o siguiente prioridad. Si necesitas datos privados, activa el contexto antes de enviar.',
+  ));
+  conversation.appendChild(emptyState);
 }
 
 function createElement(tagName, className, text) {
@@ -55,42 +75,54 @@ function renderList(items, emptyText) {
   return list;
 }
 
+function getConfidenceLabel(confidence) {
+  if (typeof confidence !== 'number') {
+    return null;
+  }
+
+  if (confidence >= 0.8) {
+    return 'Confianza alta';
+  }
+
+  if (confidence >= 0.5) {
+    return 'Confianza media';
+  }
+
+  return 'Confianza baja';
+}
+
+function appendMetadataGroup(exchange, title, items) {
+  if (!Array.isArray(items) || items.length === 0) {
+    return;
+  }
+
+  const details = createElement('details', 'message-details');
+  const summary = createElement('summary', null, title);
+
+  details.appendChild(summary);
+  details.appendChild(renderList(items, ''));
+  exchange.appendChild(details);
+}
+
 function renderExchange(query, data) {
   clearEmptyState();
 
   const exchange = createElement('article', 'exchange');
-  const questionGroup = createElement('div');
-  const answerGroup = createElement('div');
-  const confidenceGroup = createElement('div');
-  const sourcesGroup = createElement('div');
-  const limitationsGroup = createElement('div');
+  const userMessage = createElement('div', 'message user-message');
+  const assistantMessage = createElement('div', 'message assistant-message');
+  const confidenceLabel = getConfidenceLabel(data.confidence);
 
-  questionGroup.appendChild(createElement('p', 'label', 'Pregunta'));
-  questionGroup.appendChild(createElement('p', 'text', query));
+  userMessage.appendChild(createElement('p', 'message-text', query));
+  assistantMessage.appendChild(createElement('p', 'message-text', data.response || 'Sin respuesta.'));
 
-  answerGroup.appendChild(createElement('p', 'label', 'Respuesta'));
-  answerGroup.appendChild(createElement('p', 'text', data.response || 'Sin respuesta.'));
+  if (confidenceLabel) {
+    assistantMessage.appendChild(createElement('p', 'message-meta', confidenceLabel));
+  }
 
-  confidenceGroup.appendChild(createElement('p', 'label', 'Confianza'));
-  confidenceGroup.appendChild(createElement(
-    'p',
-    'text confidence',
-    typeof data.confidence === 'number' ? String(data.confidence) : 'No disponible',
-  ));
-
-  sourcesGroup.appendChild(createElement('p', 'label', 'Fuentes'));
-  sourcesGroup.appendChild(renderList(data.sources, 'Sin fuentes.'));
-
-  limitationsGroup.appendChild(createElement('p', 'label', 'Limitaciones'));
-  limitationsGroup.appendChild(renderList(data.limitations, 'Sin limitaciones.'));
-
-  [
-    questionGroup,
-    answerGroup,
-    confidenceGroup,
-    sourcesGroup,
-    limitationsGroup,
-  ].forEach((group) => exchange.appendChild(group));
+  exchange.appendChild(userMessage);
+  exchange.appendChild(assistantMessage);
+  appendMetadataGroup(exchange, 'Fuentes', data.sources);
+  appendMetadataGroup(exchange, 'Limitaciones', data.limitations);
 
   conversation.appendChild(exchange);
   scrollToLatestMessage();
@@ -111,7 +143,7 @@ function setThinking(isThinking) {
     status.remove();
   }
 
-  form.querySelector('button').disabled = isThinking;
+  askButton.disabled = isThinking;
   input.disabled = isThinking;
 }
 
@@ -119,6 +151,79 @@ function renderError(message) {
   clearEmptyState();
   conversation.appendChild(createElement('p', 'error', message));
   scrollToLatestMessage();
+}
+
+function getPrivateIdentity() {
+  return {
+    ...PRIVATE_CONTEXT_IDENTITY,
+    authorization: {
+      status: 'granted',
+      provider: 'google-oauth',
+    },
+  };
+}
+
+function clampGmailMaxMessages(value) {
+  const parsed = Number.parseInt(value, 10);
+
+  if (!Number.isFinite(parsed)) {
+    return 3;
+  }
+
+  return Math.min(Math.max(parsed, 1), 10);
+}
+
+function buildExecutiveChatPayload(query) {
+  const payload = { query };
+  const useCalendar = calendarEnabled.checked;
+  const useGmail = gmailEnabled.checked;
+
+  if (!useCalendar && !useGmail) {
+    return payload;
+  }
+
+  const privateIdentity = getPrivateIdentity();
+
+  if (useCalendar) {
+    payload.calendar = {
+      enabled: true,
+      ...privateIdentity,
+      range: calendarRange.value,
+      maxResults: 10,
+    };
+  }
+
+  if (useGmail) {
+    payload.gmail = {
+      enabled: true,
+      ...privateIdentity,
+      maxMessages: clampGmailMaxMessages(gmailMaxMessages.value),
+    };
+  }
+
+  return payload;
+}
+
+function updatePrivateContextStatus() {
+  const useCalendar = calendarEnabled.checked;
+  const useGmail = gmailEnabled.checked;
+
+  if (useCalendar && useGmail) {
+    privateContextStatus.textContent = 'Agenda + Correo';
+    return;
+  }
+
+  if (useCalendar) {
+    privateContextStatus.textContent = 'Agenda';
+    return;
+  }
+
+  if (useGmail) {
+    privateContextStatus.textContent = 'Correo';
+    return;
+  }
+
+  privateContextStatus.textContent = 'Privado desactivado';
 }
 
 form.addEventListener('submit', async (event) => {
@@ -139,7 +244,7 @@ form.addEventListener('submit', async (event) => {
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ query }),
+      body: JSON.stringify(buildExecutiveChatPayload(query)),
     });
     const data = await response.json();
 
@@ -148,6 +253,7 @@ form.addEventListener('submit', async (event) => {
     }
 
     renderExchange(query, data);
+    privateContextDetails.open = false;
     input.value = '';
   } catch (error) {
     renderError(error.message || 'Error inesperado al consultar Executive Brain.');
@@ -161,3 +267,9 @@ newConversationButton.addEventListener('click', () => {
   input.value = '';
   input.focus();
 });
+
+[calendarEnabled, gmailEnabled].forEach((control) => {
+  control.addEventListener('change', updatePrivateContextStatus);
+});
+
+updatePrivateContextStatus();

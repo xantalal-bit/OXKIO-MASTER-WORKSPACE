@@ -8,30 +8,91 @@
   <link rel="stylesheet" href="/css/executive-chat.css">
 </head>
 <body>
-  <main class="chat-shell">
-    <header class="chat-header">
-      <h1>Oxkio Executive</h1>
+  <div class="app-shell">
+    <header class="topbar">
+      <div class="brand">
+        <img class="brand-mark" src="/app/logo.png" alt="OXKIO">
+        <div>
+          <h1>OXKIO</h1>
+          <p class="subtitle">Executive Chat / Asistente Ejecutivo IA</p>
+        </div>
+      </div>
       <button class="secondary-action" id="newConversationButton" type="button">
         Nueva conversación
       </button>
     </header>
 
-    <section class="conversation" id="conversation" aria-live="polite">
-      <p class="empty-state">Escribe una consulta ejecutiva.</p>
-    </section>
+    <main class="chat-shell">
+      <section class="conversation-panel">
+        <section class="conversation" id="conversation" aria-live="polite">
+          <div class="empty-state">
+            <p class="empty-title">Hola, soy Oxkio.</p>
+            <p>Pregunta por tu agenda, correo o siguiente prioridad. Si necesitas datos privados, activa el contexto antes de enviar.</p>
+          </div>
+        </section>
 
     <form class="composer" id="executiveChatForm">
+      <details class="private-context" id="privateContextDetails">
+        <summary>
+          <span>Contexto privado</span>
+          <span class="private-context-status" id="privateContextStatus">Privado desactivado</span>
+        </summary>
+
+        <fieldset class="private-context-controls">
+          <legend class="visually-hidden">Contexto privado</legend>
+
+          <div class="context-toggles">
+            <label class="checkbox-control">
+              <input id="calendarEnabled" type="checkbox" name="calendarEnabled">
+              <span>Agenda</span>
+            </label>
+
+            <label class="checkbox-control">
+              <input id="gmailEnabled" type="checkbox" name="gmailEnabled">
+              <span>Correo</span>
+            </label>
+          </div>
+
+          <div class="context-grid">
+            <label class="field">
+              <span>Rango</span>
+              <select id="calendarRange" name="calendarRange">
+                <option value="today">Hoy</option>
+                <option value="next24Hours">24h</option>
+                <option value="next7Days">Semana</option>
+              </select>
+            </label>
+
+            <label class="field">
+              <span>Correos recientes</span>
+              <select id="gmailMaxMessages" name="gmailMaxMessages">
+                <option value="3">3</option>
+                <option value="5">5</option>
+                <option value="10">10</option>
+              </select>
+            </label>
+          </div>
+        </fieldset>
+      </details>
+
       <label class="visually-hidden" for="queryInput">Consulta</label>
-      <textarea
-        id="queryInput"
-        name="query"
-        rows="3"
-        placeholder="Pregunta sobre roadmaps, decisiones, tareas o conocimiento..."
-        required
-      ></textarea>
-      <button type="submit">Preguntar</button>
-    </form>
-  </main>
+      <div class="composer-row">
+        <textarea
+          id="queryInput"
+          name="query"
+          rows="2"
+          placeholder="Pregunta a Oxkio..."
+          required
+        ></textarea>
+        <button class="voice-button" type="button" title="Voz proximamente" aria-label="Voz proximamente">
+          <span aria-hidden="true"></span>
+        </button>
+        <button id="askButton" type="submit">Preguntar</button>
+      </div>
+        </form>
+      </section>
+    </main>
+  </div>
 
   <script src="/js/executive-chat.js"></script>
 </body>
