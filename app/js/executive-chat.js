@@ -17,6 +17,7 @@ const PRIVATE_CONTEXT_IDENTITY = {
   userId: 'usuario-cliente-cero',
   expectedClientId: 'cliente-cero',
 };
+let loadedPrivateIdentity = null;
 let voiceRecognition = null;
 let isVoiceListening = false;
 
@@ -310,14 +311,64 @@ function toggleVoiceInput() {
   startVoiceInput();
 }
 
-function getPrivateIdentity() {
+function isValidExecutiveIdentityPayload(data) {
+  const identity = data && data.identity;
+  const authorization = identity && identity.authorization;
+
+  return data && data.ok === true
+    && identity
+    && typeof identity.clientId === 'string'
+    && typeof identity.userId === 'string'
+    && typeof identity.expectedClientId === 'string'
+    && authorization
+    && authorization.status === 'granted'
+    && authorization.provider === 'google-oauth';
+}
+
+function copyPrivateIdentity(identity) {
   return {
+    clientId: identity.clientId,
+    userId: identity.userId,
+    expectedClientId: identity.expectedClientId,
+    authorization: {
+      status: identity.authorization.status,
+      provider: identity.authorization.provider,
+    },
+  };
+}
+
+async function loadExecutiveIdentity() {
+  try {
+    const response = await fetch('/api/executive/identity');
+
+    if (!response.ok) {
+      return;
+    }
+
+    const data = await response.json();
+
+    if (!isValidExecutiveIdentityPayload(data)) {
+      return;
+    }
+
+    loadedPrivateIdentity = copyPrivateIdentity(data.identity);
+  } catch (error) {
+    loadedPrivateIdentity = null;
+  }
+}
+
+function getPrivateIdentity() {
+  if (loadedPrivateIdentity) {
+    return copyPrivateIdentity(loadedPrivateIdentity);
+  }
+
+  return copyPrivateIdentity({
     ...PRIVATE_CONTEXT_IDENTITY,
     authorization: {
       status: 'granted',
       provider: 'google-oauth',
     },
-  };
+  });
 }
 
 function clampGmailMaxMessages(value) {
@@ -435,3 +486,4 @@ if (voiceButton) {
 }
 
 updatePrivateContextStatus();
+loadExecutiveIdentity();
