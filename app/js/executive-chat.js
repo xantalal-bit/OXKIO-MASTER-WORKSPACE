@@ -17,8 +17,14 @@ const PRIVATE_CONTEXT_IDENTITY = {
   expectedClientId: 'cliente-cero',
 };
 
-function scrollToLatestMessage() {
-  conversation.scrollTop = conversation.scrollHeight;
+function scrollToLatestMessage(target = conversation.lastElementChild) {
+  window.requestAnimationFrame(() => {
+    if (target && typeof target.scrollIntoView === 'function') {
+      target.scrollIntoView({ block: 'end', behavior: 'smooth' });
+    }
+
+    conversation.scrollTop = conversation.scrollHeight;
+  });
 }
 
 function clearEmptyState() {
@@ -107,7 +113,12 @@ function appendMetadataGroup(exchange, title, items) {
 function renderExchange(query, data) {
   clearEmptyState();
 
-  const exchange = createElement('article', 'exchange');
+  conversation.querySelectorAll('.exchange').forEach((item) => {
+    item.classList.remove('is-latest');
+    item.classList.add('is-past');
+  });
+
+  const exchange = createElement('article', 'exchange is-latest');
   const userMessage = createElement('div', 'message user-message');
   const assistantMessage = createElement('div', 'message assistant-message');
   const confidenceLabel = getConfidenceLabel(data.confidence);
@@ -125,7 +136,7 @@ function renderExchange(query, data) {
   appendMetadataGroup(exchange, 'Limitaciones', data.limitations);
 
   conversation.appendChild(exchange);
-  scrollToLatestMessage();
+  scrollToLatestMessage(exchange);
 }
 
 function setThinking(isThinking) {
