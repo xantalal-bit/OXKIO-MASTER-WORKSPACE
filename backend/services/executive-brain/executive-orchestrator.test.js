@@ -2,7 +2,10 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { orchestrateExecutiveQuery } = require('./executive-orchestrator');
+const {
+  orchestrateExecutiveQuery,
+  prepareAuthorizedPrivateContexts,
+} = require('./executive-orchestrator');
 
 function buildPrivateContext(overrides = {}) {
   return {
@@ -18,6 +21,41 @@ function buildPrivateContext(overrides = {}) {
     promotionPolicy: 'NEVER_PROMOTE',
     ...overrides,
   };
+}
+
+function buildPrivateContextCollection(overrides = {}) {
+  const calendar = overrides.calendar || {};
+  const gmail = overrides.gmail || {};
+
+  return [
+    {
+      privateContextMetadata: buildPrivateContext({
+        sourceType: 'calendar',
+        sourceId: 'calendar-source-alpha',
+        purpose: 'executive-briefing',
+        ...calendar.metadata,
+      }),
+      expectedClientId: Object.hasOwn(calendar, 'expectedClientId') ? calendar.expectedClientId : 'client-alpha',
+      privatePayload: calendar.privatePayload || { events: [] },
+    },
+    {
+      privateContextMetadata: buildPrivateContext({
+        sourceType: 'gmail',
+        sourceId: 'gmail-source-alpha',
+        purpose: 'executive-briefing',
+        ...gmail.metadata,
+      }),
+      expectedClientId: Object.hasOwn(gmail, 'expectedClientId') ? gmail.expectedClientId : 'client-alpha',
+      privatePayload: gmail.privatePayload || { messages: [] },
+    },
+  ];
+}
+
+function assertPrivateContextIdentityMismatch(fn) {
+  assert.throws(
+    fn,
+    (error) => error && error.code === 'private_context_identity_mismatch',
+  );
 }
 
 test('orchestrates analyzer, knowledge query service, and simulation for project queries', () => {
@@ -290,6 +328,301 @@ test('uses authorized private context without adding it to global sources', () =
   assert.deepEqual(privatePayload, originalPayload);
   assert.ok(builderInput.answer.startsWith('Respuesta ejecutiva base.'));
   assert.ok(builderInput.answer.includes('Contexto privado autorizado'));
+});
+
+test('adapts a collection of private contexts individually without mixing payloads', () => {
+  const adapterInputs = [];
+  const calendarPayload = {
+    source: 'calendar',
+    events: [{ id: 'event-private-1', title: 'Evento privado' }],
+  };
+  const gmailPayload = {
+    source: 'gmail',
+    messages: [{ id: 'msg-private-1', subject: 'Correo privado' }],
+  };
+
+  const authorizedContexts = prepareAuthorizedPrivateContexts({
+    privateContextRequiredPurpose: 'executive-briefing',
+    privateContexts: [
+      {
+        privateContextMetadata: buildPrivateContext({
+          sourceType: 'calendar',
+          purpose: 'executive-briefing',
+        }),
+        expectedClientId: 'client-alpha',
+        privatePayload: calendarPayload,
+      },
+      {
+        privateContextMetadata: buildPrivateContext({
+          sourceType: 'gmail',
+          purpose: 'executive-briefing',
+        }),
+        expectedClientId: 'client-alpha',
+        privatePayload: gmailPayload,
+      },
+    ],
+  }, (input) => {
+    adapterInputs.push(input);
+
+    return {
+      authorized: true,
+      sourceType: input.privateContext.sourceType,
+      payload: input.payload,
+    };
+  });
+
+  assert.equal(adapterInputs.length, 2);
+  assert.equal(authorizedContexts.length, 2);
+  assert.equal(authorizedContexts[0].sourceType, 'calendar');
+  assert.equal(authorizedContexts[1].sourceType, 'gmail');
+  assert.equal(adapterInputs[0].requiredPurpose, 'executive-briefing');
+  assert.equal(adapterInputs[1].requiredPurpose, 'executive-briefing');
+  assert.deepEqual(adapterInputs[0].payload, calendarPayload);
+  assert.deepEqual(adapterInputs[1].payload, gmailPayload);
+  assert.equal(Object.hasOwn(adapterInputs[0].payload, 'messages'), false);
+  assert.equal(Object.hasOwn(adapterInputs[1].payload, 'events'), false);
+});
+
+test('allows Calendar and Gmail private context collection with the same identity', () => {
+  let adapterCalls = 0;
+  const authorizedContexts = prepareAuthorizedPrivateContexts({
+    privateContexts: buildPrivateContextCollection(),
+  }, (input) => {
+    adapterCalls += 1;
+
+    return {
+      authorized: true,
+      clientId: input.privateContext.clientId,
+      userId: input.privateContext.userId,
+      sourceType: input.privateContext.sourceType,
+      purpose: input.privateContext.purpose,
+      promotionPolicy: input.privateContext.promotionPolicy,
+      payload: input.payload,
+    };
+  });
+
+  assert.equal(adapterCalls, 2);
+  assert.equal(authorizedContexts.length, 2);
+  assert.equal(authorizedContexts[0].clientId, 'client-alpha');
+  assert.equal(authorizedContexts[1].clientId, 'client-alpha');
+  assert.equal(authorizedContexts[0].userId, 'user-alpha');
+  assert.equal(authorizedContexts[1].userId, 'user-alpha');
+});
+
+test('rejects private context collection with mismatched clientId', () => {
+  assertPrivateContextIdentityMismatch(() => prepareAuthorizedPrivateContexts({
+    privateContexts: buildPrivateContextCollection({
+      gmail: {
+        metadata: { clientId: 'client-beta' },
+        expectedClientId: 'client-beta',
+      },
+    }),
+  }, () => {
+    throw new Error('Adapter should not run for identity mismatch.');
+  }));
+});
+
+test('rejects private context collection with mismatched userId', () => {
+  assertPrivateContextIdentityMismatch(() => prepareAuthorizedPrivateContexts({
+    privateContexts: buildPrivateContextCollection({
+      gmail: { metadata: { userId: 'user-beta' } },
+    }),
+  }, () => {
+    throw new Error('Adapter should not run for identity mismatch.');
+  }));
+});
+
+test('rejects private context collection with mismatched expectedClientId', () => {
+  assertPrivateContextIdentityMismatch(() => prepareAuthorizedPrivateContexts({
+    privateContexts: buildPrivateContextCollection({
+      gmail: { expectedClientId: 'client-beta' },
+    }),
+  }, () => {
+    throw new Error('Adapter should not run for identity mismatch.');
+  }));
+});
+
+test('rejects private context collection with mismatched purpose safely', () => {
+  assertPrivateContextIdentityMismatch(() => prepareAuthorizedPrivateContexts({
+    privateContexts: buildPrivateContextCollection({
+      gmail: { metadata: { purpose: 'email-sync' } },
+    }),
+  }, () => {
+    throw new Error('Adapter should not run for identity mismatch.');
+  }));
+});
+
+test('rejects private context collection with mismatched promotionPolicy safely', () => {
+  assertPrivateContextIdentityMismatch(() => prepareAuthorizedPrivateContexts({
+    privateContexts: buildPrivateContextCollection({
+      gmail: { metadata: { promotionPolicy: 'PROMOTE_ALLOWED' } },
+    }),
+  }, () => {
+    throw new Error('Adapter should not run for identity mismatch.');
+  }));
+});
+
+test('builds a combined Calendar and Gmail answer for mixed private queries', () => {
+  const adapterInputs = [];
+  const result = orchestrateExecutiveQuery('Que tengo hoy y que correos tengo?', {
+    privateContextRequiredPurpose: 'executive-briefing',
+    privateContexts: [
+      {
+        privateContextMetadata: buildPrivateContext({
+          sourceType: 'calendar',
+          sourceId: 'calendar-source-alpha',
+          purpose: 'executive-briefing',
+        }),
+        expectedClientId: 'client-alpha',
+        privatePayload: {
+          source: 'calendar',
+          events: [
+            {
+              id: 'event-private-1',
+              title: 'Evento privado A',
+              start: '2026-07-04T10:00:00+02:00',
+            },
+            {
+              id: 'event-private-2',
+              title: 'Evento privado B',
+              start: '2026-07-04T12:15:00+02:00',
+            },
+            {
+              id: 'event-private-3',
+              title: 'Evento privado C',
+              start: '2026-07-04T15:30:00+02:00',
+            },
+            {
+              id: 'event-private-4',
+              title: 'Evento privado D',
+              start: '2026-07-04T18:45:00+02:00',
+            },
+          ],
+        },
+      },
+      {
+        privateContextMetadata: buildPrivateContext({
+          sourceType: 'gmail',
+          sourceId: 'gmail-source-alpha',
+          purpose: 'executive-briefing',
+        }),
+        expectedClientId: 'client-alpha',
+        privatePayload: {
+          source: 'gmail',
+          messages: [
+            {
+              id: 'msg-private-1',
+              threadId: 'thread-private-1',
+              from: 'Remitente privado',
+              subject: 'Correo privado A',
+              snippet: 'Snippet privado A',
+            },
+            {
+              id: 'msg-private-2',
+              threadId: 'thread-private-2',
+              from: 'Remitente B',
+              subject: 'Correo privado B',
+              snippet: 'Snippet privado B',
+            },
+            {
+              id: 'msg-private-3',
+              threadId: 'thread-private-3',
+              from: 'Remitente C',
+              subject: 'Correo privado C',
+              snippet: 'Snippet privado C',
+            },
+            {
+              id: 'msg-private-4',
+              threadId: 'thread-private-4',
+              from: 'Remitente D',
+              subject: 'Correo privado D',
+              snippet: 'Snippet privado D',
+            },
+          ],
+        },
+      },
+    ],
+    dependencies: {
+      preparePrivateContextAdapter(input) {
+        adapterInputs.push(input);
+
+        return {
+          sourceType: input.privateContext.sourceType,
+          sensitivity: input.privateContext.sensitivity,
+          payload: input.payload,
+          authorized: true,
+          private: true,
+          persistable: false,
+          promotable: false,
+        };
+      },
+      analyzeExecutiveQuery() {
+        return {
+          intent: 'briefing',
+          project: null,
+          documentTypes: [],
+          keywords: ['agenda', 'correos'],
+          filters: {},
+          priority: 'high',
+          confidence: 0.9,
+        };
+      },
+      simulateExecutiveBrainQuery() {
+        return {
+          query: 'Que tengo hoy y que correos tengo?',
+          answer: 'No se encontraron Knowledge Objects relevantes para "Que tengo hoy y que correos tengo?" en el Knowledge Store.',
+          confidence: 0.2,
+          sources: [
+            {
+              id: 'global-noise',
+              name: 'knowledge-noise.md',
+              path: 'C:\\private\\knowledge-noise.md',
+              type: 'Notes',
+            },
+          ],
+          reasoningSummary: {},
+          limitations: [
+            'No sufficient evidence was found in the Knowledge Store.',
+            'Simulation only: this is not the definitive Executive Brain.',
+          ],
+        };
+      },
+      buildExecutiveResponse(input) {
+        return {
+          executiveSummary: `${input.answer} ${input.confidence >= 0.7 ? 'Confianza media.' : 'Confianza baja.'}`,
+          keyFindings: [],
+          recommendation: '',
+          confidence: input.confidence,
+          sources: input.sources,
+          limitations: input.limitations,
+        };
+      },
+    },
+  });
+
+  assert.equal(adapterInputs.length, 2);
+  assert.equal(result.privateContextUsed, true);
+  assert.equal(
+    result.response,
+    'Agenda privada autorizada: tienes 4 eventos hoy: Evento privado A a las 10:00; Evento privado B a las 12:15; Evento privado C a las 15:30 y 1 evento(s) mas. Correo privado autorizado: tienes 4 correos recientes: Correo privado A de Remitente privado; Correo privado B de Remitente B; Correo privado C de Remitente C y 1 correo(s) mas. Confianza media.',
+  );
+  assert.doesNotMatch(result.response, /No se encontraron Knowledge Objects/);
+  assert.doesNotMatch(result.response, /Knowledge Store/);
+  assert.doesNotMatch(result.response, /Evento privado D/);
+  assert.doesNotMatch(result.response, /Correo privado D/);
+  assert.doesNotMatch(result.response, /event-private-1/);
+  assert.doesNotMatch(result.response, /msg-private-1/);
+  assert.doesNotMatch(result.response, /thread-private-1/);
+  assert.doesNotMatch(result.response, /Snippet privado/);
+  assert.equal(result.confidence, 0.9);
+  assert.deepEqual(result.sources, []);
+  assert.deepEqual(result.limitations, []);
+  assert.equal(Object.hasOwn(adapterInputs[0].payload, 'messages'), false);
+  assert.equal(Object.hasOwn(adapterInputs[1].payload, 'events'), false);
+  assert.equal(JSON.stringify(result).includes('event-private-1'), false);
+  assert.equal(JSON.stringify(result).includes('msg-private-1'), false);
+  assert.equal(JSON.stringify(result).includes('thread-private-1'), false);
+  assert.equal(JSON.stringify(result).includes('Snippet privado'), false);
 });
 
 test('uses authorized Calendar context to answer daily agenda queries', () => {
@@ -725,4 +1058,83 @@ test('requires expectedClientId for private scopes', () => {
     }),
     /expectedClientId is required for private scopes/,
   );
+});
+
+test('rejects an invalid context inside a private context collection safely', () => {
+  assert.throws(
+    () => orchestrateExecutiveQuery('Consulta privada combinada', {
+      privateContextRequiredPurpose: 'executive-briefing',
+      privateContexts: [
+        {
+          privateContextMetadata: buildPrivateContext({
+            sourceType: 'calendar',
+            purpose: 'executive-briefing',
+          }),
+          expectedClientId: 'client-alpha',
+          privatePayload: { events: [] },
+        },
+        {
+          privateContextMetadata: buildPrivateContext({
+            sourceType: 'gmail',
+            purpose: 'executive-briefing',
+            authorization: { status: 'pending' },
+          }),
+          expectedClientId: 'client-alpha',
+          privatePayload: { messages: [] },
+        },
+      ],
+      dependencies: {
+        simulateExecutiveBrainQuery() {
+          throw new Error('Simulator should not run for invalid private contexts.');
+        },
+      },
+    }),
+    /authorization must be granted/,
+  );
+});
+
+test('does not invoke the private context adapter for non-private queries', () => {
+  const result = orchestrateExecutiveQuery('Resumen sin contexto privado', {
+    dependencies: {
+      preparePrivateContextAdapter() {
+        throw new Error('Private context adapter should not be called.');
+      },
+      analyzeExecutiveQuery() {
+        return {
+          intent: 'summary',
+          project: null,
+          documentTypes: [],
+          keywords: [],
+          filters: {},
+          priority: 'medium',
+          confidence: 0.8,
+        };
+      },
+      simulateExecutiveBrainQuery() {
+        return {
+          query: 'Resumen sin contexto privado',
+          answer: 'Respuesta publica.',
+          confidence: 0.7,
+          sources: [],
+          reasoningSummary: {},
+          limitations: [],
+        };
+      },
+      buildExecutiveResponse(input) {
+        return {
+          executiveSummary: input.answer,
+          keyFindings: [],
+          recommendation: '',
+          confidence: input.confidence,
+          sources: input.sources,
+          limitations: input.limitations,
+        };
+      },
+    },
+  });
+
+  assert.equal(result.privateContextUsed, false);
+  assert.equal(result.response, 'Respuesta publica.');
+  assert.deepEqual(result.sources, []);
+  assert.deepEqual(result.limitations, []);
 });

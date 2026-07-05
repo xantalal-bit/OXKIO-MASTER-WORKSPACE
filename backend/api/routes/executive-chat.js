@@ -44,27 +44,36 @@ async function buildOrchestratorOptions(body, dependencies = {}) {
   const calendarProvider = dependencies.buildCalendarPrivateContext || buildCalendarPrivateContext;
   const gmailProvider = dependencies.buildGmailPrivateContext || buildGmailPrivateContext;
   const options = {};
+  const privateContexts = [];
 
   if (body.calendar && body.calendar.enabled === true) {
     const calendarContext = await calendarProvider(body.calendar);
 
-    return {
-      ...options,
-      privateContextMetadata: calendarContext.privateContextMetadata,
-      expectedClientId: calendarContext.expectedClientId,
-      privatePayload: calendarContext.privatePayload,
-      privateContextRequiredPurpose: 'executive-briefing',
-    };
+    privateContexts.push(calendarContext);
   }
 
   if (body.gmail && body.gmail.enabled === true) {
     const gmailContext = await gmailProvider(body.gmail);
 
+    privateContexts.push(gmailContext);
+  }
+
+  if (privateContexts.length === 1) {
+    const [privateContext] = privateContexts;
+
     return {
       ...options,
-      privateContextMetadata: gmailContext.privateContextMetadata,
-      expectedClientId: gmailContext.expectedClientId,
-      privatePayload: gmailContext.privatePayload,
+      privateContextMetadata: privateContext.privateContextMetadata,
+      expectedClientId: privateContext.expectedClientId,
+      privatePayload: privateContext.privatePayload,
+      privateContextRequiredPurpose: 'executive-briefing',
+    };
+  }
+
+  if (privateContexts.length > 1) {
+    return {
+      ...options,
+      privateContexts,
       privateContextRequiredPurpose: 'executive-briefing',
     };
   }
@@ -101,6 +110,13 @@ function sendSafeError(res, error) {
       ok: false,
       error: 'google_oauth_not_configured',
       message: 'Google Calendar no está configurado todavía.',
+    });
+  }
+
+  if (error && error.code === 'private_context_identity_mismatch') {
+    return sendJson(res, 400, {
+      ok: false,
+      error: 'private_context_identity_mismatch',
     });
   }
 

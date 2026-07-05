@@ -535,6 +535,236 @@ test('preserves UTF-8 characters in Gmail executive chat response', async () => 
   assert.equal(payload.response, 'Correo privado autorizado: tienes 1 correo reciente: más detalle de García por 25€ ✅.');
 });
 
+test('builds multiple private contexts when Calendar and Gmail are enabled together', async () => {
+  let calendarProviderInput = null;
+  let gmailProviderInput = null;
+  let orchestratorCall = null;
+  const request = createRequest(JSON.stringify({
+    query: 'Que tengo hoy y que correos importantes tengo',
+    calendar: {
+      enabled: true,
+      clientId: 'cliente-cero',
+      userId: 'usuario-cliente-cero',
+      expectedClientId: 'cliente-cero',
+      authorization: { status: 'granted', provider: 'google-oauth' },
+      range: 'today',
+      maxResults: 3,
+    },
+    gmail: {
+      enabled: true,
+      clientId: 'cliente-cero',
+      userId: 'usuario-cliente-cero',
+      expectedClientId: 'cliente-cero',
+      authorization: { status: 'granted', provider: 'google-oauth' },
+      maxMessages: 3,
+    },
+  }));
+  const response = createResponse();
+
+  await handleExecutiveChatRequest(request, response, {
+    dependencies: {
+      async buildCalendarPrivateContext(input) {
+        calendarProviderInput = input;
+
+        return {
+          privateContextMetadata: buildPrivateContext({
+            clientId: input.clientId,
+            userId: input.userId,
+            sourceType: 'calendar',
+            sourceId: 'calendar-primary',
+            authorization: input.authorization,
+            purpose: 'executive-briefing',
+          }),
+          expectedClientId: input.expectedClientId,
+          privatePayload: {
+            source: 'calendar',
+            events: [],
+          },
+        };
+      },
+      async buildGmailPrivateContext(input) {
+        gmailProviderInput = input;
+
+        return {
+          privateContextMetadata: buildPrivateContext({
+            clientId: input.clientId,
+            userId: input.userId,
+            sourceType: 'gmail',
+            sourceId: 'gmail-primary',
+            authorization: input.authorization,
+            purpose: 'executive-briefing',
+          }),
+          expectedClientId: input.expectedClientId,
+          privatePayload: {
+            source: 'gmail',
+            messages: [],
+          },
+        };
+      },
+      orchestrateExecutiveQuery(query, options) {
+        orchestratorCall = { query, options };
+
+        return {
+          query,
+          analysis: {},
+          response: 'Contextos privados recibidos.',
+          confidence: 0.7,
+          sources: [],
+          privateContextUsed: true,
+          limitations: [],
+        };
+      },
+    },
+  });
+
+  const payload = response.getJson();
+
+  assert.equal(response.statusCode, 200);
+  assert.equal(calendarProviderInput.range, 'today');
+  assert.equal(gmailProviderInput.maxMessages, 3);
+  assert.equal(orchestratorCall.query, 'Que tengo hoy y que correos importantes tengo');
+  assert.equal(orchestratorCall.options.privateContextRequiredPurpose, 'executive-briefing');
+  assert.equal(Array.isArray(orchestratorCall.options.privateContexts), true);
+  assert.equal(orchestratorCall.options.privateContexts.length, 2);
+  assert.equal(orchestratorCall.options.privateContexts[0].privateContextMetadata.sourceType, 'calendar');
+  assert.equal(orchestratorCall.options.privateContexts[1].privateContextMetadata.sourceType, 'gmail');
+  assert.equal(Object.hasOwn(orchestratorCall.options, 'privateContextMetadata'), false);
+  assert.equal(Object.hasOwn(orchestratorCall.options, 'privatePayload'), false);
+  assert.equal(payload.privateContextUsed, true);
+});
+
+test('propagates safe Gmail error when combined Calendar and Gmail context fails', async () => {
+  const request = createRequest(JSON.stringify({
+    query: 'Que tengo hoy y que correos importantes tengo',
+    calendar: {
+      enabled: true,
+      clientId: 'cliente-cero',
+      userId: 'usuario-cliente-cero',
+      expectedClientId: 'cliente-cero',
+      authorization: { status: 'granted', provider: 'google-oauth' },
+    },
+    gmail: {
+      enabled: true,
+    },
+  }));
+  const response = createResponse();
+
+  await handleExecutiveChatRequest(request, response, {
+    dependencies: {
+      async buildCalendarPrivateContext(input) {
+        return {
+          privateContextMetadata: buildPrivateContext({
+            clientId: input.clientId,
+            userId: input.userId,
+            sourceType: 'calendar',
+            sourceId: 'calendar-primary',
+            authorization: input.authorization,
+            purpose: 'executive-briefing',
+          }),
+          expectedClientId: input.expectedClientId,
+          privatePayload: {
+            source: 'calendar',
+            events: [],
+          },
+        };
+      },
+      async buildGmailPrivateContext() {
+        const error = new Error('gmail_private_identity_required');
+        error.code = 'gmail_private_identity_required';
+        throw error;
+      },
+      orchestrateExecutiveQuery() {
+        throw new Error('orchestrator should not be called');
+      },
+    },
+  });
+
+  const payload = response.getJson();
+  const serialized = JSON.stringify(payload);
+
+  assert.equal(response.statusCode, 400);
+  assert.equal(payload.ok, false);
+  assert.equal(payload.error, 'gmail_private_identity_required');
+  assert.equal(serialized.includes('access_token'), false);
+  assert.equal(serialized.includes('googleTokens'), false);
+});
+
+test('propagates safe identity mismatch error for combined private contexts', async () => {
+  const request = createRequest(JSON.stringify({
+    query: 'Que tengo hoy y que correos importantes tengo',
+    calendar: {
+      enabled: true,
+      clientId: 'cliente-cero',
+      userId: 'usuario-cliente-cero',
+      expectedClientId: 'cliente-cero',
+      authorization: { status: 'granted', provider: 'google-oauth' },
+    },
+    gmail: {
+      enabled: true,
+      clientId: 'cliente-cero',
+      userId: 'usuario-distinto',
+      expectedClientId: 'cliente-cero',
+      authorization: { status: 'granted', provider: 'google-oauth' },
+    },
+  }));
+  const response = createResponse();
+
+  await handleExecutiveChatRequest(request, response, {
+    dependencies: {
+      async buildCalendarPrivateContext(input) {
+        return {
+          privateContextMetadata: buildPrivateContext({
+            clientId: input.clientId,
+            userId: input.userId,
+            sourceType: 'calendar',
+            sourceId: 'calendar-primary',
+            authorization: input.authorization,
+            purpose: 'executive-briefing',
+          }),
+          expectedClientId: input.expectedClientId,
+          privatePayload: {
+            source: 'calendar',
+            events: [],
+          },
+        };
+      },
+      async buildGmailPrivateContext(input) {
+        return {
+          privateContextMetadata: buildPrivateContext({
+            clientId: input.clientId,
+            userId: input.userId,
+            sourceType: 'gmail',
+            sourceId: 'gmail-primary',
+            authorization: input.authorization,
+            purpose: 'executive-briefing',
+          }),
+          expectedClientId: input.expectedClientId,
+          privatePayload: {
+            source: 'gmail',
+            messages: [],
+          },
+        };
+      },
+      orchestrateExecutiveQuery() {
+        const error = new Error('private context identity mismatch.');
+        error.code = 'private_context_identity_mismatch';
+        throw error;
+      },
+    },
+  });
+
+  const payload = response.getJson();
+  const serialized = JSON.stringify(payload);
+
+  assert.equal(response.statusCode, 400);
+  assert.deepEqual(payload, {
+    ok: false,
+    error: 'private_context_identity_mismatch',
+  });
+  assert.equal(serialized.includes('usuario-distinto'), false);
+  assert.equal(serialized.includes('private context identity mismatch'), false);
+});
+
 test('calendar enabled without explicit private identity returns safe error', async () => {
   const request = createRequest(JSON.stringify({
     query: 'Que tengo hoy?',

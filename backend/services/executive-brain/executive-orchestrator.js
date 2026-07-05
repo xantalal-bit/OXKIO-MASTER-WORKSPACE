@@ -91,6 +91,10 @@ function shouldPreferPrivateGmailContext(query, analysis, authorizedContext) {
   );
 }
 
+function isMixedAgendaEmailQuery(query, analysis) {
+  return isTemporalAgendaQuery(query, analysis) && isEmailQuery(query, analysis);
+}
+
 function filterPrivatePrimaryLimitations(limitations) {
   const noisyPatterns = [
     /knowledge store/i,
@@ -112,6 +116,60 @@ function hasPrivateContextInput(options) {
     || Object.hasOwn(options, 'privatePayload')
     || Object.hasOwn(options, 'expectedClientId')
   ));
+}
+
+function hasPrivateContextCollectionInput(options) {
+  return Boolean(options && Object.hasOwn(options, 'privateContexts'));
+}
+
+function buildPrivateContextIdentityMismatchError() {
+  const error = new Error('private context identity mismatch.');
+  error.code = 'private_context_identity_mismatch';
+  return error;
+}
+
+function getEffectivePrivateContextValue(privateContextOptions, fieldName, defaults = {}) {
+  if (Object.hasOwn(privateContextOptions, fieldName)) {
+    return privateContextOptions[fieldName];
+  }
+
+  return defaults[fieldName];
+}
+
+function validatePrivateContextCollectionIdentity(privateContexts, defaults = {}) {
+  if (!Array.isArray(privateContexts) || privateContexts.length <= 1) {
+    return;
+  }
+
+  const firstContextOptions = privateContexts[0] || {};
+  const firstMetadata = firstContextOptions.privateContextMetadata || {};
+  const expectedIdentity = {
+    clientId: firstMetadata.clientId,
+    userId: firstMetadata.userId,
+    expectedClientId: getEffectivePrivateContextValue(firstContextOptions, 'expectedClientId', defaults),
+    purpose: firstMetadata.purpose,
+    promotionPolicy: firstMetadata.promotionPolicy,
+  };
+
+  const hasMismatch = privateContexts.some((privateContextOptions = {}) => {
+    const metadata = privateContextOptions.privateContextMetadata || {};
+
+    return metadata.clientId !== expectedIdentity.clientId
+      || metadata.userId !== expectedIdentity.userId
+      || getEffectivePrivateContextValue(
+        privateContextOptions,
+        'expectedClientId',
+        defaults,
+      ) !== expectedIdentity.expectedClientId
+      || metadata.purpose !== 'executive-briefing'
+      || metadata.purpose !== expectedIdentity.purpose
+      || metadata.promotionPolicy !== 'NEVER_PROMOTE'
+      || metadata.promotionPolicy !== expectedIdentity.promotionPolicy;
+  });
+
+  if (hasMismatch) {
+    throw buildPrivateContextIdentityMismatchError();
+  }
 }
 
 function countPayloadItems(payload) {
@@ -153,6 +211,32 @@ function buildPrivateContextSummary(authorizedContext) {
   const itemCount = countPayloadItems(authorizedContext.payload);
 
   return `Contexto privado autorizado considerado: ${itemCount} elemento(s).`;
+}
+
+function findAuthorizedPrivateContextBySource(authorizedPrivateContexts, sourceType) {
+  return Array.isArray(authorizedPrivateContexts)
+    ? authorizedPrivateContexts.find((authorizedContext) => (
+      authorizedContext && authorizedContext.sourceType === sourceType
+    ))
+    : null;
+}
+
+function buildCombinedPrivateContextSummary(query, analysis, authorizedPrivateContexts) {
+  if (!isMixedAgendaEmailQuery(query, analysis)) {
+    return null;
+  }
+
+  const calendarContext = findAuthorizedPrivateContextBySource(authorizedPrivateContexts, 'calendar');
+  const gmailContext = findAuthorizedPrivateContextBySource(authorizedPrivateContexts, 'gmail');
+
+  if (!calendarContext || !gmailContext) {
+    return null;
+  }
+
+  return [
+    buildCalendarContextSummary(calendarContext.payload),
+    buildGmailContextSummary(gmailContext.payload),
+  ].join(' ');
 }
 
 function formatCalendarEvent(event) {
@@ -239,16 +323,22 @@ function sanitizeExecutiveSources(sources) {
   });
 }
 
-function prepareAuthorizedPrivateContext(options, adapter) {
+function prepareAuthorizedPrivateContext(options, adapter, defaults = {}) {
   if (!hasPrivateContextInput(options)) {
     return null;
   }
 
   const adapterInput = {
     privateContext: options.privateContextMetadata,
-    expectedClientId: options.expectedClientId,
-    allowedScopes: options.privateContextAllowedScopes,
-    requiredPurpose: options.privateContextRequiredPurpose,
+    expectedClientId: Object.hasOwn(options, 'expectedClientId')
+      ? options.expectedClientId
+      : defaults.expectedClientId,
+    allowedScopes: Object.hasOwn(options, 'privateContextAllowedScopes')
+      ? options.privateContextAllowedScopes
+      : defaults.privateContextAllowedScopes,
+    requiredPurpose: Object.hasOwn(options, 'privateContextRequiredPurpose')
+      ? options.privateContextRequiredPurpose
+      : defaults.privateContextRequiredPurpose,
   };
 
   if (Object.hasOwn(options, 'privatePayload')) {
@@ -258,6 +348,43 @@ function prepareAuthorizedPrivateContext(options, adapter) {
   return adapter(adapterInput);
 }
 
+function prepareAuthorizedPrivateContexts(options, adapter) {
+  if (hasPrivateContextCollectionInput(options)) {
+    if (!Array.isArray(options.privateContexts)) {
+      throw new TypeError('privateContexts must be an array.');
+    }
+
+    const defaults = {
+      expectedClientId: options.expectedClientId,
+      privateContextAllowedScopes: options.privateContextAllowedScopes,
+      privateContextRequiredPurpose: options.privateContextRequiredPurpose,
+    };
+
+    validatePrivateContextCollectionIdentity(options.privateContexts, defaults);
+
+    return options.privateContexts.map((privateContextOptions) => prepareAuthorizedPrivateContext(
+      privateContextOptions,
+      adapter,
+      defaults,
+    ));
+  }
+
+  const authorizedPrivateContext = prepareAuthorizedPrivateContext(options, adapter);
+
+  return authorizedPrivateContext ? [authorizedPrivateContext] : [];
+}
+
+function selectPrimaryPrivateContext(query, analysis, authorizedPrivateContexts) {
+  if (!Array.isArray(authorizedPrivateContexts) || authorizedPrivateContexts.length === 0) {
+    return null;
+  }
+
+  return authorizedPrivateContexts.find((authorizedContext) => (
+    shouldPreferPrivateCalendarContext(query, analysis, authorizedContext)
+    || shouldPreferPrivateGmailContext(query, analysis, authorizedContext)
+  )) || authorizedPrivateContexts[0];
+}
+
 function orchestrateExecutiveQuery(query, options) {
   const dependencies = options && options.dependencies ? options.dependencies : {};
   const analyzer = dependencies.analyzeExecutiveQuery || analyzeExecutiveQuery;
@@ -265,8 +392,9 @@ function orchestrateExecutiveQuery(query, options) {
   const simulator = dependencies.simulateExecutiveBrainQuery || simulateExecutiveBrainQuery;
   const responseBuilder = dependencies.buildExecutiveResponse || buildExecutiveResponse;
   const privateContextAdapter = dependencies.preparePrivateContextAdapter || preparePrivateContextAdapter;
-  const authorizedPrivateContext = prepareAuthorizedPrivateContext(options, privateContextAdapter);
+  const authorizedPrivateContexts = prepareAuthorizedPrivateContexts(options, privateContextAdapter);
   const analysis = analyzer(query);
+  const authorizedPrivateContext = selectPrimaryPrivateContext(query, analysis, authorizedPrivateContexts);
   let knowledgeQueryResult = null;
 
   if (shouldUseKnowledgeQuery(analysis)) {
@@ -274,22 +402,32 @@ function orchestrateExecutiveQuery(query, options) {
   }
 
   const response = simulator(buildSimulationQuery(query, analysis), options && options.simulationOptions);
+  const combinedPrivateContextSummary = buildCombinedPrivateContextSummary(
+    query,
+    analysis,
+    authorizedPrivateContexts,
+  );
   const privateContextSummary = authorizedPrivateContext
     ? buildPrivateContextSummary(authorizedPrivateContext)
     : null;
   const preferPrivateCalendarContext = shouldPreferPrivateCalendarContext(query, analysis, authorizedPrivateContext);
   const preferPrivateGmailContext = shouldPreferPrivateGmailContext(query, analysis, authorizedPrivateContext);
-  const preferPrivateContext = preferPrivateCalendarContext || preferPrivateGmailContext;
+  const preferCombinedPrivateContext = Boolean(combinedPrivateContextSummary);
+  const preferPrivateContext = preferCombinedPrivateContext
+    || preferPrivateCalendarContext
+    || preferPrivateGmailContext;
   const responseSources = preferPrivateContext ? [] : sanitizeExecutiveSources(response.sources);
-  const responseLimitations = preferPrivateContext
+  const responseLimitations = preferCombinedPrivateContext
+    ? []
+    : (preferPrivateContext
     ? filterPrivatePrimaryLimitations(response.limitations)
-    : response.limitations;
+    : response.limitations);
   const responseConfidence = preferPrivateContext
     ? Math.max(analysis.confidence, 0.7)
     : response.confidence;
   const executiveResponse = responseBuilder({
     answer: preferPrivateContext
-      ? privateContextSummary
+      ? (combinedPrivateContextSummary || privateContextSummary)
       : (privateContextSummary
         ? `${response.answer} ${privateContextSummary}`
         : response.answer),
@@ -308,7 +446,7 @@ function orchestrateExecutiveQuery(query, options) {
     response: executiveResponse.executiveSummary,
     confidence: finalConfidence,
     sources: sanitizeExecutiveSources(executiveResponse.sources),
-    privateContextUsed: Boolean(authorizedPrivateContext),
+    privateContextUsed: authorizedPrivateContexts.length > 0,
     limitations: [
       ...executiveResponse.limitations,
       ...(!preferPrivateContext && knowledgeQueryResult && knowledgeQueryResult.found === false
@@ -320,5 +458,6 @@ function orchestrateExecutiveQuery(query, options) {
 
 module.exports = {
   orchestrateExecutiveQuery,
+  prepareAuthorizedPrivateContexts,
   sanitizeExecutiveSources,
 };
