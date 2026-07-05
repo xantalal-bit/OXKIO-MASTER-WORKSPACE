@@ -18,6 +18,10 @@ const {
   isExecutiveChatRoute
 } = require("./routes/executive-chat");
 const {
+  handleExecutiveIdentityRequest,
+  isExecutiveIdentityRoute
+} = require("./routes/executive-identity");
+const {
   getSystem,
   getIntentAnalyzer,
   getRuleEngine,
@@ -96,6 +100,10 @@ function sendJson(res, statusCode, data) {
 const server = http.createServer(async (req, res) => {
 
 const pathname = req.url.split("?")[0];
+if (isExecutiveIdentityRoute(pathname, req.method)) {
+  return handleExecutiveIdentityRequest(req, res);
+}
+
 if (isExecutiveChatRoute(pathname, req.method)) {
   return handleExecutiveChatRequest(req, res);
 }
