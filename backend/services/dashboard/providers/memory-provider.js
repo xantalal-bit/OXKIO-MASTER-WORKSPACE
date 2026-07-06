@@ -1,13 +1,19 @@
+const { getMemory: getRuntimeMemory } = require("../../../runtime/executive-runtime");
+
 function getMemory(timestamp) {
+  const memory = getRuntimeMemory();
+  const status = memory.getStatus();
+
   return {
-    summary: "Memoria preparada para agregacion futura sin lectura real.",
+    summary: `Memoria ejecutiva activa con ${status.shortTerm} registros recientes y ${status.longTerm} registros históricos.`,
     signals: [],
     counters: {
-      shortTermItems: 0,
-      strategicItems: 0
+      shortTermItems: status.shortTerm,
+      longTermItems: status.longTerm,
+      maxShortTerm: status.maxShortTerm
     },
     updatedAt: timestamp,
-    source: "mock"
+    source: "runtime-memory"
   };
 }
 

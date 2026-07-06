@@ -550,7 +550,7 @@
               <h2>Entrada conversacional</h2>
               <p class="meta">Pide a OXKIO un resumen, una prioridad o el siguiente paso.</p>
             </div>
-            <span class="badge">Sin integración</span>
+            <span class="badge ok">Consulta disponible</span>
           </div>
           <div class="conversation">
             <div class="conversation-stage">
@@ -567,7 +567,7 @@
                 </div>
               </div>
             </div>
-            <p class="note">Datos simulados. Esta versión no ejecuta acciones, no consulta servicios y no carga integraciones reales.</p>
+            <p class="note">Consulta conversacional disponible. Las acciones ejecutivas desde esta superficie siguen pendientes de conexión supervisada.</p>
           </div>
         </article>
 
@@ -577,7 +577,7 @@
               <h2>Agenda</h2>
               <p class="meta">Hoy y próximos eventos.</p>
             </span>
-            <span class="badge">Simulado</span>
+            <span class="badge">Pendiente</span>
           </summary>
           <div class="collapsed-content">
             <ul class="list">
@@ -666,20 +666,20 @@
         <details class="panel span-4 collapsed-section">
           <summary>
             <span>
-              <h2>Documentos</h2>
-              <p class="meta">Acceso diario a documentación relevante.</p>
+              <h2>Memoria ejecutiva</h2>
+              <p class="meta">Resumen seguro de memoria runtime.</p>
             </span>
-            <span class="badge">Base</span>
+            <span class="badge ok">Runtime</span>
           </summary>
           <div class="collapsed-content">
             <ul class="list">
               <li class="item">
-                <span class="item-title">Documentos recientes</span>
-                <p class="item-text">Espacio reservado para documentos de trabajo.</p>
+                <span class="item-title">Memoria operativa</span>
+                <p class="item-text">Resumen agregado de registros recientes.</p>
               </li>
               <li class="item">
-                <span class="item-title">Pendientes de revisión</span>
-                <p class="item-text">Sin carga documental en esta versión.</p>
+                <span class="item-title">Elementos registrados</span>
+                <p class="item-text">Contadores seguros sin contenido privado.</p>
               </li>
             </ul>
           </div>
@@ -786,11 +786,42 @@
       return labels[status] || textOrFallback(status, "No disponible");
     }
 
+    function formatAgendaSourceBadge(source) {
+      if (source === "google-calendar") {
+        return "Google Calendar";
+      }
+
+      if (source === "mock") {
+        return "Simulado";
+      }
+
+      return "Pendiente";
+    }
+
+    function formatAgendaDate(value) {
+      if (!value) {
+        return "";
+      }
+
+      const date = new Date(value);
+
+      if (Number.isNaN(date.getTime())) {
+        return value;
+      }
+
+      return date.toLocaleString("es-ES", {
+        dateStyle: "medium",
+        timeStyle: value.length <= 10 ? undefined : "short"
+      });
+    }
+
     function formatAgendaItem(item, fallbackTitle, fallbackText) {
+      const formattedStart = formatAgendaDate(item && item.start);
+
       return {
         title: textOrFallback(item && item.title, fallbackTitle),
-        badge: textOrFallback(item && (item.status || item.when), "Pendiente"),
-        text: textOrFallback(item && (item.description || item.startsAt), fallbackText)
+        badge: textOrFallback(item && (item.status || item.when || formattedStart), "Pendiente"),
+        text: textOrFallback(item && (item.description || formattedStart || item.start), fallbackText)
       };
     }
 
@@ -915,15 +946,21 @@
 
       const agendaPanel = findPanelByTitle("Agenda");
       const agendaItems = agendaPanel ? agendaPanel.querySelectorAll(".item") : [];
-      const today = (state.agenda && state.agenda.today) || [];
-      const next = (state.agenda && state.agenda.next) || [];
+      const agenda = state.agenda || {};
+      const events = Array.isArray(agenda.events) ? agenda.events : [];
+      const nextEvent = agenda.nextEvent || events[0] || null;
+      setText(
+        agendaPanel && agendaPanel.querySelector("summary .badge"),
+        formatAgendaSourceBadge(agenda.source),
+        "Pendiente"
+      );
       updateListItem(
         agendaItems[0],
-        formatAgendaItem(today[0], "Agenda no disponible", "No se pudo cargar la agenda.")
+        formatAgendaItem(nextEvent, "Agenda no disponible", "No se pudo cargar la agenda.")
       );
       updateListItem(
         agendaItems[1],
-        formatAgendaItem(next[0], "Sin proximos eventos", "No hay eventos cargados en este momento.")
+        formatAgendaItem(events[1], "Sin proximos eventos", "No hay eventos cargados en este momento.")
       );
 
       const gmailPanel = findPanelByTitle("Gmail");
@@ -940,10 +977,15 @@
         `${textOrFallback(inbox.requiresReview, 0)} requieren revision.`
       );
 
-      const documentsPanel = findPanelByTitle("Documentos");
+      const documentsPanel = findPanelByTitle("Memoria ejecutiva");
       const documentItems = documentsPanel ? documentsPanel.querySelectorAll(".item") : [];
       const memory = state.memory || {};
       const counters = memory.counters || {};
+      setText(
+        documentsPanel && documentsPanel.querySelector("summary .badge"),
+        memory.source === "runtime-memory" ? "Runtime" : "Pendiente",
+        "Pendiente"
+      );
       updateSimpleItem(
         documentItems[0],
         "Memoria operativa",
@@ -952,7 +994,7 @@
       updateSimpleItem(
         documentItems[1],
         "Elementos registrados",
-        `${textOrFallback(counters.shortTermItems, 0)} operativos, ${textOrFallback(counters.strategicItems, 0)} estrategicos.`
+        `${textOrFallback(counters.shortTermItems, 0)} recientes, ${textOrFallback(counters.longTermItems, 0)} historicos. Maximo operativo: ${textOrFallback(counters.maxShortTerm, 0)}.`
       );
 
       const commitmentsPanel = findPanelByTitle("Compromisos Ejecutivos");
