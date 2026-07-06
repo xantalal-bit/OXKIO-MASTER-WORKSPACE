@@ -66,3 +66,7 @@ backend/knowledge/connectors/data/
 # Knowledge store runtime
 backend/data/knowledge-store/objects/*.json
 !backend/data/knowledge-store/objects/.gitkeep
+
+# Runtime vivo Oxkio
+backend/core/approvalQueue.json
+backend/memory/memory.json
