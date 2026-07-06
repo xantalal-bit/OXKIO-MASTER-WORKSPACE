@@ -1,0 +1,126 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Knowledge Object",
+  "description": "Objeto estándar de conocimiento utilizado por Oxkio.",
+  "type": "object",
+
+  "required": [
+    "id",
+    "source",
+    "type",
+    "title",
+    "summary",
+    "createdAt"
+  ],
+
+  "properties": {
+
+    "id": {
+      "type": "string",
+      "description": "Identificador único."
+    },
+
+    "source": {
+      "type": "string",
+      "description": "Origen de la información."
+    },
+
+    "connector": {
+      "type": "string",
+      "description": "Conector utilizado."
+    },
+
+    "type": {
+      "type": "string",
+      "description": "Tipo de contenido."
+    },
+
+    "title": {
+      "type": "string"
+    },
+
+    "summary": {
+      "type": "string"
+    },
+
+    "content": {
+      "type": "string"
+    },
+
+    "links": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+
+    "documents": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+
+    "videos": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+
+    "images": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+
+    "prompts": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+
+    "tools": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+
+    "projects": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+
+    "tags": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+
+    "priority": {
+      "type": "integer"
+    },
+
+    "confidence": {
+      "type": "number"
+    },
+
+    "createdAt": {
+      "type": "string"
+    },
+
+    "updatedAt": {
+      "type": "string"
+    },
+
+    "metadata": {
+      "type": "object"
+    }
+  }
+}
