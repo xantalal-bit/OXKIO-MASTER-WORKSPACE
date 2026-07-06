@@ -25,7 +25,7 @@ const FILES = {
 const DEFAULT_SUMMARY = {
   ecosystem: "XANTALAL",
   version: "1.0",
-  owner: "JosÃ© Antonio Ãlvarez"
+  owner: "José Antonio Álvarez"
 };
 
 function readFileSafe(filename) {
