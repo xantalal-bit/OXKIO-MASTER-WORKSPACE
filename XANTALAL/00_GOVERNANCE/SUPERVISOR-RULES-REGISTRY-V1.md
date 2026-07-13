@@ -52,6 +52,7 @@ Estas reglas aplican a:
 19. Knowledge Object V2 es contrato universal.
 20. Executive Brain debe crecer modularmente.
 21. El Supervisor y Knowledge Watcher, como guardián/avisador, deben mantener visible la propuesta aprobada `Knowledge Discovery & Intelligence Agent`, detectar oportunidades relacionadas y avisar de tecnologías, fuentes o cambios relevantes, evitando que quede fuera del roadmap. Esto no autoriza su implementación ni la creación de un sistema paralelo.
+22. Aplicar la política `MODEL-GOVERNANCE-GPT-5-6.md`: Terra como preferente si está disponible y autorizado, con fallback aprobado y registrado si no lo está; Luna para bajo riesgo y alto volumen; Sol para alto riesgo, trabajo crítico o dificultad elevada. El Supervisor puede reasignar el modelo y debe exigir escalado ante baja confianza o alto riesgo.
 
 ## Reglas de Git
 

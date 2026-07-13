@@ -40,3 +40,7 @@
 10. Learning Agent / Bibliotecario
 - Rol: clasificar conocimiento de Learning Heroes y formación antigua.
 - Restricción: no borrar ni mover archivos sin aprobación.
+
+## Regla futura del orquestador
+
+Todos los agentes quedan sujetos a `XANTALAL/00_GOVERNANCE/MODEL-GOVERNANCE-GPT-5-6.md`. El futuro enrutamiento preferirá Terra solo cuando esté disponible y autorizado, registrará cualquier fallback, permitirá `Luna → Terra → Sol` y escalará por baja confianza o alto riesgo. Las métricas distinguirán modelo solicitado, modelo realmente utilizado y motivo del fallback. Esta regla no modifica todavía llamadas reales a APIs ni presupone IDs habilitados.

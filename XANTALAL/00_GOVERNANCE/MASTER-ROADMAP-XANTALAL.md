@@ -18,6 +18,7 @@ Tareas:
 - Decision Registry
 - Estado global
 - reglas de ejecución Codex
+- Gobernanza GPT-5.6 Sol/Terra/Luna (política activa; verificación de disponibilidad, enrutamiento y métricas pendientes)
 
 ## Fase 2 — Knowledge Platform
 
