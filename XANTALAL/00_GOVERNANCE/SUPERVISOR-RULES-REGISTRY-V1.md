@@ -51,6 +51,7 @@ Estas reglas aplican a:
 18. Oxkio debe seguir siendo orquestador, no un conjunto desordenado de agentes.
 19. Knowledge Object V2 es contrato universal.
 20. Executive Brain debe crecer modularmente.
+21. El Supervisor y Knowledge Watcher, como guardián/avisador, deben mantener visible la propuesta aprobada `Knowledge Discovery & Intelligence Agent`, detectar oportunidades relacionadas y avisar de tecnologías, fuentes o cambios relevantes, evitando que quede fuera del roadmap. Esto no autoriza su implementación ni la creación de un sistema paralelo.
 
 ## Reglas de Git
 

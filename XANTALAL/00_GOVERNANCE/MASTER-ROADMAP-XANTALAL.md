@@ -31,6 +31,7 @@ Tareas:
 - OneDrive Discovery V1
 - Recognition Engine
 - Knowledge Curator
+- Knowledge Discovery & Intelligence Agent (prioridad alta; aprobada para estudio futuro; no implementar antes de la auditoría técnica previa)
 - Knowledge Index
 - Knowledge Search
 

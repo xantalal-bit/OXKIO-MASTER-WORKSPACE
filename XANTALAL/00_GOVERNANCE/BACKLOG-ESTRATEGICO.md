@@ -31,6 +31,16 @@ Estado: EN DESARROLLO
 ### Knowledge Watcher
 Estado: BACKLOG
 
+### Knowledge Discovery & Intelligence Agent
+Estado: APROBADA PARA ESTUDIO E IMPLEMENTACIÓN FUTURA
+Prioridad: ALTA
+
+Capacidad estratégica para descubrir, evaluar y convertir fuentes autorizadas en inteligencia útil. Debe integrarse en la arquitectura existente, sin crear un sistema paralelo, y reutilizar Knowledge Curator, Knowledge Objects, Executive Brain, Memory Engine, Learning Heroes Connector, supervisores, auditores y clasificación documental.
+
+Caso de estudio inicial: Adrián Sáenz / Adrián Science.
+
+Requisito previo: auditoría técnica de APIs, RSS, conectores, NotebookLM, automatizaciones, licencias, términos de uso y derechos de autor. No implementar hasta completar el estudio y aprobar su encaje arquitectónico.
+
 ### Knowledge Recognition Engine
 Estado: PLANIFICADA
 
