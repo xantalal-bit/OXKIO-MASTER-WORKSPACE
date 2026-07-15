@@ -70,3 +70,6 @@ backend/data/knowledge-store/objects/*.json
 # Runtime vivo Oxkio
 backend/core/approvalQueue.json
 backend/memory/memory.json
+
+# Universal Knowledge Supervisor runtime
+backend/data/knowledge-supervisor/

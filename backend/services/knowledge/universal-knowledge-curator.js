@@ -27,8 +27,10 @@ function curateDocument(document) {
     };
   }
 
-  const content = fs.readFileSync(document.path, 'utf8');
-  const stats = fs.statSync(document.path);
+  const hasInlineContent = typeof document.content === 'string';
+  const content = hasInlineContent ? document.content : fs.readFileSync(document.path, 'utf8');
+  const stats = hasInlineContent ? null : fs.statSync(document.path);
+  const technical = document.technical || {};
 
   return {
     supported: true,
@@ -36,18 +38,18 @@ function curateDocument(document) {
       identity: {
         id: null,
         source: document.source || null,
-        sourceType: null,
+        sourceType: document.sourceType || null,
         path: document.path,
         name: document.name,
         extension: document.extension,
-        hash: null,
+        hash: document.contentHash || null,
         version: '2.0',
       },
       technical: {
-        size: stats.size,
-        createdAt: stats.birthtime.toISOString(),
-        modifiedAt: stats.mtime.toISOString(),
-        indexedAt: null,
+        size: technical.size || (stats ? stats.size : Buffer.byteLength(content, 'utf8')),
+        createdAt: technical.createdAt || (stats ? stats.birthtime.toISOString() : null),
+        modifiedAt: technical.modifiedAt || (stats ? stats.mtime.toISOString() : null),
+        indexedAt: technical.indexedAt || new Date().toISOString(),
         language: null,
         encoding: 'utf8',
       },
@@ -69,6 +71,8 @@ function curateDocument(document) {
         generatedAt: new Date().toISOString(),
         reviewed: false,
         reviewer: null,
+        sourceUrl: document.sourceUrl || null,
+        externalId: document.externalId || null,
       },
     },
   };

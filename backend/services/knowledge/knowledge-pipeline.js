@@ -24,6 +24,30 @@ function enrichKnowledgeObject(document, knowledgeObject) {
   };
 }
 
+function processKnowledgeDocument(document, options = {}) {
+  const curation = curateDocument(document);
+
+  if (!curation.supported) {
+    return {
+      supported: false,
+      reason: curation.reason,
+      knowledgeObject: null,
+      persistence: null,
+    };
+  }
+
+  const knowledgeObject = enrichKnowledgeObject(document, curation.knowledgeObject);
+  const persistence = options.persist === false
+    ? null
+    : persistKnowledgeObject(knowledgeObject, { allowUpdate: options.allowUpdate === true });
+
+  return {
+    supported: true,
+    knowledgeObject,
+    persistence,
+  };
+}
+
 function processDocumentFolder(asset, folder) {
   const documentDiscovery = discoverDocuments(folder);
   const catalog = buildDocumentCatalog(documentDiscovery);
@@ -69,5 +93,7 @@ function runKnowledgePipeline(asset, options) {
 }
 
 module.exports = {
+  enrichKnowledgeObject,
+  processKnowledgeDocument,
   runKnowledgePipeline,
 };

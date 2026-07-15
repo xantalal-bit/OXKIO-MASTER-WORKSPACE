@@ -9,6 +9,7 @@ class ApprovalQueue {
 
     this.pending = [];
     this.history = [];
+    this.sequence = 0;
 
     this.load();
 }
@@ -16,7 +17,7 @@ class ApprovalQueue {
     add(proposal, context = {}) {
 
         const item = {
-            id: Date.now().toString(),
+            id: `${Date.now()}-${++this.sequence}`,
             status: "pending",
             createdAt: new Date().toISOString(),
             proposal,

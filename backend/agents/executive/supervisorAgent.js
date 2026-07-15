@@ -9,6 +9,7 @@ const { KnowledgeAcquisitionEngine } = require("../../knowledge/knowledgeAcquisi
 const ProjectFolderConnector = require("../../knowledge/connectors/projectFolderConnector");
 const { ProjectRegistry } = require("../../projects/projectRegistry");
 const { SecurityInventory } = require("../../security/securityInventory");
+const { UniversalKnowledgeSupervisor } = require("../../services/knowledge/universal-knowledge-supervisor");
 
 class SupervisorAgent {
 
@@ -21,6 +22,7 @@ class SupervisorAgent {
     this.knowledgeAcquisitionEngine = new KnowledgeAcquisitionEngine();
     this.projectRegistry = new ProjectRegistry();
     this.securityInventory = new SecurityInventory();
+    this.universalKnowledgeSupervisor = new UniversalKnowledgeSupervisor();
     this.pendingApprovals = [];
     executiveAgenda.initializeAgendaFromGovernance();
   }
@@ -145,6 +147,14 @@ class SupervisorAgent {
 
   getKnowledgeAcquisitionStatus() {
     return this.knowledgeAcquisitionEngine.getStatus();
+  }
+
+  discoverOfficialGitHubReleases() {
+    return this.universalKnowledgeSupervisor.discover();
+  }
+
+  approveGitHubReleaseKnowledge(approvalId) {
+    return this.universalKnowledgeSupervisor.approve(approvalId);
   }
 
   registerProject(project) {

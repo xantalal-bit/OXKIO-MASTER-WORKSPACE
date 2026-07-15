@@ -13,6 +13,7 @@ const ProjectManagerService = require("../projects/projectManagerService");
 const DashboardIntelligence = require("../services/dashboard/dashboard-intelligence");
 const { matchExecutiveQuery } = require("../services/executive/executive-query-router");
 const { searchKnowledge } = require("../services/knowledge/knowledge-query-service");
+const { UniversalKnowledgeSupervisor } = require("../services/knowledge/universal-knowledge-supervisor");
 const {
   handleExecutiveChatRequest,
   isExecutiveChatRoute
@@ -38,6 +39,7 @@ const ruleEngine = getRuleEngine();
 const executiveBrain = getExecutiveBrain();
 const proposalEngine = new ProposalEngine();
 const approvalQueue = new ApprovalQueue();
+const universalKnowledgeSupervisor = new UniversalKnowledgeSupervisor({ approvalQueue });
 const executionLogger = new ExecutionLogger();
 const actionExecutor = new ActionExecutor();
 const gmailConnector = new GmailConnector();
@@ -1015,13 +1017,31 @@ if (req.url.startsWith("/api/pending-approvals")) {
   return;
 }
 
+if (pathname === "/api/knowledge-supervisor/github-releases/discover" && req.method === "POST") {
+  try {
+    const result = await universalKnowledgeSupervisor.discover();
+    return sendJson(res, 200, { ok: true, module: "universal-knowledge-supervisor", result });
+  } catch (error) {
+    return sendJson(res, error.status || 500, {
+      ok: false,
+      module: "universal-knowledge-supervisor",
+      error: error.code || "github_release_discovery_failed"
+    });
+  }
+}
+
 if (req.url.startsWith("/api/approve")) {
 
   const url = new URL(req.url, `http://${req.headers.host}`);
 
   const id = url.searchParams.get("id");
 
-  const result = approvalQueue.approve(id);
+  const pendingItem = approvalQueue.listPending().find(item => item.id === id);
+  const result = pendingItem
+    && pendingItem.proposal
+    && pendingItem.proposal.action === "ingest_github_release"
+    ? universalKnowledgeSupervisor.approve(id)
+    : approvalQueue.approve(id);
 
   res.writeHead(200, {
     "Content-Type": "application/json"
