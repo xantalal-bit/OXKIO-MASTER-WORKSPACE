@@ -81,6 +81,8 @@ test('returns orchestrator response for a valid query', async () => {
           },
           response: 'Respuesta simulada.',
           confidence: 0.7,
+          proposal: null,
+          approval: null,
           sources: [
             {
               id: 'source-1',
@@ -109,6 +111,8 @@ test('returns orchestrator response for a valid query', async () => {
     'analysis',
     'response',
     'confidence',
+    'proposal',
+    'approval',
     'sources',
     'limitations',
   ]);
@@ -118,6 +122,71 @@ test('returns orchestrator response for a valid query', async () => {
   assert.equal(Object.hasOwn(payload.sources[0], 'path'), false);
   assert.equal(Object.hasOwn(payload.sources[0], 'token'), false);
   assert.equal(Object.hasOwn(payload.sources[0], 'credentials'), false);
+});
+
+test('passes only internal shared dependencies to the orchestrator', async () => {
+  const memory = { searchMemory() { throw new Error('memory must not be invoked'); } };
+  const proposalEngine = { generate() { throw new Error('proposal engine must not be invoked'); } };
+  const approvalQueue = { add() { throw new Error('approval queue must not be invoked'); } };
+  const clientDependencies = {
+    memory: { source: 'client' },
+    proposalEngine: { source: 'client' },
+    approvalQueue: { source: 'client' },
+  };
+  let receivedOptions = null;
+  const request = createRequest(JSON.stringify({
+    query: 'Consulta sin efectos laterales',
+    dependencies: clientDependencies,
+    diagnostics: {
+      memorySearchAttempted: true,
+      memoryResultCount: 999,
+    },
+  }));
+  const response = createResponse();
+
+  await handleExecutiveChatRequest(request, response, {
+    dependencies: {
+      memory,
+      proposalEngine,
+      approvalQueue,
+      orchestrateExecutiveQuery(query, options) {
+        receivedOptions = options;
+
+        return {
+          query,
+          analysis: { intent: 'unknown' },
+          response: 'Respuesta sin cambios.',
+          confidence: 0.5,
+          sources: [],
+          privateContextUsed: false,
+          limitations: [],
+        };
+      },
+    },
+  });
+
+  assert.equal(response.statusCode, 200);
+  assert.equal(receivedOptions.dependencies.memory, memory);
+  assert.equal(receivedOptions.dependencies.proposalEngine, proposalEngine);
+  assert.equal(receivedOptions.dependencies.approvalQueue, approvalQueue);
+  assert.notEqual(receivedOptions.dependencies.memory, clientDependencies.memory);
+  assert.notEqual(receivedOptions.dependencies.proposalEngine, clientDependencies.proposalEngine);
+  assert.notEqual(receivedOptions.dependencies.approvalQueue, clientDependencies.approvalQueue);
+  assert.equal(Object.hasOwn(receivedOptions, 'diagnostics'), false);
+  assert.deepEqual(Object.keys(receivedOptions.dependencies), [
+    'memory',
+    'proposalEngine',
+    'approvalQueue',
+  ]);
+  assert.deepEqual(Object.keys(response.getJson()), [
+    'query',
+    'analysis',
+    'response',
+    'confidence',
+    'sources',
+    'privateContextUsed',
+    'limitations',
+  ]);
 });
 
 test('passes optional private context to the executive orchestrator', async () => {

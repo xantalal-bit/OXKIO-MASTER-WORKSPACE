@@ -107,7 +107,13 @@ if (isExecutiveIdentityRoute(pathname, req.method)) {
 }
 
 if (isExecutiveChatRoute(pathname, req.method)) {
-  return handleExecutiveChatRequest(req, res);
+  return handleExecutiveChatRequest(req, res, {
+    dependencies: {
+      memory: system.memory,
+      proposalEngine,
+      approvalQueue
+    }
+  });
 }
 
 if (pathname === "/oauth/google" && req.method === "GET") {

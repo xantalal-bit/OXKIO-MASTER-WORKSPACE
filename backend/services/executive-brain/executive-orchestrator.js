@@ -390,8 +390,209 @@ function selectPrimaryPrivateContext(query, analysis, authorizedPrivateContexts)
   )) || authorizedPrivateContexts[0];
 }
 
+const MAX_MEMORY_RESULT_COUNT = 5;
+
+function searchMemorySafely(memory, query, diagnostics) {
+  diagnostics.memorySearchAttempted = false;
+  diagnostics.memorySearchSucceeded = false;
+  diagnostics.memoryResultCount = 0;
+
+  if (!memory || typeof memory.searchMemory !== 'function') {
+    return;
+  }
+
+  diagnostics.memorySearchAttempted = true;
+
+  try {
+    const results = memory.searchMemory(query);
+    const normalizedResults = Array.isArray(results)
+      ? results.filter((result) => result && typeof result === 'object').slice(0, MAX_MEMORY_RESULT_COUNT)
+      : [];
+
+    diagnostics.memorySearchSucceeded = true;
+    diagnostics.memoryResultCount = normalizedResults.length;
+  } catch (error) {
+    diagnostics.memorySearchSucceeded = false;
+    diagnostics.memoryResultCount = 0;
+  }
+}
+
+function detectActionableIntent(query) {
+  const normalizedQuery = normalizeQueryText(query);
+  const includesAny = (terms) => terms.some((term) => normalizedQuery.includes(term));
+
+  if (
+    includesAny(['prepara', 'preparar', 'redacta', 'redactar', 'crea', 'crear', 'genera', 'generar'])
+    && includesAny(['borrador', 'respuesta', 'correo', 'email'])
+  ) {
+    return {
+      intent: 'email',
+      actionType: 'propose_email',
+      proposalType: 'email_draft',
+    };
+  }
+
+  if (
+    includesAny(['crea', 'crear', 'programa', 'programar', 'agenda', 'agendar', 'propone', 'proponer'])
+    && includesAny(['reunion'])
+  ) {
+    return {
+      intent: 'meeting',
+      actionType: 'propose_meeting',
+      proposalType: 'meeting_proposal',
+    };
+  }
+
+  if (
+    includesAny(['crea', 'crear', 'anade', 'anadir', 'registra', 'registrar', 'prepara', 'preparar'])
+    && includesAny(['tarea'])
+  ) {
+    return {
+      intent: 'task',
+      actionType: 'create_task_proposal',
+      proposalType: 'task_proposal',
+    };
+  }
+
+  return null;
+}
+
+function buildProposalEngineInput(query, analysis, executiveResponse, actionableIntent) {
+  return {
+    message: query,
+    analysis: {
+      intent: actionableIntent.intent,
+      urgency: analysis && analysis.priority ? analysis.priority : 'normal',
+      actionType: actionableIntent.actionType,
+      requiresApproval: true,
+    },
+    decision: {
+      recommendation: executiveResponse && executiveResponse.recommendation
+        ? executiveResponse.recommendation
+        : 'Preparar propuesta para revision humana.',
+      requiresApproval: true,
+    },
+  };
+}
+
+function buildSafeProposalMetadata(actionableIntent, generatedProposal) {
+  if (!generatedProposal || typeof generatedProposal !== 'object') {
+    return null;
+  }
+
+  const summaries = {
+    email_draft: 'Borrador de email preparado para revision.',
+    meeting_proposal: 'Propuesta de reunion preparada para revision.',
+    task_proposal: 'Propuesta de tarea preparada para revision.',
+  };
+
+  return {
+    type: actionableIntent.proposalType,
+    summary: summaries[actionableIntent.proposalType],
+    requiresApproval: generatedProposal.requiresApproval === true,
+  };
+}
+
+function generateProposalSafely(proposalEngine, query, analysis, executiveResponse, diagnostics) {
+  diagnostics.proposalAttempted = false;
+  diagnostics.proposalSucceeded = false;
+  diagnostics.proposalType = null;
+  const actionableIntent = detectActionableIntent(query);
+
+  if (!actionableIntent || !proposalEngine || typeof proposalEngine.generate !== 'function') {
+    return null;
+  }
+
+  diagnostics.proposalAttempted = true;
+  diagnostics.proposalType = actionableIntent.proposalType;
+
+  try {
+    const proposalInput = buildProposalEngineInput(query, analysis, executiveResponse, actionableIntent);
+    const generatedProposal = proposalEngine.generate(proposalInput);
+    const safeProposal = buildSafeProposalMetadata(actionableIntent, generatedProposal);
+
+    diagnostics.proposalSucceeded = Boolean(safeProposal);
+    return safeProposal;
+  } catch (error) {
+    diagnostics.proposalSucceeded = false;
+    return null;
+  }
+}
+
+function buildSafeApprovalContext(actionableIntent, analysis, privateContextUsed) {
+  return {
+    query: `Solicitud accionable de tipo ${actionableIntent.intent}.`,
+    intent: actionableIntent.intent,
+    actionType: actionableIntent.actionType,
+    priority: analysis && analysis.priority ? analysis.priority : 'normal',
+    privateContextUsed: Boolean(privateContextUsed),
+    source: 'executive-orchestrator',
+  };
+}
+
+function buildSafeApprovalMetadata(approvalItem) {
+  if (
+    !approvalItem
+    || typeof approvalItem !== 'object'
+    || (typeof approvalItem.id !== 'string' && typeof approvalItem.id !== 'number')
+    || typeof approvalItem.status !== 'string'
+    || typeof approvalItem.createdAt !== 'string'
+  ) {
+    return null;
+  }
+
+  return {
+    id: approvalItem.id,
+    status: approvalItem.status,
+    createdAt: approvalItem.createdAt,
+  };
+}
+
+function enqueueApprovalSafely(
+  approvalQueue,
+  proposal,
+  query,
+  analysis,
+  privateContextUsed,
+  diagnostics,
+) {
+  diagnostics.approvalAttempted = false;
+  diagnostics.approvalSucceeded = false;
+  const actionableIntent = detectActionableIntent(query);
+
+  if (
+    !actionableIntent
+    || !proposal
+    || proposal.requiresApproval !== true
+    || !approvalQueue
+    || typeof approvalQueue.add !== 'function'
+  ) {
+    return null;
+  }
+
+  diagnostics.approvalAttempted = true;
+
+  try {
+    const context = buildSafeApprovalContext(actionableIntent, analysis, privateContextUsed);
+    const approvalItem = approvalQueue.add(proposal, context);
+    const approval = buildSafeApprovalMetadata(approvalItem);
+
+    diagnostics.approvalSucceeded = Boolean(approval);
+    return approval;
+  } catch (error) {
+    diagnostics.approvalSucceeded = false;
+    return null;
+  }
+}
+
 function orchestrateExecutiveQuery(query, options) {
   const dependencies = options && options.dependencies ? options.dependencies : {};
+  const diagnostics = options && options.diagnostics && typeof options.diagnostics === 'object'
+    ? options.diagnostics
+    : {};
+  const memory = dependencies.memory || null;
+  const proposalEngine = dependencies.proposalEngine || null;
+  const approvalQueue = dependencies.approvalQueue || null;
   const analyzer = dependencies.analyzeExecutiveQuery || analyzeExecutiveQuery;
   const knowledgeSearch = dependencies.searchKnowledge || searchKnowledge;
   const simulator = dependencies.simulateExecutiveBrainQuery || simulateExecutiveBrainQuery;
@@ -399,6 +600,7 @@ function orchestrateExecutiveQuery(query, options) {
   const privateContextAdapter = dependencies.preparePrivateContextAdapter || preparePrivateContextAdapter;
   const authorizedPrivateContexts = prepareAuthorizedPrivateContexts(options, privateContextAdapter);
   const analysis = analyzer(query);
+  searchMemorySafely(memory, query, diagnostics);
   const authorizedPrivateContext = selectPrimaryPrivateContext(query, analysis, authorizedPrivateContexts);
   let knowledgeQueryResult = null;
 
@@ -444,6 +646,22 @@ function orchestrateExecutiveQuery(query, options) {
   const finalConfidence = preferPrivateContext
     ? executiveResponse.confidence
     : Math.min(analysis.confidence, executiveResponse.confidence);
+  const proposal = generateProposalSafely(
+    proposalEngine,
+    query,
+    analysis,
+    executiveResponse,
+    diagnostics,
+  );
+  const privateContextUsed = authorizedPrivateContexts.length > 0;
+  const approval = enqueueApprovalSafely(
+    approvalQueue,
+    proposal,
+    query,
+    analysis,
+    privateContextUsed,
+    diagnostics,
+  );
 
   return {
     query,
@@ -451,7 +669,9 @@ function orchestrateExecutiveQuery(query, options) {
     response: executiveResponse.executiveSummary,
     confidence: finalConfidence,
     sources: sanitizeExecutiveSources(executiveResponse.sources),
-    privateContextUsed: authorizedPrivateContexts.length > 0,
+    privateContextUsed,
+    proposal,
+    approval,
     limitations: [
       ...executiveResponse.limitations,
       ...(!preferPrivateContext && knowledgeQueryResult && knowledgeQueryResult.found === false

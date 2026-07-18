@@ -245,6 +245,616 @@ test('returns the required orchestrator response shape with default components',
   assert.equal(result.privateContextUsed, false);
 });
 
+test('reads shared memory without invoking proposal or approval dependencies or changing the response contract', () => {
+  const calls = [];
+  const diagnostics = {};
+  const runtimeDependencies = {
+    memory: {
+      searchMemory(query) {
+        calls.push(['memory.searchMemory', query]);
+        return [
+          { data: 'contenido sensible que no debe salir' },
+          { data: 'otro contenido privado' },
+        ];
+      },
+      saveShortTerm() {
+        throw new Error('memory must remain read-only');
+      },
+    },
+    proposalEngine: {
+      generate() {
+        throw new Error('proposal engine must not be invoked');
+      },
+    },
+    approvalQueue: {
+      add() {
+        throw new Error('approval queue must not be invoked');
+      },
+    },
+  };
+  const componentDependencies = {
+    analyzeExecutiveQuery() {
+      calls.push(['analyzeExecutiveQuery']);
+      return {
+        intent: 'unknown',
+        project: null,
+        documentTypes: [],
+        keywords: [],
+        filters: {},
+        priority: 'normal',
+        confidence: 0.35,
+      };
+    },
+    simulateExecutiveBrainQuery(query) {
+      calls.push(['simulateExecutiveBrainQuery']);
+      return {
+        query,
+        answer: 'Respuesta estable.',
+        confidence: 0.5,
+        sources: [],
+        reasoningSummary: {},
+        limitations: [],
+      };
+    },
+    buildExecutiveResponse(input) {
+      return {
+        executiveSummary: input.answer,
+        confidence: input.confidence,
+        sources: input.sources,
+        limitations: input.limitations,
+      };
+    },
+  };
+  const withoutRuntimeDependencies = orchestrateExecutiveQuery('Consulta estable', {
+    dependencies: componentDependencies,
+  });
+  const withRuntimeDependencies = orchestrateExecutiveQuery('Consulta estable', {
+    diagnostics,
+    dependencies: {
+      ...componentDependencies,
+      ...runtimeDependencies,
+    },
+  });
+
+  assert.deepEqual(withRuntimeDependencies, withoutRuntimeDependencies);
+  assert.deepEqual(calls.slice(-3), [
+    ['analyzeExecutiveQuery'],
+    ['memory.searchMemory', 'Consulta estable'],
+    ['simulateExecutiveBrainQuery'],
+  ]);
+  assert.deepEqual(diagnostics, {
+    memorySearchAttempted: true,
+    memorySearchSucceeded: true,
+    memoryResultCount: 2,
+    proposalAttempted: false,
+    proposalSucceeded: false,
+    proposalType: null,
+    approvalAttempted: false,
+    approvalSucceeded: false,
+  });
+  assert.equal(JSON.stringify(withRuntimeDependencies).includes('contenido sensible'), false);
+  assert.equal(JSON.stringify(withRuntimeDependencies).includes('contenido privado'), false);
+  assert.deepEqual(Object.keys(withRuntimeDependencies), [
+    'query',
+    'analysis',
+    'response',
+    'confidence',
+    'sources',
+    'privateContextUsed',
+    'proposal',
+    'approval',
+    'limitations',
+  ]);
+});
+
+test('continues normally when memory search fails', () => {
+  const diagnostics = {};
+  const result = orchestrateExecutiveQuery('Consulta con memoria no disponible', {
+    diagnostics,
+    dependencies: {
+      memory: {
+        searchMemory() {
+          throw new Error('memory unavailable');
+        },
+        saveShortTerm() {
+          throw new Error('memory must remain read-only');
+        },
+      },
+      proposalEngine: {
+        generate() {
+          throw new Error('proposal engine must not be invoked');
+        },
+      },
+      approvalQueue: {
+        add() {
+          throw new Error('approval queue must not be invoked');
+        },
+      },
+      simulateExecutiveBrainQuery(query) {
+        return {
+          query,
+          answer: 'Respuesta disponible.',
+          confidence: 0.5,
+          sources: [],
+          reasoningSummary: {},
+          limitations: [],
+        };
+      },
+    },
+  });
+
+  assert.equal(result.response.includes('Respuesta disponible.'), true);
+  assert.deepEqual(diagnostics, {
+    memorySearchAttempted: true,
+    memorySearchSucceeded: false,
+    memoryResultCount: 0,
+    proposalAttempted: false,
+    proposalSucceeded: false,
+    proposalType: null,
+    approvalAttempted: false,
+    approvalSucceeded: false,
+  });
+});
+
+test('normalizes empty and oversized memory results without exposing them', () => {
+  const emptyDiagnostics = {};
+  const oversizedDiagnostics = {};
+  const sensitiveEntries = Array.from({ length: 8 }, (_, index) => ({
+    secret: `private-memory-${index}`,
+  }));
+  const commonDependencies = {
+    simulateExecutiveBrainQuery(query) {
+      return {
+        query,
+        answer: 'Respuesta sin memoria.',
+        confidence: 0.5,
+        sources: [],
+        reasoningSummary: {},
+        limitations: [],
+      };
+    },
+  };
+  const emptyResult = orchestrateExecutiveQuery('Consulta vacia', {
+    diagnostics: emptyDiagnostics,
+    dependencies: {
+      ...commonDependencies,
+      memory: { searchMemory: () => [] },
+    },
+  });
+  const oversizedResult = orchestrateExecutiveQuery('Consulta limitada', {
+    diagnostics: oversizedDiagnostics,
+    dependencies: {
+      ...commonDependencies,
+      memory: { searchMemory: () => sensitiveEntries },
+    },
+  });
+
+  assert.deepEqual(emptyDiagnostics, {
+    memorySearchAttempted: true,
+    memorySearchSucceeded: true,
+    memoryResultCount: 0,
+    proposalAttempted: false,
+    proposalSucceeded: false,
+    proposalType: null,
+    approvalAttempted: false,
+    approvalSucceeded: false,
+  });
+  assert.equal(oversizedDiagnostics.memoryResultCount, 5);
+  assert.deepEqual(emptyResult.sources, []);
+  assert.deepEqual(oversizedResult.sources, []);
+  assert.equal(JSON.stringify(oversizedResult).includes('private-memory'), false);
+});
+
+test('reports no memory attempt internally when the dependency is absent', () => {
+  const diagnostics = {};
+  const result = orchestrateExecutiveQuery('Consulta sin memoria', {
+    diagnostics,
+    dependencies: {
+      simulateExecutiveBrainQuery(query) {
+        return {
+          query,
+          answer: 'Respuesta normal.',
+          confidence: 0.5,
+          sources: [],
+          reasoningSummary: {},
+          limitations: [],
+        };
+      },
+    },
+  });
+
+  assert.equal(typeof result.response, 'string');
+  assert.deepEqual(diagnostics, {
+    memorySearchAttempted: false,
+    memorySearchSucceeded: false,
+    memoryResultCount: 0,
+    proposalAttempted: false,
+    proposalSucceeded: false,
+    proposalType: null,
+    approvalAttempted: false,
+    approvalSucceeded: false,
+  });
+  assert.equal(Object.hasOwn(result, 'memorySearchAttempted'), false);
+  assert.equal(Object.hasOwn(result, 'memorySearchSucceeded'), false);
+  assert.equal(Object.hasOwn(result, 'memoryResultCount'), false);
+});
+
+test('does not generate proposals for informational email, calendar, briefing, or inventory queries', () => {
+  const informationalQueries = [
+    'Que correos tengo',
+    'Lee mi correo',
+    'Que tengo hoy',
+    'Prepara mi briefing de hoy',
+    'Muestra el inventario de proyectos',
+  ];
+  let proposalCalls = 0;
+
+  informationalQueries.forEach((query) => {
+    const result = orchestrateExecutiveQuery(query, {
+      dependencies: {
+        memory: {
+          searchMemory: () => [],
+          saveShortTerm() {
+            throw new Error('memory must remain read-only');
+          },
+        },
+        proposalEngine: {
+          generate() {
+            proposalCalls += 1;
+            throw new Error('informational queries must not generate proposals');
+          },
+        },
+        approvalQueue: {
+          add() {
+            throw new Error('approval queue must not be invoked');
+          },
+        },
+        simulateExecutiveBrainQuery(simulationQuery) {
+          return {
+            query: simulationQuery,
+            answer: 'Respuesta informativa.',
+            confidence: 0.5,
+            sources: [],
+            reasoningSummary: {},
+            limitations: [],
+          };
+        },
+      },
+    });
+
+    assert.equal(result.proposal, null);
+    assert.equal(result.approval, null);
+  });
+
+  assert.equal(proposalCalls, 0);
+});
+
+test('generates safe proposals for explicit email, meeting, and task actions', () => {
+  const cases = [
+    {
+      query: 'Prepara un borrador',
+      intent: 'email',
+      actionType: 'propose_email',
+      proposalType: 'email_draft',
+    },
+    {
+      query: 'Programa una reunion',
+      intent: 'meeting',
+      actionType: 'propose_meeting',
+      proposalType: 'meeting_proposal',
+    },
+    {
+      query: 'Crea una tarea',
+      intent: 'task',
+      actionType: 'create_task_proposal',
+      proposalType: 'task_proposal',
+    },
+  ];
+
+  cases.forEach((testCase) => {
+    let proposalInput = null;
+    let queuedProposal = null;
+    let queuedContext = null;
+    let memoryReads = 0;
+    const diagnostics = {};
+    const result = orchestrateExecutiveQuery(testCase.query, {
+      diagnostics,
+      dependencies: {
+        memory: {
+          searchMemory(query) {
+            memoryReads += 1;
+            assert.equal(query, testCase.query);
+            return [{ secret: 'sensitive-memory-value' }];
+          },
+          saveShortTerm() {
+            throw new Error('memory must remain read-only');
+          },
+        },
+        proposalEngine: {
+          generate(input) {
+            proposalInput = input;
+            return {
+              type: testCase.proposalType,
+              requiresApproval: true,
+              body: 'private-email-body',
+              title: 'private-event-title',
+              agenda: ['private-event-agenda'],
+            };
+          },
+        },
+        approvalQueue: {
+          add(proposal, context) {
+            queuedProposal = proposal;
+            queuedContext = context;
+            return {
+              id: `approval-${testCase.intent}`,
+              status: 'pending',
+              createdAt: '2026-07-18T12:00:00.000Z',
+            };
+          },
+        },
+        simulateExecutiveBrainQuery(simulationQuery) {
+          return {
+            query: simulationQuery,
+            answer: 'Respuesta ejecutiva estable.',
+            confidence: 0.6,
+            sources: [],
+            reasoningSummary: {},
+            limitations: [],
+          };
+        },
+        buildExecutiveResponse(input) {
+          return {
+            executiveSummary: input.answer,
+            recommendation: 'Validar antes de ejecutar.',
+            confidence: input.confidence,
+            sources: input.sources,
+            limitations: input.limitations,
+          };
+        },
+      },
+    });
+
+    assert.equal(memoryReads, 1);
+    assert.deepEqual(proposalInput, {
+      message: testCase.query,
+      analysis: {
+        intent: testCase.intent,
+        urgency: result.analysis.priority,
+        actionType: testCase.actionType,
+        requiresApproval: true,
+      },
+      decision: {
+        recommendation: 'Validar antes de ejecutar.',
+        requiresApproval: true,
+      },
+    });
+    assert.deepEqual(result.proposal, {
+      type: testCase.proposalType,
+      summary: {
+        email_draft: 'Borrador de email preparado para revision.',
+        meeting_proposal: 'Propuesta de reunion preparada para revision.',
+        task_proposal: 'Propuesta de tarea preparada para revision.',
+      }[testCase.proposalType],
+      requiresApproval: true,
+    });
+    assert.deepEqual(queuedProposal, result.proposal);
+    assert.deepEqual(queuedContext, {
+      query: `Solicitud accionable de tipo ${testCase.intent}.`,
+      intent: testCase.intent,
+      actionType: testCase.actionType,
+      priority: result.analysis.priority,
+      privateContextUsed: false,
+      source: 'executive-orchestrator',
+    });
+    assert.equal(typeof queuedContext.privateContextUsed, 'boolean');
+    assert.deepEqual(result.approval, {
+      id: `approval-${testCase.intent}`,
+      status: 'pending',
+      createdAt: '2026-07-18T12:00:00.000Z',
+    });
+    assert.equal(JSON.stringify(result).includes('sensitive-memory-value'), false);
+    assert.equal(JSON.stringify(result).includes('private-email-body'), false);
+    assert.equal(JSON.stringify(result).includes('private-event-title'), false);
+    assert.equal(JSON.stringify(result).includes('private-event-agenda'), false);
+    assert.equal(diagnostics.proposalAttempted, true);
+    assert.equal(diagnostics.proposalSucceeded, true);
+    assert.equal(diagnostics.proposalType, testCase.proposalType);
+    assert.equal(diagnostics.approvalAttempted, true);
+    assert.equal(diagnostics.approvalSucceeded, true);
+  });
+});
+
+test('keeps the executive response when Proposal Engine is absent or fails', () => {
+  const baseDependencies = {
+    simulateExecutiveBrainQuery(query) {
+      return {
+        query,
+        answer: 'Respuesta conservada.',
+        confidence: 0.5,
+        sources: [],
+        reasoningSummary: {},
+        limitations: [],
+      };
+    },
+  };
+  const withoutEngine = orchestrateExecutiveQuery('Crea una tarea', {
+    dependencies: baseDependencies,
+  });
+  const diagnostics = {};
+  const withFailure = orchestrateExecutiveQuery('Crea una tarea', {
+    diagnostics,
+    dependencies: {
+      ...baseDependencies,
+      proposalEngine: {
+        generate() {
+          throw new Error('proposal unavailable');
+        },
+      },
+      approvalQueue: {
+        add() {
+          throw new Error('approval queue must not be invoked');
+        },
+      },
+    },
+  });
+
+  assert.equal(withoutEngine.proposal, null);
+  assert.equal(withoutEngine.approval, null);
+  assert.equal(withFailure.proposal, null);
+  assert.equal(withFailure.approval, null);
+  assert.equal(withFailure.response, withoutEngine.response);
+  assert.deepEqual(diagnostics, {
+    memorySearchAttempted: false,
+    memorySearchSucceeded: false,
+    memoryResultCount: 0,
+    proposalAttempted: true,
+    proposalSucceeded: false,
+    proposalType: 'task_proposal',
+    approvalAttempted: false,
+    approvalSucceeded: false,
+  });
+});
+
+test('keeps proposal when Approval Queue is absent or fails', () => {
+  const proposalEngine = {
+    generate() {
+      return {
+        type: 'task_proposal',
+        requiresApproval: true,
+        title: 'sensitive-task-title',
+      };
+    },
+  };
+  const simulateExecutiveBrainQuery = (query) => ({
+    query,
+    answer: 'Respuesta ejecutiva.',
+    confidence: 0.5,
+    sources: [],
+    reasoningSummary: {},
+    limitations: [],
+  });
+  const withoutQueue = orchestrateExecutiveQuery('Crea una tarea', {
+    dependencies: { proposalEngine, simulateExecutiveBrainQuery },
+  });
+  const diagnostics = {};
+  const withQueueFailure = orchestrateExecutiveQuery('Crea una tarea', {
+    diagnostics,
+    dependencies: {
+      proposalEngine,
+      simulateExecutiveBrainQuery,
+      approvalQueue: {
+        add() {
+          throw new Error('queue unavailable');
+        },
+      },
+    },
+  });
+
+  assert.notEqual(withoutQueue.proposal, null);
+  assert.equal(withoutQueue.approval, null);
+  assert.deepEqual(withQueueFailure.proposal, withoutQueue.proposal);
+  assert.equal(withQueueFailure.approval, null);
+  assert.equal(withQueueFailure.response, withoutQueue.response);
+  assert.equal(diagnostics.approvalAttempted, true);
+  assert.equal(diagnostics.approvalSucceeded, false);
+});
+
+test('does not enqueue a proposal that does not require approval', () => {
+  let approvalCalls = 0;
+  const result = orchestrateExecutiveQuery('Crea una tarea', {
+    dependencies: {
+      proposalEngine: {
+        generate() {
+          return {
+            type: 'task_proposal',
+            requiresApproval: false,
+          };
+        },
+      },
+      approvalQueue: {
+        add() {
+          approvalCalls += 1;
+        },
+      },
+      simulateExecutiveBrainQuery(query) {
+        return {
+          query,
+          answer: 'Respuesta ejecutiva.',
+          confidence: 0.5,
+          sources: [],
+          reasoningSummary: {},
+          limitations: [],
+        };
+      },
+    },
+  });
+
+  assert.equal(result.proposal.requiresApproval, false);
+  assert.equal(result.approval, null);
+  assert.equal(approvalCalls, 0);
+});
+
+test('does not expose private context through safe proposal metadata', () => {
+  const privatePayload = {
+    messages: [{ subject: 'private-subject', snippet: 'private-snippet' }],
+  };
+  let queuedProposal = null;
+  let queuedContext = null;
+  const result = orchestrateExecutiveQuery('Prepara un borrador de respuesta', {
+    privateContextMetadata: buildPrivateContext({
+      sourceType: 'gmail',
+      sourceId: 'gmail-private-source',
+    }),
+    expectedClientId: 'client-alpha',
+    privatePayload,
+    dependencies: {
+      proposalEngine: {
+        generate() {
+          return {
+            type: 'email_draft',
+            requiresApproval: true,
+            body: privatePayload.messages[0].snippet,
+            subject: privatePayload.messages[0].subject,
+          };
+        },
+      },
+      approvalQueue: {
+        add(proposal, context) {
+          queuedProposal = proposal;
+          queuedContext = context;
+          return {
+            id: 'approval-private-context',
+            status: 'pending',
+            createdAt: '2026-07-18T12:00:00.000Z',
+          };
+        },
+      },
+      simulateExecutiveBrainQuery(query) {
+        return {
+          query,
+          answer: 'Respuesta base.',
+          confidence: 0.5,
+          sources: [],
+          reasoningSummary: {},
+          limitations: [],
+        };
+      },
+    },
+  });
+
+  assert.equal(result.proposal.type, 'email_draft');
+  assert.equal(JSON.stringify(result.proposal).includes('private-subject'), false);
+  assert.equal(JSON.stringify(result.proposal).includes('private-snippet'), false);
+  assert.deepEqual(queuedProposal, result.proposal);
+  assert.equal(queuedContext.privateContextUsed, true);
+  assert.equal(typeof queuedContext.privateContextUsed, 'boolean');
+  assert.equal(JSON.stringify(queuedContext).includes('private-subject'), false);
+  assert.equal(JSON.stringify(queuedContext).includes('private-snippet'), false);
+  assert.equal(JSON.stringify(result.approval).includes('private-subject'), false);
+  assert.equal(JSON.stringify(result.approval).includes('private-snippet'), false);
+});
+
 test('uses authorized private context without adding it to global sources', () => {
   const privatePayload = {
     events: [

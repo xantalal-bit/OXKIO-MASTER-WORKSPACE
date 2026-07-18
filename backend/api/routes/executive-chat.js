@@ -40,10 +40,29 @@ function isExecutiveChatRoute(pathname, method) {
   return pathname === '/api/executive/chat' && method === 'POST';
 }
 
+function getInternalOrchestratorDependencies(dependencies = {}) {
+  const orchestratorDependencies = {};
+
+  [
+    'memory',
+    'proposalEngine',
+    'approvalQueue',
+  ].forEach((dependencyName) => {
+    if (Object.hasOwn(dependencies, dependencyName)) {
+      orchestratorDependencies[dependencyName] = dependencies[dependencyName];
+    }
+  });
+
+  return orchestratorDependencies;
+}
+
 async function buildOrchestratorOptions(body, dependencies = {}) {
   const calendarProvider = dependencies.buildCalendarPrivateContext || buildCalendarPrivateContext;
   const gmailProvider = dependencies.buildGmailPrivateContext || buildGmailPrivateContext;
-  const options = {};
+  const internalDependencies = getInternalOrchestratorDependencies(dependencies);
+  const options = Object.keys(internalDependencies).length > 0
+    ? { dependencies: internalDependencies }
+    : {};
   const privateContexts = [];
 
   if (body.calendar && body.calendar.enabled === true) {
@@ -151,6 +170,7 @@ async function handleExecutiveChatRequest(req, res, options) {
 
 module.exports = {
   buildOrchestratorOptions,
+  getInternalOrchestratorDependencies,
   handleExecutiveChatRequest,
   isExecutiveChatRoute,
 };
