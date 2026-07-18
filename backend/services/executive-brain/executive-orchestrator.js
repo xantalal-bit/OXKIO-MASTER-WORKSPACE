@@ -1,5 +1,6 @@
 'use strict';
 
+const { randomUUID } = require('crypto');
 const { analyzeExecutiveQuery } = require('./query-analyzer');
 const { searchKnowledge } = require('../knowledge/knowledge-query-service');
 const { simulateExecutiveBrainQuery } = require('../knowledge/executive-brain-simulation');
@@ -519,8 +520,9 @@ function generateProposalSafely(proposalEngine, query, analysis, executiveRespon
   }
 }
 
-function buildSafeApprovalContext(actionableIntent, analysis, privateContextUsed) {
+function buildSafeApprovalContext(interactionId, actionableIntent, analysis, privateContextUsed) {
   return {
+    interactionId,
     query: `Solicitud accionable de tipo ${actionableIntent.intent}.`,
     intent: actionableIntent.intent,
     actionType: actionableIntent.actionType,
@@ -554,6 +556,7 @@ function enqueueApprovalSafely(
   query,
   analysis,
   privateContextUsed,
+  interactionId,
   diagnostics,
 ) {
   diagnostics.approvalAttempted = false;
@@ -573,7 +576,12 @@ function enqueueApprovalSafely(
   diagnostics.approvalAttempted = true;
 
   try {
-    const context = buildSafeApprovalContext(actionableIntent, analysis, privateContextUsed);
+    const context = buildSafeApprovalContext(
+      interactionId,
+      actionableIntent,
+      analysis,
+      privateContextUsed,
+    );
     const approvalItem = approvalQueue.add(proposal, context);
     const approval = buildSafeApprovalMetadata(approvalItem);
 
@@ -585,7 +593,51 @@ function enqueueApprovalSafely(
   }
 }
 
+function buildSafeMemoryEntry(
+  interactionId,
+  analysis,
+  query,
+  proposal,
+  approval,
+  privateContextUsed,
+) {
+  const actionableIntent = detectActionableIntent(query);
+
+  return {
+    type: 'executive-interaction',
+    interactionId,
+    intent: actionableIntent ? actionableIntent.intent : analysis.intent,
+    priority: analysis && analysis.priority ? analysis.priority : 'normal',
+    actionable: Boolean(actionableIntent),
+    actionType: actionableIntent ? actionableIntent.intent : null,
+    proposalCreated: Boolean(proposal),
+    approvalCreated: Boolean(approval),
+    privateContextUsed: Boolean(privateContextUsed),
+    status: 'completed',
+    createdAt: new Date().toISOString(),
+  };
+}
+
+function writeMemorySafely(memory, entry, diagnostics) {
+  diagnostics.memoryWriteAttempted = false;
+  diagnostics.memoryWriteSucceeded = false;
+
+  if (!memory || typeof memory.saveShortTerm !== 'function') {
+    return;
+  }
+
+  diagnostics.memoryWriteAttempted = true;
+
+  try {
+    memory.saveShortTerm(entry);
+    diagnostics.memoryWriteSucceeded = true;
+  } catch (error) {
+    diagnostics.memoryWriteSucceeded = false;
+  }
+}
+
 function orchestrateExecutiveQuery(query, options) {
+  const interactionId = randomUUID();
   const dependencies = options && options.dependencies ? options.dependencies : {};
   const diagnostics = options && options.diagnostics && typeof options.diagnostics === 'object'
     ? options.diagnostics
@@ -660,10 +712,21 @@ function orchestrateExecutiveQuery(query, options) {
     query,
     analysis,
     privateContextUsed,
+    interactionId,
     diagnostics,
   );
+  const memoryEntry = buildSafeMemoryEntry(
+    interactionId,
+    analysis,
+    query,
+    proposal,
+    approval,
+    privateContextUsed,
+  );
+  writeMemorySafely(memory, memoryEntry, diagnostics);
 
   return {
+    interactionId,
     query,
     analysis,
     response: executiveResponse.executiveSummary,

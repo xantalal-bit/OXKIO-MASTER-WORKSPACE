@@ -7,6 +7,8 @@ const {
   prepareAuthorizedPrivateContexts,
 } = require('./executive-orchestrator');
 
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
 function buildPrivateContext(overrides = {}) {
   return {
     clientId: 'client-alpha',
@@ -316,7 +318,11 @@ test('reads shared memory without invoking proposal or approval dependencies or 
     },
   });
 
-  assert.deepEqual(withRuntimeDependencies, withoutRuntimeDependencies);
+  assert.deepEqual(
+    { ...withRuntimeDependencies, interactionId: '<interaction-id>' },
+    { ...withoutRuntimeDependencies, interactionId: '<interaction-id>' },
+  );
+  assert.notEqual(withRuntimeDependencies.interactionId, withoutRuntimeDependencies.interactionId);
   assert.deepEqual(calls.slice(-3), [
     ['analyzeExecutiveQuery'],
     ['memory.searchMemory', 'Consulta estable'],
@@ -331,10 +337,13 @@ test('reads shared memory without invoking proposal or approval dependencies or 
     proposalType: null,
     approvalAttempted: false,
     approvalSucceeded: false,
+    memoryWriteAttempted: true,
+    memoryWriteSucceeded: false,
   });
   assert.equal(JSON.stringify(withRuntimeDependencies).includes('contenido sensible'), false);
   assert.equal(JSON.stringify(withRuntimeDependencies).includes('contenido privado'), false);
   assert.deepEqual(Object.keys(withRuntimeDependencies), [
+    'interactionId',
     'query',
     'analysis',
     'response',
@@ -384,6 +393,7 @@ test('continues normally when memory search fails', () => {
   });
 
   assert.equal(result.response.includes('Respuesta disponible.'), true);
+  assert.match(result.interactionId, UUID_PATTERN);
   assert.deepEqual(diagnostics, {
     memorySearchAttempted: true,
     memorySearchSucceeded: false,
@@ -393,6 +403,8 @@ test('continues normally when memory search fails', () => {
     proposalType: null,
     approvalAttempted: false,
     approvalSucceeded: false,
+    memoryWriteAttempted: true,
+    memoryWriteSucceeded: false,
   });
 });
 
@@ -438,6 +450,8 @@ test('normalizes empty and oversized memory results without exposing them', () =
     proposalType: null,
     approvalAttempted: false,
     approvalSucceeded: false,
+    memoryWriteAttempted: false,
+    memoryWriteSucceeded: false,
   });
   assert.equal(oversizedDiagnostics.memoryResultCount, 5);
   assert.deepEqual(emptyResult.sources, []);
@@ -473,6 +487,8 @@ test('reports no memory attempt internally when the dependency is absent', () =>
     proposalType: null,
     approvalAttempted: false,
     approvalSucceeded: false,
+    memoryWriteAttempted: false,
+    memoryWriteSucceeded: false,
   });
   assert.equal(Object.hasOwn(result, 'memorySearchAttempted'), false);
   assert.equal(Object.hasOwn(result, 'memorySearchSucceeded'), false);
@@ -640,6 +656,7 @@ test('generates safe proposals for explicit email, meeting, and task actions', (
     });
     assert.deepEqual(queuedProposal, result.proposal);
     assert.deepEqual(queuedContext, {
+      interactionId: result.interactionId,
       query: `Solicitud accionable de tipo ${testCase.intent}.`,
       intent: testCase.intent,
       actionType: testCase.actionType,
@@ -703,6 +720,7 @@ test('keeps the executive response when Proposal Engine is absent or fails', () 
   assert.equal(withoutEngine.approval, null);
   assert.equal(withFailure.proposal, null);
   assert.equal(withFailure.approval, null);
+  assert.match(withFailure.interactionId, UUID_PATTERN);
   assert.equal(withFailure.response, withoutEngine.response);
   assert.deepEqual(diagnostics, {
     memorySearchAttempted: false,
@@ -713,6 +731,8 @@ test('keeps the executive response when Proposal Engine is absent or fails', () 
     proposalType: 'task_proposal',
     approvalAttempted: false,
     approvalSucceeded: false,
+    memoryWriteAttempted: false,
+    memoryWriteSucceeded: false,
   });
 });
 
@@ -756,6 +776,7 @@ test('keeps proposal when Approval Queue is absent or fails', () => {
   assert.deepEqual(withQueueFailure.proposal, withoutQueue.proposal);
   assert.equal(withQueueFailure.approval, null);
   assert.equal(withQueueFailure.response, withoutQueue.response);
+  assert.match(withQueueFailure.interactionId, UUID_PATTERN);
   assert.equal(diagnostics.approvalAttempted, true);
   assert.equal(diagnostics.approvalSucceeded, false);
 });
@@ -793,6 +814,372 @@ test('does not enqueue a proposal that does not require approval', () => {
   assert.equal(result.proposal.requiresApproval, false);
   assert.equal(result.approval, null);
   assert.equal(approvalCalls, 0);
+});
+
+test('writes only safe completed metadata after response, proposal, and approval are built', () => {
+  const calls = [];
+  let savedEntry = null;
+  let approvalContext = null;
+  const sensitiveQuery = 'Prepara un borrador de respuesta para asunto privado 123';
+  const result = orchestrateExecutiveQuery(sensitiveQuery, {
+    dependencies: {
+      memory: {
+        searchMemory(query) {
+          calls.push('memory.search');
+          assert.equal(query, sensitiveQuery);
+          return [{ secret: 'private-memory-content' }];
+        },
+        saveShortTerm(entry) {
+          calls.push('memory.write');
+          savedEntry = entry;
+        },
+      },
+      analyzeExecutiveQuery() {
+        calls.push('analysis');
+        return {
+          intent: 'unknown',
+          project: null,
+          documentTypes: [],
+          keywords: [],
+          filters: {},
+          priority: 'high',
+          confidence: 0.5,
+        };
+      },
+      simulateExecutiveBrainQuery(query) {
+        calls.push('response');
+        return {
+          query,
+          answer: 'private-executive-response',
+          confidence: 0.5,
+          sources: [{ id: 'private-source', path: 'private-path' }],
+          reasoningSummary: {},
+          limitations: ['private-limitation'],
+        };
+      },
+      buildExecutiveResponse(input) {
+        calls.push('response-builder');
+        return {
+          executiveSummary: input.answer,
+          recommendation: 'private-recommendation',
+          confidence: input.confidence,
+          sources: input.sources,
+          limitations: input.limitations,
+        };
+      },
+      proposalEngine: {
+        generate() {
+          calls.push('proposal');
+          return {
+            type: 'email_draft',
+            body: 'private-proposal-body',
+            requiresApproval: true,
+          };
+        },
+      },
+      approvalQueue: {
+        add(proposal, context) {
+          calls.push('approval');
+          approvalContext = context;
+          return {
+            id: 'private-approval-id',
+            status: 'pending',
+            createdAt: '2026-07-18T12:00:00.000Z',
+          };
+        },
+      },
+    },
+  });
+
+  assert.deepEqual(calls, [
+    'analysis',
+    'memory.search',
+    'response',
+    'response-builder',
+    'proposal',
+    'approval',
+    'memory.write',
+  ]);
+  assert.deepEqual(Object.keys(savedEntry), [
+    'type',
+    'interactionId',
+    'intent',
+    'priority',
+    'actionable',
+    'actionType',
+    'proposalCreated',
+    'approvalCreated',
+    'privateContextUsed',
+    'status',
+    'createdAt',
+  ]);
+  assert.deepEqual({ ...savedEntry, createdAt: '<timestamp>' }, {
+    type: 'executive-interaction',
+    interactionId: result.interactionId,
+    intent: 'email',
+    priority: 'high',
+    actionable: true,
+    actionType: 'email',
+    proposalCreated: true,
+    approvalCreated: true,
+    privateContextUsed: false,
+    status: 'completed',
+    createdAt: '<timestamp>',
+  });
+  assert.equal(Number.isNaN(Date.parse(savedEntry.createdAt)), false);
+  assert.equal(savedEntry.interactionId, result.interactionId);
+  assert.equal(approvalContext.interactionId, result.interactionId);
+  [
+    sensitiveQuery,
+    'private-memory-content',
+    'private-executive-response',
+    'private-source',
+    'private-path',
+    'private-limitation',
+    'private-recommendation',
+    'private-proposal-body',
+    'private-approval-id',
+  ].forEach((sensitiveValue) => {
+    assert.equal(JSON.stringify(savedEntry).includes(sensitiveValue), false);
+  });
+  assert.notEqual(result.proposal, null);
+  assert.notEqual(result.approval, null);
+});
+
+test('writes correct safe metadata for informational, meeting, and task interactions', () => {
+  const cases = [
+    {
+      query: 'Que correos tengo',
+      intent: 'unknown',
+      actionable: false,
+      actionType: null,
+      proposalCreated: false,
+      approvalCreated: false,
+    },
+    {
+      query: 'Programa una reunion',
+      intent: 'meeting',
+      actionable: true,
+      actionType: 'meeting',
+      proposalCreated: true,
+      approvalCreated: true,
+    },
+    {
+      query: 'Crea una tarea',
+      intent: 'task',
+      actionable: true,
+      actionType: 'task',
+      proposalCreated: true,
+      approvalCreated: true,
+    },
+  ];
+
+  cases.forEach((testCase) => {
+    let savedEntry = null;
+    const result = orchestrateExecutiveQuery(testCase.query, {
+      dependencies: {
+        memory: {
+          searchMemory: () => [],
+          saveShortTerm(entry) {
+            savedEntry = entry;
+          },
+        },
+        proposalEngine: {
+          generate() {
+            return { requiresApproval: true };
+          },
+        },
+        approvalQueue: {
+          add() {
+            return {
+              id: 'approval-test',
+              status: 'pending',
+              createdAt: '2026-07-18T12:00:00.000Z',
+            };
+          },
+        },
+        simulateExecutiveBrainQuery(query) {
+          return {
+            query,
+            answer: 'Respuesta.',
+            confidence: 0.5,
+            sources: [],
+            reasoningSummary: {},
+            limitations: [],
+          };
+        },
+      },
+    });
+
+    assert.equal(savedEntry.intent, testCase.intent);
+    assert.equal(savedEntry.actionable, testCase.actionable);
+    assert.equal(savedEntry.actionType, testCase.actionType);
+    assert.equal(savedEntry.proposalCreated, testCase.proposalCreated);
+    assert.equal(savedEntry.approvalCreated, testCase.approvalCreated);
+    assert.equal(savedEntry.privateContextUsed, false);
+    assert.equal(savedEntry.interactionId, result.interactionId);
+    assert.equal(result.proposal !== null, testCase.proposalCreated);
+    assert.equal(result.approval !== null, testCase.approvalCreated);
+  });
+});
+
+test('private context writes the same safe metadata without private content', () => {
+  const privatePayload = {
+    messages: [{ subject: 'private-subject-write', snippet: 'private-snippet-write' }],
+  };
+  let savedEntry = null;
+  const result = orchestrateExecutiveQuery('Prepara un borrador de respuesta privada', {
+    privateContextMetadata: buildPrivateContext({
+      sourceType: 'gmail',
+      sourceId: 'private-source-write',
+    }),
+    expectedClientId: 'client-alpha',
+    privatePayload,
+    dependencies: {
+      memory: {
+        searchMemory: () => [{ secret: 'private-memory-write' }],
+        saveShortTerm(entry) {
+          savedEntry = entry;
+        },
+      },
+      proposalEngine: {
+        generate() {
+          return {
+            requiresApproval: true,
+            body: 'private-body-write',
+          };
+        },
+      },
+      approvalQueue: {
+        add() {
+          return {
+            id: 'private-approval-write',
+            status: 'pending',
+            createdAt: '2026-07-18T12:00:00.000Z',
+          };
+        },
+      },
+      simulateExecutiveBrainQuery(query) {
+        return {
+          query,
+          answer: 'private-response-write',
+          confidence: 0.5,
+          sources: [],
+          reasoningSummary: {},
+          limitations: [],
+        };
+      },
+    },
+  });
+
+  assert.equal(savedEntry.privateContextUsed, true);
+  assert.equal(savedEntry.interactionId, result.interactionId);
+  [
+    'private-subject-write',
+    'private-snippet-write',
+    'private-source-write',
+    'private-memory-write',
+    'private-body-write',
+    'private-approval-write',
+    'private-response-write',
+  ].forEach((sensitiveValue) => {
+    assert.equal(JSON.stringify(savedEntry).includes(sensitiveValue), false);
+  });
+});
+
+test('memory write failure or missing saveShortTerm does not change the executive result', () => {
+  const diagnostics = {};
+  const commonDependencies = {
+    proposalEngine: {
+      generate() {
+        return { requiresApproval: true };
+      },
+    },
+    approvalQueue: {
+      add() {
+        return {
+          id: 'approval-stable',
+          status: 'pending',
+          createdAt: '2026-07-18T12:00:00.000Z',
+        };
+      },
+    },
+    simulateExecutiveBrainQuery(query) {
+      return {
+        query,
+        answer: 'Respuesta estable.',
+        confidence: 0.5,
+        sources: [],
+        reasoningSummary: {},
+        limitations: [],
+      };
+    },
+  };
+  const withoutWriter = orchestrateExecutiveQuery('Crea una tarea', {
+    dependencies: {
+      ...commonDependencies,
+      memory: { searchMemory: () => [] },
+    },
+  });
+  const withWriteFailure = orchestrateExecutiveQuery('Crea una tarea', {
+    diagnostics,
+    dependencies: {
+      ...commonDependencies,
+      memory: {
+        searchMemory: () => [],
+        saveShortTerm() {
+          throw new Error('write unavailable');
+        },
+      },
+    },
+  });
+
+  assert.deepEqual(
+    { ...withWriteFailure, interactionId: '<interaction-id>' },
+    { ...withoutWriter, interactionId: '<interaction-id>' },
+  );
+  assert.notEqual(withWriteFailure.interactionId, withoutWriter.interactionId);
+  assert.match(withWriteFailure.interactionId, UUID_PATTERN);
+  assert.equal(diagnostics.memoryWriteAttempted, true);
+  assert.equal(diagnostics.memoryWriteSucceeded, false);
+});
+
+test('generates one unique non-sensitive UUID interactionId per operation', () => {
+  const firstSavedEntries = [];
+  const secondSavedEntries = [];
+  const buildDependencies = (savedEntries) => ({
+    memory: {
+      searchMemory: () => [],
+      saveShortTerm(entry) {
+        savedEntries.push(entry);
+      },
+    },
+    simulateExecutiveBrainQuery(query) {
+      return {
+        query,
+        answer: 'Respuesta.',
+        confidence: 0.5,
+        sources: [],
+        reasoningSummary: {},
+        limitations: [],
+      };
+    },
+  });
+  const first = orchestrateExecutiveQuery('Consulta sensible alpha@example.com', {
+    dependencies: buildDependencies(firstSavedEntries),
+  });
+  const second = orchestrateExecutiveQuery('Consulta sensible alpha@example.com', {
+    dependencies: buildDependencies(secondSavedEntries),
+  });
+  assert.match(first.interactionId, UUID_PATTERN);
+  assert.match(second.interactionId, UUID_PATTERN);
+  assert.notEqual(first.interactionId, second.interactionId);
+  assert.equal(firstSavedEntries.length, 1);
+  assert.equal(secondSavedEntries.length, 1);
+  assert.equal(firstSavedEntries[0].interactionId, first.interactionId);
+  assert.equal(secondSavedEntries[0].interactionId, second.interactionId);
+  assert.equal(first.interactionId.includes('alpha@example.com'), false);
+  assert.equal(JSON.stringify(firstSavedEntries[0]).includes('alpha@example.com'), false);
 });
 
 test('does not expose private context through safe proposal metadata', () => {
@@ -847,6 +1234,7 @@ test('does not expose private context through safe proposal metadata', () => {
   assert.equal(JSON.stringify(result.proposal).includes('private-subject'), false);
   assert.equal(JSON.stringify(result.proposal).includes('private-snippet'), false);
   assert.deepEqual(queuedProposal, result.proposal);
+  assert.equal(queuedContext.interactionId, result.interactionId);
   assert.equal(queuedContext.privateContextUsed, true);
   assert.equal(typeof queuedContext.privateContextUsed, 'boolean');
   assert.equal(JSON.stringify(queuedContext).includes('private-subject'), false);

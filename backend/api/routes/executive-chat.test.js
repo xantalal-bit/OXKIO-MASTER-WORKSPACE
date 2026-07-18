@@ -69,6 +69,7 @@ test('returns orchestrator response for a valid query', async () => {
         calledWith = query;
 
         return {
+          interactionId: '11111111-1111-4111-8111-111111111111',
           query,
           analysis: {
             intent: 'roadmap',
@@ -106,7 +107,9 @@ test('returns orchestrator response for a valid query', async () => {
 
   assert.equal(response.statusCode, 200);
   assert.equal(calledWith, 'Resumen del roadmap de Oxkio');
+  assert.equal(payload.interactionId, '11111111-1111-4111-8111-111111111111');
   assert.deepEqual(Object.keys(payload), [
+    'interactionId',
     'query',
     'analysis',
     'response',
@@ -136,6 +139,7 @@ test('passes only internal shared dependencies to the orchestrator', async () =>
   let receivedOptions = null;
   const request = createRequest(JSON.stringify({
     query: 'Consulta sin efectos laterales',
+    interactionId: 'client-controlled-interaction-id',
     dependencies: clientDependencies,
     diagnostics: {
       memorySearchAttempted: true,
@@ -173,6 +177,7 @@ test('passes only internal shared dependencies to the orchestrator', async () =>
   assert.notEqual(receivedOptions.dependencies.proposalEngine, clientDependencies.proposalEngine);
   assert.notEqual(receivedOptions.dependencies.approvalQueue, clientDependencies.approvalQueue);
   assert.equal(Object.hasOwn(receivedOptions, 'diagnostics'), false);
+  assert.equal(Object.hasOwn(receivedOptions, 'interactionId'), false);
   assert.deepEqual(Object.keys(receivedOptions.dependencies), [
     'memory',
     'proposalEngine',
