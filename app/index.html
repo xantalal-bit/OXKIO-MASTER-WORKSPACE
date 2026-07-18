@@ -780,26 +780,62 @@ applyModoCEO();
     async function procesarComandoVoz(textoOriginal) { const texto = (textoOriginal || "").toLowerCase().trim(); if (!texto) { setOxkioRespuesta("No he entendido la orden."); return; } if (texto.startsWith("añadir tarea") || texto.startsWith("crear tarea") || texto.startsWith("nueva tarea")) { await crearTareaPorVoz(textoOriginal); return; } if (texto.includes("modo ceo")) { if (!modoCEO) window.toggleModoCEO(); setOxkioRespuesta("Modo CEO activado."); return; } if (texto.includes("quitar modo ceo") || texto.includes("salir modo ceo")) { if (modoCEO) window.toggleModoCEO(); setOxkioRespuesta("Modo CEO desactivado."); return; } if (texto.includes("documentos") || texto.includes("abre documentos") || texto.includes("muéstrame documentos")) { mostrarSeccion('otros'); openSection("docsListaContent"); const header = document.querySelector('#docsListaCard .collapsible'); if (header) header.classList.add("active"); setOxkioRespuesta("Mostrando documentos."); return; } if (texto.includes("agenda completa") || texto.includes("abre agenda") || texto.includes("muéstrame agenda")) { mostrarSeccion('otros'); openSection("agendaContent"); const header = document.querySelector('#agendaCard .collapsible'); if (header) header.classList.add("active"); setOxkioRespuesta("Mostrando agenda completa."); return; } if (texto.includes("hoy")) { mostrarSeccion('menu'); openSection("hoyContent"); const header = document.querySelector('#hoyCard .collapsible'); if (header) header.classList.add("active"); setOxkioRespuesta("Mostrando hoy."); return; } if (texto.includes("urgentes") || texto.includes("urgente")) { mostrarSeccion('otros'); openSection("urgentesContent"); const header = document.querySelector('#urgentesCard .collapsible'); if (header) header.classList.add("active"); setOxkioRespuesta("Mostrando urgentes."); return; } if (texto.includes("resumen")) { mostrarSeccion('menu'); openSection("resumenContent"); const header = document.querySelector('#resumenCard .collapsible'); if (header) header.classList.add("active"); setOxkioRespuesta("Mostrando resumen."); return; } if (texto.includes("configuración") || texto.includes("abre configuración")) { mostrarSeccion('otros'); if (modoCEO) { setOxkioRespuesta("La configuración no se muestra en modo CEO."); return; } configBox.classList.remove("content-hidden"); setOxkioRespuesta("Mostrando configuración."); return; } if (texto.includes("centro de control") || texto.includes("incidencias") || texto.includes("reglas") || texto.includes("bitácora")) { mostrarSeccion('otros'); openSection("controlContent"); const header = document.querySelector('#controlCard .collapsible'); if (header) header.classList.add("active"); if (texto.includes("incidencias")) { await window.cargarIncidencias(); setOxkioRespuesta("Mostrando incidencias."); } else if (texto.includes("reglas")) { await window.cargarReglas(); setOxkioRespuesta("Mostrando reglas."); } else if (texto.includes("bitácora")) { await window.cargarBitacora(); setOxkioRespuesta("Mostrando aprendizaje."); } else setOxkioRespuesta("Mostrando centro de control."); return; } if (texto.includes("próximos") || texto.includes("esta semana")) { mostrarSeccion('otros'); openSection("proximosContent"); const header = document.querySelector('#proximosCard .collapsible'); if (header) header.classList.add("active"); setOxkioRespuesta("Mostrando próximos días."); return; } await consultarOxkioBackend(textoOriginal); }
     async function consultarOxkioBackend(textoOriginal) {
   try {
-    const res = await fetch(
-      "http://localhost:3000/api/chat?message=" + encodeURIComponent(textoOriginal)
-    );
+    const executiveChatEndpoint = "/api/executive/chat";
+    // Reversión temporal: GET /api/chat?message=<texto codificado>.
+    const res = await fetch(executiveChatEndpoint, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({ query: textoOriginal })
+    });
 
-    const data = await res.json();
+    let data = {};
+    try {
+      data = await res.json();
+    } catch {
+      data = {};
+    }
 
-    if (!data.ok) {
-      setOxkioRespuesta("Oxkio no ha podido procesar la solicitud.");
+    if (!res.ok) {
+      const backendMessage = typeof data.message === "string"
+        ? data.message
+        : typeof data.error === "string"
+          ? data.error
+          : "Oxkio no ha podido procesar la solicitud.";
+      setOxkioRespuesta(`Error ${res.status}: ${backendMessage}`);
       return;
     }
 
-    const respuesta = data.response;
+    if (typeof data.response !== "string") {
+      setOxkioRespuesta("Oxkio ha devuelto una respuesta no válida.");
+      return;
+    }
 
-    setOxkioRespuesta(
-      `${respuesta.summary}\n\nIntención: ${respuesta.intent}\nUrgencia: ${respuesta.urgency}\nAcción propuesta: ${respuesta.proposedAction}\n${respuesta.nextStep}`
-    );
+    const analysis = data.analysis && typeof data.analysis === "object" ? data.analysis : {};
+    const lines = [
+      `Respuesta: ${data.response}`,
+      `Intención: ${analysis.intent || "No disponible"}`,
+      `Prioridad: ${analysis.priority || "No disponible"}`,
+      `Confianza: ${data.confidence ?? "No disponible"}`
+    ];
+
+    if (data.proposal && typeof data.proposal === "object") {
+      lines.push(`Propuesta: ${data.proposal.summary || "No disponible"}`);
+      lines.push(`Tipo: ${data.proposal.type || "No disponible"}`);
+    }
+
+    if (data.approval && typeof data.approval === "object") {
+      lines.push(`Aprobación pendiente: ${data.approval.id || "No disponible"}`);
+      lines.push(`Estado: ${data.approval.status || "No disponible"}`);
+    }
+
+    lines.push(`Interaction ID: ${data.interactionId || "No disponible"}`);
+    setOxkioRespuesta(lines.join("\n"));
 
   } catch (error) {
     console.log("Error conectando con backend Oxkio:", error);
-    setOxkioRespuesta("No puedo conectar con el backend de Oxkio. Revisa que node server.js esté activo.");
+    setOxkioRespuesta("No puedo conectar con el backend de Oxkio. Inténtalo de nuevo más tarde.");
   }
 } function hablarTexto(texto) { if (!("speechSynthesis" in window)) return; const utter = new SpeechSynthesisUtterance(texto); utter.lang = "es-ES"; speechSynthesis.cancel(); speechSynthesis.speak(utter); }
     window.iniciarVoz = function() { if (!currentUser) return; if (escuchando) return; const rec = getVoiceRecognition(); if (!rec) { setEstadoVoz("Este navegador no soporta voz.", false); setOxkioRespuesta("La voz no está disponible en este dispositivo o navegador."); return; } recognition = rec; escuchando = true; setEstadoVoz("Escuchando...", true); setOxkioRespuesta("Te escucho."); recognition.onresult = async (event) => { const texto = event.results[0][0].transcript; setEstadoVoz(`Oído: ${texto}`, false); await procesarComandoVoz(texto); }; recognition.onerror = () => { escuchando = false; setEstadoVoz("Error de voz.", false); setOxkioRespuesta("No he podido escuchar bien. Inténtalo otra vez."); }; recognition.onend = () => { escuchando = false; if (voiceStatus && voiceStatus.textContent === "Escuchando...") setEstadoVoz("Voz en espera.", false); else floatingVoiceBtn.classList.remove("listening"); }; recognition.start(); };
