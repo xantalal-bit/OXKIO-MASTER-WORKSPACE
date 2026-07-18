@@ -22,7 +22,7 @@ function buildContract(overrides = {}) {
   };
 }
 
-test('accepts every current actionType and returns a disconnected result', () => {
+test('accepts every current actionType and returns a disconnected result', async () => {
   assert.deepEqual(ACCEPTED_ACTION_TYPES, [
     'propose_email',
     'propose_meeting',
@@ -31,8 +31,8 @@ test('accepts every current actionType and returns a disconnected result', () =>
 
   const adapter = new ExecutionAdapter();
 
-  ACCEPTED_ACTION_TYPES.forEach((actionType) => {
-    const result = adapter.execute(buildContract({ actionType }));
+  for (const actionType of ACCEPTED_ACTION_TYPES) {
+    const result = await adapter.execute(buildContract({ actionType }));
 
     assert.equal(result.success, false);
     assert.equal(result.code, 'execution_not_connected');
@@ -41,11 +41,11 @@ test('accepts every current actionType and returns a disconnected result', () =>
     assert.equal(result.externalId, null);
     assert.equal(result.secondaryExternalId, null);
     assert.deepEqual(result.metadata, { actionType, connected: false });
-  });
+  }
 });
 
-test('rejects an unknown actionType without selecting a provider', () => {
-  const result = new ExecutionAdapter().execute(buildContract({ actionType: 'unknown_action' }));
+test('rejects an unknown actionType without selecting a provider', async () => {
+  const result = await new ExecutionAdapter().execute(buildContract({ actionType: 'unknown_action' }));
 
   assert.equal(result.success, false);
   assert.equal(result.code, 'unknown_action_type');
@@ -85,9 +85,9 @@ test('requires executionPayload to be a non-array object', () => {
   assert.deepEqual(validateExecutionContract(buildContract({ executionPayload: {} })), { valid: true });
 });
 
-test('does not return or reflect executionPayload', () => {
+test('does not return or reflect executionPayload', async () => {
   const sensitiveMarker = 'sensitive-value-that-must-not-be-returned';
-  const result = new ExecutionAdapter().execute(buildContract({
+  const result = await new ExecutionAdapter().execute(buildContract({
     executionPayload: {
       nested: { sensitiveMarker },
       body: sensitiveMarker,
@@ -100,7 +100,7 @@ test('does not return or reflect executionPayload', () => {
   assert.equal(serialized.includes(sensitiveMarker), false);
 });
 
-test('does not mutate the execution contract input', () => {
+test('does not mutate the execution contract input', async () => {
   const input = buildContract({
     executionPayload: {
       nested: { value: 'unchanged' },
@@ -109,15 +109,15 @@ test('does not mutate the execution contract input', () => {
   });
   const before = JSON.parse(JSON.stringify(input));
 
-  new ExecutionAdapter().execute(input);
+  await new ExecutionAdapter().execute(input);
 
   assert.deepEqual(input, before);
 });
 
-test('independent calls do not share result state', () => {
+test('independent calls do not share result state', async () => {
   const adapter = new ExecutionAdapter();
-  const first = adapter.execute(buildContract({ actionType: 'propose_email' }));
-  const second = adapter.execute(buildContract({ actionType: 'propose_meeting' }));
+  const first = await adapter.execute(buildContract({ actionType: 'propose_email' }));
+  const second = await adapter.execute(buildContract({ actionType: 'propose_meeting' }));
 
   assert.notEqual(first, second);
   assert.notEqual(first.metadata, second.metadata);
@@ -128,6 +128,104 @@ test('independent calls do not share result state', () => {
     actionType: 'propose_meeting',
     connected: false,
   });
+});
+
+test('delegates propose_email only to the internally injected provider', async () => {
+  const calls = [];
+  const emailProvider = {
+    async execute(input) {
+      calls.push(input);
+      return {
+        success: true,
+        provider: 'test-provider',
+        mode: 'SAFE_DRAFT_ONLY',
+        externalId: 'external-1',
+        secondaryExternalId: 'secondary-1',
+        metadata: { private: 'must-not-pass' },
+        executionPayload: { private: 'must-not-pass' },
+      };
+    },
+  };
+  const adapter = new ExecutionAdapter({ emailProvider });
+  const input = buildContract();
+  const result = await adapter.execute(input);
+
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0], input);
+  assert.deepEqual(result, {
+    success: true,
+    provider: 'test-provider',
+    mode: 'SAFE_DRAFT_ONLY',
+    externalId: 'external-1',
+    secondaryExternalId: 'secondary-1',
+    metadata: { actionType: 'propose_email' },
+  });
+  assert.equal(JSON.stringify(result).includes('must-not-pass'), false);
+});
+
+test('never accepts an execution provider from client input', async () => {
+  let clientProviderCalls = 0;
+  const input = buildContract({
+    emailProvider: {
+      execute() {
+        clientProviderCalls += 1;
+      },
+    },
+    provider: {
+      execute() {
+        clientProviderCalls += 1;
+      },
+    },
+  });
+  const result = await new ExecutionAdapter().execute(input);
+
+  assert.equal(clientProviderCalls, 0);
+  assert.equal(result.code, 'execution_not_connected');
+});
+
+test('keeps meeting and task disconnected when an email provider exists', async () => {
+  let calls = 0;
+  const adapter = new ExecutionAdapter({
+    emailProvider: { execute: async () => { calls += 1; } },
+  });
+
+  for (const actionType of ['propose_meeting', 'create_task_proposal']) {
+    const result = await adapter.execute(buildContract({ actionType }));
+    assert.equal(result.code, 'execution_not_connected');
+    assert.equal(result.provider, null);
+  }
+  assert.equal(calls, 0);
+});
+
+test('normalizes provider failures and catches thrown errors', async () => {
+  const failingAdapter = new ExecutionAdapter({
+    emailProvider: {
+      execute: async () => ({
+        success: false,
+        provider: 'test-provider',
+        mode: 'SAFE_DRAFT_ONLY',
+        code: 'temporary_failure',
+        retryable: true,
+        message: 'sensitive provider message',
+        executionPayload: { private: true },
+      }),
+    },
+  });
+  const thrownAdapter = new ExecutionAdapter({
+    emailProvider: { execute: async () => { throw new Error('sensitive failure'); } },
+  });
+
+  const failed = await failingAdapter.execute(buildContract());
+  const thrown = await thrownAdapter.execute(buildContract());
+
+  assert.equal(failed.success, false);
+  assert.equal(failed.code, 'temporary_failure');
+  assert.equal(failed.retryable, true);
+  assert.equal(JSON.stringify(failed).includes('sensitive provider message'), false);
+  assert.equal(JSON.stringify(failed).includes('executionPayload'), false);
+  assert.equal(thrown.code, 'provider_execution_failed');
+  assert.equal(thrown.retryable, true);
+  assert.equal(JSON.stringify(thrown).includes('sensitive failure'), false);
 });
 
 test('production adapter has no provider or execution-system imports and references', () => {

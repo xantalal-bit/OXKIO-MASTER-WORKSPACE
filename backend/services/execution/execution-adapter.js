@@ -71,8 +71,44 @@ function validateExecutionContract(input) {
   return { valid: true };
 }
 
+function normalizeProviderResult(result, actionType) {
+  if (!result || typeof result !== 'object' || Array.isArray(result)) {
+    return buildResult({
+      code: 'provider_execution_failed',
+      retryable: true,
+      message: 'Execution provider returned an invalid result.',
+      metadata: { actionType },
+    });
+  }
+
+  const normalized = {
+    success: result.success === true,
+    provider: typeof result.provider === 'string' ? result.provider : null,
+    mode: typeof result.mode === 'string' ? result.mode : 'NOT_CONNECTED',
+    externalId: typeof result.externalId === 'string' ? result.externalId : null,
+    secondaryExternalId: typeof result.secondaryExternalId === 'string'
+      ? result.secondaryExternalId
+      : null,
+    metadata: { actionType },
+  };
+
+  if (!normalized.success) {
+    normalized.code = typeof result.code === 'string' && /^[a-z0-9_]{1,64}$/.test(result.code)
+      ? result.code
+      : 'provider_execution_failed';
+    normalized.retryable = result.retryable === true;
+    normalized.message = 'Execution provider did not complete the action.';
+  }
+
+  return normalized;
+}
+
 class ExecutionAdapter {
-  execute(input) {
+  constructor({ emailProvider } = {}) {
+    this.emailProvider = emailProvider;
+  }
+
+  async execute(input) {
     const validation = validateExecutionContract(input);
 
     if (!validation.valid) {
@@ -80,6 +116,24 @@ class ExecutionAdapter {
         code: validation.code,
         message: validation.message,
       });
+    }
+
+    if (
+      input.actionType === 'propose_email'
+      && this.emailProvider
+      && typeof this.emailProvider.execute === 'function'
+    ) {
+      try {
+        const result = await this.emailProvider.execute(input);
+        return normalizeProviderResult(result, input.actionType);
+      } catch (error) {
+        return buildResult({
+          code: 'provider_execution_failed',
+          retryable: true,
+          message: 'Execution provider failed safely.',
+          metadata: { actionType: input.actionType },
+        });
+      }
     }
 
     return buildResult({
@@ -96,5 +150,6 @@ class ExecutionAdapter {
 module.exports = {
   ACCEPTED_ACTION_TYPES,
   ExecutionAdapter,
+  normalizeProviderResult,
   validateExecutionContract,
 };
