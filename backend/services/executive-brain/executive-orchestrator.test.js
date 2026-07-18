@@ -6,6 +6,7 @@ const {
   orchestrateExecutiveQuery,
   prepareAuthorizedPrivateContexts,
 } = require('./executive-orchestrator');
+const ProposalEngine = require('../../core/proposalEngine');
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -570,6 +571,7 @@ test('generates safe proposals for explicit email, meeting, and task actions', (
   cases.forEach((testCase) => {
     let proposalInput = null;
     let queuedProposal = null;
+    let queuedExecutionPayload = null;
     let queuedContext = null;
     let memoryReads = 0;
     const diagnostics = {};
@@ -592,16 +594,23 @@ test('generates safe proposals for explicit email, meeting, and task actions', (
             return {
               type: testCase.proposalType,
               requiresApproval: true,
-              body: 'private-email-body',
+              executionPayload: testCase.intent === 'email' ? {
+                to: null,
+                subject: 'Respuesta pendiente',
+                body: 'Contenido interno seguro',
+                replyMessageId: null,
+                threadId: null,
+              } : undefined,
               title: 'private-event-title',
               agenda: ['private-event-agenda'],
             };
           },
         },
         approvalQueue: {
-          add(proposal, context) {
+          add(proposal, context, executionPayload) {
             queuedProposal = proposal;
             queuedContext = context;
+            queuedExecutionPayload = executionPayload;
             return {
               id: `approval-${testCase.intent}`,
               status: 'pending',
@@ -655,6 +664,14 @@ test('generates safe proposals for explicit email, meeting, and task actions', (
       requiresApproval: true,
     });
     assert.deepEqual(queuedProposal, result.proposal);
+    assert.deepEqual(queuedExecutionPayload, testCase.intent === 'email' ? {
+      to: null,
+      subject: 'Respuesta pendiente',
+      body: 'Contenido interno seguro',
+      replyMessageId: null,
+      threadId: null,
+    } : null);
+    assert.equal(Object.hasOwn(result.proposal, 'executionPayload'), false);
     assert.deepEqual(queuedContext, {
       interactionId: result.interactionId,
       query: `Solicitud accionable de tipo ${testCase.intent}.`,
@@ -679,6 +696,27 @@ test('generates safe proposals for explicit email, meeting, and task actions', (
     assert.equal(diagnostics.proposalType, testCase.proposalType);
     assert.equal(diagnostics.approvalAttempted, true);
     assert.equal(diagnostics.approvalSucceeded, true);
+  });
+});
+
+test('Proposal Engine creates an internal email payload without inventing a recipient', () => {
+  const proposal = new ProposalEngine().generate({
+    analysis: { intent: 'email' },
+    decision: { recommendation: 'Preparar borrador', requiresApproval: true },
+  });
+
+  assert.deepEqual(Object.keys(proposal).sort(), [
+    'executionPayload',
+    'requiresApproval',
+    'summary',
+    'type',
+  ]);
+  assert.deepEqual(proposal.executionPayload, {
+    to: null,
+    subject: 'Respuesta pendiente',
+    body: 'Hola,\n\nHe revisado el asunto y propongo avanzar con prioridad.\n\nQuedo atento a confirmación.\n\nUn saludo,',
+    replyMessageId: null,
+    threadId: null,
   });
 });
 
@@ -1187,6 +1225,7 @@ test('does not expose private context through safe proposal metadata', () => {
     messages: [{ subject: 'private-subject', snippet: 'private-snippet' }],
   };
   let queuedProposal = null;
+  let queuedExecutionPayload = null;
   let queuedContext = null;
   const result = orchestrateExecutiveQuery('Prepara un borrador de respuesta', {
     privateContextMetadata: buildPrivateContext({
@@ -1207,9 +1246,10 @@ test('does not expose private context through safe proposal metadata', () => {
         },
       },
       approvalQueue: {
-        add(proposal, context) {
+        add(proposal, context, executionPayload) {
           queuedProposal = proposal;
           queuedContext = context;
+          queuedExecutionPayload = executionPayload;
           return {
             id: 'approval-private-context',
             status: 'pending',
@@ -1234,6 +1274,7 @@ test('does not expose private context through safe proposal metadata', () => {
   assert.equal(JSON.stringify(result.proposal).includes('private-subject'), false);
   assert.equal(JSON.stringify(result.proposal).includes('private-snippet'), false);
   assert.deepEqual(queuedProposal, result.proposal);
+  assert.equal(queuedExecutionPayload, null);
   assert.equal(queuedContext.interactionId, result.interactionId);
   assert.equal(queuedContext.privateContextUsed, true);
   assert.equal(typeof queuedContext.privateContextUsed, 'boolean');

@@ -23,6 +23,10 @@ const {
   isExecutiveIdentityRoute
 } = require("./routes/executive-identity");
 const {
+  handleApproveRequest,
+  handleExecuteApprovedRequest
+} = require("./routes/executive-approval");
+const {
   getSystem,
   getIntentAnalyzer,
   getRuleEngine,
@@ -1007,10 +1011,11 @@ status: system.memory.getStatus()
       status: system.logs.getStatus()
     });
   }
-if (req.url.startsWith("/api/pending-approvals")) {
+if (pathname === "/api/pending-approvals" && req.method === "GET") {
 
   res.writeHead(200, {
-    "Content-Type": "application/json"
+    "Content-Type": "application/json; charset=utf-8",
+    "Cache-Control": "no-store"
   });
 
   res.end(JSON.stringify({
@@ -1036,36 +1041,14 @@ if (pathname === "/api/knowledge-supervisor/github-releases/discover" && req.met
   }
 }
 
-if (req.url.startsWith("/api/approve")) {
-
-  const url = new URL(req.url, `http://${req.headers.host}`);
-
-  const id = url.searchParams.get("id");
-
-  const pendingItem = approvalQueue.listPending().find(item => item.id === id);
-  const result = pendingItem
-    && pendingItem.proposal
-    && pendingItem.proposal.action === "ingest_github_release"
-    ? universalKnowledgeSupervisor.approve(id)
-    : approvalQueue.approve(id);
-
-  res.writeHead(200, {
-    "Content-Type": "application/json"
-  });
-
-  res.end(JSON.stringify({
-    ok: result.ok,
-    module: "approval-queue",
-    result,
-    status: approvalQueue.getStatus()
-  }, null, 2));
-
-  return;
+if (pathname === "/api/approve") {
+  return handleApproveRequest(req, res, { approvalQueue });
 }
-if (req.url.startsWith("/api/approval-history")) {
+if (pathname === "/api/approval-history" && req.method === "GET") {
 
   res.writeHead(200, {
-    "Content-Type": "application/json"
+    "Content-Type": "application/json; charset=utf-8",
+    "Cache-Control": "no-store"
   });
 
   res.end(JSON.stringify({
@@ -1077,43 +1060,8 @@ if (req.url.startsWith("/api/approval-history")) {
 
   return;
 }
-if (req.url.startsWith("/api/execute-approved")) {
-
-  const url = new URL(req.url, `http://${req.headers.host}`);
-
-  const id = url.searchParams.get("id");
-
- const item = approvalQueue.getHistory().find(item => item.id === id);
-
-if (executionLogger.hasExecuted(id)) {
-
-  return sendJson(res, 400, {
-    ok: false,
-    error: "Esta aprobación ya fue ejecutada"
-  });
-}
-
- const result = await actionExecutor.execute(item, {
-  gmailConnector
-});
-
-  executionLogger.add({
-  approvalId: id,
-  executionResult: result,
-  item
-});
-
-  res.writeHead(200, {
-    "Content-Type": "application/json"
-  });
-
-  res.end(JSON.stringify({
-    ok: result.ok,
-    module: "action-executor",
-    result
-  }, null, 2));
-
-  return;
+if (pathname === "/api/execute-approved") {
+  return handleExecuteApprovedRequest(req, res, { approvalQueue });
 }
 if (req.url.startsWith("/api/execution-logs")) {
 

@@ -92,8 +92,8 @@
         <li>Usuario autoriza acceso vía Gmail OAuth; tokens se almacenan en backend.</li>
         <li>El motor analiza correos y publica propuestas con estado <strong>pending</strong>.</li>
         <li>Esta interfaz lista las propuestas desde <code>/api/pending-approvals</code> para revisión humana.</li>
-        <li>Aprobar llama <code>/api/approve?id=...</code> y registrar auditoría.</li>
-        <li>Ejecutar llama <code>/api/execute-approved?id=...</code> para finalizar la acción.</li>
+        <li>Aprobar usa <code>POST /api/approve</code> con el identificador de aprobación.</li>
+        <li>La ejecución permanece deshabilitada hasta completar su integración segura.</li>
       </ol>
     </section>
 
@@ -147,53 +147,107 @@
       const approvedCount = document.getElementById('approvedCount');
       const executedCount = document.getElementById('executedCount');
       
-      pendingCards.innerHTML = '<div class="status-empty">Cargando...</div>';
-      approvedCards.innerHTML = '';
-      executedCards.innerHTML = '';
+      pendingCards.textContent = 'Cargando...';
+      approvedCards.textContent = '';
+      executedCards.textContent = '';
       
       try{
-        const res = await fetch('/api/pending-approvals' + (force? '?_force=1':''));
-        if(!res.ok) throw new Error('Error de red');
-        const data = await res.json();
+        const suffix = force ? '?_force=1' : '';
+        const [pendingResponse, historyResponse] = await Promise.all([
+          fetch('/api/pending-approvals' + suffix),
+          fetch('/api/approval-history' + suffix)
+        ]);
+        if(!pendingResponse.ok || !historyResponse.ok) throw new Error('Error de red');
+        const pendingData = await pendingResponse.json();
+        const historyData = await historyResponse.json();
 
-        const pending = data.pending?.filter(i => (i.status || '').toLowerCase() === 'pending') || [];
-        const approved = data.pending?.filter(i => (i.status || '').toLowerCase() === 'approved') || [];
-        const executed = data.pending?.filter(i => (i.status || '').toLowerCase() === 'executed') || [];
+        const pending = Array.isArray(pendingData.pending)
+          ? pendingData.pending.filter(i => i.status === 'pending')
+          : [];
+        const history = Array.isArray(historyData.history) ? historyData.history : [];
+        const approved = history.filter(i => i.status === 'approved');
+        const executed = history.filter(i => ['executing', 'executed', 'execution_failed'].includes(i.status));
 
         pendingCount.textContent = pending.length;
         approvedCount.textContent = approved.length;
         executedCount.textContent = executed.length;
 
-        const renderCards = (items) => items.map(item => {
+        const renderCards = (container, items) => {
+          container.replaceChildren();
+          if(items.length === 0){
+            const empty = document.createElement('div');
+            empty.className = 'status-empty';
+            empty.textContent = 'No hay elementos';
+            container.appendChild(empty);
+            return;
+          }
+
+          items.forEach(item => {
           const tipo = item.proposal?.type || 'sin tipo';
-          const resumen = (item.proposal?.summary || item.proposal?.proposal || 'Sin resumen').replace(/\n/g,' ');
+          const resumen = String(item.proposal?.summary || item.proposal?.proposal || 'Sin resumen').replace(/\n/g,' ');
           const st = (item.status || '').toLowerCase();
           const showApprove = st === 'pending';
-          const showExecute = st === 'approved';
-          return `
-            <div class="card">
-              <div>
-                <div class="metaRow"><div class="title">ID: ${item.id}</div><div class="sub">${tipo}</div></div>
-                <div class="sub" style="margin-top:6px;"><span class="badge ${st}">Pendiente</span></div>
-                <div class="sub">${resumen}</div>
-              </div>
-              <div class="actions">
-                ${showApprove ? `<button class="btn small approve" onclick="approveAction('${item.id}')">Aprobar</button>` : ''}
-                ${showExecute ? `<button class="btn small execute" onclick="executeAction('${item.id}')">Ejecutar</button>` : ''}
-                <button class="btn small" onclick="viewRaw('${encodeURIComponent(JSON.stringify(item))}')">Detalles</button>
-              </div>
-            </div>
-          `;
-        }).join('');
+          const card = document.createElement('div');
+          card.className = 'card';
+          const content = document.createElement('div');
+          const meta = document.createElement('div');
+          meta.className = 'metaRow';
+          const title = document.createElement('div');
+          title.className = 'title';
+          title.textContent = `ID: ${item.id || 'No disponible'}`;
+          const type = document.createElement('div');
+          type.className = 'sub';
+          type.textContent = tipo;
+          meta.append(title, type);
+          const badgeRow = document.createElement('div');
+          badgeRow.className = 'sub';
+          badgeRow.style.marginTop = '6px';
+          const badge = document.createElement('span');
+          badge.className = `badge ${['pending','approved','executing','executed','execution_failed'].includes(st) ? st : ''}`;
+          badge.textContent = st || 'sin estado';
+          badgeRow.appendChild(badge);
+          const summary = document.createElement('div');
+          summary.className = 'sub';
+          summary.textContent = resumen;
+          content.append(meta, badgeRow, summary);
 
-        pendingCards.innerHTML = pending.length > 0 ? renderCards(pending) : '<div class="status-empty">No hay elementos</div>';
-        approvedCards.innerHTML = approved.length > 0 ? renderCards(approved) : '<div class="status-empty">No hay elementos</div>';
-        executedCards.innerHTML = executed.length > 0 ? renderCards(executed) : '<div class="status-empty">No hay elementos</div>';
+          const actions = document.createElement('div');
+          actions.className = 'actions';
+          if(showApprove){
+            const approveButton = document.createElement('button');
+            approveButton.type = 'button';
+            approveButton.className = 'btn small approve';
+            approveButton.textContent = 'Aprobar';
+            approveButton.addEventListener('click', () => approveAction(item.id));
+            actions.appendChild(approveButton);
+          }
+          if(st === 'approved'){
+            const executeButton = document.createElement('button');
+            executeButton.type = 'button';
+            executeButton.className = 'btn small execute';
+            executeButton.textContent = 'Ejecución no habilitada';
+            executeButton.disabled = true;
+            actions.appendChild(executeButton);
+          }
+          const detailsButton = document.createElement('button');
+          detailsButton.type = 'button';
+          detailsButton.className = 'btn small';
+          detailsButton.textContent = 'Detalles';
+          detailsButton.addEventListener('click', () => viewRaw(item));
+          actions.appendChild(detailsButton);
+          card.append(content, actions);
+          container.appendChild(card);
+          });
+        };
+
+        renderCards(pendingCards, pending);
+        renderCards(approvedCards, approved);
+        renderCards(executedCards, executed);
 
       }catch(err){
-        pendingCards.innerHTML = '<div class="status-empty">Error cargando aprobaciones</div>';
-        approvedCards.innerHTML = '';
-        executedCards.innerHTML = '';
+        pendingCards.textContent = 'Error cargando aprobaciones';
+        approvedCards.textContent = '';
+        executedCards.textContent = '';
         pendingCount.textContent = '0';
         approvedCount.textContent = '0';
         executedCount.textContent = '0';
@@ -201,31 +255,41 @@
       }
     }
 
-    function viewRaw(encoded){
+    function viewRaw(item){
       try{
-        const obj = JSON.parse(decodeURIComponent(encoded));
         const w = window.open('','_blank','noopener');
-        w.document.write('<pre style="white-space:pre-wrap;font-family:monospace;padding:18px">'+JSON.stringify(obj,null,2)+'</pre>');
+        if(!w) throw new Error('Ventana bloqueada');
+        const pre = w.document.createElement('pre');
+        pre.style.cssText = 'white-space:pre-wrap;font-family:monospace;padding:18px';
+        pre.textContent = JSON.stringify(item, null, 2);
+        w.document.body.replaceChildren(pre);
       }catch(e){ showToast('No se pudo mostrar detalles'); }
     }
 
     async function approveAction(id){
       if(!confirm('Confirmar aprobación de ' + id + '?')) return;
       try{
-        const res = await fetch(`/api/approve?id=${id}`);
+        const res = await fetch('/api/approve', {
+          method: 'POST',
+          headers: {'Content-Type':'application/json'},
+          body: JSON.stringify({approvalId: id})
+        });
         const data = await res.json();
-        if(data.result?.ok) showToast('Aprobado: ' + id);
-        else showToast('Error: ' + (data.result?.error || data.error || 'no se aprobó'));
+        if(res.ok) showToast('Aprobado: ' + id);
+        else showToast('Error: ' + (data.message || 'no se aprobó'));
       }catch(err){ showToast('Error al aprobar: '+(err.message||err)); }
       loadApprovals();
     }
 
     async function executeAction(id){
-      if(!confirm('Ejecutar la acción aprobada ' + id + '?')) return;
       try{
-        const res = await fetch(`/api/execute-approved?id=${id}`);
+        const res = await fetch('/api/execute-approved', {
+          method: 'POST',
+          headers: {'Content-Type':'application/json'},
+          body: JSON.stringify({approvalId: id})
+        });
         const data = await res.json();
-        showToast(data.result?.message || data.message || data.error || 'Ejecutado');
+        showToast(data.message || 'Ejecución todavía no habilitada');
       }catch(err){ showToast('Error al ejecutar: '+(err.message||err)); }
       loadApprovals();
     }

@@ -959,39 +959,65 @@ testOxkioMemory();
 <script>
 async function loadApprovals() {
   const box = document.getElementById("approvalsBox");
-  box.innerHTML = "Cargando aprobaciones...";
+  box.textContent = "Cargando aprobaciones...";
 
-  const res = await fetch("/api/pending-approvals");
-  const data = await res.json();
+  try {
+    const res = await fetch("/api/pending-approvals");
+    const data = await res.json();
 
-  if (!data.pending || data.pending.length === 0) {
-    box.innerHTML = "<p>No hay aprobaciones pendientes.</p>";
-    return;
+    if (!res.ok) throw new Error(data.message || "No se pudieron cargar las aprobaciones.");
+    box.replaceChildren();
+
+    if (!Array.isArray(data.pending) || data.pending.length === 0) {
+      box.textContent = "No hay aprobaciones pendientes.";
+      return;
+    }
+
+    data.pending.forEach(item => {
+      const card = document.createElement("div");
+      card.style.cssText = "border:1px solid #475569;border-radius:12px;padding:15px;margin-bottom:12px;";
+      const addLine = (label, value) => {
+        const line = document.createElement("div");
+        const strong = document.createElement("strong");
+        strong.textContent = `${label}: `;
+        line.append(strong, document.createTextNode(String(value)));
+        card.appendChild(line);
+      };
+      addLine("ID", item.id || "No disponible");
+      addLine("Tipo", item.proposal?.type || "sin tipo");
+      addLine("Resumen", item.proposal?.summary || item.proposal?.proposal || "Sin resumen");
+
+      const approveButton = document.createElement("button");
+      approveButton.type = "button";
+      approveButton.textContent = "Aprobar";
+      approveButton.addEventListener("click", () => approveAction(item.id));
+      card.appendChild(approveButton);
+      box.appendChild(card);
+    });
+  } catch (error) {
+    box.textContent = error.message || "No se pudieron cargar las aprobaciones.";
   }
-
-  box.innerHTML = data.pending.map(item => `
-    <div style="border:1px solid #475569; border-radius:12px; padding:15px; margin-bottom:12px;">
-      <strong>ID:</strong> ${item.id}<br>
-      <strong>Tipo:</strong> ${item.proposal?.type || "sin tipo"}<br>
-      <strong>Resumen:</strong> ${item.proposal?.summary || item.proposal?.proposal || "Sin resumen"}<br>
-      <button onclick="approveAction('${item.id}')">Aprobar</button>
-      <button onclick="executeAction('${item.id}')">Ejecutar</button>
-    </div>
-  `).join("");
 }
 
 async function approveAction(id) {
-  const res = await fetch(`/api/approve?id=${id}`);
+  const res = await fetch("/api/approve", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ approvalId: id })
+  });
   const data = await res.json();
-  alert(data.result?.ok ? "Aprobado" : data.result?.error || "Error al aprobar");
+  alert(res.ok ? "Aprobado" : data.message || "Error al aprobar");
   loadApprovals();
 }
 
 async function executeAction(id) {
-  const res = await fetch(`/api/execute-approved?id=${id}`);
+  const res = await fetch("/api/execute-approved", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ approvalId: id })
+  });
   const data = await res.json();
-  alert(data.result?.message || data.error || "Ejecutado");
-  loadApprovals();
+  alert(data.message || "Ejecución todavía no habilitada");
 }
 </script>
 </body>

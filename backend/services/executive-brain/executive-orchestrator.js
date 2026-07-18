@@ -494,6 +494,33 @@ function buildSafeProposalMetadata(actionableIntent, generatedProposal) {
   };
 }
 
+function buildExecutionPayload(actionableIntent, generatedProposal) {
+  if (
+    !actionableIntent
+    || actionableIntent.proposalType !== 'email_draft'
+    || !generatedProposal
+    || typeof generatedProposal !== 'object'
+    || !generatedProposal.executionPayload
+    || typeof generatedProposal.executionPayload !== 'object'
+  ) {
+    return null;
+  }
+
+  const payload = generatedProposal.executionPayload;
+
+  return {
+    to: typeof payload.to === 'string' && payload.to.trim() ? payload.to.trim() : null,
+    subject: typeof payload.subject === 'string' ? payload.subject : '',
+    body: typeof payload.body === 'string' ? payload.body : '',
+    replyMessageId: typeof payload.replyMessageId === 'string' && payload.replyMessageId.trim()
+      ? payload.replyMessageId.trim()
+      : null,
+    threadId: typeof payload.threadId === 'string' && payload.threadId.trim()
+      ? payload.threadId.trim()
+      : null,
+  };
+}
+
 function generateProposalSafely(proposalEngine, query, analysis, executiveResponse, diagnostics) {
   diagnostics.proposalAttempted = false;
   diagnostics.proposalSucceeded = false;
@@ -510,10 +537,11 @@ function generateProposalSafely(proposalEngine, query, analysis, executiveRespon
   try {
     const proposalInput = buildProposalEngineInput(query, analysis, executiveResponse, actionableIntent);
     const generatedProposal = proposalEngine.generate(proposalInput);
-    const safeProposal = buildSafeProposalMetadata(actionableIntent, generatedProposal);
+    const publicProposal = buildSafeProposalMetadata(actionableIntent, generatedProposal);
+    const executionPayload = buildExecutionPayload(actionableIntent, generatedProposal);
 
-    diagnostics.proposalSucceeded = Boolean(safeProposal);
-    return safeProposal;
+    diagnostics.proposalSucceeded = Boolean(publicProposal);
+    return publicProposal ? { publicProposal, executionPayload } : null;
   } catch (error) {
     diagnostics.proposalSucceeded = false;
     return null;
@@ -552,7 +580,7 @@ function buildSafeApprovalMetadata(approvalItem) {
 
 function enqueueApprovalSafely(
   approvalQueue,
-  proposal,
+  proposalBundle,
   query,
   analysis,
   privateContextUsed,
@@ -565,8 +593,9 @@ function enqueueApprovalSafely(
 
   if (
     !actionableIntent
-    || !proposal
-    || proposal.requiresApproval !== true
+    || !proposalBundle
+    || !proposalBundle.publicProposal
+    || proposalBundle.publicProposal.requiresApproval !== true
     || !approvalQueue
     || typeof approvalQueue.add !== 'function'
   ) {
@@ -582,7 +611,11 @@ function enqueueApprovalSafely(
       analysis,
       privateContextUsed,
     );
-    const approvalItem = approvalQueue.add(proposal, context);
+    const approvalItem = approvalQueue.add(
+      proposalBundle.publicProposal,
+      context,
+      proposalBundle.executionPayload,
+    );
     const approval = buildSafeApprovalMetadata(approvalItem);
 
     diagnostics.approvalSucceeded = Boolean(approval);
@@ -698,17 +731,18 @@ function orchestrateExecutiveQuery(query, options) {
   const finalConfidence = preferPrivateContext
     ? executiveResponse.confidence
     : Math.min(analysis.confidence, executiveResponse.confidence);
-  const proposal = generateProposalSafely(
+  const proposalBundle = generateProposalSafely(
     proposalEngine,
     query,
     analysis,
     executiveResponse,
     diagnostics,
   );
+  const proposal = proposalBundle ? proposalBundle.publicProposal : null;
   const privateContextUsed = authorizedPrivateContexts.length > 0;
   const approval = enqueueApprovalSafely(
     approvalQueue,
-    proposal,
+    proposalBundle,
     query,
     analysis,
     privateContextUsed,

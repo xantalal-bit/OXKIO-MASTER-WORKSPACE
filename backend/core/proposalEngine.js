@@ -30,9 +30,14 @@ class ProposalEngine {
         return {
             type: "email_draft",
             summary: "Borrador de email preparado para revisión.",
-            subject: "Respuesta pendiente",
-            body: "Hola,\n\nHe revisado el asunto y propongo avanzar con prioridad.\n\nQuedo atento a confirmación.\n\nUn saludo,",
-            requiresApproval: true
+            requiresApproval: true,
+            executionPayload: {
+                to: null,
+                subject: "Respuesta pendiente",
+                body: "Hola,\n\nHe revisado el asunto y propongo avanzar con prioridad.\n\nQuedo atento a confirmación.\n\nUn saludo,",
+                replyMessageId: null,
+                threadId: null
+            }
         };
     }
 
