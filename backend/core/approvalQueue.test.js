@@ -211,6 +211,7 @@ test('begins one persisted execution with internal payload, hash, UUID, and corr
     assert.equal(begun.approvalId, id);
     assert.equal(begun.interactionId, 'interaction-begin');
     assert.match(begun.executionId, UUID_PATTERN);
+    assert.equal(begun.actionType, 'propose_email');
     assert.equal(begun.status, 'executing');
     assert.equal(begun.executionPayload.body, 'Cuerpo aprobado');
     assert.equal(begun.payloadHash, calculatePayloadHash(begun.executionPayload));
@@ -220,6 +221,137 @@ test('begins one persisted execution with internal payload, hash, UUID, and corr
     assert.equal(Object.hasOwn(publicItem, 'payloadHash'), false);
     assert.equal(JSON.stringify(publicItem).includes('Cuerpo aprobado'), false);
   });
+});
+
+test('maps persisted proposal types to internal actionTypes without accepting external overrides', () => {
+  const cases = [
+    ['email_draft', 'propose_email'],
+    ['meeting_proposal', 'propose_meeting'],
+    ['task_proposal', 'create_task_proposal'],
+  ];
+
+  for (const [proposalType, expectedActionType] of cases) {
+    withTemporaryQueue((queue) => {
+      const added = queue.add({
+        type: proposalType,
+        summary: 'Propuesta persistida',
+        requiresApproval: true,
+      }, {
+        interactionId: `interaction-${proposalType}`,
+        actionType: 'client_context_override',
+      }, {
+        to: 'recipient@example.com',
+        subject: 'Forma de payload email que no determina el tipo',
+        body: 'Contenido interno',
+        replyMessageId: null,
+        threadId: null,
+      });
+      queue.approve(added.id);
+      const stored = queue.history.find((item) => item.id === added.id);
+      stored.actionType = 'record_override';
+
+      const begun = queue.beginExecution(added.id, 'argument_override');
+
+      assert.equal(begun.ok, true);
+      assert.equal(begun.actionType, expectedActionType);
+      assert.equal(stored.status, 'executing');
+    });
+  }
+});
+
+test('keeps actionType internal to beginExecution and leaves public queue views unchanged', () => {
+  withTemporaryQueue((queue) => {
+    const approvedId = addEmailApproval(queue, 'public-approved');
+    const rejectedId = addEmailApproval(queue, 'public-rejected');
+    const pendingId = addEmailApproval(queue, 'public-pending');
+    const approved = queue.approve(approvedId);
+    const rejected = queue.reject(rejectedId);
+    const begun = queue.beginExecution(approvedId);
+    const pending = queue.listPending().find((item) => item.id === pendingId);
+    const history = queue.getHistory();
+
+    assert.equal(begun.actionType, 'propose_email');
+    [pending, approved.item, rejected.item, ...history].forEach((publicItem) => {
+      assert.equal(Object.hasOwn(publicItem, 'actionType'), false);
+      assert.equal(Object.hasOwn(publicItem, 'executionPayload'), false);
+      assert.equal(Object.hasOwn(publicItem, 'payloadHash'), false);
+    });
+    assert.equal(pending.publicProposal.type, 'email_draft');
+  });
+});
+
+test('blocks missing and unknown persisted proposal types before mutating approved state', () => {
+  const cases = [
+    { summary: 'Sin tipo' },
+    { type: 'unknown_proposal', summary: 'Tipo desconocido' },
+  ];
+
+  for (const publicProposal of cases) {
+    withTemporaryQueue((queue, dataFile) => {
+      const added = queue.add({
+        ...publicProposal,
+        requiresApproval: true,
+      }, {
+        interactionId: 'interaction-unavailable-type',
+        actionType: 'propose_email',
+      }, {
+        to: 'recipient@example.com',
+        subject: 'Payload con forma de email',
+        body: 'No debe inferirse el tipo desde este payload',
+        replyMessageId: null,
+        threadId: null,
+      });
+      queue.approve(added.id);
+      const before = fs.readFileSync(dataFile, 'utf8');
+
+      const result = queue.beginExecution(added.id);
+      const stored = queue.history.find((item) => item.id === added.id);
+
+      assert.deepEqual(result, {
+        ok: false,
+        code: 'execution_action_type_unavailable',
+        message: 'Execution action type is unavailable.',
+      });
+      assert.equal(stored.status, 'approved');
+      assert.equal(Object.hasOwn(stored, 'executionId'), false);
+      assert.equal(Object.hasOwn(result, 'executionPayload'), false);
+      assert.equal(fs.readFileSync(dataFile, 'utf8'), before);
+    });
+  }
+});
+
+test('rejects legacy approved records without an executable proposal type safely', () => {
+  const payload = {
+    to: 'legacy@example.com',
+    subject: 'Legacy',
+    body: 'Legacy body',
+    replyMessageId: null,
+    threadId: null,
+  };
+  const legacyData = {
+    pending: [],
+    history: [{
+      id: 'legacy-with-payload-no-type',
+      status: 'approved',
+      interactionId: 'legacy-interaction',
+      createdAt: '2026-01-01T00:00:00.000Z',
+      proposal: { summary: 'Legacy without executable type' },
+      executionPayload: payload,
+      payloadHash: calculatePayloadHash(payload),
+      context: { actionType: 'propose_email' },
+    }],
+  };
+
+  withTemporaryQueue((queue, dataFile) => {
+    const before = fs.readFileSync(dataFile, 'utf8');
+    const result = queue.beginExecution('legacy-with-payload-no-type');
+
+    assert.equal(result.code, 'execution_action_type_unavailable');
+    assert.equal(queue.history[0].status, 'approved');
+    assert.equal(Object.hasOwn(queue.history[0], 'executionId'), false);
+    assert.equal(Object.hasOwn(result, 'executionPayload'), false);
+    assert.equal(fs.readFileSync(dataFile, 'utf8'), before);
+  }, legacyData);
 });
 
 test('blocks missing or manipulated execution payload without changing persisted state', () => {

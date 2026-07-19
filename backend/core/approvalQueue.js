@@ -11,6 +11,11 @@ const ALLOWED_STATUSES = new Set([
     "executed",
     "execution_failed"
 ]);
+const EXECUTION_ACTION_TYPES = Object.freeze({
+    email_draft: "propose_email",
+    meeting_proposal: "propose_meeting",
+    task_proposal: "create_task_proposal"
+});
 
 function normalizeExecutionPayload(payload) {
     if (!payload || typeof payload !== "object") return null;
@@ -295,6 +300,19 @@ class ApprovalQueue {
         const integrity = this.verifyExecutionPayload(item);
         if (!integrity.ok) return integrity;
 
+        const publicProposal = normalizePublicProposal(item.publicProposal || item.proposal);
+        const actionType = publicProposal && typeof publicProposal.type === "string"
+            ? EXECUTION_ACTION_TYPES[publicProposal.type]
+            : null;
+
+        if (!actionType) {
+            return {
+                ok: false,
+                code: "execution_action_type_unavailable",
+                message: "Execution action type is unavailable."
+            };
+        }
+
         item.executionPayload = integrity.executionPayload;
         item.status = "executing";
         item.executionId = randomUUID();
@@ -305,7 +323,7 @@ class ApprovalQueue {
         delete item.error;
         this.save();
 
-        return this.buildInternalExecutionResult(item);
+        return this.buildInternalExecutionResult(item, actionType);
     }
 
     validateForExecution(id) {
@@ -439,12 +457,13 @@ class ApprovalQueue {
         return { ok: true };
     }
 
-    buildInternalExecutionResult(item) {
+    buildInternalExecutionResult(item, actionType) {
         return {
             ok: true,
             approvalId: item.id,
             interactionId: item.interactionId || null,
             executionId: item.executionId,
+            ...(actionType ? { actionType } : {}),
             executionPayload: normalizeExecutionPayload(item.executionPayload),
             payloadHash: item.payloadHash,
             status: "executing",
