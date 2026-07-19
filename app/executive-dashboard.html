@@ -657,73 +657,67 @@
           </div>
         </details>
 
-        <details class="panel span-4 collapsed-section">
+        <details class="panel span-4 collapsed-section" data-ecosystem-widget="businessHunter">
           <summary>
             <span>
               <h2>Business Hunter</h2>
-              <p class="meta">Seguimiento comercial básico.</p>
+              <p class="meta" data-ecosystem-summary>No disponible</p>
             </span>
-            <span class="badge ok">Prioridad</span>
+            <span class="badge" data-ecosystem-status>No disponible</span>
           </summary>
           <div class="collapsed-content">
             <ul class="list">
               <li class="item">
-                <span class="item-title">Objetivo actual</span>
-                <p class="item-text">Conseguir los primeros clientes reales.</p>
+                <span class="item-title">Elementos</span>
+                <p class="item-text" data-ecosystem-items>0</p>
               </li>
               <li class="item">
-                <span class="item-title">Próximo paso</span>
-                <p class="item-text">Preparar acciones comerciales concretas.</p>
+                <span class="item-title">Última actualización</span>
+                <p class="item-text" data-ecosystem-updated>No disponible</p>
               </li>
             </ul>
           </div>
         </details>
 
-        <details class="panel span-6 collapsed-section">
+        <details class="panel span-6 collapsed-section" data-ecosystem-widget="xose">
           <summary>
             <span>
-              <h2>Profesor IA</h2>
-              <p class="meta">Estado básico de contenidos.</p>
+              <h2>Xose</h2>
+              <p class="meta" data-ecosystem-summary>No disponible</p>
             </span>
-            <span class="badge">Seguimiento</span>
+            <span class="badge" data-ecosystem-status>No disponible</span>
           </summary>
           <div class="collapsed-content">
             <ul class="list">
               <li class="item">
-                <span class="item-title">Contenidos en desarrollo</span>
-                <p class="item-text">Panel preparado para ver avances y bloqueos.</p>
+                <span class="item-title">Elementos</span>
+                <p class="item-text" data-ecosystem-items>0</p>
               </li>
               <li class="item">
-                <span class="item-title">Recomendación de avance</span>
-                <p class="item-text">Mantener foco en piezas útiles para el Cliente Cero.</p>
+                <span class="item-title">Última actualización</span>
+                <p class="item-text" data-ecosystem-updated>No disponible</p>
               </li>
             </ul>
           </div>
         </details>
 
-        <details class="panel span-6 collapsed-section">
+        <details class="panel span-6 collapsed-section" data-ecosystem-widget="ecosystem">
           <summary>
             <span>
               <h2>Estado del Ecosistema</h2>
-              <p class="meta">Contexto visual básico de XANTALAL.</p>
+              <p class="meta" data-ecosystem-summary>No disponible</p>
             </span>
-            <span class="badge ok">XANTALAL</span>
+            <span class="badge" data-ecosystem-status>No disponible</span>
           </summary>
           <div class="collapsed-content">
             <ul class="list">
               <li class="item">
-                <div class="item-top">
-                  <span class="item-title">Proyecto activo</span>
-                  <span class="badge">OXKIO</span>
-                </div>
-                <p class="item-text">Cliente Cero: José Antonio.</p>
+                <span class="item-title">Elementos</span>
+                <p class="item-text" data-ecosystem-items>0</p>
               </li>
               <li class="item">
-                <div class="item-top">
-                  <span class="item-title">Prioridad actual</span>
-                  <span class="badge ok">Business Hunter</span>
-                </div>
-                <p class="item-text">Estado mostrado sin modificar gobierno ni documentos oficiales.</p>
+                <span class="item-title">Última actualización</span>
+                <p class="item-text" data-ecosystem-updated>No disponible</p>
               </li>
             </ul>
           </div>
@@ -769,6 +763,44 @@
       badge.classList.remove("ok", "warn", "danger");
       if (classes[status]) badge.classList.add(classes[status]);
       badge.textContent = formatStatus(status);
+    }
+
+    function formatEcosystemStatus(status) {
+      const labels = {
+        active: "Activo",
+        partial: "Parcial",
+        inactive: "Inactivo",
+        unknown: "No disponible"
+      };
+      return labels[status] || labels.unknown;
+    }
+
+    function renderEcosystemWidget(key, data) {
+      const panel = document.querySelector(`[data-ecosystem-widget="${key}"]`);
+      if (!panel) return;
+      const status = data && data.available === true ? data.status : "unknown";
+      const badge = panel.querySelector("[data-ecosystem-status]");
+      const classes = { active: "ok", partial: "warn", inactive: "danger" };
+      if (badge) {
+        badge.classList.remove("ok", "warn", "danger");
+        if (classes[status]) badge.classList.add(classes[status]);
+        badge.textContent = formatEcosystemStatus(status);
+      }
+      setText(
+        panel.querySelector("[data-ecosystem-summary]"),
+        data && data.summary,
+        "No disponible"
+      );
+      setText(
+        panel.querySelector("[data-ecosystem-items]"),
+        data && Number.isFinite(data.items) ? data.items : 0,
+        0
+      );
+      setText(
+        panel.querySelector("[data-ecosystem-updated]"),
+        data && data.updatedAt ? formatAgendaDate(data.updatedAt) : null,
+        "No disponible"
+      );
     }
 
     function formatAgendaSourceBadge(source) {
@@ -1055,6 +1087,11 @@
 
       const commitmentsPanel = findPanelByTitle("Compromisos Ejecutivos");
       renderCommitments(commitmentsPanel, state.automations);
+
+      const ecosystem = state.ecosystem || {};
+      renderEcosystemWidget("businessHunter", ecosystem.businessHunter);
+      renderEcosystemWidget("xose", ecosystem.xose);
+      renderEcosystemWidget("ecosystem", ecosystem.ecosystem);
     }
 
     function createUnavailableDashboardState() {
@@ -1094,6 +1131,11 @@
           recent: [],
           available: false,
           source: "unavailable"
+        },
+        ecosystem: {
+          businessHunter: null,
+          xose: null,
+          ecosystem: null
         }
       };
     }
