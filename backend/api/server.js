@@ -31,6 +31,7 @@ const {
   handleExecuteApprovedRequest
 } = require("./routes/executive-approval");
 const { createExecutiveCsrf } = require("../security/executive-csrf");
+const { createExecutiveRuntime } = require("../services/runtime/executive-runtime-factory");
 const { getClienteCeroIdentity } = require("../services/private-context/client-identity-resolver");
 const { buildGmailPrivateContext } = require("../services/private-context/gmail-private-provider");
 const { buildCalendarPrivateContext } = require("../services/private-context/calendar-private-provider");
@@ -53,6 +54,12 @@ const ruleEngine = getRuleEngine();
 const executiveBrain = getExecutiveBrain();
 const proposalEngine = new ProposalEngine();
 const approvalQueue = new ApprovalQueue();
+const runtimeConfig = Object.freeze({ runtimeMode: "production" });
+const executiveRuntime = createExecutiveRuntime({
+  mode: runtimeConfig.runtimeMode,
+  productionMemory: system.memory,
+  productionApprovalQueue: approvalQueue
+});
 const executiveCsrf = createExecutiveCsrf();
 const executionConfig = Object.freeze({ executionEnabled: false });
 const gmailDraftComposition = createAuthorizedGmailDraftProvider({
@@ -150,9 +157,9 @@ if (pathname === "/api/executive/security-context") {
 if (isExecutiveChatRoute(pathname, req.method)) {
   return handleExecutiveChatRequest(req, res, {
     dependencies: {
-      memory: system.memory,
+      memory: executiveRuntime.memory,
       proposalEngine,
-      approvalQueue
+      approvalQueue: executiveRuntime.approvalQueue
     }
   });
 }
@@ -1242,6 +1249,10 @@ const proposal = proposalEngine.generate({
     ok: false,
     error: "Endpoint no encontrado"
   });
+});
+
+server.on("close", () => {
+  executiveRuntime.cleanup();
 });
 
 server.listen(PORT, () => {

@@ -3,9 +3,9 @@ const path = require("path");
 
 class MemoryEngine {
 
-    constructor() {
+    constructor(options = {}) {
 
-        this.memoryPath = path.join(__dirname, "memory.json");
+        this.memoryPath = options.memoryPath || path.join(__dirname, "memory.json");
 
         this.maxShortTerm = 20;
 
