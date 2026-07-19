@@ -11,8 +11,11 @@ const ApprovalQueue = require('../../core/approvalQueue');
 const { ExecutionAdapter } = require('../../services/execution/execution-adapter');
 const { ExecutionService } = require('../../services/execution/execution-service');
 const { GmailDraftProvider } = require('../../services/execution/providers/gmail-draft-provider');
+const { getClienteCeroIdentity } = require('../../services/private-context/client-identity-resolver');
+const { createExecutiveCsrf } = require('../../security/executive-csrf');
 const {
   handleApproveRequest,
+  handleExecutiveSecurityContextRequest,
   handleExecuteApprovedRequest,
 } = require('./executive-approval');
 
@@ -60,10 +63,21 @@ function request(handler, queue, {
   body,
   contentType = 'application/json',
   dependencies = {},
+  csrfHeader,
 } = {}) {
   const req = new EventEmitter();
   req.method = method;
+  const csrf = dependencies.csrf || createExecutiveCsrf();
+  const effectiveCsrfHeader = csrfHeader === undefined
+    ? csrf.getSecurityContext().csrfToken
+    : csrfHeader;
   req.headers = contentType ? { 'content-type': contentType } : {};
+  if (effectiveCsrfHeader !== null) req.headers['x-oxkio-csrf'] = effectiveCsrfHeader;
+  const effectiveDependencies = {
+    getIdentity: getClienteCeroIdentity,
+    csrf,
+    ...dependencies,
+  };
 
   return new Promise((resolve, reject) => {
     const response = { statusCode: null, headers: null, body: '' };
@@ -83,13 +97,134 @@ function request(handler, queue, {
       },
     };
 
-    Promise.resolve(handler(req, res, { approvalQueue: queue, ...dependencies })).catch(reject);
+    Promise.resolve(handler(req, res, { approvalQueue: queue, ...effectiveDependencies })).catch(reject);
     process.nextTick(() => {
       if (body !== undefined) req.emit('data', Buffer.from(typeof body === 'string' ? body : JSON.stringify(body)));
       req.emit('end');
     });
   });
 }
+
+test('GET security context returns only an authorized expiring token with no-store', async () => {
+  await withTemporaryQueue(async (queue) => {
+    const firstCsrf = createExecutiveCsrf();
+    const secondCsrf = createExecutiveCsrf();
+    const response = await request(handleExecutiveSecurityContextRequest, queue, {
+      method: 'GET',
+      contentType: null,
+      dependencies: { csrf: firstCsrf },
+      csrfHeader: null,
+    });
+
+    assert.equal(response.statusCode, 200);
+    assert.equal(response.headers['Cache-Control'], 'no-store');
+    assert.deepEqual(Object.keys(response.json).sort(), ['authorized', 'csrfToken', 'expiresAt']);
+    assert.equal(response.json.authorized, true);
+    assert.match(response.json.csrfToken, /^[A-Za-z0-9_-]{43}$/);
+    assert.equal(Date.parse(response.json.expiresAt) > Date.now(), true);
+    assert.notEqual(response.json.csrfToken, secondCsrf.getSecurityContext().csrfToken);
+    const serialized = JSON.stringify(response.json);
+    ['clientId', 'authorization', 'token_type', 'client_secret', 'userId'].forEach((value) => {
+      assert.equal(serialized.includes(value), false);
+    });
+  });
+});
+
+test('security context denies missing or unauthorized internal identity', async () => {
+  await withTemporaryQueue(async (queue) => {
+    for (const getIdentity of [
+      () => null,
+      () => ({
+        clientId: 'cliente-cero',
+        expectedClientId: 'cliente-cero',
+        authorization: { status: 'denied' },
+      }),
+      () => ({
+        clientId: 'other-client',
+        expectedClientId: 'other-client',
+        authorization: { status: 'granted' },
+      }),
+    ]) {
+      const response = await request(handleExecutiveSecurityContextRequest, queue, {
+        method: 'GET',
+        contentType: null,
+        dependencies: { getIdentity },
+        csrfHeader: null,
+      });
+      assert.equal(response.statusCode, 403);
+      assert.equal(response.json.code, 'executive_authorization_denied');
+    }
+  });
+});
+
+test('mutable routes fail closed on identity and CSRF before queue access', async () => {
+  let queueCalls = 0;
+  const queue = {
+    approve() { queueCalls += 1; },
+    validateForExecution() { queueCalls += 1; },
+  };
+  const csrf = createExecutiveCsrf();
+  const validToken = csrf.getSecurityContext().csrfToken;
+  const deniedIdentity = () => ({
+    clientId: 'cliente-cero',
+    expectedClientId: 'cliente-cero',
+    authorization: { status: 'denied' },
+  });
+
+  for (const handler of [handleApproveRequest, handleExecuteApprovedRequest]) {
+    const denied = await request(handler, queue, {
+      body: {
+        approvalId: 'approval-1',
+        clientId: 'cliente-cero',
+        authorization: 'granted',
+        csrfToken: validToken,
+      },
+      dependencies: { csrf, getIdentity: deniedIdentity },
+      csrfHeader: validToken,
+    });
+    assert.equal(denied.statusCode, 403);
+    assert.equal(denied.json.code, 'executive_authorization_denied');
+
+    const missing = await request(handler, queue, {
+      body: { approvalId: 'approval-1', csrfToken: validToken },
+      dependencies: { csrf },
+      csrfHeader: null,
+    });
+    assert.equal(missing.statusCode, 403);
+    assert.equal(missing.json.code, 'csrf_token_required');
+
+    const invalid = await request(handler, queue, {
+      body: { approvalId: 'approval-1' },
+      dependencies: { csrf },
+      csrfHeader: 'invalid-token',
+    });
+    assert.equal(invalid.statusCode, 403);
+    assert.equal(invalid.json.code, 'csrf_token_invalid');
+  }
+  assert.equal(queueCalls, 0);
+});
+
+test('expired CSRF is rejected without changing approval state', async () => {
+  await withTemporaryQueue(async (queue, dataFile) => {
+    const added = addEmailApproval(queue);
+    const before = fs.readFileSync(dataFile, 'utf8');
+    let clock = 1_000;
+    const csrf = createExecutiveCsrf({ now: () => clock, ttlMs: 10 });
+    const token = csrf.getSecurityContext().csrfToken;
+    clock += 10;
+
+    const response = await request(handleApproveRequest, queue, {
+      body: { approvalId: added.id },
+      dependencies: { csrf },
+      csrfHeader: token,
+    });
+
+    assert.equal(response.statusCode, 403);
+    assert.equal(response.json.code, 'csrf_token_expired');
+    assert.equal(queue.getInternalById(added.id).status, 'pending');
+    assert.equal(fs.readFileSync(dataFile, 'utf8'), before);
+  });
+});
 
 function buildFakeExecution(queue, behavior = 'success') {
   const calls = [];
@@ -456,14 +591,20 @@ test('public pending and history views never expose executable fields', async ()
   });
 });
 
-test('approval frontends use POST approvalId only and contain no active mutable GET calls', () => {
+test('approval frontends keep CSRF in memory and send only approvalId in mutable bodies', () => {
   const files = ['app/index.html', 'app/approvals.html'];
 
   files.forEach((file) => {
     const html = fs.readFileSync(path.resolve(__dirname, '../../..', file), 'utf8');
-    assert.match(html, /fetch\(["'`]\/api\/approve["'`],\s*\{[\s\S]*?method:\s*["']POST["']/);
+    assert.match(html, /fetch\(["'`]\/api\/executive\/security-context["'`]/);
+    assert.match(html, /["']X-OXKIO-CSRF["']:\s*executiveCsrfToken/);
+    assert.match(html, /executivePost\(["'`]\/api\/approve["'`],\s*id\)/);
+    assert.match(html, /executivePost\(["'`]\/api\/execute-approved["'`],\s*id\)/);
     assert.equal(/\/api\/approve\?id=/.test(html), false);
     assert.equal(/\/api\/execute-approved\?id=/.test(html), false);
-    assert.equal(/JSON\.stringify\(\{\s*approvalId:\s*id\s*\}\)/.test(html), true);
+    assert.match(html, /body:\s*JSON\.stringify\(\{\s*approvalId\s*\}\)/);
+    assert.equal(/body:\s*JSON\.stringify\(\{[^}]*csrfToken/.test(html), false);
+    assert.equal(/localStorage|sessionStorage/.test(html), false);
+    assert.match(html, /data\.code\s*===\s*["']csrf_token_expired["']/);
   });
 });

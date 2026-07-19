@@ -957,6 +957,40 @@ testOxkioMemory();
 </section>
 
 <script>
+let executiveCsrfToken = null;
+let executiveCsrfExpiresAt = 0;
+
+async function refreshExecutiveSecurityContext() {
+  const response = await fetch("/api/executive/security-context", { cache: "no-store" });
+  const context = await response.json();
+  if (!response.ok || !context.authorized || typeof context.csrfToken !== "string") {
+    throw new Error(context.message || "AutorizaciÃ³n ejecutiva no disponible");
+  }
+  executiveCsrfToken = context.csrfToken;
+  executiveCsrfExpiresAt = Date.parse(context.expiresAt);
+}
+
+async function executivePost(endpoint, approvalId, retry = true) {
+  if (!executiveCsrfToken || !Number.isFinite(executiveCsrfExpiresAt) || Date.now() >= executiveCsrfExpiresAt) {
+    await refreshExecutiveSecurityContext();
+  }
+  const response = await fetch(endpoint, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "X-OXKIO-CSRF": executiveCsrfToken
+    },
+    body: JSON.stringify({ approvalId })
+  });
+  const data = await response.json();
+  if (retry && data.code === "csrf_token_expired") {
+    executiveCsrfToken = null;
+    await refreshExecutiveSecurityContext();
+    return executivePost(endpoint, approvalId, false);
+  }
+  return { response, data };
+}
+
 async function loadApprovals() {
   const box = document.getElementById("approvalsBox");
   box.textContent = "Cargando aprobaciones...";
@@ -1000,23 +1034,13 @@ async function loadApprovals() {
 }
 
 async function approveAction(id) {
-  const res = await fetch("/api/approve", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ approvalId: id })
-  });
-  const data = await res.json();
-  alert(res.ok ? "Aprobado" : data.message || "Error al aprobar");
+  const { response, data } = await executivePost("/api/approve", id);
+  alert(response.ok ? "Aprobado" : data.message || "Error al aprobar");
   loadApprovals();
 }
 
 async function executeAction(id) {
-  const res = await fetch("/api/execute-approved", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ approvalId: id })
-  });
-  const data = await res.json();
+  const { data } = await executivePost("/api/execute-approved", id);
   alert(data.message || "Ejecución todavía no habilitada");
 }
 </script>

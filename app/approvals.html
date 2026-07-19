@@ -131,6 +131,40 @@
   <div id="toast" role="status" aria-live="polite"></div>
 
   <script>
+    let executiveCsrfToken = null;
+    let executiveCsrfExpiresAt = 0;
+
+    async function refreshExecutiveSecurityContext(){
+      const response = await fetch('/api/executive/security-context', { cache: 'no-store' });
+      const context = await response.json();
+      if(!response.ok || !context.authorized || typeof context.csrfToken !== 'string'){
+        throw new Error(context.message || 'AutorizaciÃ³n ejecutiva no disponible');
+      }
+      executiveCsrfToken = context.csrfToken;
+      executiveCsrfExpiresAt = Date.parse(context.expiresAt);
+    }
+
+    async function executivePost(endpoint, approvalId, retry=true){
+      if(!executiveCsrfToken || !Number.isFinite(executiveCsrfExpiresAt) || Date.now() >= executiveCsrfExpiresAt){
+        await refreshExecutiveSecurityContext();
+      }
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-OXKIO-CSRF': executiveCsrfToken
+        },
+        body: JSON.stringify({approvalId})
+      });
+      const data = await response.json();
+      if(retry && data.code === 'csrf_token_expired'){
+        executiveCsrfToken = null;
+        await refreshExecutiveSecurityContext();
+        return executivePost(endpoint, approvalId, false);
+      }
+      return {response, data};
+    }
+
     function showToast(msg, timeout=3200){
       const t = document.getElementById('toast');
       t.textContent = msg;
@@ -269,13 +303,8 @@
     async function approveAction(id){
       if(!confirm('Confirmar aprobación de ' + id + '?')) return;
       try{
-        const res = await fetch('/api/approve', {
-          method: 'POST',
-          headers: {'Content-Type':'application/json'},
-          body: JSON.stringify({approvalId: id})
-        });
-        const data = await res.json();
-        if(res.ok) showToast('Aprobado: ' + id);
+        const {response, data} = await executivePost('/api/approve', id);
+        if(response.ok) showToast('Aprobado: ' + id);
         else showToast('Error: ' + (data.message || 'no se aprobó'));
       }catch(err){ showToast('Error al aprobar: '+(err.message||err)); }
       loadApprovals();
@@ -283,12 +312,7 @@
 
     async function executeAction(id){
       try{
-        const res = await fetch('/api/execute-approved', {
-          method: 'POST',
-          headers: {'Content-Type':'application/json'},
-          body: JSON.stringify({approvalId: id})
-        });
-        const data = await res.json();
+        const {data} = await executivePost('/api/execute-approved', id);
         showToast(data.message || 'Ejecución todavía no habilitada');
       }catch(err){ showToast('Error al ejecutar: '+(err.message||err)); }
       loadApprovals();

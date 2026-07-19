@@ -27,8 +27,11 @@ const {
 } = require("./routes/executive-identity");
 const {
   handleApproveRequest,
+  handleExecutiveSecurityContextRequest,
   handleExecuteApprovedRequest
 } = require("./routes/executive-approval");
+const { createExecutiveCsrf } = require("../security/executive-csrf");
+const { getClienteCeroIdentity } = require("../services/private-context/client-identity-resolver");
 const {
   getSystem,
   getIntentAnalyzer,
@@ -48,6 +51,7 @@ const ruleEngine = getRuleEngine();
 const executiveBrain = getExecutiveBrain();
 const proposalEngine = new ProposalEngine();
 const approvalQueue = new ApprovalQueue();
+const executiveCsrf = createExecutiveCsrf();
 const executionConfig = Object.freeze({ executionEnabled: false });
 const gmailDraftComposition = createAuthorizedGmailDraftProvider({
   executionEnabled: executionConfig.executionEnabled,
@@ -124,6 +128,12 @@ const server = http.createServer(async (req, res) => {
 const pathname = req.url.split("?")[0];
 if (isExecutiveIdentityRoute(pathname, req.method)) {
   return handleExecutiveIdentityRequest(req, res);
+}
+if (pathname === "/api/executive/security-context") {
+  return handleExecutiveSecurityContextRequest(req, res, {
+    getIdentity: getClienteCeroIdentity,
+    csrf: executiveCsrf
+  });
 }
 
 if (isExecutiveChatRoute(pathname, req.method)) {
@@ -1058,7 +1068,11 @@ if (pathname === "/api/knowledge-supervisor/github-releases/discover" && req.met
 }
 
 if (pathname === "/api/approve") {
-  return handleApproveRequest(req, res, { approvalQueue });
+  return handleApproveRequest(req, res, {
+    approvalQueue,
+    getIdentity: getClienteCeroIdentity,
+    csrf: executiveCsrf
+  });
 }
 if (pathname === "/api/approval-history" && req.method === "GET") {
 
@@ -1080,7 +1094,9 @@ if (pathname === "/api/execute-approved") {
   return handleExecuteApprovedRequest(req, res, {
     approvalQueue,
     executionService,
-    config: executionConfig
+    config: executionConfig,
+    getIdentity: getClienteCeroIdentity,
+    csrf: executiveCsrf
   });
 }
 if (req.url.startsWith("/api/execution-logs")) {

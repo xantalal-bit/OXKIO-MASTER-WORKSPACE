@@ -1,5 +1,7 @@
 'use strict';
 
+const { getClienteCeroIdentity } = require('../../services/private-context/client-identity-resolver');
+
 function sendJson(res, statusCode, payload, extraHeaders = {}) {
   res.writeHead(statusCode, {
     'Content-Type': 'application/json; charset=utf-8',
@@ -81,8 +83,84 @@ function validatePostJson(req, res) {
   return true;
 }
 
-async function handleApproveRequest(req, res, { approvalQueue }) {
-  if (!validatePostJson(req, res)) return;
+function isAuthorizedExecutiveIdentity(identity) {
+  return Boolean(
+    identity
+    && identity.clientId === 'cliente-cero'
+    && identity.expectedClientId === 'cliente-cero'
+    && identity.authorization
+    && identity.authorization.status === 'granted'
+  );
+}
+
+function authorizeExecutiveRequest(res, getIdentity = getClienteCeroIdentity) {
+  let identity;
+  try {
+    identity = typeof getIdentity === 'function' ? getIdentity() : null;
+  } catch (error) {
+    identity = null;
+  }
+  if (isAuthorizedExecutiveIdentity(identity)) return true;
+
+  sendJson(res, 403, {
+    ok: false,
+    code: 'executive_authorization_denied',
+    message: 'Executive authorization is required.',
+  });
+  return false;
+}
+
+function validateCsrfRequest(req, res, csrf) {
+  const candidate = req.headers && req.headers['x-oxkio-csrf'];
+  const result = csrf && typeof csrf.validate === 'function'
+    ? csrf.validate(candidate)
+    : { ok: false, code: 'csrf_token_required' };
+  if (result.ok) return true;
+
+  const messages = {
+    csrf_token_required: 'CSRF token is required.',
+    csrf_token_invalid: 'CSRF token is invalid.',
+    csrf_token_expired: 'CSRF token has expired.',
+  };
+  const code = Object.hasOwn(messages, result.code) ? result.code : 'csrf_token_invalid';
+  sendJson(res, 403, { ok: false, code, message: messages[code] });
+  return false;
+}
+
+function validateMutableRequest(req, res, { getIdentity, csrf } = {}) {
+  if (req.method !== 'POST') {
+    sendMethodNotAllowed(res);
+    return false;
+  }
+  if (!authorizeExecutiveRequest(res, getIdentity)) return false;
+  if (!validateCsrfRequest(req, res, csrf)) return false;
+  return validatePostJson(req, res);
+}
+
+function handleExecutiveSecurityContextRequest(req, res, {
+  getIdentity = getClienteCeroIdentity,
+  csrf,
+} = {}) {
+  if (req.method !== 'GET') {
+    return sendJson(res, 405, {
+      ok: false,
+      code: 'method_not_allowed',
+      message: 'Use GET for the executive security context.',
+    }, { Allow: 'GET' });
+  }
+  if (!authorizeExecutiveRequest(res, getIdentity)) return;
+  if (!csrf || typeof csrf.getSecurityContext !== 'function') {
+    return sendJson(res, 500, {
+      ok: false,
+      code: 'security_context_unavailable',
+      message: 'Executive security context is unavailable.',
+    });
+  }
+  return sendJson(res, 200, csrf.getSecurityContext());
+}
+
+async function handleApproveRequest(req, res, { approvalQueue, getIdentity, csrf }) {
+  if (!validateMutableRequest(req, res, { getIdentity, csrf })) return;
 
   try {
     const body = await readJsonBody(req);
@@ -132,8 +210,10 @@ async function handleExecuteApprovedRequest(req, res, {
   approvalQueue,
   executionService,
   config = { executionEnabled: false },
+  getIdentity,
+  csrf,
 }) {
-  if (!validatePostJson(req, res)) return;
+  if (!validateMutableRequest(req, res, { getIdentity, csrf })) return;
 
   try {
     const body = await readJsonBody(req);
@@ -185,6 +265,8 @@ async function handleExecuteApprovedRequest(req, res, {
 
 module.exports = {
   handleApproveRequest,
+  handleExecutiveSecurityContextRequest,
   handleExecuteApprovedRequest,
+  isAuthorizedExecutiveIdentity,
   statusForExecutionResult,
 };
