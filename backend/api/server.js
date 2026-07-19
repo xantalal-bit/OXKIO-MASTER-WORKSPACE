@@ -671,7 +671,7 @@ if (req.url === "/api/status") {
 
 if (pathname === "/api/dashboard" && req.method === "GET") {
   try {
-    const dashboardState = await DashboardIntelligence.getDashboardState();
+    const dashboardState = await DashboardIntelligence.getDashboardState({ approvalQueue });
 
     return sendJson(res, 200, dashboardState);
   } catch (error) {
@@ -748,7 +748,7 @@ if (pathname === "/api/projects" && req.method === "GET") {
         }
 
         if (result.found) {
-          const dashboardState = await DashboardIntelligence.getDashboardState();
+          const dashboardState = await DashboardIntelligence.getDashboardState({ approvalQueue });
           const knowledgeInventory = dashboardState.knowledgeInventory || {};
           const recommendation = knowledgeInventory.recommendation || {};
           const pipeline = result.pipeline || {};
@@ -791,7 +791,7 @@ if (pathname === "/api/projects" && req.method === "GET") {
 
     case "morningBriefing": {
       try {
-        const dashboardState = await DashboardIntelligence.getDashboardState();
+        const dashboardState = await DashboardIntelligence.getDashboardState({ approvalQueue });
         const morningBriefing = dashboardState.morningBriefing || {};
 
         return sendJson(res, 200, {
@@ -817,7 +817,7 @@ if (pathname === "/api/projects" && req.method === "GET") {
 
     case "projects": {
       try {
-        const dashboardState = await DashboardIntelligence.getDashboardState();
+        const dashboardState = await DashboardIntelligence.getDashboardState({ approvalQueue });
         const knowledgeInventory = dashboardState.knowledgeInventory || {};
         const summary = knowledgeInventory.summary || {};
         const recommendation = knowledgeInventory.recommendation || {};
@@ -848,7 +848,7 @@ if (pathname === "/api/projects" && req.method === "GET") {
 
     case "knowledgeInventory": {
       try {
-        const dashboardState = await DashboardIntelligence.getDashboardState();
+        const dashboardState = await DashboardIntelligence.getDashboardState({ approvalQueue });
         const knowledgeInventory = dashboardState.knowledgeInventory || {};
         const recommendation = knowledgeInventory.recommendation || {};
         const assets = Array.isArray(knowledgeInventory.assets)
@@ -878,7 +878,7 @@ if (pathname === "/api/projects" && req.method === "GET") {
 
     case "greeting": {
       try {
-        const dashboardState = await DashboardIntelligence.getDashboardState();
+        const dashboardState = await DashboardIntelligence.getDashboardState({ approvalQueue });
         const executiveBriefing = dashboardState.executiveBriefing;
 
         return sendJson(res, 200, {

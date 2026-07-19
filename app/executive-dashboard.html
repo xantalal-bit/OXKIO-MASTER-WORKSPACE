@@ -608,36 +608,8 @@
             <span class="badge warn">Atención</span>
           </summary>
           <div class="collapsed-content">
-            <div class="commitments">
-              <div class="item commitment">
-                <div class="item-top">
-                  <span class="item-title">Renovar certificado digital</span>
-                  <span class="badge danger">Alta</span>
-                </div>
-                <p class="item-text">Revisar vigencia y preparar renovación antes del vencimiento.</p>
-              </div>
-              <div class="item commitment">
-                <div class="item-top">
-                  <span class="item-title">Revisar dominios</span>
-                  <span class="badge warn">Media</span>
-                </div>
-                <p class="item-text">Comprobar fechas, titularidad, renovación y datos de contacto.</p>
-              </div>
-              <div class="item commitment">
-                <div class="item-top">
-                  <span class="item-title">Suscripciones IA</span>
-                  <span class="badge">Seguimiento</span>
-                </div>
-                <p class="item-text">Controlar pagos periódicos, utilidad y próximas renovaciones.</p>
-              </div>
-              <div class="item commitment">
-                <div class="item-top">
-                  <span class="item-title">Obligaciones fiscales</span>
-                  <span class="badge warn">Pendiente</span>
-                </div>
-                <p class="item-text">Mantener visibles fechas y documentación necesaria.</p>
-              </div>
-            </div>
+            <div class="commitments" data-commitment-counts></div>
+            <ul class="list" data-commitment-recent></ul>
           </div>
         </details>
 
@@ -851,6 +823,79 @@
       setText(itemElement.querySelector(".item-text"), text, "Informacion no disponible");
     }
 
+    function renderCommitmentItem(container, title, value) {
+      const item = document.createElement("div");
+      item.className = "item commitment";
+      const row = document.createElement("div");
+      row.className = "item-top";
+      const label = document.createElement("span");
+      label.className = "item-title";
+      label.textContent = title;
+      const badge = document.createElement("span");
+      badge.className = "badge";
+      badge.textContent = String(value);
+      row.append(label, badge);
+      item.appendChild(row);
+      container.appendChild(item);
+    }
+
+    function renderCommitments(panel, commitments) {
+      if (!panel) return;
+      const counts = panel.querySelector("[data-commitment-counts]");
+      const recentList = panel.querySelector("[data-commitment-recent]");
+      const availabilityBadge = panel.querySelector("summary .badge");
+      if (!counts || !recentList) return;
+      counts.replaceChildren();
+      recentList.replaceChildren();
+
+      if (!commitments || commitments.available !== true) {
+        setText(availabilityBadge, "No disponible", "No disponible");
+        renderCommitmentItem(counts, "Estado", "No disponible");
+        return;
+      }
+
+      setText(availabilityBadge, "Approval Queue", "Approval Queue");
+      [
+        ["Pendientes", commitments.pending],
+        ["Aprobados", commitments.approved],
+        ["En ejecución", commitments.executing],
+        ["Ejecutados", commitments.executed],
+        ["Fallidos", commitments.failed],
+        ["Rechazados", commitments.rejected]
+      ].forEach(([label, value]) => renderCommitmentItem(counts, label, Number(value) || 0));
+
+      const recent = Array.isArray(commitments.recent) ? commitments.recent.slice(0, 5) : [];
+      if (recent.length === 0) {
+        const empty = document.createElement("li");
+        empty.className = "item";
+        empty.textContent = "Sin compromisos pendientes";
+        recentList.appendChild(empty);
+        return;
+      }
+
+      recent.forEach((commitment) => {
+        const item = document.createElement("li");
+        item.className = "item";
+        const row = document.createElement("div");
+        row.className = "item-top";
+        const summary = document.createElement("span");
+        summary.className = "item-title";
+        summary.textContent = textOrFallback(commitment && commitment.summary, "Compromiso ejecutivo");
+        const status = document.createElement("span");
+        status.className = "badge";
+        status.textContent = textOrFallback(commitment && commitment.status, "unknown");
+        row.append(summary, status);
+        const date = document.createElement("p");
+        date.className = "item-text";
+        date.textContent = textOrFallback(
+          commitment && (commitment.updatedAt || commitment.createdAt),
+          "Fecha no disponible"
+        );
+        item.append(row, date);
+        recentList.appendChild(item);
+      });
+    }
+
     function getExecutiveResponse(state) {
       return state.executiveBriefing &&
         state.executiveBriefing.executiveResponse
@@ -1009,28 +1054,7 @@
       );
 
       const commitmentsPanel = findPanelByTitle("Compromisos Ejecutivos");
-      const commitmentItems = commitmentsPanel ? commitmentsPanel.querySelectorAll(".item") : [];
-      const automations = state.automations || {};
-      updateListItem(commitmentItems[0], {
-        title: "Automatizaciones activas",
-        badge: textOrFallback((automations.active || []).length, 0),
-        text: "Estado agregado desde Dashboard Intelligence."
-      });
-      updateListItem(commitmentItems[1], {
-        title: "Pendientes de aprobacion",
-        badge: textOrFallback(automations.pendingApproval, 0),
-        text: "Acciones pendientes de revision humana."
-      });
-      updateListItem(commitmentItems[2], {
-        title: "Ultima ejecucion",
-        badge: textOrFallback(automations.lastExecution, "Sin ejecucion"),
-        text: "Seguimiento preparado para automatizaciones futuras."
-      });
-      updateListItem(commitmentItems[3], {
-        title: "Estado de automatizaciones",
-        badge: "Base",
-        text: "Capa visual conectada sin ejecutar integraciones reales."
-      });
+      renderCommitments(commitmentsPanel, state.automations);
     }
 
     function createUnavailableDashboardState() {
@@ -1061,9 +1085,15 @@
           }
         },
         automations: {
-          active: [],
-          pendingApproval: 0,
-          lastExecution: null
+          pending: 0,
+          approved: 0,
+          executing: 0,
+          executed: 0,
+          failed: 0,
+          rejected: 0,
+          recent: [],
+          available: false,
+          source: "unavailable"
         }
       };
     }

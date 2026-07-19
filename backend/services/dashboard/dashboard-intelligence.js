@@ -10,7 +10,7 @@ const { buildMorningBriefing } = require("../executive/morning-briefing");
 const { discoverKnowledge } = require("../knowledge/discovery-engine");
 const { getExecutiveBrain } = require("../../runtime/executive-runtime");
 
-async function getDashboardState() {
+async function getDashboardState(options = {}) {
   const timestamp = new Date().toISOString();
   const [
     greeting,
@@ -23,7 +23,7 @@ async function getDashboardState() {
     getAgenda(timestamp),
     getGmail(timestamp),
     getMemory(timestamp),
-    getAutomations(timestamp)
+    getAutomations(timestamp, options.approvalQueue)
   ]);
   const executiveStatus = getExecutiveStatus({
     operational: true,
