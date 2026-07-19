@@ -190,6 +190,8 @@ test('normalizes Calendar events by whitelist', () => {
     summary: 'Compromiso ficticio',
     start: '2026-07-03T10:00:00.000Z',
     end: '2026-07-03T11:00:00.000Z',
+    allDay: true,
+    location: 'Sala segura',
     description: 'secreto',
     htmlLink: 'https://calendar.example',
     token: 'secret-token',
@@ -197,8 +199,10 @@ test('normalizes Calendar events by whitelist', () => {
     attendees: [{ email: 'private@example.test' }],
   });
 
-  assert.deepEqual(Object.keys(event), ['id', 'title', 'start', 'end']);
+  assert.deepEqual(Object.keys(event), ['id', 'title', 'start', 'end', 'allDay', 'location']);
   assert.equal(event.title, 'Compromiso ficticio');
+  assert.equal(event.allDay, true);
+  assert.equal(event.location, 'Sala segura');
   assert.equal(JSON.stringify(event).includes('secret-token'), false);
   assert.equal(JSON.stringify(event).includes('private@example.test'), false);
 });

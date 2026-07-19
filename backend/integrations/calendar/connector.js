@@ -6,6 +6,7 @@ function normalizeEvent(event) {
     title: event.summary || "Sin titulo",
     start: (event.start && (event.start.dateTime || event.start.date)) || null,
     end: (event.end && (event.end.dateTime || event.end.date)) || null,
+    allDay: Boolean(event.start && event.start.date && !event.start.dateTime),
     location: event.location || null,
     source: "google-calendar"
   };

@@ -187,7 +187,7 @@ async function getDashboardState(options = {}) {
     automations
   ] = await Promise.all([
     getGreeting(timestamp),
-    getAgenda(timestamp),
+    getAgenda(timestamp, options.calendarReader),
     getGmail(timestamp, options.gmailReader),
     getMemory(timestamp),
     getAutomations(timestamp, options.approvalQueue)

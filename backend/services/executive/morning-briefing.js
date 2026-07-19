@@ -1,7 +1,7 @@
 'use strict';
 
 function getAgendaPriority(agenda) {
-  if (!agenda) {
+  if (!agenda || agenda.source !== 'calendar' || agenda.available !== true) {
     return null;
   }
 

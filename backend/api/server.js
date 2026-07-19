@@ -33,6 +33,7 @@ const {
 const { createExecutiveCsrf } = require("../security/executive-csrf");
 const { getClienteCeroIdentity } = require("../services/private-context/client-identity-resolver");
 const { buildGmailPrivateContext } = require("../services/private-context/gmail-private-provider");
+const { buildCalendarPrivateContext } = require("../services/private-context/calendar-private-provider");
 const {
   getSystem,
   getIntentAnalyzer,
@@ -74,6 +75,11 @@ const systemStateManager = new SystemStateManager();
 const dashboardGmailReader = () => buildGmailPrivateContext({
   ...getClienteCeroIdentity(),
   maxMessages: 5
+});
+const dashboardCalendarReader = () => buildCalendarPrivateContext({
+  ...getClienteCeroIdentity(),
+  range: "next7Days",
+  maxResults: 10
 });
 
 systemStateManager.updateIntegration(
@@ -676,7 +682,11 @@ if (req.url === "/api/status") {
 
 if (pathname === "/api/dashboard" && req.method === "GET") {
   try {
-    const dashboardState = await DashboardIntelligence.getDashboardState({ approvalQueue, gmailReader: dashboardGmailReader });
+    const dashboardState = await DashboardIntelligence.getDashboardState({
+      approvalQueue,
+      gmailReader: dashboardGmailReader,
+      calendarReader: dashboardCalendarReader
+    });
 
     return sendJson(res, 200, dashboardState);
   } catch (error) {

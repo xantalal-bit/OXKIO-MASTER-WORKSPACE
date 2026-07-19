@@ -123,6 +123,8 @@ function normalizeCalendarEvent(event = {}) {
     title: normalizeEventText(event.title || event.summary, 'Evento sin titulo'),
     start: isValidText(start) ? start.trim() : null,
     end: isValidText(end) ? end.trim() : null,
+    allDay: event.allDay === true,
+    location: isValidText(event.location) ? event.location.trim() : null,
   };
 }
 

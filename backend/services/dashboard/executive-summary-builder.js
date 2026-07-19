@@ -1,7 +1,12 @@
 function hasAgendaEvents(agenda) {
   const events = agenda && Array.isArray(agenda.events) ? agenda.events : [];
 
-  return Boolean(agenda && agenda.nextEvent) || events.length > 0;
+  return Boolean(
+    agenda
+    && agenda.source === "calendar"
+    && agenda.available === true
+    && events.length > 0
+  );
 }
 
 function hasPendingGmail(gmail) {

@@ -584,27 +584,12 @@
           <summary>
             <span>
               <h2>Agenda</h2>
-              <p class="meta">Hoy y próximos eventos.</p>
+              <p class="meta" data-agenda-summary>Agenda no disponible</p>
             </span>
-            <span class="badge">Pendiente</span>
+            <span class="badge" data-agenda-status>No disponible</span>
           </summary>
           <div class="collapsed-content">
-            <ul class="list">
-              <li class="item">
-                <div class="item-top">
-                  <span class="item-title">Revisión diaria</span>
-                  <span class="badge ok">Hoy</span>
-                </div>
-                <p class="item-text">Repasar prioridades, compromisos y próximos pasos.</p>
-              </li>
-              <li class="item">
-                <div class="item-top">
-                  <span class="item-title">Bloque de planificación</span>
-                  <span class="badge">Próximo</span>
-                </div>
-                <p class="item-text">Ordenar acciones de Cliente Cero y seguimiento operativo.</p>
-              </li>
-            </ul>
+            <ul class="list" data-agenda-events></ul>
           </div>
         </details>
 
@@ -914,15 +899,15 @@
     }
 
     function formatAgendaSourceBadge(source) {
-      if (source === "google-calendar") {
+      if (source === "calendar") {
         return "Google Calendar";
       }
 
-      if (source === "mock") {
-        return "Simulado";
+      if (source === "fallback") {
+        return "Datos de respaldo";
       }
 
-      return "Pendiente";
+      return "No disponible";
     }
 
     function formatAgendaDate(value) {
@@ -942,21 +927,60 @@
       });
     }
 
-    function formatAgendaItem(item, fallbackTitle, fallbackText) {
-      const formattedStart = formatAgendaDate(item && item.start);
+    function renderAgendaWidget(agenda) {
+      const panel = findPanelByTitle("Agenda");
+      if (!panel) return;
+      const status = panel.querySelector("[data-agenda-status]");
+      const summary = panel.querySelector("[data-agenda-summary]");
+      const eventList = panel.querySelector("[data-agenda-events]");
+      if (!eventList) return;
+      eventList.replaceChildren();
 
-      return {
-        title: textOrFallback(item && item.title, fallbackTitle),
-        badge: textOrFallback(item && (item.status || item.when || formattedStart), "Pendiente"),
-        text: textOrFallback(item && (item.description || formattedStart || item.start), fallbackText)
-      };
-    }
+      if (!agenda || agenda.source === "unavailable" || agenda.available !== true) {
+        setText(status, formatAgendaSourceBadge(agenda && agenda.source), "No disponible");
+        setText(
+          summary,
+          agenda && agenda.source === "fallback" ? "Datos de respaldo" : "Agenda no disponible",
+          "Agenda no disponible"
+        );
+        const unavailable = document.createElement("li");
+        unavailable.className = "item";
+        unavailable.textContent = agenda && agenda.source === "fallback"
+          ? "Datos de respaldo; no proceden de Google Calendar."
+          : "Agenda no disponible";
+        eventList.appendChild(unavailable);
+        return;
+      }
 
-    function updateListItem(itemElement, data) {
-      if (!itemElement) return;
-      setText(itemElement.querySelector(".item-title"), data.title, "Informacion no disponible");
-      setText(itemElement.querySelector(".badge"), data.badge, "No disponible");
-      setText(itemElement.querySelector(".item-text"), data.text, "Informacion no disponible");
+      setText(status, formatAgendaSourceBadge(agenda.source), "Google Calendar");
+      setText(summary, `${Number(agenda.count) || 0} eventos próximos`, "Agenda");
+      const events = Array.isArray(agenda.events) ? agenda.events.slice(0, 10) : [];
+      events.forEach((event) => {
+        const item = document.createElement("li");
+        item.className = "item";
+        const row = document.createElement("div");
+        row.className = "item-top";
+        const title = document.createElement("span");
+        title.className = "item-title";
+        title.textContent = textOrFallback(event && event.title, "Evento sin título");
+        const badge = document.createElement("span");
+        badge.className = "badge";
+        badge.textContent = event && event.allDay ? "Día completo" : "Con horario";
+        row.append(title, badge);
+        const date = document.createElement("p");
+        date.className = "item-text";
+        date.textContent = event && event.start
+          ? formatAgendaDate(event.start)
+          : "Fecha no disponible";
+        item.append(row, date);
+        if (event && event.location) {
+          const location = document.createElement("p");
+          location.className = "item-text";
+          location.textContent = event.location;
+          item.appendChild(location);
+        }
+        eventList.appendChild(item);
+      });
     }
 
     function updateSimpleItem(itemElement, title, text) {
@@ -1213,24 +1237,7 @@
         "Informacion no disponible"
       );
 
-      const agendaPanel = findPanelByTitle("Agenda");
-      const agendaItems = agendaPanel ? agendaPanel.querySelectorAll(".item") : [];
-      const agenda = state.agenda || {};
-      const events = Array.isArray(agenda.events) ? agenda.events : [];
-      const nextEvent = agenda.nextEvent || events[0] || null;
-      setText(
-        agendaPanel && agendaPanel.querySelector("summary .badge"),
-        formatAgendaSourceBadge(agenda.source),
-        "Pendiente"
-      );
-      updateListItem(
-        agendaItems[0],
-        formatAgendaItem(nextEvent, "Agenda no disponible", "No se pudo cargar la agenda.")
-      );
-      updateListItem(
-        agendaItems[1],
-        formatAgendaItem(events[1], "Sin proximos eventos", "No hay eventos cargados en este momento.")
-      );
+      renderAgendaWidget(state.agenda);
 
       renderGmailWidget(state.gmail);
 
@@ -1273,8 +1280,13 @@
           focus: "No se pudo cargar el estado del Dashboard. Intentalo de nuevo mas tarde."
         },
         agenda: {
-          today: [],
-          next: []
+          title: "Agenda",
+          events: [],
+          count: 0,
+          source: "unavailable",
+          available: false,
+          stale: false,
+          errorCode: "calendar_unavailable"
         },
         gmail: {
           unread: 0,
