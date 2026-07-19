@@ -1,3 +1,5 @@
+const DEGRADED_SOURCES = new Set(["mock", "fallback", "unavailable"]);
+
 function isWeekend(date) {
   const day = date.getDay();
 
@@ -34,19 +36,42 @@ function getSummary(daySegment, weekend) {
   return "Finaliza la jornada. Es un buen momento para preparar el día siguiente.";
 }
 
-function getExecutiveStatus() {
+function getHealth(availability) {
+  if (!availability || typeof availability !== "object") {
+    return "unknown";
+  }
+
+  if (availability.operational === false || availability.criticalError === true) {
+    return "critical";
+  }
+
+  if (availability.operational !== true) {
+    return "unknown";
+  }
+
+  const sources = Array.isArray(availability.sources) ? availability.sources : [];
+  const degraded = sources.some((source) => {
+    if (!source || typeof source !== "object") return true;
+    return source.available === false || DEGRADED_SOURCES.has(source.source);
+  });
+
+  return degraded ? "warning" : "healthy";
+}
+
+function getExecutiveStatus(availability) {
   const now = new Date();
   const daySegment = getDaySegment(now);
   const weekend = isWeekend(now);
-  const dayType = weekend ? "fin de semana" : "día laborable";
 
   return {
-    title: `Estado ejecutivo: ${dayType}, ${daySegment}`,
+    title: "Estado general",
     summary: getSummary(daySegment, weekend),
+    health: getHealth(availability),
     source: "system"
   };
 }
 
 module.exports = {
+  getHealth,
   getExecutiveStatus
 };

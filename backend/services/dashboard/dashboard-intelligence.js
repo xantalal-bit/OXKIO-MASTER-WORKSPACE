@@ -14,19 +14,21 @@ async function getDashboardState() {
   const timestamp = new Date().toISOString();
   const [
     greeting,
-    executiveStatus,
     agenda,
     gmail,
     memory,
     automations
   ] = await Promise.all([
     getGreeting(timestamp),
-    getExecutiveStatus(timestamp),
     getAgenda(timestamp),
     getGmail(timestamp),
     getMemory(timestamp),
     getAutomations(timestamp)
   ]);
+  const executiveStatus = getExecutiveStatus({
+    operational: true,
+    sources: [agenda, gmail, memory, automations]
+  });
 
   const dashboardState = {
     greeting,

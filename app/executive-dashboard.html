@@ -528,7 +528,7 @@
               <h2>Estado general</h2>
               <p class="meta">Resumen operativo inicial para uso diario.</p>
             </div>
-            <span class="badge ok">Activo</span>
+            <span class="badge">No disponible</span>
           </div>
           <p class="executive-summary">Hoy tienes compromisos próximos que conviene revisar y Business Hunter continúa siendo la prioridad operativa.</p>
         </article>
@@ -778,12 +778,25 @@
 
     function formatStatus(status) {
       const labels = {
-        READY: "Activo",
-        UNAVAILABLE: "No disponible",
-        SAFE_AGGREGATION_ONLY: "Agregacion segura"
+        healthy: "Operativo",
+        warning: "Atención",
+        critical: "Crítico",
+        unknown: "No disponible"
       };
 
-      return labels[status] || textOrFallback(status, "No disponible");
+      return labels[status] || labels.unknown;
+    }
+
+    function updateStatusBadge(badge, status) {
+      if (!badge) return;
+      const classes = {
+        healthy: "ok",
+        warning: "warn",
+        critical: "danger"
+      };
+      badge.classList.remove("ok", "warn", "danger");
+      if (classes[status]) badge.classList.add(classes[status]);
+      badge.textContent = formatStatus(status);
     }
 
     function formatAgendaSourceBadge(source) {
@@ -920,15 +933,13 @@
       );
 
       const statusPanel = findPanelByTitle("Estado general");
-      setText(
+      updateStatusBadge(
         statusPanel && statusPanel.querySelector(".badge"),
-        state.executiveStatus && formatStatus(state.executiveStatus.health),
-        "No disponible"
+        state.executiveStatus && state.executiveStatus.health
       );
       setText(
         statusPanel && statusPanel.querySelector(".executive-summary"),
-        (executiveResponse && executiveResponse.message) ||
-          (state.executiveStatus && (state.executiveStatus.focus || state.executiveStatus.summary)),
+        state.executiveStatus && state.executiveStatus.summary,
         "Informacion no disponible"
       );
 
@@ -1028,7 +1039,7 @@
           text: "Informacion no disponible"
         },
         executiveStatus: {
-          health: "UNAVAILABLE",
+          health: "unknown",
           focus: "No se pudo cargar el estado del Dashboard. Intentalo de nuevo mas tarde."
         },
         agenda: {
