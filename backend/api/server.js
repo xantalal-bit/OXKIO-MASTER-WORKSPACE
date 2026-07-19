@@ -5,7 +5,7 @@ const ProposalEngine = require("../core/proposalEngine");
 const ApprovalQueue = require("../core/approvalQueue");
 const { ExecutionAdapter } = require("../services/execution/execution-adapter");
 const { ExecutionService } = require("../services/execution/execution-service");
-const { GmailDraftProvider } = require("../services/execution/providers/gmail-draft-provider");
+const { createAuthorizedGmailDraftProvider } = require("../services/execution/gmail-draft-provider-factory");
 const ActionExecutor = require("../core/actionExecutor");
 const ExecutionLogger = require("../core/executionLogger");
 const GmailConnector = require("../integrations/gmail/connector");
@@ -37,7 +37,9 @@ const {
 } = require("../runtime/executive-runtime");
 const {
   getAuthUrl,
-  getTokens
+  getTokens,
+  getGmailClient,
+  inspectGoogleOAuthReadiness
 } = require("../integrations/googleOAuth");
 
 const system = getSystem();
@@ -47,11 +49,14 @@ const executiveBrain = getExecutiveBrain();
 const proposalEngine = new ProposalEngine();
 const approvalQueue = new ApprovalQueue();
 const executionConfig = Object.freeze({ executionEnabled: false });
-const gmailDraftProvider = new GmailDraftProvider({
-  gmail: null,
-  mode: "SAFE_DRAFT_ONLY",
-  allowRealSend: false
+const gmailDraftComposition = createAuthorizedGmailDraftProvider({
+  executionEnabled: executionConfig.executionEnabled,
+  oauthReadiness: executionConfig.executionEnabled
+    ? inspectGoogleOAuthReadiness()
+    : null,
+  getGmailClient
 });
+const gmailDraftProvider = gmailDraftComposition.provider;
 const executionAdapter = new ExecutionAdapter({ emailProvider: gmailDraftProvider });
 const executionService = new ExecutionService({ approvalQueue, executionAdapter });
 const universalKnowledgeSupervisor = new UniversalKnowledgeSupervisor({ approvalQueue });
