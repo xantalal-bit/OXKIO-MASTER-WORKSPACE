@@ -3,6 +3,9 @@ const EmailWorkflow = require("../workflows/emailWorkflow");
 const EmailAgent = require("../agents/emailAgent");
 const ProposalEngine = require("../core/proposalEngine");
 const ApprovalQueue = require("../core/approvalQueue");
+const { ExecutionAdapter } = require("../services/execution/execution-adapter");
+const { ExecutionService } = require("../services/execution/execution-service");
+const { GmailDraftProvider } = require("../services/execution/providers/gmail-draft-provider");
 const ActionExecutor = require("../core/actionExecutor");
 const ExecutionLogger = require("../core/executionLogger");
 const GmailConnector = require("../integrations/gmail/connector");
@@ -43,6 +46,14 @@ const ruleEngine = getRuleEngine();
 const executiveBrain = getExecutiveBrain();
 const proposalEngine = new ProposalEngine();
 const approvalQueue = new ApprovalQueue();
+const executionConfig = Object.freeze({ executionEnabled: false });
+const gmailDraftProvider = new GmailDraftProvider({
+  gmail: null,
+  mode: "SAFE_DRAFT_ONLY",
+  allowRealSend: false
+});
+const executionAdapter = new ExecutionAdapter({ emailProvider: gmailDraftProvider });
+const executionService = new ExecutionService({ approvalQueue, executionAdapter });
 const universalKnowledgeSupervisor = new UniversalKnowledgeSupervisor({ approvalQueue });
 const executionLogger = new ExecutionLogger();
 const actionExecutor = new ActionExecutor();
@@ -1061,7 +1072,11 @@ if (pathname === "/api/approval-history" && req.method === "GET") {
   return;
 }
 if (pathname === "/api/execute-approved") {
-  return handleExecuteApprovedRequest(req, res, { approvalQueue });
+  return handleExecuteApprovedRequest(req, res, {
+    approvalQueue,
+    executionService,
+    config: executionConfig
+  });
 }
 if (req.url.startsWith("/api/execution-logs")) {
 

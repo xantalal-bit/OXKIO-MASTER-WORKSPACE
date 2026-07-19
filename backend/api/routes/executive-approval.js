@@ -1,7 +1,5 @@
 'use strict';
 
-const EXECUTION_ENABLED = false;
-
 function sendJson(res, statusCode, payload, extraHeaders = {}) {
   res.writeHead(statusCode, {
     'Content-Type': 'application/json; charset=utf-8',
@@ -42,6 +40,18 @@ function getApprovalId(body) {
 
 function statusForQueueError(result) {
   if (result && result.code === 'approval_not_found') return 404;
+  return 409;
+}
+
+function statusForExecutionResult(result) {
+  if (result && result.ok === true) return 200;
+  if (result && result.status === 'execution_failed') {
+    return result.error && result.error.retryable === true ? 503 : 502;
+  }
+
+  const code = result && result.error && result.error.code;
+  if (code === 'approval_not_found') return 404;
+  if (code === 'invalid_approval_id') return 400;
   return 409;
 }
 
@@ -118,7 +128,11 @@ async function handleApproveRequest(req, res, { approvalQueue }) {
   }
 }
 
-async function handleExecuteApprovedRequest(req, res, { approvalQueue }) {
+async function handleExecuteApprovedRequest(req, res, {
+  approvalQueue,
+  executionService,
+  config = { executionEnabled: false },
+}) {
   if (!validatePostJson(req, res)) return;
 
   try {
@@ -133,16 +147,16 @@ async function handleExecuteApprovedRequest(req, res, { approvalQueue }) {
       });
     }
 
-    const validation = approvalQueue.validateForExecution(approvalId);
-    if (!validation.ok) {
-      return sendJson(res, statusForQueueError(validation), {
-        ok: false,
-        code: validation.code || 'invalid_transition',
-        message: validation.error || 'Approval is not ready for execution.',
-      });
-    }
+    if (config.executionEnabled !== true) {
+      const validation = approvalQueue.validateForExecution(approvalId);
+      if (!validation.ok) {
+        return sendJson(res, statusForQueueError(validation), {
+          ok: false,
+          code: validation.code || 'invalid_transition',
+          message: 'Approval is not ready for execution.',
+        });
+      }
 
-    if (!EXECUTION_ENABLED) {
       return sendJson(res, 503, {
         ok: false,
         code: 'execution_disabled',
@@ -150,11 +164,8 @@ async function handleExecuteApprovedRequest(req, res, { approvalQueue }) {
       });
     }
 
-    return sendJson(res, 503, {
-      ok: false,
-      code: 'execution_disabled',
-      message: 'Execution is not enabled.',
-    });
+    const result = await executionService.executeApproved(approvalId);
+    return sendJson(res, statusForExecutionResult(result), result);
   } catch (error) {
     if (error && error.message === 'invalid_json') {
       return sendJson(res, 400, {
@@ -175,4 +186,5 @@ async function handleExecuteApprovedRequest(req, res, { approvalQueue }) {
 module.exports = {
   handleApproveRequest,
   handleExecuteApprovedRequest,
+  statusForExecutionResult,
 };

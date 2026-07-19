@@ -8,6 +8,9 @@ const path = require('node:path');
 const test = require('node:test');
 
 const ApprovalQueue = require('../../core/approvalQueue');
+const { ExecutionAdapter } = require('../../services/execution/execution-adapter');
+const { ExecutionService } = require('../../services/execution/execution-service');
+const { GmailDraftProvider } = require('../../services/execution/providers/gmail-draft-provider');
 const {
   handleApproveRequest,
   handleExecuteApprovedRequest,
@@ -38,7 +41,26 @@ function addEmailApproval(queue, interactionId = 'interaction-api') {
   });
 }
 
-function request(handler, queue, { method = 'POST', body, contentType = 'application/json' } = {}) {
+function addExecutableEmailApproval(queue, interactionId = 'interaction-api-execution') {
+  return queue.add({
+    type: 'email_draft',
+    summary: 'Borrador ejecutable',
+    requiresApproval: true,
+  }, { interactionId }, {
+    to: 'recipient@example.com',
+    subject: 'Asunto interno',
+    body: 'Cuerpo interno',
+    replyMessageId: null,
+    threadId: null,
+  });
+}
+
+function request(handler, queue, {
+  method = 'POST',
+  body,
+  contentType = 'application/json',
+  dependencies = {},
+} = {}) {
   const req = new EventEmitter();
   req.method = method;
   req.headers = contentType ? { 'content-type': contentType } : {};
@@ -61,12 +83,56 @@ function request(handler, queue, { method = 'POST', body, contentType = 'applica
       },
     };
 
-    Promise.resolve(handler(req, res, { approvalQueue: queue })).catch(reject);
+    Promise.resolve(handler(req, res, { approvalQueue: queue, ...dependencies })).catch(reject);
     process.nextTick(() => {
       if (body !== undefined) req.emit('data', Buffer.from(typeof body === 'string' ? body : JSON.stringify(body)));
       req.emit('end');
     });
   });
+}
+
+function buildFakeExecution(queue, behavior = 'success') {
+  const calls = [];
+  const gmail = {
+    users: {
+      drafts: {
+        async create(input) {
+          calls.push(input);
+          if (behavior === '429') throw { response: { status: 429 } };
+          if (behavior === '401') throw { response: { status: 401 } };
+          if (behavior === '403') throw { response: { status: 403 } };
+          return { data: { id: 'api-fake-draft', message: { id: 'api-fake-message' } } };
+        },
+      },
+    },
+  };
+  const provider = new GmailDraftProvider({
+    gmail,
+    mode: 'SAFE_DRAFT_ONLY',
+    allowRealSend: false,
+  });
+  const executionAdapter = new ExecutionAdapter({ emailProvider: provider });
+  return {
+    calls,
+    dependencies: {
+      executionService: new ExecutionService({ approvalQueue: queue, executionAdapter }),
+      config: { executionEnabled: true },
+    },
+  };
+}
+
+function assertSafeExecutionResponse(response) {
+  const serialized = JSON.stringify(response.json);
+  [
+    'executionPayload',
+    'payloadHash',
+    'Asunto interno',
+    'Cuerpo interno',
+    'attacker@example.com',
+    'private-token',
+    'stack',
+    'Content-Type:',
+  ].forEach((value) => assert.equal(serialized.includes(value), false));
 }
 
 test('POST /api/approve approves pending item and ignores client-controlled fields', async () => {
@@ -140,12 +206,17 @@ test('POST /api/execute-approved validates but remains disabled without state ch
     const added = addEmailApproval(queue, 'interaction-disabled');
     queue.approve(added.id);
     const before = fs.readFileSync(dataFile, 'utf8');
+    let serviceCalls = 0;
     const response = await request(handleExecuteApprovedRequest, queue, {
       body: {
         approvalId: added.id,
         executionPayload: { to: 'attacker@example.com' },
         payloadHash: 'attacker-hash',
         executionEnabled: true,
+      },
+      dependencies: {
+        executionService: { executeApproved() { serviceCalls += 1; } },
+        config: { executionEnabled: false },
       },
     });
 
@@ -157,7 +228,169 @@ test('POST /api/execute-approved validates but remains disabled without state ch
     });
     assert.equal(queue.getInternalById(added.id).status, 'approved');
     assert.equal(Object.hasOwn(queue.getInternalById(added.id), 'executionId'), false);
+    assert.equal(serviceCalls, 0);
     assert.equal(fs.readFileSync(dataFile, 'utf8'), before);
+  });
+});
+
+test('internally enabled POST executes approved email once with correlated safe response', async () => {
+  await withTemporaryQueue(async (queue, dataFile) => {
+    const added = addExecutableEmailApproval(queue, 'interaction-api-enabled');
+    queue.approve(added.id);
+    const fake = buildFakeExecution(queue);
+    const response = await request(handleExecuteApprovedRequest, queue, {
+      body: {
+        approvalId: added.id,
+        executionEnabled: false,
+        executionPayload: { to: 'attacker@example.com' },
+        payloadHash: 'attacker-hash',
+        actionType: 'create_task_proposal',
+        provider: 'attacker-provider',
+        interactionId: 'attacker-interaction',
+        executionId: 'attacker-execution',
+        status: 'executed',
+      },
+      dependencies: fake.dependencies,
+    });
+    const stored = JSON.parse(fs.readFileSync(dataFile, 'utf8')).history.find((item) => item.id === added.id);
+
+    assert.equal(response.statusCode, 200);
+    assert.equal(response.headers['Cache-Control'], 'no-store');
+    assert.equal(fake.calls.length, 1);
+    assert.equal(response.json.ok, true);
+    assert.equal(response.json.approvalId, added.id);
+    assert.equal(response.json.interactionId, 'interaction-api-enabled');
+    assert.equal(response.json.executionId, stored.executionId);
+    assert.equal(response.json.result.externalId, 'api-fake-draft');
+    assert.equal(response.json.result.secondaryExternalId, 'api-fake-message');
+    assert.equal(stored.status, 'executed');
+    assert.equal(stored.executionPayload.to, 'recipient@example.com');
+    assert.notEqual(stored.payloadHash, 'attacker-hash');
+    assertSafeExecutionResponse(response);
+  });
+});
+
+for (const failureCase of [
+  { behavior: '429', statusCode: 503, code: 'gmail_rate_limited', retryable: true },
+  { behavior: '401', statusCode: 502, code: 'gmail_unauthorized', retryable: false },
+  { behavior: '403', statusCode: 502, code: 'gmail_unauthorized', retryable: false },
+]) {
+  test(`maps fake Gmail ${failureCase.behavior} to safe HTTP failure`, async () => {
+    await withTemporaryQueue(async (queue) => {
+      const added = addExecutableEmailApproval(queue);
+      queue.approve(added.id);
+      const fake = buildFakeExecution(queue, failureCase.behavior);
+      const response = await request(handleExecuteApprovedRequest, queue, {
+        body: { approvalId: added.id },
+        dependencies: fake.dependencies,
+      });
+
+      assert.equal(response.statusCode, failureCase.statusCode);
+      assert.equal(fake.calls.length, 1);
+      assert.equal(response.json.status, 'execution_failed');
+      assert.deepEqual(response.json.error, {
+        code: failureCase.code,
+        retryable: failureCase.retryable,
+      });
+      assert.equal(queue.getInternalById(added.id).status, 'execution_failed');
+      assertSafeExecutionResponse(response);
+    });
+  });
+}
+
+test('invalid execution states and tampered payload never call fake Gmail', async () => {
+  await withTemporaryQueue(async (queue) => {
+    const pending = addEmailApproval(queue, 'pending');
+    const rejected = addEmailApproval(queue, 'rejected');
+    const executing = addEmailApproval(queue, 'executing');
+    const executed = addEmailApproval(queue, 'executed');
+    const tampered = addEmailApproval(queue, 'tampered');
+    queue.reject(rejected.id);
+    queue.approve(executing.id);
+    queue.beginExecution(executing.id);
+    queue.approve(executed.id);
+    const begun = queue.beginExecution(executed.id);
+    queue.completeExecution(executed.id, {
+      executionId: begun.executionId,
+      result: { type: 'email_draft', mode: 'SAFE_DRAFT_ONLY' },
+    });
+    queue.approve(tampered.id);
+    queue.history.find((item) => item.id === tampered.id).executionPayload.body = 'tampered';
+    const fake = buildFakeExecution(queue);
+
+    for (const id of [pending.id, rejected.id, executing.id, executed.id, tampered.id, 'missing']) {
+      const response = await request(handleExecuteApprovedRequest, queue, {
+        body: { approvalId: id },
+        dependencies: fake.dependencies,
+      });
+      assert.equal([404, 409].includes(response.statusCode), true);
+      assertSafeExecutionResponse(response);
+    }
+    assert.equal(fake.calls.length, 0);
+  });
+
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'oxkio-api-old-record-'));
+  const dataFile = path.join(directory, 'approvalQueue.json');
+  fs.writeFileSync(dataFile, JSON.stringify({
+    pending: [],
+    history: [{
+      id: 'old-approved',
+      status: 'approved',
+      proposal: { type: 'email_draft' },
+      context: {},
+    }],
+  }));
+  try {
+    const queue = new ApprovalQueue({ dataFile });
+    const fake = buildFakeExecution(queue);
+    const response = await request(handleExecuteApprovedRequest, queue, {
+      body: { approvalId: 'old-approved' },
+      dependencies: fake.dependencies,
+    });
+    assert.equal(response.statusCode, 409);
+    assert.equal(response.json.error.code, 'execution_payload_unavailable');
+    assert.equal(fake.calls.length, 0);
+  } finally {
+    fs.rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test('two enabled POST calls invoke fake Gmail at most once', async () => {
+  await withTemporaryQueue(async (queue) => {
+    const added = addExecutableEmailApproval(queue);
+    queue.approve(added.id);
+    const fake = buildFakeExecution(queue);
+    const options = { body: { approvalId: added.id }, dependencies: fake.dependencies };
+
+    const first = await request(handleExecuteApprovedRequest, queue, options);
+    const second = await request(handleExecuteApprovedRequest, queue, options);
+
+    assert.equal(first.statusCode, 200);
+    assert.equal(second.statusCode, 409);
+    assert.equal(fake.calls.length, 1);
+    assertSafeExecutionResponse(second);
+  });
+});
+
+test('execute route validates method, JSON, and approvalId before dependencies', async () => {
+  await withTemporaryQueue(async (queue) => {
+    const invalidId = await request(handleExecuteApprovedRequest, queue, { body: {} });
+    const invalidJson = await request(handleExecuteApprovedRequest, queue, { body: '{' });
+    const invalidType = await request(handleExecuteApprovedRequest, queue, {
+      body: { approvalId: 'id' },
+      contentType: 'text/plain',
+    });
+    const get = await request(handleExecuteApprovedRequest, queue, {
+      method: 'GET',
+      contentType: null,
+    });
+
+    assert.equal(invalidId.statusCode, 400);
+    assert.equal(invalidJson.statusCode, 400);
+    assert.equal(invalidType.statusCode, 400);
+    assert.equal(get.statusCode, 405);
+    assert.equal(get.headers.Allow, 'POST');
+    assert.equal(get.headers['Cache-Control'], 'no-store');
   });
 });
 
