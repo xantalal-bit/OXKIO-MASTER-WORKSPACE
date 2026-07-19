@@ -10,7 +10,8 @@ function hasAgendaEvents(agenda) {
 }
 
 function hasPendingGmail(gmail) {
-  const inbox = gmail && gmail.inbox ? gmail.inbox : gmail || {};
+  if (!gmail || gmail.available !== true || gmail.source !== "gmail") return false;
+  const inbox = gmail.inbox || gmail;
 
   return Number(inbox.unread || 0) > 0
     || Number(inbox.priority || inbox.important || 0) > 0
@@ -19,21 +20,13 @@ function hasPendingGmail(gmail) {
 
 function getAutomationAlerts(automations) {
   const alerts = [];
-  const active = automations && Array.isArray(automations.active)
-    ? automations.active
-    : [];
-  const pendingApproval = Number((automations && automations.pendingApproval) || 0);
-  const incidents = active.filter((automation) => {
-    const status = String((automation && automation.status) || "").toLowerCase();
-    return ["incident", "error", "failed", "blocked"].includes(status);
-  });
-
-  if (incidents.length > 0) {
-    alerts.push("Hay incidencias en automatizaciones activas.");
-  }
-
-  if (pendingApproval > 0) {
-    alerts.push("Hay automatizaciones pendientes de aprobacion.");
+  if (
+    automations
+    && automations.available === true
+    && automations.source === "approval-queue"
+    && Number(automations.failed || 0) > 0
+  ) {
+    alerts.push("Hay compromisos con ejecución fallida.");
   }
 
   return alerts;
@@ -48,10 +41,10 @@ function buildExecutiveSummary(dashboardState) {
   return {
     priority: hasAgenda
       ? "Revisar agenda."
-      : "Mantener seguimiento operativo.",
+      : null,
     recommendation: hasGmail
       ? "Revisar correo."
-      : "Continuar con el foco ejecutivo actual.",
+      : null,
     alerts
   };
 }

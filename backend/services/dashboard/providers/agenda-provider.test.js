@@ -123,12 +123,16 @@ test('fallback and unavailable agenda are never represented as real briefing fac
     events: [{ title: 'Real event' }],
   };
 
-  assert.equal(buildExecutiveSummary({ agenda: degraded }).priority, 'Mantener seguimiento operativo.');
+  assert.equal(buildExecutiveSummary({ agenda: degraded }).priority, null);
   assert.equal(buildExecutiveSummary({ agenda: real }).priority, 'Revisar agenda.');
   assert.deepEqual(buildMorningBriefing({ agenda: degraded }).priorities, []);
-  assert.deepEqual(buildMorningBriefing({ agenda: real }).priorities, [
-    'Revisar agenda: 1 eventos pendientes.',
-  ]);
+  assert.deepEqual(buildMorningBriefing({ agenda: real }).priorities, [{
+    type: 'calendar',
+    title: 'Revisar agenda',
+    detail: '1 evento próximo.',
+    source: 'calendar',
+    confidence: 'high',
+  }]);
   assert.equal(getExecutiveStatus({ operational: true, sources: [degraded] }).health, 'warning');
   assert.equal(getExecutiveStatus({
     operational: true,

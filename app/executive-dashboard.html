@@ -505,16 +505,21 @@
             </div>
             <span class="badge ok">Briefing</span>
           </div>
-          <p class="item-title" data-morning-briefing-title>Buenos días, José Antonio</p>
+          <p class="item-title" data-morning-briefing-title>Resumen ejecutivo del día</p>
           <p class="executive-summary" data-morning-briefing-summary>Información no disponible</p>
           <div data-morning-briefing-priorities-block hidden>
             <p class="meta">Prioridades</p>
             <ul class="list" data-morning-briefing-priorities></ul>
           </div>
-          <div data-morning-briefing-recommendations-block hidden>
-            <p class="meta">Recomendaciones</p>
-            <ul class="list" data-morning-briefing-recommendations></ul>
+          <div data-morning-briefing-alerts-block hidden>
+            <p class="meta">Alertas</p>
+            <ul class="list" data-morning-briefing-alerts></ul>
           </div>
+          <div data-morning-briefing-sources-block hidden>
+            <p class="meta">Fuentes</p>
+            <ul class="list" data-morning-briefing-sources></ul>
+          </div>
+          <p class="meta" data-morning-briefing-generated></p>
         </article>
 
         <article class="panel span-12 greeting">
@@ -1150,7 +1155,7 @@
 
     function renderTextList(listElement, blockElement, values) {
       if (!listElement || !blockElement) return;
-      listElement.innerHTML = "";
+      listElement.replaceChildren();
 
       if (!Array.isArray(values) || values.length === 0) {
         blockElement.hidden = true;
@@ -1159,14 +1164,46 @@
 
       values.forEach((value) => {
         const item = document.createElement("li");
-        item.className = "item";
+        item.className = value && value.message ? "item briefing-alert" : "item briefing-priority";
+        if (value && typeof value === "object" && value.title) {
+          const title = document.createElement("p");
+          title.className = "item-title";
+          title.textContent = textOrFallback(value.title, "Prioridad");
+          item.appendChild(title);
+        }
         const text = document.createElement("p");
         text.className = "item-text";
-        text.textContent = textOrFallback(value, "Información no disponible");
+        text.textContent = textOrFallback(
+          typeof value === "string" ? value : value && (value.detail || value.message),
+          "Información no disponible"
+        );
         item.appendChild(text);
         listElement.appendChild(item);
       });
 
+      blockElement.hidden = false;
+    }
+
+    function renderBriefingSources(listElement, blockElement, sourceStatus) {
+      if (!listElement || !blockElement) return;
+      listElement.replaceChildren();
+      const labels = {
+        gmail: "Gmail",
+        calendar: "Calendar",
+        approvals: "Aprobaciones",
+        memory: "Memoria",
+        ecosystem: "Ecosistema"
+      };
+      const statusLabels = { real: "Real", partial: "Parcial", unavailable: "No disponible" };
+      Object.entries(labels).forEach(([key, label]) => {
+        const item = document.createElement("li");
+        item.className = "item";
+        const text = document.createElement("p");
+        text.className = "item-text";
+        text.textContent = `${label}: ${statusLabels[sourceStatus && sourceStatus[key]] || "No disponible"}`;
+        item.appendChild(text);
+        listElement.appendChild(item);
+      });
       blockElement.hidden = false;
     }
 
@@ -1178,7 +1215,7 @@
       setText(
         card.querySelector("[data-morning-briefing-title]"),
         briefing.title,
-        "Buenos días, José Antonio"
+        "Resumen ejecutivo del día"
       );
       setText(
         card.querySelector("[data-morning-briefing-summary]"),
@@ -1191,9 +1228,19 @@
         briefing.priorities
       );
       renderTextList(
-        card.querySelector("[data-morning-briefing-recommendations]"),
-        card.querySelector("[data-morning-briefing-recommendations-block]"),
-        briefing.recommendations
+        card.querySelector("[data-morning-briefing-alerts]"),
+        card.querySelector("[data-morning-briefing-alerts-block]"),
+        briefing.alerts
+      );
+      renderBriefingSources(
+        card.querySelector("[data-morning-briefing-sources]"),
+        card.querySelector("[data-morning-briefing-sources-block]"),
+        briefing.sourceStatus
+      );
+      setText(
+        card.querySelector("[data-morning-briefing-generated]"),
+        briefing.generatedAt ? `Generado: ${formatAgendaDate(briefing.generatedAt)}` : null,
+        ""
       );
     }
 
