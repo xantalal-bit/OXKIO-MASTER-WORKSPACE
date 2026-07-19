@@ -192,9 +192,11 @@ async function getDashboardState(options = {}) {
     getMemory(timestamp),
     getAutomations(timestamp, options.approvalQueue)
   ]);
+  const knowledgeInventory = discoverKnowledge();
+  const ecosystem = buildEcosystemView(knowledgeInventory);
   const executiveStatus = getExecutiveStatus({
     operational: true,
-    sources: [agenda, gmail, memory, automations]
+    sources: [agenda, gmail, memory, automations, ecosystem]
   });
 
   const dashboardState = {
@@ -214,8 +216,6 @@ async function getDashboardState(options = {}) {
     executiveBrain: getExecutiveBrain(),
     dashboardState: dashboardStateWithSummary
   });
-  const knowledgeInventory = discoverKnowledge();
-  const ecosystem = buildEcosystemView(knowledgeInventory);
   const dashboardStateWithIntelligence = {
     ...dashboardStateWithSummary,
     executiveBriefing,

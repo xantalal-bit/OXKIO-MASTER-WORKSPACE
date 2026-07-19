@@ -1,4 +1,23 @@
 const DEGRADED_SOURCES = new Set(["mock", "fallback", "unavailable"]);
+const ECOSYSTEM_KEYS = ["businessHunter", "xose", "ecosystem"];
+
+function isDegradedSource(source) {
+  if (!source || typeof source !== "object") return true;
+
+  if (ECOSYSTEM_KEYS.some((key) => Object.prototype.hasOwnProperty.call(source, key))) {
+    return ECOSYSTEM_KEYS.some((key) => {
+      const entry = source[key];
+      return !entry
+        || typeof entry !== "object"
+        || entry.available !== true
+        || entry.source !== "knowledge-inventory"
+        || ["partial", "unknown"].includes(entry.status);
+    });
+  }
+
+  if (typeof source.source !== "string" || !source.source) return true;
+  return source.available === false || DEGRADED_SOURCES.has(source.source);
+}
 
 function isWeekend(date) {
   const day = date.getDay();
@@ -50,10 +69,8 @@ function getHealth(availability) {
   }
 
   const sources = Array.isArray(availability.sources) ? availability.sources : [];
-  const degraded = sources.some((source) => {
-    if (!source || typeof source !== "object") return true;
-    return source.available === false || DEGRADED_SOURCES.has(source.source);
-  });
+  if (sources.length === 0) return "unknown";
+  const degraded = sources.some(isDegradedSource);
 
   return degraded ? "warning" : "healthy";
 }
