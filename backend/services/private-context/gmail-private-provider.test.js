@@ -150,13 +150,15 @@ test('normalizes Gmail messages by whitelist', () => {
     attachments: [{ filename: 'secret.pdf' }],
   }));
 
-  assert.deepEqual(Object.keys(message), ['id', 'threadId', 'from', 'subject', 'date', 'snippet']);
+  assert.deepEqual(Object.keys(message), ['id', 'threadId', 'from', 'subject', 'date', 'snippet', 'unread', 'important']);
   assert.equal(message.id, 'message-1');
   assert.equal(message.threadId, 'thread-1');
   assert.equal(message.from, 'Cliente Ficticio <cliente@example.test>');
   assert.equal(message.subject, 'Asunto privado ficticio');
   assert.equal(message.date, 'Sat, 04 Jul 2026 10:00:00 +0200');
   assert.equal(message.snippet, 'Snippet privado ficticio');
+  assert.equal(message.unread, false);
+  assert.equal(message.important, false);
   assert.equal(JSON.stringify(message).includes('secret-token'), false);
   assert.equal(JSON.stringify(message).includes('secret-raw-message'), false);
   assert.equal(JSON.stringify(message).includes('secret.pdf'), false);
@@ -244,5 +246,5 @@ test('real Gmail readonly reader uses metadata-only Gmail API calls', async () =
     metadataHeaders: ['From', 'Subject', 'Date'],
   });
   assert.equal(messages.length, 2);
-  assert.deepEqual(Object.keys(messages[0]), ['id', 'threadId', 'from', 'subject', 'date', 'snippet']);
+  assert.deepEqual(Object.keys(messages[0]), ['id', 'threadId', 'from', 'subject', 'date', 'snippet', 'unread', 'important']);
 });

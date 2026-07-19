@@ -32,6 +32,7 @@ const {
 } = require("./routes/executive-approval");
 const { createExecutiveCsrf } = require("../security/executive-csrf");
 const { getClienteCeroIdentity } = require("../services/private-context/client-identity-resolver");
+const { buildGmailPrivateContext } = require("../services/private-context/gmail-private-provider");
 const {
   getSystem,
   getIntentAnalyzer,
@@ -70,6 +71,10 @@ const gmailConnector = new GmailConnector();
 gmailConnector.connect();
 const workflowManager = new WorkflowManager();
 const systemStateManager = new SystemStateManager();
+const dashboardGmailReader = () => buildGmailPrivateContext({
+  ...getClienteCeroIdentity(),
+  maxMessages: 5
+});
 
 systemStateManager.updateIntegration(
     "gmail",
@@ -671,7 +676,7 @@ if (req.url === "/api/status") {
 
 if (pathname === "/api/dashboard" && req.method === "GET") {
   try {
-    const dashboardState = await DashboardIntelligence.getDashboardState({ approvalQueue });
+    const dashboardState = await DashboardIntelligence.getDashboardState({ approvalQueue, gmailReader: dashboardGmailReader });
 
     return sendJson(res, 200, dashboardState);
   } catch (error) {

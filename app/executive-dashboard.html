@@ -626,21 +626,13 @@
           <summary>
             <span>
               <h2>Gmail</h2>
-              <p class="meta">Resumen estático sin integración real.</p>
+              <p class="meta" data-gmail-summary>Gmail no disponible</p>
             </span>
-            <span class="badge">Base</span>
+            <span class="badge" data-gmail-status>No disponible</span>
           </summary>
           <div class="collapsed-content">
-            <ul class="list">
-              <li class="item">
-                <span class="item-title">Correos relevantes</span>
-                <p class="item-text">Pendiente de conectar cuando exista autorización.</p>
-              </li>
-              <li class="item">
-                <span class="item-title">Respuestas pendientes</span>
-                <p class="item-text">Vista preparada para alertas futuras.</p>
-              </li>
-            </ul>
+            <div class="commitments" data-gmail-counts></div>
+            <ul class="list" data-gmail-recent></ul>
           </div>
         </details>
 
@@ -1046,6 +1038,77 @@
       });
     }
 
+    function renderGmailCount(container, title, value) {
+      const item = document.createElement("div");
+      item.className = "item commitment";
+      const row = document.createElement("div");
+      row.className = "item-top";
+      const label = document.createElement("span");
+      label.className = "item-title";
+      label.textContent = title;
+      const badge = document.createElement("span");
+      badge.className = "badge";
+      badge.textContent = String(Number(value) || 0);
+      row.append(label, badge);
+      item.appendChild(row);
+      container.appendChild(item);
+    }
+
+    function renderGmailWidget(gmail) {
+      const panel = findPanelByTitle("Gmail");
+      if (!panel) return;
+      const status = panel.querySelector("[data-gmail-status]");
+      const summary = panel.querySelector("[data-gmail-summary]");
+      const counts = panel.querySelector("[data-gmail-counts]");
+      const recentList = panel.querySelector("[data-gmail-recent]");
+      if (!counts || !recentList) return;
+      counts.replaceChildren();
+      recentList.replaceChildren();
+
+      if (!gmail || gmail.available !== true || gmail.source !== "gmail") {
+        setText(status, "No disponible", "No disponible");
+        setText(summary, "Gmail no disponible", "Gmail no disponible");
+        const unavailable = document.createElement("li");
+        unavailable.className = "item";
+        unavailable.textContent = "Gmail no disponible";
+        recentList.appendChild(unavailable);
+        return;
+      }
+
+      setText(status, "Solo lectura", "Solo lectura");
+      setText(summary, "Bandeja reciente de Gmail", "Gmail");
+      renderGmailCount(counts, "No leídos", gmail.unread);
+      renderGmailCount(counts, "Importantes", gmail.important);
+      renderGmailCount(counts, "Recientes", gmail.recentCount);
+
+      const recent = Array.isArray(gmail.recent) ? gmail.recent.slice(0, 5) : [];
+      recent.forEach((message) => {
+        const item = document.createElement("li");
+        item.className = "item";
+        const row = document.createElement("div");
+        row.className = "item-top";
+        const sender = document.createElement("span");
+        sender.className = "item-title";
+        sender.textContent = textOrFallback(message && message.from, "Remitente no disponible");
+        const flags = document.createElement("span");
+        flags.className = "badge";
+        flags.textContent = message && message.unread
+          ? (message.important ? "No leído · Importante" : "No leído")
+          : (message && message.important ? "Importante" : "Leído");
+        row.append(sender, flags);
+        const subject = document.createElement("p");
+        subject.className = "item-text";
+        subject.textContent = textOrFallback(message && message.subject, "Sin asunto");
+        const receivedAt = document.createElement("p");
+        receivedAt.className = "item-text";
+        receivedAt.textContent = message && message.receivedAt
+          ? formatAgendaDate(message.receivedAt)
+          : "Fecha no disponible";
+        item.append(row, subject, receivedAt);
+        recentList.appendChild(item);
+      });
+    }
+
     function getExecutiveResponse(state) {
       return state.executiveBriefing &&
         state.executiveBriefing.executiveResponse
@@ -1169,19 +1232,7 @@
         formatAgendaItem(events[1], "Sin proximos eventos", "No hay eventos cargados en este momento.")
       );
 
-      const gmailPanel = findPanelByTitle("Gmail");
-      const gmailItems = gmailPanel ? gmailPanel.querySelectorAll(".item") : [];
-      const inbox = (state.gmail && state.gmail.inbox) || {};
-      updateSimpleItem(
-        gmailItems[0],
-        "Correos relevantes",
-        `${textOrFallback(inbox.priority, 0)} prioritarios, ${textOrFallback(inbox.unread, 0)} sin leer.`
-      );
-      updateSimpleItem(
-        gmailItems[1],
-        "Respuestas pendientes",
-        `${textOrFallback(inbox.requiresReview, 0)} requieren revision.`
-      );
+      renderGmailWidget(state.gmail);
 
       const documentsPanel = findPanelByTitle("Memoria ejecutiva");
       const documentItems = documentsPanel ? documentsPanel.querySelectorAll(".item") : [];
@@ -1226,11 +1277,14 @@
           next: []
         },
         gmail: {
-          inbox: {
-            unread: 0,
-            priority: 0,
-            requiresReview: 0
-          }
+          unread: 0,
+          important: 0,
+          recentCount: 0,
+          recent: [],
+          source: "unavailable",
+          available: false,
+          stale: false,
+          errorCode: "gmail_unavailable"
         },
         memory: {
           summary: "Informacion no disponible",

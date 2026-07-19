@@ -5,10 +5,10 @@ function hasAgendaEvents(agenda) {
 }
 
 function hasPendingGmail(gmail) {
-  const inbox = gmail && gmail.inbox ? gmail.inbox : {};
+  const inbox = gmail && gmail.inbox ? gmail.inbox : gmail || {};
 
   return Number(inbox.unread || 0) > 0
-    || Number(inbox.priority || 0) > 0
+    || Number(inbox.priority || inbox.important || 0) > 0
     || Number(inbox.requiresReview || 0) > 0;
 }
 

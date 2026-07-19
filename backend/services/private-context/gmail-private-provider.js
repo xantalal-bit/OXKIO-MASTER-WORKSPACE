@@ -72,6 +72,7 @@ function normalizeGmailMessage(message = {}) {
     ? message.payload
     : {};
   const headers = Array.isArray(payload.headers) ? payload.headers : [];
+  const labelIds = Array.isArray(message.labelIds) ? message.labelIds : [];
 
   return {
     id: isValidText(message.id) ? message.id.trim() : null,
@@ -80,6 +81,8 @@ function normalizeGmailMessage(message = {}) {
     subject: isValidText(message.subject) ? message.subject.trim() : getHeader(headers, 'Subject'),
     date: isValidText(message.date) ? message.date.trim() : getHeader(headers, 'Date'),
     snippet: isValidText(message.snippet) ? message.snippet.trim() : '',
+    unread: labelIds.includes('UNREAD'),
+    important: labelIds.includes('IMPORTANT'),
   };
 }
 
