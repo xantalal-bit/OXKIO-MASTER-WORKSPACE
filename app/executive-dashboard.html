@@ -557,8 +557,8 @@
               <div class="radio-mic" aria-hidden="true"></div>
               <div class="conversation">
                 <div class="input-row">
-                  <input type="text" value="estado del ecosistema" aria-label="Entrada conversacional de OXKIO">
-                  <button type="button">Enviar</button>
+                  <input type="text" value="estado del ecosistema" aria-label="Entrada conversacional de OXKIO" data-executive-chat-input>
+                  <button type="button" data-executive-chat-submit>Enviar</button>
                 </div>
                 <div class="future-tools" aria-label="Capacidades futuras">
                   <span class="tool-chip">Subir documentos</span>
@@ -567,7 +567,16 @@
                 </div>
               </div>
             </div>
-            <p class="note">Consulta conversacional disponible. Las acciones ejecutivas desde esta superficie siguen pendientes de conexión supervisada.</p>
+            <p class="note" data-executive-chat-state>Consulta disponible.</p>
+            <div class="item" data-executive-chat-result hidden>
+              <p class="item-title" data-chat-response></p>
+              <p class="item-text" data-chat-intent></p>
+              <p class="item-text" data-chat-priority></p>
+              <p class="item-text" data-chat-confidence></p>
+              <p class="item-text" data-chat-proposal hidden></p>
+              <p class="item-text" data-chat-approval hidden></p>
+              <p class="item-text" data-chat-interaction></p>
+            </div>
           </div>
         </article>
 
@@ -733,6 +742,115 @@
     function setText(element, value, fallback) {
       if (!element) return;
       element.textContent = textOrFallback(value, fallback);
+    }
+
+    let executiveChatSending = false;
+
+    function setExecutiveChatState(message, state) {
+      const stateElement = document.querySelector("[data-executive-chat-state]");
+      if (!stateElement) return;
+      stateElement.textContent = message;
+      stateElement.dataset.state = state;
+    }
+
+    function formatOptionalExecutiveMetadata(value, fallback) {
+      if (typeof value === "string" && value.trim()) return value.trim();
+      if (!value || typeof value !== "object") return fallback;
+      return textOrFallback(value.summary || value.status || value.type || value.id, fallback);
+    }
+
+    function renderExecutiveChatResult(data) {
+      const result = document.querySelector("[data-executive-chat-result]");
+      if (!result) return;
+      const analysis = data && data.analysis && typeof data.analysis === "object"
+        ? data.analysis
+        : {};
+      const proposal = data && data.proposal ? data.proposal : null;
+      const approval = data && data.approval ? data.approval : null;
+      const confidence = data && Number.isFinite(data.confidence)
+        ? data.confidence
+        : (Number.isFinite(analysis.confidence) ? analysis.confidence : null);
+
+      setText(
+        result.querySelector("[data-chat-response]"),
+        data && typeof data.response === "string" ? data.response : null,
+        "Respuesta no disponible."
+      );
+      setText(result.querySelector("[data-chat-intent]"), `Intención: ${textOrFallback(analysis.intent, "No disponible")}`);
+      setText(result.querySelector("[data-chat-priority]"), `Prioridad: ${textOrFallback(analysis.priority, "No disponible")}`);
+      setText(
+        result.querySelector("[data-chat-confidence]"),
+        `Confianza: ${confidence === null ? "No disponible" : confidence}`
+      );
+      const proposalElement = result.querySelector("[data-chat-proposal]");
+      proposalElement.hidden = !proposal;
+      if (proposal) {
+        proposalElement.textContent = `Propuesta: ${formatOptionalExecutiveMetadata(proposal, "Disponible")}`;
+      }
+      const approvalElement = result.querySelector("[data-chat-approval]");
+      approvalElement.hidden = !approval;
+      if (approval) {
+        approvalElement.textContent = `Aprobación: ${formatOptionalExecutiveMetadata(approval, "Disponible")}`;
+      }
+      setText(
+        result.querySelector("[data-chat-interaction]"),
+        `Interaction ID: ${textOrFallback(data && data.interactionId, "No disponible")}`
+      );
+      result.hidden = false;
+    }
+
+    function getExecutiveChatError(status) {
+      if (status === 400) return "La consulta no es válida.";
+      if (status === 503) return "El servicio ejecutivo no está disponible temporalmente.";
+      return "No se pudo completar la consulta.";
+    }
+
+    async function submitExecutiveChat() {
+      const input = document.querySelector("[data-executive-chat-input]");
+      const button = document.querySelector("[data-executive-chat-submit]");
+      const query = input && typeof input.value === "string" ? input.value.trim() : "";
+      if (!query) {
+        setExecutiveChatState("Escribe una consulta antes de enviar.", "error");
+        return;
+      }
+      if (executiveChatSending) return;
+
+      executiveChatSending = true;
+      if (button) button.disabled = true;
+      setExecutiveChatState("Procesando…", "sending");
+
+      try {
+        const response = await fetch("/api/executive/chat", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ query })
+        });
+        if (!response.ok) {
+          setExecutiveChatState(getExecutiveChatError(response.status), "error");
+          return;
+        }
+        const data = await response.json();
+        renderExecutiveChatResult(data);
+        setExecutiveChatState("Consulta completada.", "success");
+      } catch (error) {
+        setExecutiveChatState("No se pudo conectar con el servicio ejecutivo.", "error");
+      } finally {
+        executiveChatSending = false;
+        if (button) button.disabled = false;
+      }
+    }
+
+    function initializeExecutiveChat() {
+      const input = document.querySelector("[data-executive-chat-input]");
+      const button = document.querySelector("[data-executive-chat-submit]");
+      if (!input || !button) return;
+      button.addEventListener("click", submitExecutiveChat);
+      input.addEventListener("keydown", (event) => {
+        if (event.key === "Enter" && !event.shiftKey) {
+          event.preventDefault();
+          submitExecutiveChat();
+        }
+      });
     }
 
     function findPanelByTitle(title) {
@@ -1155,7 +1273,10 @@
       }
     }
 
-    document.addEventListener("DOMContentLoaded", loadDashboardState);
+    document.addEventListener("DOMContentLoaded", () => {
+      loadDashboardState();
+      initializeExecutiveChat();
+    });
   </script>
 </body>
 </html>
