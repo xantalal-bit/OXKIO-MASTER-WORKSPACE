@@ -561,6 +561,44 @@ if (req.url === "/favicon.png") {
 
   return;
 }
+if (req.url === "/manifest.webmanifest") {
+
+  const fs = require("fs");
+  const path = require("path");
+
+  const manifestPath = path.join(__dirname, "../../app/manifest.webmanifest");
+
+  res.writeHead(200, {
+    "Content-Type": "application/manifest+json; charset=utf-8",
+    "Cache-Control": "public, max-age=3600"
+  });
+
+  res.end(fs.readFileSync(manifestPath));
+
+  return;
+}
+if (req.url === "/icons/icon-192.png" ||
+    req.url === "/icons/icon-512.png" ||
+    req.url === "/icons/apple-touch-icon.png") {
+
+  const fs = require("fs");
+  const path = require("path");
+  const iconFiles = {
+    "/icons/icon-192.png": "icon-192.png",
+    "/icons/icon-512.png": "icon-512.png",
+    "/icons/apple-touch-icon.png": "apple-touch-icon.png"
+  };
+  const iconPath = path.join(__dirname, "../../app/icons", iconFiles[req.url]);
+
+  res.writeHead(200, {
+    "Content-Type": "image/png",
+    "Cache-Control": "public, max-age=604800"
+  });
+
+  res.end(fs.readFileSync(iconPath));
+
+  return;
+}
 
 if (req.url === "/modules/projects/projectManager.js") {
   const fs = require("fs");
