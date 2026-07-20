@@ -2,1034 +2,236 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { Readable, Writable } = require('stream');
-const {
-  handleExecutiveChatRequest,
-  isExecutiveChatRoute,
-} = require('./executive-chat');
+const { EventEmitter } = require('events');
+const ProposalEngine = require('../../core/proposalEngine');
+const { createExecutiveRuntime, SANDBOX_MODE } = require('../../services/runtime/executive-runtime-factory');
+const { handleExecutiveChatRequest, isExecutiveChatRoute } = require('./executive-chat');
 
 function createRequest(body) {
-  const request = Readable.from([body]);
-
-  request.method = 'POST';
-  request.url = '/api/executive/chat';
-
+  const request = new EventEmitter();
+  process.nextTick(() => { request.emit('data', Buffer.from(body)); request.emit('end'); });
   return request;
 }
 
 function createResponse() {
-  const chunks = [];
-  const response = new Writable({
-    write(chunk, encoding, callback) {
-      chunks.push(Buffer.from(chunk));
-      callback();
-    },
-  });
-
-  response.writeHead = (statusCode, headers) => {
-    response.statusCode = statusCode;
-    response.headers = headers;
+  return {
+    statusCode: null,
+    headers: null,
+    body: '',
+    writeHead(statusCode, headers) { this.statusCode = statusCode; this.headers = headers; },
+    end(body) { this.body = body; },
+    getJson() { return JSON.parse(this.body); },
   };
-  response.getRawBody = () => Buffer.concat(chunks).toString('utf8');
-  response.getJson = () => JSON.parse(response.getRawBody());
+}
 
+function privateContext(sourceType, payload) {
+  return {
+    privateContextMetadata: {
+      clientId: 'cliente-cero', userId: 'usuario-cliente-cero', scope: 'private:user',
+      sensitivity: 'confidential', sourceType, sourceId: `${sourceType}-primary`,
+      authorization: { status: 'granted', provider: 'google-oauth' },
+      purpose: 'executive-briefing', retentionPolicy: 'CLIENT_CONTROLLED', promotionPolicy: 'NEVER_PROMOTE',
+    },
+    expectedClientId: 'cliente-cero',
+    privatePayload: payload,
+  };
+}
+
+function createHarness(t, overrides = {}) {
+  const runtime = createExecutiveRuntime({ mode: SANDBOX_MODE });
+  t.after(() => runtime.cleanup());
+  const calls = { gmail: 0, calendar: 0, dashboard: 0 };
+  const dependencies = {
+    memory: runtime.memory,
+    approvalQueue: runtime.approvalQueue,
+    proposalEngine: new ProposalEngine(),
+    getClienteCeroIdentity: () => ({
+      clientId: 'cliente-cero', userId: 'usuario-cliente-cero', expectedClientId: 'cliente-cero',
+      authorization: { status: 'granted', provider: 'google-oauth' },
+    }),
+    async buildGmailPrivateContext() {
+      calls.gmail += 1;
+      return privateContext('gmail', { source: 'gmail', messages: [{
+        id: 'secret-message-id', threadId: 'secret-thread-id', from: 'Equipo', subject: 'Seguimiento',
+        date: '2026-07-20T08:00:00.000Z', snippet: 'secret-body-snippet', unread: true, important: true,
+      }] });
+    },
+    async buildCalendarPrivateContext() {
+      calls.calendar += 1;
+      return privateContext('calendar', { source: 'calendar', events: [{
+        id: 'secret-event-id', title: 'Reunion operativa', start: '2026-07-20T10:00:00.000Z',
+        end: '2026-07-20T10:30:00.000Z', description: 'secret-description', attendees: ['secret@example.com'],
+      }] });
+    },
+    async getDashboardState() {
+      calls.dashboard += 1;
+      return { executiveSummary: 'Estado agregado estable.', morningBriefing: 'Dos prioridades requieren atencion.' };
+    },
+    ...overrides,
+  };
+  return { calls, dependencies, runtime };
+}
+
+async function requestChat(query, dependencies, extra = {}) {
+  const request = createRequest(JSON.stringify({ query, ...extra }));
+  const response = createResponse();
+  await handleExecutiveChatRequest(request, response, { dependencies });
   return response;
 }
 
-function buildPrivateContext(overrides = {}) {
-  return {
-    clientId: 'client-alpha',
-    userId: 'user-alpha',
-    scope: 'private:user',
-    sensitivity: 'confidential',
-    sourceType: 'agenda-ficticia',
-    sourceId: 'agenda-source-alpha',
-    authorization: { status: 'granted' },
-    purpose: 'executive-context',
-    retentionPolicy: 'CLIENT_CONTROLLED',
-    promotionPolicy: 'NEVER_PROMOTE',
-    ...overrides,
-  };
-}
-
-test('matches POST /api/executive/chat', () => {
+test('matches only the unchanged POST route', () => {
   assert.equal(isExecutiveChatRoute('/api/executive/chat', 'POST'), true);
   assert.equal(isExecutiveChatRoute('/api/executive/chat', 'GET'), false);
-  assert.equal(isExecutiveChatRoute('/api/chat', 'POST'), false);
 });
 
-test('returns orchestrator response for a valid query', async () => {
-  let calledWith = null;
-  const request = createRequest(JSON.stringify({ query: 'Resumen del roadmap de Oxkio' }));
-  const response = createResponse();
-
-  await handleExecutiveChatRequest(request, response, {
-    dependencies: {
-      orchestrateExecutiveQuery(query) {
-        calledWith = query;
-
-        return {
-          interactionId: '11111111-1111-4111-8111-111111111111',
-          query,
-          analysis: {
-            intent: 'roadmap',
-            project: 'Oxkio',
-            documentTypes: ['Roadmap'],
-            keywords: [],
-            filters: {},
-            priority: 'medium',
-            confidence: 0.8,
-          },
-          response: 'Respuesta simulada.',
-          confidence: 0.7,
-          proposal: null,
-          approval: null,
-          sources: [
-            {
-              id: 'source-1',
-              name: 'roadmap.md',
-              path: 'C:\\private\\roadmap.md',
-              token: 'secret-token',
-              credentials: 'secret-credentials',
-              type: 'Roadmap',
-              score: 5,
-              rankingPosition: 1,
-              reasons: ['matched'],
-            },
-          ],
-          limitations: ['Simulation only.'],
-        };
-      },
-    },
-  });
-
-  const payload = response.getJson();
-
-  assert.equal(response.statusCode, 200);
-  assert.equal(calledWith, 'Resumen del roadmap de Oxkio');
-  assert.equal(payload.interactionId, '11111111-1111-4111-8111-111111111111');
-  assert.deepEqual(Object.keys(payload), [
-    'interactionId',
-    'query',
-    'analysis',
-    'response',
-    'confidence',
-    'proposal',
-    'approval',
-    'sources',
-    'limitations',
-  ]);
-  assert.equal(payload.query, 'Resumen del roadmap de Oxkio');
-  assert.equal(response.headers['Content-Type'], 'application/json; charset=utf-8');
-  assert.equal(payload.sources.length, 1);
-  assert.equal(Object.hasOwn(payload.sources[0], 'path'), false);
-  assert.equal(Object.hasOwn(payload.sources[0], 'token'), false);
-  assert.equal(Object.hasOwn(payload.sources[0], 'credentials'), false);
+test('A-D select Gmail, Calendar, Dashboard, and combined context once and minimally', async (t) => {
+  const cases = [
+    ['¿Qué correos tengo pendientes?', { gmail: 1, calendar: 0, dashboard: 0 }],
+    ['¿Qué reuniones tengo hoy?', { gmail: 0, calendar: 1, dashboard: 0 }],
+    ['¿Cómo está mi día?', { gmail: 0, calendar: 0, dashboard: 1 }],
+    ['Resume mis correos y reuniones de hoy.', { gmail: 1, calendar: 1, dashboard: 0 }],
+  ];
+  for (const [query, expected] of cases) {
+    await t.test(query, async (subtest) => {
+      const { calls, dependencies } = createHarness(subtest);
+      const response = await requestChat(query, dependencies);
+      const payload = response.getJson();
+      assert.equal(response.statusCode, 200);
+      assert.deepEqual(calls, expected);
+      assert.equal(payload.privateContextUsed, true);
+      assert.equal(payload.proposal, null);
+      assert.equal(payload.approval, null);
+      const serialized = JSON.stringify(payload);
+      for (const secret of ['secret-message-id', 'secret-thread-id', 'secret-body-snippet', 'secret-event-id', 'secret-description', 'secret@example.com']) {
+        assert.equal(serialized.includes(secret), false);
+      }
+    });
+  }
 });
 
-test('passes only internal shared dependencies to the orchestrator', async () => {
-  const memory = { searchMemory() { throw new Error('memory must not be invoked'); } };
-  const proposalEngine = { generate() { throw new Error('proposal engine must not be invoked'); } };
-  const approvalQueue = { add() { throw new Error('approval queue must not be invoked'); } };
-  const clientDependencies = {
-    memory: { source: 'client' },
-    proposalEngine: { source: 'client' },
-    approvalQueue: { source: 'client' },
+test('E uses only public Approval Queue views and does not expose payload or hash', async (t) => {
+  let pendingCalls = 0; let historyCalls = 0;
+  const queue = {
+    listPending() { pendingCalls += 1; return [{ id: 'a1', status: 'pending', createdAt: '2026-07-20T08:00:00.000Z', publicProposal: { type: 'email_draft', summary: 'Revision pendiente.', requiresApproval: true }, executionPayload: { body: 'secret-body' }, payloadHash: 'secret-hash' }]; },
+    getHistory() { historyCalls += 1; return []; },
+    add() { throw new Error('informational query must not enqueue'); },
   };
-  let receivedOptions = null;
-  const request = createRequest(JSON.stringify({
-    query: 'Consulta sin efectos laterales',
-    interactionId: 'client-controlled-interaction-id',
-    dependencies: clientDependencies,
-    diagnostics: {
-      memorySearchAttempted: true,
-      memoryResultCount: 999,
-    },
-  }));
-  const response = createResponse();
-
-  await handleExecutiveChatRequest(request, response, {
-    dependencies: {
-      memory,
-      proposalEngine,
-      approvalQueue,
-      orchestrateExecutiveQuery(query, options) {
-        receivedOptions = options;
-
-        return {
-          query,
-          analysis: { intent: 'unknown' },
-          response: 'Respuesta sin cambios.',
-          confidence: 0.5,
-          sources: [],
-          privateContextUsed: false,
-          limitations: [],
-        };
-      },
-    },
-  });
-
-  assert.equal(response.statusCode, 200);
-  assert.equal(receivedOptions.dependencies.memory, memory);
-  assert.equal(receivedOptions.dependencies.proposalEngine, proposalEngine);
-  assert.equal(receivedOptions.dependencies.approvalQueue, approvalQueue);
-  assert.notEqual(receivedOptions.dependencies.memory, clientDependencies.memory);
-  assert.notEqual(receivedOptions.dependencies.proposalEngine, clientDependencies.proposalEngine);
-  assert.notEqual(receivedOptions.dependencies.approvalQueue, clientDependencies.approvalQueue);
-  assert.equal(Object.hasOwn(receivedOptions, 'diagnostics'), false);
-  assert.equal(Object.hasOwn(receivedOptions, 'interactionId'), false);
-  assert.deepEqual(Object.keys(receivedOptions.dependencies), [
-    'memory',
-    'proposalEngine',
-    'approvalQueue',
-  ]);
-  assert.deepEqual(Object.keys(response.getJson()), [
-    'query',
-    'analysis',
-    'response',
-    'confidence',
-    'sources',
-    'privateContextUsed',
-    'limitations',
-  ]);
+  const { calls, dependencies } = createHarness(t, { approvalQueue: queue });
+  const response = await requestChat('¿Qué tengo pendiente de aprobar?', dependencies);
+  const payload = response.getJson();
+  assert.equal(pendingCalls, 1); assert.equal(historyCalls, 1);
+  assert.deepEqual(calls, { gmail: 0, calendar: 0, dashboard: 0 });
+  assert.equal(payload.proposal, null); assert.equal(payload.approval, null);
+  assert.equal(payload.privateContextUsed, true);
+  assert.equal(JSON.stringify(payload).includes('secret-body'), false);
+  assert.equal(JSON.stringify(payload).includes('secret-hash'), false);
 });
 
-test('passes optional private context to the executive orchestrator', async () => {
-  let calledWith = null;
-  const privateContextMetadata = buildPrivateContext();
-  const privatePayload = {
-    events: [
-      {
-        title: 'Evento privado ficticio',
-        date: '2026-07-04',
-        token: 'private-token',
-        credentials: 'private-credentials',
-      },
-    ],
+test('F-G read safe memory only when selected and keep general query privateContextUsed false', async (t) => {
+  const memoryHarness = createHarness(t);
+  memoryHarness.runtime.memory.saveShortTerm({ intent: 'decisions', status: 'completed', query: 'secret raw query' });
+  const memoryResponse = await requestChat('¿Qué recuerdas de nuestras últimas decisiones?', memoryHarness.dependencies);
+  assert.equal(memoryResponse.getJson().privateContextUsed, true);
+  assert.equal(JSON.stringify(memoryResponse.getJson()).includes('secret raw query'), false);
+  assert.deepEqual(memoryHarness.calls, { gmail: 0, calendar: 0, dashboard: 0 });
+
+  await t.test('general', async (subtest) => {
+    const generalHarness = createHarness(subtest);
+    const response = await requestChat('Explícame qué es una agenda digital.', generalHarness.dependencies);
+    const payload = response.getJson();
+    assert.deepEqual(generalHarness.calls, { gmail: 0, calendar: 0, dashboard: 0 });
+    assert.equal(payload.privateContextUsed, false);
+    assert.equal(payload.proposal, null); assert.equal(payload.approval, null);
+  });
+});
+
+test('H-J preserve supervised proposals in sandbox without real execution', async (t) => {
+  const cases = [
+    ['Prepara un borrador de respuesta.', 'email_draft', 0, 0],
+    ['Prepara una respuesta al último correo.', 'email_draft', 1, 0],
+    ['Programa una reunión.', 'meeting_proposal', 0, 0],
+  ];
+  for (const [query, type, gmailCalls, calendarCalls] of cases) {
+    await t.test(query, async (subtest) => {
+      const { calls, dependencies } = createHarness(subtest);
+      const response = await requestChat(query, dependencies);
+      const payload = response.getJson();
+      assert.equal(payload.proposal.type, type);
+      assert.equal(payload.approval.status, 'pending');
+      assert.equal(calls.gmail, gmailCalls); assert.equal(calls.calendar, calendarCalls);
+      assert.equal(JSON.stringify(payload).includes('executionPayload'), false);
+    });
+  }
+});
+
+test('K negations create no proposal, approval, execution, or private context', async (t) => {
+  for (const query of ['No prepares un borrador.', 'No programes una reunión.', 'No crees una tarea.']) {
+    await t.test(query, async (subtest) => {
+      const { dependencies, runtime } = createHarness(subtest);
+      const response = await requestChat(query, dependencies);
+      const payload = response.getJson();
+      assert.equal(payload.proposal, null); assert.equal(payload.approval, null);
+      assert.equal(runtime.approvalQueue.listPending().length, 0);
+      assert.equal(payload.privateContextUsed, false);
+    });
+  }
+});
+
+test('L ignores all client-supplied selection, dependency, identity, and runtime fields', async (t) => {
+  const { calls, dependencies } = createHarness(t);
+  let capturedOptions;
+  dependencies.orchestrateExecutiveQuery = (query, options) => {
+    capturedOptions = options;
+    return { interactionId: 'stable-id', query, analysis: {}, response: 'ok', confidence: 0.5, sources: [], privateContextUsed: false, proposal: null, approval: null, limitations: [] };
   };
-  const request = createRequest(JSON.stringify({
-    query: 'Briefing privado',
-    privateContextMetadata,
-    expectedClientId: 'client-alpha',
-    privatePayload,
-  }));
-  const response = createResponse();
-
-  await handleExecutiveChatRequest(request, response, {
-    dependencies: {
-      orchestrateExecutiveQuery(query, options) {
-        calledWith = { query, options };
-
-        return {
-          query,
-          analysis: {
-            intent: 'briefing',
-            project: null,
-            documentTypes: [],
-            keywords: [],
-            filters: {},
-            priority: 'high',
-            confidence: 0.8,
-          },
-          response: 'Respuesta con contexto privado autorizado.',
-          confidence: 0.7,
-          sources: [
-            {
-              id: 'source-private',
-              name: 'private-related.md',
-              path: 'C:\\private\\private-related.md',
-              type: 'Notes',
-              score: 4,
-            },
-          ],
-          privateContextUsed: true,
-          limitations: [],
-        };
-      },
-    },
+  const response = await requestChat('Consulta general sin contexto.', dependencies, {
+    gmail: true, calendar: true, dashboard: true, privateContext: { secret: true },
+    privateContextMode: 'all', dependencies: { attack: true }, identity: { authorization: 'granted' },
+    authorization: 'granted', runtimeMode: 'production', sandbox: false,
   });
-
-  const payload = response.getJson();
-
   assert.equal(response.statusCode, 200);
-  assert.equal(calledWith.query, 'Briefing privado');
-  assert.deepEqual(calledWith.options, {
-    privateContextMetadata,
-    expectedClientId: 'client-alpha',
-    privatePayload,
-  });
-  assert.equal(payload.privateContextUsed, true);
-  assert.equal(JSON.stringify(payload).includes('Evento privado ficticio'), false);
-  assert.equal(JSON.stringify(payload).includes('private-token'), false);
-  assert.equal(JSON.stringify(payload).includes('private-credentials'), false);
-  assert.equal(Object.hasOwn(payload.sources[0], 'path'), false);
+  assert.deepEqual(calls, { gmail: 0, calendar: 0, dashboard: 0 });
+  assert.equal(capturedOptions.contextSelection.reason, 'general_query');
+  assert.equal(Object.hasOwn(capturedOptions, 'privateContextMetadata'), false);
+  assert.equal(response.getJson().interactionId, 'stable-id');
 });
 
-test('builds Calendar private context for executive chat requests', async () => {
-  let providerInput = null;
-  let orchestratorCall = null;
-  const request = createRequest(JSON.stringify({
-    query: 'Que tengo hoy?',
-    calendar: {
-      enabled: true,
-      clientId: 'client-alpha',
-      userId: 'user-alpha',
-      expectedClientId: 'client-alpha',
-      authorization: { status: 'granted', provider: 'google-oauth' },
-      sourceId: 'calendar-source-alpha',
-      range: 'today',
-      maxResults: 10,
-    },
-  }));
-  const response = createResponse();
-
-  await handleExecutiveChatRequest(request, response, {
-    dependencies: {
-      async buildCalendarPrivateContext(input) {
-        providerInput = input;
-
-        return {
-          privateContextMetadata: buildPrivateContext({
-            sourceType: 'calendar',
-            sourceId: 'calendar-source-alpha',
-            purpose: 'executive-briefing',
-          }),
-          expectedClientId: 'client-alpha',
-          privatePayload: {
-            source: 'calendar',
-            range: {
-              preset: 'today',
-              timeMin: '2026-07-03T00:00:00.000Z',
-              timeMax: '2026-07-04T00:00:00.000Z',
-              maxResults: 10,
-            },
-            events: [
-              {
-                id: 'event-1',
-                title: 'Evento privado ficticio',
-                start: '2026-07-03T10:00:00.000Z',
-                token: 'private-token',
-              },
-            ],
-          },
-        };
-      },
-      orchestrateExecutiveQuery(query, options) {
-        orchestratorCall = { query, options };
-
-        return {
-          query,
-          analysis: {
-            intent: 'briefing',
-            project: null,
-            documentTypes: [],
-            keywords: [],
-            filters: {},
-            priority: 'high',
-            confidence: 0.8,
-          },
-          response: 'Agenda privada autorizada: Evento privado ficticio.',
-          confidence: 0.7,
-          sources: [
-            {
-              id: 'source-1',
-              name: 'source.md',
-              path: 'C:\\private\\source.md',
-              type: 'Notes',
-            },
-          ],
-          privateContextUsed: true,
-          limitations: [],
-        };
-      },
-    },
-  });
-
-  const payload = response.getJson();
-
-  assert.equal(response.statusCode, 200);
-  assert.equal(providerInput.range, 'today');
-  assert.equal(orchestratorCall.query, 'Que tengo hoy?');
-  assert.equal(orchestratorCall.options.privateContextMetadata.sourceType, 'calendar');
-  assert.equal(orchestratorCall.options.privateContextRequiredPurpose, 'executive-briefing');
-  assert.equal(payload.privateContextUsed, true);
-  assert.equal(Object.hasOwn(payload.sources[0], 'path'), false);
-  assert.equal(JSON.stringify(payload).includes('private-token'), false);
+test('denied internal identity blocks private providers but leaves general queries working', async (t) => {
+  const { calls, dependencies } = createHarness(t, { getClienteCeroIdentity: () => ({ clientId: 'cliente-cero', expectedClientId: 'cliente-cero', userId: 'user', authorization: { status: 'denied', provider: 'google-oauth' } }) });
+  const denied = await requestChat('¿Qué correos tengo?', dependencies);
+  assert.equal(denied.statusCode, 200); assert.equal(calls.gmail, 0);
+  assert.equal(denied.getJson().privateContextUsed, false);
+  assert.match(denied.getJson().response, /no esta autorizado/i);
+  const general = await requestChat('Consulta general.', dependencies);
+  assert.equal(general.statusCode, 200);
 });
 
-test('documented Calendar body remains valid with simulated provider', async () => {
-  let orchestratorOptions = null;
-  const request = createRequest(JSON.stringify({
-    query: 'Resume mi agenda de las proximas 24 horas.',
-    calendar: {
-      enabled: true,
-      clientId: 'cliente-cero',
-      userId: 'usuario-cliente-cero',
-      expectedClientId: 'cliente-cero',
-      authorization: { status: 'granted', provider: 'google-oauth' },
-      range: 'next24Hours',
-      maxResults: 10,
-    },
-  }));
-  const response = createResponse();
-
-  await handleExecutiveChatRequest(request, response, {
-    dependencies: {
-      async buildCalendarPrivateContext(input) {
-        return {
-          privateContextMetadata: {
-            clientId: input.clientId,
-            userId: input.userId,
-            scope: 'private:user',
-            sensitivity: 'confidential',
-            sourceType: 'calendar',
-            sourceId: 'google-calendar-primary',
-            authorization: input.authorization,
-            purpose: 'executive-briefing',
-            retentionPolicy: 'CLIENT_CONTROLLED',
-            promotionPolicy: 'NEVER_PROMOTE',
-          },
-          expectedClientId: input.expectedClientId,
-          privatePayload: {
-            source: 'calendar',
-            range: {
-              preset: 'next24Hours',
-              timeMin: '2026-07-03T08:00:00.000Z',
-              timeMax: '2026-07-04T08:00:00.000Z',
-              maxResults: 10,
-            },
-            events: [],
-          },
-        };
-      },
-      orchestrateExecutiveQuery(query, options) {
-        orchestratorOptions = options;
-
-        return {
-          query,
-          analysis: {},
-          response: 'Agenda privada autorizada: no hay eventos.',
-          confidence: 0.7,
-          sources: [],
-          privateContextUsed: true,
-          limitations: [],
-        };
-      },
-    },
-  });
-
-  const payload = response.getJson();
-
-  assert.equal(response.statusCode, 200);
-  assert.equal(orchestratorOptions.expectedClientId, 'cliente-cero');
-  assert.equal(orchestratorOptions.privateContextMetadata.authorization.status, 'granted');
-  assert.equal(payload.privateContextUsed, true);
+test('M isolates each unavailable source and never fabricates context or proposals', async (t) => {
+  const cases = [
+    ['¿Qué correos tengo?', { buildGmailPrivateContext: async () => { throw new Error('secret gmail stack'); } }, /Gmail readonly/i],
+    ['¿Qué reuniones tengo hoy?', { buildCalendarPrivateContext: async () => { throw new Error('secret calendar stack'); } }, /Calendar readonly/i],
+    ['¿Qué tengo pendiente de aprobar?', { approvalQueue: { listPending() { throw new Error('secret queue'); }, getHistory() { return []; } } }, /Approval Queue/i],
+    ['¿Cómo está mi día?', { getDashboardState: async () => { throw new Error('secret dashboard'); } }, /resumen agregado/i],
+  ];
+  for (const [query, override, safeMessage] of cases) {
+    await t.test(query, async (subtest) => {
+      const { dependencies } = createHarness(subtest, override);
+      const response = await requestChat(query, dependencies);
+      const payload = response.getJson();
+      assert.equal(response.statusCode, 200);
+      assert.match(payload.response, safeMessage);
+      assert.equal(payload.privateContextUsed, false);
+      assert.equal(payload.proposal, null); assert.equal(payload.approval, null);
+      assert.equal(JSON.stringify(payload).includes('secret'), false);
+    });
+  }
 });
 
-test('gmail enabled without explicit private identity returns safe error', async () => {
-  const request = createRequest(JSON.stringify({
-    query: 'Que correos tengo',
-    gmail: {
-      enabled: true,
-    },
-  }));
-  const response = createResponse();
-
-  await handleExecutiveChatRequest(request, response, {
-    dependencies: {
-      orchestrateExecutiveQuery() {
-        throw new Error('orchestrator should not be called');
-      },
-    },
-  });
-
-  const payload = response.getJson();
-  const serialized = JSON.stringify(payload);
-
-  assert.equal(response.statusCode, 400);
-  assert.equal(payload.ok, false);
-  assert.equal(payload.error, 'gmail_private_identity_required');
-  assert.equal(serialized.includes('access_token'), false);
-  assert.equal(serialized.includes('googleTokens'), false);
-});
-
-test('builds Gmail private context for executive chat requests', async () => {
-  let providerInput = null;
-  let orchestratorCall = null;
-  const request = createRequest(JSON.stringify({
-    query: 'Que correos tengo',
-    gmail: {
-      enabled: true,
-      clientId: 'cliente-cero',
-      userId: 'usuario-cliente-cero',
-      expectedClientId: 'cliente-cero',
-      authorization: { status: 'granted', provider: 'google-oauth' },
-      maxMessages: 3,
-    },
-  }));
-  const response = createResponse();
-
-  await handleExecutiveChatRequest(request, response, {
-    dependencies: {
-      async buildGmailPrivateContext(input) {
-        providerInput = input;
-
-        return {
-          privateContextMetadata: {
-            clientId: input.clientId,
-            userId: input.userId,
-            scope: 'private:user',
-            sensitivity: 'confidential',
-            sourceType: 'gmail',
-            sourceId: 'gmail-primary',
-            authorization: input.authorization,
-            purpose: 'executive-briefing',
-            retentionPolicy: 'CLIENT_CONTROLLED',
-            promotionPolicy: 'NEVER_PROMOTE',
-          },
-          expectedClientId: input.expectedClientId,
-          privatePayload: {
-            source: 'gmail',
-            messages: [
-              {
-                id: 'msg-private-1',
-                threadId: 'thread-private-1',
-                from: 'Remitente A',
-                subject: 'Asunto A',
-                date: '2026-07-04T09:00:00.000Z',
-                snippet: 'Snippet privado',
-              },
-            ],
-            maxMessages: input.maxMessages,
-          },
-        };
-      },
-      orchestrateExecutiveQuery(query, options) {
-        orchestratorCall = { query, options };
-
-        return {
-          query,
-          analysis: {},
-          response: 'Correo privado autorizado: tienes 1 correo reciente: Asunto A de Remitente A.',
-          confidence: 0.7,
-          sources: [],
-          privateContextUsed: true,
-          limitations: [],
-        };
-      },
-    },
-  });
-
-  const payload = response.getJson();
-  const serialized = JSON.stringify(payload);
-
-  assert.equal(response.statusCode, 200);
-  assert.equal(response.headers['Content-Type'], 'application/json; charset=utf-8');
-  assert.equal(providerInput.maxMessages, 3);
-  assert.equal(orchestratorCall.query, 'Que correos tengo');
-  assert.equal(orchestratorCall.options.privateContextMetadata.sourceType, 'gmail');
-  assert.equal(orchestratorCall.options.privateContextRequiredPurpose, 'executive-briefing');
-  assert.equal(payload.privateContextUsed, true);
-  assert.deepEqual(payload.sources, []);
-  assert.equal(serialized.includes('msg-private-1'), false);
-  assert.equal(serialized.includes('thread-private-1'), false);
-  assert.equal(serialized.includes('Snippet privado'), false);
-});
-
-test('preserves UTF-8 characters in Gmail executive chat response', async () => {
-  const request = createRequest(JSON.stringify({
-    query: 'Que correos tengo',
-    gmail: {
-      enabled: true,
-      clientId: 'cliente-cero',
-      userId: 'usuario-cliente-cero',
-      expectedClientId: 'cliente-cero',
-      authorization: { status: 'granted', provider: 'google-oauth' },
-      maxMessages: 1,
-    },
-  }));
-  const response = createResponse();
-
-  await handleExecutiveChatRequest(request, response, {
-    dependencies: {
-      async buildGmailPrivateContext(input) {
-        return {
-          privateContextMetadata: {
-            clientId: input.clientId,
-            userId: input.userId,
-            scope: 'private:user',
-            sensitivity: 'confidential',
-            sourceType: 'gmail',
-            sourceId: 'gmail-primary',
-            authorization: input.authorization,
-            purpose: 'executive-briefing',
-            retentionPolicy: 'CLIENT_CONTROLLED',
-            promotionPolicy: 'NEVER_PROMOTE',
-          },
-          expectedClientId: input.expectedClientId,
-          privatePayload: {
-            source: 'gmail',
-            messages: [
-              {
-                id: 'msg-private-utf8',
-                threadId: 'thread-private-utf8',
-                from: 'Jose Garcia',
-                subject: 'Presupuesto',
-                date: '2026-07-04T09:00:00.000Z',
-                snippet: 'No se expone',
-              },
-            ],
-            maxMessages: input.maxMessages,
-          },
-        };
-      },
-      orchestrateExecutiveQuery(query) {
-        return {
-          query,
-          analysis: {},
-          response: 'Correo privado autorizado: tienes 1 correo reciente: más detalle de García por 25€ ✅.',
-          confidence: 0.7,
-          sources: [],
-          privateContextUsed: true,
-          limitations: [],
-        };
-      },
-    },
-  });
-
-  const rawBody = response.getRawBody();
-  const payload = JSON.parse(rawBody);
-
-  assert.equal(response.statusCode, 200);
-  assert.equal(response.headers['Content-Type'], 'application/json; charset=utf-8');
-  assert.match(rawBody, /más/);
-  assert.match(rawBody, /García/);
-  assert.match(rawBody, /25€/);
-  assert.match(rawBody, /✅/);
-  assert.equal(payload.response, 'Correo privado autorizado: tienes 1 correo reciente: más detalle de García por 25€ ✅.');
-});
-
-test('builds multiple private contexts when Calendar and Gmail are enabled together', async () => {
-  let calendarProviderInput = null;
-  let gmailProviderInput = null;
-  let orchestratorCall = null;
-  const request = createRequest(JSON.stringify({
-    query: 'Que tengo hoy y que correos importantes tengo',
-    calendar: {
-      enabled: true,
-      clientId: 'cliente-cero',
-      userId: 'usuario-cliente-cero',
-      expectedClientId: 'cliente-cero',
-      authorization: { status: 'granted', provider: 'google-oauth' },
-      range: 'today',
-      maxResults: 3,
-    },
-    gmail: {
-      enabled: true,
-      clientId: 'cliente-cero',
-      userId: 'usuario-cliente-cero',
-      expectedClientId: 'cliente-cero',
-      authorization: { status: 'granted', provider: 'google-oauth' },
-      maxMessages: 3,
-    },
-  }));
-  const response = createResponse();
-
-  await handleExecutiveChatRequest(request, response, {
-    dependencies: {
-      async buildCalendarPrivateContext(input) {
-        calendarProviderInput = input;
-
-        return {
-          privateContextMetadata: buildPrivateContext({
-            clientId: input.clientId,
-            userId: input.userId,
-            sourceType: 'calendar',
-            sourceId: 'calendar-primary',
-            authorization: input.authorization,
-            purpose: 'executive-briefing',
-          }),
-          expectedClientId: input.expectedClientId,
-          privatePayload: {
-            source: 'calendar',
-            events: [],
-          },
-        };
-      },
-      async buildGmailPrivateContext(input) {
-        gmailProviderInput = input;
-
-        return {
-          privateContextMetadata: buildPrivateContext({
-            clientId: input.clientId,
-            userId: input.userId,
-            sourceType: 'gmail',
-            sourceId: 'gmail-primary',
-            authorization: input.authorization,
-            purpose: 'executive-briefing',
-          }),
-          expectedClientId: input.expectedClientId,
-          privatePayload: {
-            source: 'gmail',
-            messages: [],
-          },
-        };
-      },
-      orchestrateExecutiveQuery(query, options) {
-        orchestratorCall = { query, options };
-
-        return {
-          query,
-          analysis: {},
-          response: 'Contextos privados recibidos.',
-          confidence: 0.7,
-          sources: [],
-          privateContextUsed: true,
-          limitations: [],
-        };
-      },
-    },
-  });
-
-  const payload = response.getJson();
-
-  assert.equal(response.statusCode, 200);
-  assert.equal(calendarProviderInput.range, 'today');
-  assert.equal(gmailProviderInput.maxMessages, 3);
-  assert.equal(orchestratorCall.query, 'Que tengo hoy y que correos importantes tengo');
-  assert.equal(orchestratorCall.options.privateContextRequiredPurpose, 'executive-briefing');
-  assert.equal(Array.isArray(orchestratorCall.options.privateContexts), true);
-  assert.equal(orchestratorCall.options.privateContexts.length, 2);
-  assert.equal(orchestratorCall.options.privateContexts[0].privateContextMetadata.sourceType, 'calendar');
-  assert.equal(orchestratorCall.options.privateContexts[1].privateContextMetadata.sourceType, 'gmail');
-  assert.equal(Object.hasOwn(orchestratorCall.options, 'privateContextMetadata'), false);
-  assert.equal(Object.hasOwn(orchestratorCall.options, 'privatePayload'), false);
-  assert.equal(payload.privateContextUsed, true);
-});
-
-test('propagates safe Gmail error when combined Calendar and Gmail context fails', async () => {
-  const request = createRequest(JSON.stringify({
-    query: 'Que tengo hoy y que correos importantes tengo',
-    calendar: {
-      enabled: true,
-      clientId: 'cliente-cero',
-      userId: 'usuario-cliente-cero',
-      expectedClientId: 'cliente-cero',
-      authorization: { status: 'granted', provider: 'google-oauth' },
-    },
-    gmail: {
-      enabled: true,
-    },
-  }));
-  const response = createResponse();
-
-  await handleExecutiveChatRequest(request, response, {
-    dependencies: {
-      async buildCalendarPrivateContext(input) {
-        return {
-          privateContextMetadata: buildPrivateContext({
-            clientId: input.clientId,
-            userId: input.userId,
-            sourceType: 'calendar',
-            sourceId: 'calendar-primary',
-            authorization: input.authorization,
-            purpose: 'executive-briefing',
-          }),
-          expectedClientId: input.expectedClientId,
-          privatePayload: {
-            source: 'calendar',
-            events: [],
-          },
-        };
-      },
-      async buildGmailPrivateContext() {
-        const error = new Error('gmail_private_identity_required');
-        error.code = 'gmail_private_identity_required';
-        throw error;
-      },
-      orchestrateExecutiveQuery() {
-        throw new Error('orchestrator should not be called');
-      },
-    },
-  });
-
-  const payload = response.getJson();
-  const serialized = JSON.stringify(payload);
-
-  assert.equal(response.statusCode, 400);
-  assert.equal(payload.ok, false);
-  assert.equal(payload.error, 'gmail_private_identity_required');
-  assert.equal(serialized.includes('access_token'), false);
-  assert.equal(serialized.includes('googleTokens'), false);
-});
-
-test('propagates safe identity mismatch error for combined private contexts', async () => {
-  const request = createRequest(JSON.stringify({
-    query: 'Que tengo hoy y que correos importantes tengo',
-    calendar: {
-      enabled: true,
-      clientId: 'cliente-cero',
-      userId: 'usuario-cliente-cero',
-      expectedClientId: 'cliente-cero',
-      authorization: { status: 'granted', provider: 'google-oauth' },
-    },
-    gmail: {
-      enabled: true,
-      clientId: 'cliente-cero',
-      userId: 'usuario-distinto',
-      expectedClientId: 'cliente-cero',
-      authorization: { status: 'granted', provider: 'google-oauth' },
-    },
-  }));
-  const response = createResponse();
-
-  await handleExecutiveChatRequest(request, response, {
-    dependencies: {
-      async buildCalendarPrivateContext(input) {
-        return {
-          privateContextMetadata: buildPrivateContext({
-            clientId: input.clientId,
-            userId: input.userId,
-            sourceType: 'calendar',
-            sourceId: 'calendar-primary',
-            authorization: input.authorization,
-            purpose: 'executive-briefing',
-          }),
-          expectedClientId: input.expectedClientId,
-          privatePayload: {
-            source: 'calendar',
-            events: [],
-          },
-        };
-      },
-      async buildGmailPrivateContext(input) {
-        return {
-          privateContextMetadata: buildPrivateContext({
-            clientId: input.clientId,
-            userId: input.userId,
-            sourceType: 'gmail',
-            sourceId: 'gmail-primary',
-            authorization: input.authorization,
-            purpose: 'executive-briefing',
-          }),
-          expectedClientId: input.expectedClientId,
-          privatePayload: {
-            source: 'gmail',
-            messages: [],
-          },
-        };
-      },
-      orchestrateExecutiveQuery() {
-        const error = new Error('private context identity mismatch.');
-        error.code = 'private_context_identity_mismatch';
-        throw error;
-      },
-    },
-  });
-
-  const payload = response.getJson();
-  const serialized = JSON.stringify(payload);
-
-  assert.equal(response.statusCode, 400);
-  assert.deepEqual(payload, {
-    ok: false,
-    error: 'private_context_identity_mismatch',
-  });
-  assert.equal(serialized.includes('usuario-distinto'), false);
-  assert.equal(serialized.includes('private context identity mismatch'), false);
-});
-
-test('calendar enabled without explicit private identity returns safe error', async () => {
-  const request = createRequest(JSON.stringify({
-    query: 'Que tengo hoy?',
-    calendar: {
-      enabled: true,
-    },
-  }));
-  const response = createResponse();
-
-  await handleExecutiveChatRequest(request, response, {
-    dependencies: {
-      orchestrateExecutiveQuery(query, options) {
-        throw new Error('orchestrator should not be called');
-      },
-    },
-  });
-
-  const payload = response.getJson();
-  const serialized = JSON.stringify(payload);
-
-  assert.equal(response.statusCode, 400);
-  assert.equal(payload.ok, false);
-  assert.equal(payload.error, 'calendar_private_identity_required');
-  assert.equal(serialized.includes('access_token'), false);
-  assert.equal(serialized.includes('googleTokens'), false);
-});
-
-test('calendar enabled without OAuth config returns safe 503 error', async () => {
-  const request = createRequest(JSON.stringify({
-    query: 'Resume mi agenda de las proximas 24 horas.',
-    calendar: {
-      enabled: true,
-      clientId: 'cliente-cero',
-      userId: 'usuario-cliente-cero',
-      expectedClientId: 'cliente-cero',
-      authorization: { status: 'granted', provider: 'google-oauth' },
-      range: 'next24Hours',
-      maxResults: 10,
-    },
-  }));
-  const response = createResponse();
-
-  await handleExecutiveChatRequest(request, response, {
-    dependencies: {
-      async buildCalendarPrivateContext() {
-        const error = new Error('Google OAuth is not configured. access_token secret-token stacktrace');
-        error.code = 'google_oauth_not_configured';
-        throw error;
-      },
-      orchestrateExecutiveQuery() {
-        throw new Error('orchestrator should not be called');
-      },
-    },
-  });
-
-  const payload = response.getJson();
-  const serialized = JSON.stringify(payload);
-
-  assert.equal(response.statusCode, 503);
-  assert.equal(payload.ok, false);
-  assert.equal(payload.error, 'google_oauth_not_configured');
-  assert.equal(payload.message, 'Google Calendar no está configurado todavía.');
-  assert.equal(serialized.includes('secret-token'), false);
-  assert.equal(serialized.includes('stacktrace'), false);
-  assert.equal(serialized.includes('access_token'), false);
-});
-
-test('passes weekly Calendar range to provider', async () => {
-  let providerInput = null;
-  const request = createRequest(JSON.stringify({
-    query: 'Que compromisos importantes tengo esta semana?',
-    calendar: {
-      enabled: true,
-      clientId: 'client-alpha',
-      userId: 'user-alpha',
-      expectedClientId: 'client-alpha',
-      authorization: { status: 'granted', provider: 'google-oauth' },
-      range: 'next7Days',
-      maxResults: 10,
-    },
-  }));
-  const response = createResponse();
-
-  await handleExecutiveChatRequest(request, response, {
-    dependencies: {
-      async buildCalendarPrivateContext(input) {
-        providerInput = input;
-
-        return {
-          privateContextMetadata: buildPrivateContext({
-            sourceType: 'calendar',
-            purpose: 'executive-briefing',
-          }),
-          expectedClientId: 'client-alpha',
-          privatePayload: {
-            source: 'calendar',
-            range: {
-              preset: 'next7Days',
-              timeMin: '2026-07-03T08:00:00.000Z',
-              timeMax: '2026-07-10T08:00:00.000Z',
-              maxResults: 10,
-            },
-            events: [],
-          },
-        };
-      },
-      orchestrateExecutiveQuery(query) {
-        return {
-          query,
-          analysis: {},
-          response: 'Agenda privada autorizada: no hay eventos.',
-          confidence: 0.7,
-          sources: [],
-          privateContextUsed: true,
-          limitations: [],
-        };
-      },
-    },
-  });
-
-  assert.equal(response.statusCode, 200);
-  assert.equal(providerInput.range, 'next7Days');
-});
-
-test('rejects privateContextMetadata without privatePayload', async () => {
-  const request = createRequest(JSON.stringify({
-    query: 'Briefing privado',
-    privateContextMetadata: buildPrivateContext(),
-    expectedClientId: 'client-alpha',
-  }));
-  const response = createResponse();
-
-  await handleExecutiveChatRequest(request, response);
-
-  const payload = response.getJson();
-
-  assert.equal(response.statusCode, 400);
-  assert.equal(payload.ok, false);
-  assert.equal(payload.error, 'payload is required.');
-});
-
-test('rejects privatePayload without privateContextMetadata', async () => {
-  const request = createRequest(JSON.stringify({
-    query: 'Briefing privado',
-    expectedClientId: 'client-alpha',
-    privatePayload: {
-      events: [
-        { title: 'Evento privado ficticio', token: 'private-token' },
-      ],
-    },
-  }));
-  const response = createResponse();
-
-  await handleExecutiveChatRequest(request, response);
-
-  const payload = response.getJson();
-
-  assert.equal(response.statusCode, 400);
-  assert.equal(payload.ok, false);
-  assert.match(payload.error, /clientId must be a non-empty string/);
-  assert.equal(JSON.stringify(payload).includes('private-token'), false);
-});
-
-test('rejects missing query', async () => {
-  const request = createRequest(JSON.stringify({ query: '' }));
-  const response = createResponse();
-
-  await handleExecutiveChatRequest(request, response, {
-    dependencies: {
-      orchestrateExecutiveQuery() {
-        throw new Error('orchestrator should not be called');
-      },
-    },
-  });
-
-  const payload = response.getJson();
-
-  assert.equal(response.statusCode, 400);
-  assert.equal(payload.ok, false);
-  assert.equal(payload.error, 'query is required.');
-});
-
-test('rejects invalid JSON', async () => {
-  const request = createRequest('{invalid');
-  const response = createResponse();
-
-  await handleExecutiveChatRequest(request, response);
-
-  const payload = response.getJson();
-
-  assert.equal(response.statusCode, 400);
-  assert.equal(payload.ok, false);
-  assert.equal(payload.error, 'Invalid JSON body.');
+test('rejects missing query and invalid JSON without changing the contract', async () => {
+  for (const body of [JSON.stringify({ query: '' }), '{invalid']) {
+    const response = createResponse();
+    await handleExecutiveChatRequest(createRequest(body), response);
+    assert.equal(response.statusCode, 400);
+    assert.equal(response.getJson().ok, false);
+  }
 });

@@ -422,6 +422,10 @@ function detectActionableIntent(query) {
   const normalizedQuery = normalizeQueryText(query);
   const includesAny = (terms) => terms.some((term) => normalizedQuery.includes(term));
 
+  if (/\b(?:no|nunca)\s+(?:me\s+)?(?:prepares?|redactes?|crees?|generes?|programes?|agendes?|anadas?|registres?)\b/.test(normalizedQuery)) {
+    return null;
+  }
+
   if (
     includesAny(['prepara', 'preparar', 'redacta', 'redactar', 'crea', 'crear', 'genera', 'generar'])
     && includesAny(['borrador', 'respuesta', 'correo', 'email'])
@@ -456,6 +460,37 @@ function detectActionableIntent(query) {
   }
 
   return null;
+}
+
+function buildContextualDataSummary(contextualData) {
+  if (!contextualData || typeof contextualData !== 'object') return null;
+  const summaries = [];
+  if (contextualData.dashboard) {
+    const dashboard = contextualData.dashboard;
+    summaries.push(dashboard.morningBriefing || dashboard.executiveSummary || 'Resumen ejecutivo agregado disponible.');
+  }
+  if (contextualData.approvals) {
+    const pending = Array.isArray(contextualData.approvals.pending) ? contextualData.approvals.pending : [];
+    const history = Array.isArray(contextualData.approvals.history) ? contextualData.approvals.history : [];
+    summaries.push(`Approval Queue: ${pending.length} propuesta(s) pendiente(s) y ${history.length} registro(s) historico(s).`);
+  }
+  if (Array.isArray(contextualData.memory)) {
+    summaries.push(`Memoria segura: ${contextualData.memory.length} registro(s) reciente(s) disponible(s).`);
+  }
+  return summaries.filter(Boolean).join(' ') || null;
+}
+
+function buildContextFailureSummary(contextFailures) {
+  if (!Array.isArray(contextFailures) || contextFailures.length === 0) return null;
+  const labels = {
+    gmail_unavailable: 'Gmail readonly no esta disponible temporalmente.',
+    calendar_unavailable: 'Calendar readonly no esta disponible temporalmente.',
+    dashboard_unavailable: 'El resumen agregado no esta disponible temporalmente.',
+    approvals_unavailable: 'Approval Queue no esta disponible temporalmente.',
+    memory_unavailable: 'La memoria segura no esta disponible temporalmente.',
+    private_context_unauthorized: 'El contexto privado solicitado no esta autorizado.',
+  };
+  return contextFailures.map((code) => labels[code]).filter(Boolean).join(' ');
 }
 
 function buildProposalEngineInput(query, analysis, executiveResponse, actionableIntent) {
@@ -685,7 +720,10 @@ function orchestrateExecutiveQuery(query, options) {
   const privateContextAdapter = dependencies.preparePrivateContextAdapter || preparePrivateContextAdapter;
   const authorizedPrivateContexts = prepareAuthorizedPrivateContexts(options, privateContextAdapter);
   const analysis = analyzer(query);
-  searchMemorySafely(memory, query, diagnostics);
+  const contextSelection = options && options.contextSelection;
+  if (!contextSelection || contextSelection.memory === true) {
+    searchMemorySafely(memory, query, diagnostics);
+  }
   const authorizedPrivateContext = selectPrimaryPrivateContext(query, analysis, authorizedPrivateContexts);
   let knowledgeQueryResult = null;
 
@@ -702,12 +740,16 @@ function orchestrateExecutiveQuery(query, options) {
   const privateContextSummary = authorizedPrivateContext
     ? buildPrivateContextSummary(authorizedPrivateContext)
     : null;
+  const contextualDataSummary = buildContextualDataSummary(options && options.contextualData);
+  const contextFailureSummary = buildContextFailureSummary(options && options.contextFailures);
   const preferPrivateCalendarContext = shouldPreferPrivateCalendarContext(query, analysis, authorizedPrivateContext);
   const preferPrivateGmailContext = shouldPreferPrivateGmailContext(query, analysis, authorizedPrivateContext);
   const preferCombinedPrivateContext = Boolean(combinedPrivateContextSummary);
   const preferPrivateContext = preferCombinedPrivateContext
     || preferPrivateCalendarContext
-    || preferPrivateGmailContext;
+    || preferPrivateGmailContext
+    || Boolean(contextualDataSummary)
+    || Boolean(contextFailureSummary);
   const responseSources = preferPrivateContext ? [] : sanitizeExecutiveSources(response.sources);
   const responseLimitations = preferCombinedPrivateContext
     ? []
@@ -719,7 +761,8 @@ function orchestrateExecutiveQuery(query, options) {
     : response.confidence;
   const executiveResponse = responseBuilder({
     answer: preferPrivateContext
-      ? (combinedPrivateContextSummary || privateContextSummary)
+      ? ([combinedPrivateContextSummary || privateContextSummary, contextualDataSummary, contextFailureSummary]
+        .filter(Boolean).join(' '))
       : (privateContextSummary
         ? `${response.answer} ${privateContextSummary}`
         : response.answer),
@@ -739,7 +782,7 @@ function orchestrateExecutiveQuery(query, options) {
     diagnostics,
   );
   const proposal = proposalBundle ? proposalBundle.publicProposal : null;
-  const privateContextUsed = authorizedPrivateContexts.length > 0;
+  const privateContextUsed = authorizedPrivateContexts.length > 0 || Boolean(contextualDataSummary);
   const approval = enqueueApprovalSafely(
     approvalQueue,
     proposalBundle,

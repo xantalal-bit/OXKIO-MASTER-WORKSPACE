@@ -159,7 +159,13 @@ if (isExecutiveChatRoute(pathname, req.method)) {
     dependencies: {
       memory: executiveRuntime.memory,
       proposalEngine,
-      approvalQueue: executiveRuntime.approvalQueue
+      approvalQueue: executiveRuntime.approvalQueue,
+      getClienteCeroIdentity,
+      buildGmailPrivateContext,
+      buildCalendarPrivateContext,
+      getDashboardState: DashboardIntelligence.getDashboardState,
+      dashboardGmailReader,
+      dashboardCalendarReader
     }
   });
 }
