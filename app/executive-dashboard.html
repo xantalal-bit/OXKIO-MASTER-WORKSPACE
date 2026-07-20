@@ -34,6 +34,7 @@
         linear-gradient(180deg, #07111f 0%, #0b1526 54%, #101827 100%);
       color: var(--text);
       line-height: 1.5;
+      overflow-x: hidden;
     }
 
     .dashboard {
@@ -426,19 +427,99 @@
     @media (max-width: 600px) {
       .topbar-inner,
       main {
-        width: min(100% - 20px, 1180px);
+        width: min(100% - 16px, 1180px);
       }
 
       .topbar-inner {
-        padding: 18px 0;
+        padding: 12px 0;
+        gap: 10px;
+        flex-wrap: nowrap;
+      }
+
+      .brand {
+        min-width: 0;
+        gap: 9px;
+      }
+
+      .brand-mark {
+        width: 38px;
+        height: 38px;
+      }
+
+      .brand-copy {
+        min-width: 0;
       }
 
       .brand-title {
-        font-size: 24px;
+        font-size: 21px;
+      }
+
+      .brand-subtitle {
+        font-size: 12px;
+      }
+
+      .client {
+        max-width: 148px;
+        padding: 7px 9px;
+        font-size: 12px;
+        line-height: 1.25;
+        text-align: right;
+      }
+
+      main {
+        padding: 12px 0 24px;
+      }
+
+      .grid {
+        grid-template-columns: minmax(0, 1fr);
+        gap: 10px;
+      }
+
+      .span-12,
+      .span-6,
+      .span-4 {
+        grid-column: 1 / -1;
+      }
+
+      .dashboard-status {
+        order: 1;
+      }
+
+      .dashboard-recommendation {
+        order: 2;
+      }
+
+      .dashboard-agenda {
+        order: 3;
+      }
+
+      .dashboard-gmail {
+        order: 4;
+      }
+
+      .dashboard-chat {
+        order: 5;
+      }
+
+      .dashboard-intro {
+        order: 6;
+      }
+
+      .dashboard-briefing {
+        order: 7;
+      }
+
+      .dashboard-commitments {
+        order: 8;
+      }
+
+      .dashboard-secondary {
+        order: 9;
       }
 
       .panel {
-        padding: 14px;
+        padding: 13px;
+        border-radius: 10px;
       }
 
       .collapsed-section {
@@ -446,11 +527,33 @@
       }
 
       .collapsed-section summary {
-        padding: 14px;
+        min-height: 64px;
+        padding: 12px 13px;
+      }
+
+      .collapsed-section summary > span:first-child {
+        min-width: 0;
       }
 
       .collapsed-content {
-        padding: 0 14px 14px;
+        padding: 0 13px 13px;
+      }
+
+      .panel-header {
+        margin-bottom: 10px;
+      }
+
+      h2 {
+        font-size: 17px;
+      }
+
+      .meta {
+        font-size: 12px;
+      }
+
+      .executive-summary {
+        padding: 12px;
+        font-size: 15px;
       }
 
       .panel-header,
@@ -466,8 +569,22 @@
       }
 
       .radio-mic {
-        width: 64px;
-        height: 82px;
+        width: 54px;
+        height: 68px;
+      }
+
+      .radio-mic::before {
+        left: 12px;
+        top: 9px;
+        width: 30px;
+        height: 34px;
+      }
+
+      .radio-mic::after {
+        left: 20px;
+        bottom: 9px;
+        width: 14px;
+        height: 14px;
       }
 
       .commitments {
@@ -476,6 +593,19 @@
 
       .input-row button {
         width: 100%;
+        min-height: 48px;
+        cursor: pointer;
+      }
+
+      .input-row input {
+        min-height: 48px;
+        padding: 13px;
+        font-size: 16px;
+      }
+
+      .tool-chip {
+        min-height: 32px;
+        font-size: 12px;
       }
     }
   </style>
@@ -497,7 +627,7 @@
 
     <main>
       <section class="grid" aria-label="Executive Dashboard V2">
-        <article class="panel span-12" id="morning-briefing-card">
+        <article class="panel span-12 dashboard-briefing" id="morning-briefing-card">
           <div class="panel-header">
             <div>
               <h2>Resumen Ejecutivo del Día</h2>
@@ -522,12 +652,12 @@
           <p class="meta" data-morning-briefing-generated></p>
         </article>
 
-        <article class="panel span-12 greeting">
+        <article class="panel span-12 greeting dashboard-intro">
           <h2>Buenos días, José Antonio.</h2>
           <p>OXKIO está listo para ayudarte a revisar lo importante, priorizar el día y mantener el foco sin sobrecargar la pantalla.</p>
         </article>
 
-        <article class="panel span-6">
+        <article class="panel span-6 dashboard-status">
           <div class="panel-header">
             <div>
               <h2>Estado general</h2>
@@ -538,7 +668,7 @@
           <p class="executive-summary">Información no disponible</p>
         </article>
 
-        <article class="panel span-6 recommendation">
+        <article class="panel span-6 recommendation dashboard-recommendation">
           <div class="panel-header">
             <div>
               <h2>Recomendación ejecutiva del día</h2>
@@ -549,10 +679,10 @@
           <p class="executive-summary">Información no disponible</p>
         </article>
 
-        <article class="panel span-12 conversation-primary">
+        <article class="panel span-12 conversation-primary dashboard-chat">
           <div class="panel-header">
             <div>
-              <h2>Entrada conversacional</h2>
+              <h2>Hablar con OXKIO</h2>
               <p class="meta">Pide a OXKIO un resumen, una prioridad o el siguiente paso.</p>
             </div>
             <span class="badge ok">Consulta disponible</span>
@@ -585,7 +715,7 @@
           </div>
         </article>
 
-        <details class="panel span-6 collapsed-section">
+        <details class="panel span-6 collapsed-section dashboard-agenda">
           <summary>
             <span>
               <h2>Agenda</h2>
@@ -598,7 +728,7 @@
           </div>
         </details>
 
-        <details class="panel span-6 collapsed-section">
+        <details class="panel span-6 collapsed-section dashboard-commitments">
           <summary>
             <span>
               <h2>Compromisos Ejecutivos</h2>
@@ -612,7 +742,7 @@
           </div>
         </details>
 
-        <details class="panel span-4 collapsed-section">
+        <details class="panel span-4 collapsed-section dashboard-gmail">
           <summary>
             <span>
               <h2>Gmail</h2>
@@ -626,7 +756,7 @@
           </div>
         </details>
 
-        <details class="panel span-4 collapsed-section">
+        <details class="panel span-4 collapsed-section dashboard-secondary">
           <summary>
             <span>
               <h2>Memoria ejecutiva</h2>
@@ -648,7 +778,7 @@
           </div>
         </details>
 
-        <details class="panel span-4 collapsed-section" data-ecosystem-widget="businessHunter">
+        <details class="panel span-4 collapsed-section dashboard-secondary" data-ecosystem-widget="businessHunter">
           <summary>
             <span>
               <h2>Business Hunter</h2>
@@ -670,7 +800,7 @@
           </div>
         </details>
 
-        <details class="panel span-6 collapsed-section" data-ecosystem-widget="xose">
+        <details class="panel span-6 collapsed-section dashboard-secondary" data-ecosystem-widget="xose">
           <summary>
             <span>
               <h2>Xose</h2>
@@ -692,7 +822,7 @@
           </div>
         </details>
 
-        <details class="panel span-6 collapsed-section" data-ecosystem-widget="ecosystem">
+        <details class="panel span-6 collapsed-section dashboard-secondary" data-ecosystem-widget="ecosystem">
           <summary>
             <span>
               <h2>Estado del Ecosistema</h2>
