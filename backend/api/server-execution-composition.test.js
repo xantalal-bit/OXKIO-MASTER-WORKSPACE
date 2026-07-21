@@ -16,6 +16,6 @@ test('production execution composition remains disabled and lazy', () => {
   assert.equal(/executionEnabled:\s*true/.test(source), false);
   assert.match(source, /const executiveCsrf = createExecutiveCsrf\(\)/);
   assert.match(source, /pathname === ["']\/api\/executive\/security-context["']/);
-  assert.match(source, /handleApproveRequest\(req, res, \{[\s\S]*?getIdentity:\s*getClienteCeroIdentity,[\s\S]*?csrf:\s*executiveCsrf/);
-  assert.match(source, /handleExecuteApprovedRequest\(req, res, \{[\s\S]*?getIdentity:\s*getClienteCeroIdentity,[\s\S]*?csrf:\s*executiveCsrf/);
+  assert.match(source, /handleApproveRequest\(req, res, \{[\s\S]*?getIdentity:\s*\(\) => requestPrivateIdentity,[\s\S]*?csrf:\s*executiveCsrf/);
+  assert.match(source, /handleExecuteApprovedRequest\(req, res, \{[\s\S]*?getIdentity:\s*\(\) => requestPrivateIdentity,[\s\S]*?csrf:\s*executiveCsrf/);
 });

@@ -596,7 +596,7 @@ test('approval frontends keep CSRF in memory and send only approvalId in mutable
 
   files.forEach((file) => {
     const html = fs.readFileSync(path.resolve(__dirname, '../../..', file), 'utf8');
-    assert.match(html, /fetch\(["'`]\/api\/executive\/security-context["'`]/);
+    assert.match(html, /(?:window\.oxkioAuthenticatedFetch|authenticatedFetch)\(["'`]\/api\/executive\/security-context["'`]/);
     assert.match(html, /["']X-OXKIO-CSRF["']:\s*executiveCsrfToken/);
     assert.match(html, /executivePost\(["'`]\/api\/approve["'`],\s*id\)/);
     assert.match(html, /executivePost\(["'`]\/api\/execute-approved["'`],\s*id\)/);

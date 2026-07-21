@@ -130,12 +130,47 @@
 
   <div id="toast" role="status" aria-live="polite"></div>
 
-  <script>
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+    import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+
+    const firebaseApp = initializeApp({
+      apiKey: "AIzaSyDFySiO23mqJilJPUfE-dLv9Zbs9gcY_kg",
+      authDomain: "oxkio-9af40.firebaseapp.com",
+      projectId: "oxkio-9af40",
+      storageBucket: "oxkio-9af40.firebasestorage.app",
+      messagingSenderId: "975887789346",
+      appId: "1:975887789346:web:fa581107285b989d90897b"
+    });
+    const firebaseAuth = getAuth(firebaseApp);
+    let resolveAuthReady;
+    window.oxkioAuthReady = new Promise((resolve) => { resolveAuthReady = resolve; });
+    onAuthStateChanged(firebaseAuth, (user) => {
+      if (!user) {
+        window.location.replace("/");
+        return;
+      }
+      resolveAuthReady(user);
+    });
+    window.oxkioAuthenticatedFetch = async function(url, options = {}, retry = true) {
+      const user = await window.oxkioAuthReady;
+      const token = await user.getIdToken(!retry);
+      const headers = new Headers(options.headers || {});
+      headers.set("Authorization", `Bearer ${token}`);
+      const response = await fetch(url, { ...options, headers });
+      if (response.status === 401 && retry) {
+        return window.oxkioAuthenticatedFetch(url, options, false);
+      }
+      if (response.status === 401) window.location.replace("/");
+      return response;
+    };
+  </script>
+  <script type="module">
     let executiveCsrfToken = null;
     let executiveCsrfExpiresAt = 0;
 
     async function refreshExecutiveSecurityContext(){
-      const response = await fetch('/api/executive/security-context', { cache: 'no-store' });
+      const response = await window.oxkioAuthenticatedFetch('/api/executive/security-context', { cache: 'no-store' });
       const context = await response.json();
       if(!response.ok || !context.authorized || typeof context.csrfToken !== 'string'){
         throw new Error(context.message || 'AutorizaciÃ³n ejecutiva no disponible');
@@ -148,7 +183,7 @@
       if(!executiveCsrfToken || !Number.isFinite(executiveCsrfExpiresAt) || Date.now() >= executiveCsrfExpiresAt){
         await refreshExecutiveSecurityContext();
       }
-      const response = await fetch(endpoint, {
+      const response = await window.oxkioAuthenticatedFetch(endpoint, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -188,8 +223,8 @@
       try{
         const suffix = force ? '?_force=1' : '';
         const [pendingResponse, historyResponse] = await Promise.all([
-          fetch('/api/pending-approvals' + suffix),
-          fetch('/api/approval-history' + suffix)
+          window.oxkioAuthenticatedFetch('/api/pending-approvals' + suffix),
+          window.oxkioAuthenticatedFetch('/api/approval-history' + suffix)
         ]);
         if(!pendingResponse.ok || !historyResponse.ok) throw new Error('Error de red');
         const pendingData = await pendingResponse.json();
@@ -318,6 +353,7 @@
       loadApprovals();
     }
 
+    window.loadApprovals = loadApprovals;
     loadApprovals();
     setInterval(()=>loadApprovals(),10000);
   </script>

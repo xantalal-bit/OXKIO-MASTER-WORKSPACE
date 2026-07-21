@@ -609,6 +609,25 @@
     const auth = getAuth(app);
     const db = getFirestore(app);
 
+    async function authenticatedFetch(url, options = {}, retry = true) {
+      const firebaseUser = auth.currentUser;
+      if (!firebaseUser) throw new Error("Sesión no disponible.");
+      const token = await firebaseUser.getIdToken(!retry);
+      const headers = new Headers(options.headers || {});
+      headers.set("Authorization", `Bearer ${token}`);
+      const response = await fetch(url, { ...options, headers });
+      if (response.status === 401 && retry) {
+        return authenticatedFetch(url, options, false);
+      }
+      if (response.status === 401) {
+        await signOut(auth);
+        showLogin("La sesión ha caducado. Vuelve a iniciar sesión.");
+      }
+      return response;
+    }
+
+    window.oxkioAuthenticatedFetch = authenticatedFetch;
+
     let currentUser = null;
     let modoCEO = false;
     let recognition = null;
@@ -718,7 +737,7 @@ console.log("Cargando inteligencia estratégica Oxkio...");
   if (!box) return;
 
   try {
-    const response = await fetch("/api/simulator-executive-export");
+    const response = await authenticatedFetch("/api/simulator-executive-export");
     const result = await response.json();
 
     if (!result.ok || !result.data) {
@@ -791,7 +810,7 @@ applyModoCEO();
   try {
     const executiveChatEndpoint = "/api/executive/chat";
     // Reversión temporal: GET /api/chat?message=<texto codificado>.
-    const res = await fetch(executiveChatEndpoint, {
+    const res = await authenticatedFetch(executiveChatEndpoint, {
       method: "POST",
       headers: {
         "Content-Type": "application/json"
@@ -901,7 +920,7 @@ let executiveCsrfToken = null;
 let executiveCsrfExpiresAt = 0;
 
 async function refreshExecutiveSecurityContext() {
-  const response = await fetch("/api/executive/security-context", { cache: "no-store" });
+  const response = await authenticatedFetch("/api/executive/security-context", { cache: "no-store" });
   const context = await response.json();
   if (!response.ok || !context.authorized || typeof context.csrfToken !== "string") {
     throw new Error(context.message || "AutorizaciÃ³n ejecutiva no disponible");
@@ -914,7 +933,7 @@ async function executivePost(endpoint, approvalId, retry = true) {
   if (!executiveCsrfToken || !Number.isFinite(executiveCsrfExpiresAt) || Date.now() >= executiveCsrfExpiresAt) {
     await refreshExecutiveSecurityContext();
   }
-  const response = await fetch(endpoint, {
+  const response = await authenticatedFetch(endpoint, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -936,7 +955,7 @@ async function loadApprovals() {
   box.textContent = "Cargando aprobaciones...";
 
   try {
-    const res = await fetch("/api/pending-approvals");
+    const res = await authenticatedFetch("/api/pending-approvals");
     const data = await res.json();
 
     if (!res.ok) throw new Error(data.message || "No se pudieron cargar las aprobaciones.");

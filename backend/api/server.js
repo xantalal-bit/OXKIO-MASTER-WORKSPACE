@@ -31,6 +31,12 @@ const {
   handleExecuteApprovedRequest
 } = require("./routes/executive-approval");
 const { createExecutiveCsrf } = require("../security/executive-csrf");
+const {
+  authenticateFirebaseRequest,
+  createFirebaseAdminVerifier,
+  sendFirebaseAuthError
+} = require("../security/firebase-server-auth");
+const { createExecutiveAuthorizer } = require("../security/executive-authorization");
 const { createExecutiveRuntime } = require("../services/runtime/executive-runtime-factory");
 const { getClienteCeroIdentity } = require("../services/private-context/client-identity-resolver");
 const { buildGmailPrivateContext } = require("../services/private-context/gmail-private-provider");
@@ -61,6 +67,8 @@ const executiveRuntime = createExecutiveRuntime({
   productionApprovalQueue: approvalQueue
 });
 const executiveCsrf = createExecutiveCsrf();
+const verifyFirebaseIdToken = createFirebaseAdminVerifier();
+const authorizeFirebaseIdentity = createExecutiveAuthorizer();
 const executionConfig = Object.freeze({ executionEnabled: false });
 const gmailDraftComposition = createAuthorizedGmailDraftProvider({
   executionEnabled: executionConfig.executionEnabled,
@@ -79,15 +87,34 @@ const gmailConnector = new GmailConnector();
 gmailConnector.connect();
 const workflowManager = new WorkflowManager();
 const systemStateManager = new SystemStateManager();
-const dashboardGmailReader = () => buildGmailPrivateContext({
-  ...getClienteCeroIdentity(),
-  maxMessages: 5
-});
-const dashboardCalendarReader = () => buildCalendarPrivateContext({
-  ...getClienteCeroIdentity(),
-  range: "next7Days",
-  maxResults: 10
-});
+function buildRequestPrivateIdentity(firebaseIdentity) {
+  const privateIdentity = getClienteCeroIdentity();
+  return {
+    ...privateIdentity,
+    userId: firebaseIdentity.uid
+  };
+}
+
+function createDashboardReaders(firebaseIdentity) {
+  const identity = buildRequestPrivateIdentity(firebaseIdentity);
+  return {
+    gmailReader: () => buildGmailPrivateContext({ ...identity, maxMessages: 5 }),
+    calendarReader: () => buildCalendarPrivateContext({
+      ...identity,
+      range: "next7Days",
+      maxResults: 10
+    })
+  };
+}
+
+const MUTABLE_EXECUTIVE_ROUTES = new Set([
+  "/api/approve",
+  "/api/execute-approved"
+]);
+
+function requiresFirebaseAuthentication(pathname) {
+  return pathname.startsWith("/api/") || pathname === "/oauth/google";
+}
 
 systemStateManager.updateIntegration(
     "gmail",
@@ -144,12 +171,40 @@ function sendJson(res, statusCode, data) {
 const server = http.createServer(async (req, res) => {
 
 const pathname = req.url.split("?")[0];
+const methodMustBeHandledFirst = MUTABLE_EXECUTIVE_ROUTES.has(pathname)
+  && req.method !== "POST";
+
+if (requiresFirebaseAuthentication(pathname) && !methodMustBeHandledFirst) {
+  const authentication = await authenticateFirebaseRequest(req, {
+    verifyIdToken: verifyFirebaseIdToken,
+    authorizeIdentity: authorizeFirebaseIdentity
+  });
+  if (!authentication.ok) {
+    return sendFirebaseAuthError(res, authentication);
+  }
+  res.setHeader("Cache-Control", "no-store");
+  Object.defineProperty(req, "oxkioIdentity", {
+    value: authentication.identity,
+    enumerable: false,
+    writable: false
+  });
+}
+
+const requestPrivateIdentity = req.oxkioIdentity
+  ? buildRequestPrivateIdentity(req.oxkioIdentity)
+  : null;
+const dashboardReaders = req.oxkioIdentity
+  ? createDashboardReaders(req.oxkioIdentity)
+  : null;
+
 if (isExecutiveIdentityRoute(pathname, req.method)) {
-  return handleExecutiveIdentityRequest(req, res);
+  return handleExecutiveIdentityRequest(req, res, {
+    dependencies: { getClienteCeroIdentity: () => req.oxkioIdentity }
+  });
 }
 if (pathname === "/api/executive/security-context") {
   return handleExecutiveSecurityContextRequest(req, res, {
-    getIdentity: getClienteCeroIdentity,
+    getIdentity: () => requestPrivateIdentity,
     csrf: executiveCsrf
   });
 }
@@ -160,12 +215,12 @@ if (isExecutiveChatRoute(pathname, req.method)) {
       memory: executiveRuntime.memory,
       proposalEngine,
       approvalQueue: executiveRuntime.approvalQueue,
-      getClienteCeroIdentity,
+      getClienteCeroIdentity: () => requestPrivateIdentity,
       buildGmailPrivateContext,
       buildCalendarPrivateContext,
       getDashboardState: DashboardIntelligence.getDashboardState,
-      dashboardGmailReader,
-      dashboardCalendarReader
+      dashboardGmailReader: dashboardReaders.gmailReader,
+      dashboardCalendarReader: dashboardReaders.calendarReader
     }
   });
 }
@@ -471,6 +526,17 @@ if (req.url === "/js/business-hunter-dashboard.js") {
 
   return;
 }
+if (req.url === "/js/firebase-authenticated-fetch.js") {
+  const fs = require("fs");
+  const path = require("path");
+  const scriptPath = path.join(__dirname, "../../app/js/firebase-authenticated-fetch.js");
+
+  res.writeHead(200, {
+    "Content-Type": "application/javascript; charset=utf-8"
+  });
+  res.end(fs.readFileSync(scriptPath));
+  return;
+}
 if (req.url === "/css/executive-chat.css") {
 
   const fs = require("fs");
@@ -735,8 +801,8 @@ if (pathname === "/api/dashboard" && req.method === "GET") {
   try {
     const dashboardState = await DashboardIntelligence.getDashboardState({
       approvalQueue,
-      gmailReader: dashboardGmailReader,
-      calendarReader: dashboardCalendarReader
+      gmailReader: dashboardReaders.gmailReader,
+      calendarReader: dashboardReaders.calendarReader
     });
 
     return sendJson(res, 200, dashboardState);
@@ -1136,7 +1202,7 @@ if (pathname === "/api/knowledge-supervisor/github-releases/discover" && req.met
 if (pathname === "/api/approve") {
   return handleApproveRequest(req, res, {
     approvalQueue,
-    getIdentity: getClienteCeroIdentity,
+    getIdentity: () => requestPrivateIdentity,
     csrf: executiveCsrf
   });
 }
@@ -1161,7 +1227,7 @@ if (pathname === "/api/execute-approved") {
     approvalQueue,
     executionService,
     config: executionConfig,
-    getIdentity: getClienteCeroIdentity,
+    getIdentity: () => requestPrivateIdentity,
     csrf: executiveCsrf
   });
 }

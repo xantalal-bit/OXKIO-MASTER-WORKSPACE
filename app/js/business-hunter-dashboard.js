@@ -61,7 +61,11 @@ async function loadBusinessHunterSummary() {
   setLoadingState(true);
 
   try {
-    const response = await fetch('/api/executive/chat', {
+    if (typeof window.oxkioAuthenticatedFetch !== 'function') {
+      throw new Error('Autenticación no disponible.');
+    }
+
+    const response = await window.oxkioAuthenticatedFetch('/api/executive/chat', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

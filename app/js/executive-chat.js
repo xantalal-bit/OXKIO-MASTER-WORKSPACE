@@ -313,33 +313,25 @@ function toggleVoiceInput() {
 
 function isValidExecutiveIdentityPayload(data) {
   const identity = data && data.identity;
-  const authorization = identity && identity.authorization;
 
   return data && data.ok === true
     && identity
     && typeof identity.clientId === 'string'
-    && typeof identity.userId === 'string'
-    && typeof identity.expectedClientId === 'string'
-    && authorization
-    && authorization.status === 'granted'
-    && authorization.provider === 'google-oauth';
+    && typeof identity.uid === 'string'
+    && identity.role === 'admin'
+    && identity.authorized === true;
 }
 
 function copyPrivateIdentity(identity) {
   return {
     clientId: identity.clientId,
-    userId: identity.userId,
-    expectedClientId: identity.expectedClientId,
-    authorization: {
-      status: identity.authorization.status,
-      provider: identity.authorization.provider,
-    },
+    userId: identity.uid,
   };
 }
 
 async function loadExecutiveIdentity() {
   try {
-    const response = await fetch('/api/executive/identity');
+    const response = await window.oxkioAuthenticatedFetch('/api/executive/identity');
 
     if (!response.ok) {
       return;
@@ -447,7 +439,7 @@ form.addEventListener('submit', async (event) => {
   setThinking(true);
 
   try {
-    const response = await fetch('/api/executive/chat', {
+    const response = await window.oxkioAuthenticatedFetch('/api/executive/chat', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

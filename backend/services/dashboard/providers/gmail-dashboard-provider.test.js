@@ -156,8 +156,8 @@ test('dashboard injection is lazy and frontend renders only whitelisted Gmail da
   const renderer = html.slice(renderStart, renderEnd);
 
   assert.match(dashboardSource, /getGmail\(timestamp, options\.gmailReader\)/);
-  assert.match(serverSource, /const dashboardGmailReader = \(\) => buildGmailPrivateContext/);
-  assert.match(serverSource, /pathname === ["']\/api\/dashboard["'][\s\S]*gmailReader: dashboardGmailReader/);
+  assert.match(serverSource, /gmailReader: \(\) => buildGmailPrivateContext/);
+  assert.match(serverSource, /pathname === ["']\/api\/dashboard["'][\s\S]*gmailReader: dashboardReaders\.gmailReader/);
   assert.match(renderer, /gmail\.available !== true \|\| gmail\.source !== ["']gmail["']/);
   assert.match(renderer, /Gmail no disponible/);
   assert.match(renderer, /textContent/);

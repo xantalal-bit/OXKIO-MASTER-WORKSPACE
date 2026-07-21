@@ -4,6 +4,7 @@
   },
   "dependencies": {
     "dotenv": "^17.4.2",
+    "firebase-admin": "^14.2.0",
     "googleapis": "^171.4.0",
     "openai": "^6.39.1",
     "pdfkit": "^0.18.0"

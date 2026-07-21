@@ -42,7 +42,11 @@
     container.textContent = "Cargando proyectos...";
 
     try {
-      const response = await fetch("/api/projects", {
+      if (typeof window.oxkioAuthenticatedFetch !== "function") {
+        throw new Error("Autenticación no disponible.");
+      }
+
+      const response = await window.oxkioAuthenticatedFetch("/api/projects", {
         method: "GET",
         headers: {
           Accept: "application/json"

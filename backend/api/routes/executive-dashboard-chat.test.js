@@ -21,7 +21,7 @@ function getChatScript(html) {
 test('uses only the official executive chat POST contract', () => {
   const source = getChatScript(readDashboard());
 
-  assert.match(source, /fetch\(["']\/api\/executive\/chat["']/);
+  assert.match(source, /oxkioAuthenticatedFetch\(["']\/api\/executive\/chat["']/);
   assert.match(source, /method:\s*["']POST["']/);
   assert.match(source, /["']Content-Type["']:\s*["']application\/json["']/);
   assert.match(source, /body:\s*JSON\.stringify\(\{ query \}\)/);
@@ -44,7 +44,7 @@ test('blocks empty and duplicate submissions before fetch and restores the butto
   const source = getChatScript(readDashboard());
   const emptyGuard = source.indexOf('if (!query)');
   const duplicateGuard = source.indexOf('if (executiveChatSending) return');
-  const fetchCall = source.indexOf('await fetch');
+  const fetchCall = source.indexOf('await window.oxkioAuthenticatedFetch');
 
   assert.ok(emptyGuard >= 0 && emptyGuard < fetchCall);
   assert.ok(duplicateGuard >= 0 && duplicateGuard < fetchCall);
