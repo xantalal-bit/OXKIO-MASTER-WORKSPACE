@@ -1,4 +1,3 @@
 @echo off
-cd /d C:\Users\janta\OneDrive\Documentos\OXKIO\backend\api
-node server.js
-pause
+powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File "%~dp0Start-Oxkio.ps1" %*
+exit /b %ERRORLEVEL%

@@ -10,6 +10,10 @@ node_modules/
 
 # VARIABLES PRIVADAS
 .env
+.env.local
+.env.*.local
+**/*firebase-adminsdk*.json
+**/firebase-admin-service-account*.json
 
 # BACKUPS
 backups/
