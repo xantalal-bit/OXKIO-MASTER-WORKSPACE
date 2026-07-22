@@ -37,7 +37,7 @@ function sendMethodNotAllowed(res) {
   return sendJson(res, 405, {
     ok: false,
     code: 'method_not_allowed',
-    message: 'Use POST with JSON.',
+    message: 'Esta operación solo puede iniciarse desde el botón de análisis.',
   });
 }
 
@@ -57,7 +57,7 @@ function authorizeBusinessHunterRequest(res, getIdentity = getClienteCeroIdentit
   sendJson(res, 403, {
     ok: false,
     code: 'executive_authorization_denied',
-    message: 'Executive authorization is required.',
+    message: 'Tu sesión no tiene permiso para realizar esta operación.',
   });
   return false;
 }
@@ -76,7 +76,7 @@ function validateBusinessHunterRequest(req, res, getIdentity) {
     sendJson(res, 400, {
       ok: false,
       code: 'invalid_content_type',
-      message: 'Content-Type application/json is required.',
+      message: 'La solicitud de análisis no tiene un formato válido.',
     });
     return false;
   }
@@ -102,7 +102,7 @@ async function handleBusinessHunterOperationRequest(req, res, {
       return sendJson(res, 400, {
         ok: false,
         code: 'invalid_json_body',
-        message: 'Invalid JSON body.',
+        message: 'La solicitud de análisis no tiene un formato válido.',
       });
     }
 
@@ -111,7 +111,7 @@ async function handleBusinessHunterOperationRequest(req, res, {
       return sendJson(res, 500, {
         ok: false,
         code: 'business_hunter_service_unavailable',
-        message: 'Business Hunter service is unavailable.',
+        message: 'El análisis comercial no está disponible en este momento.',
       });
     }
 
@@ -124,7 +124,7 @@ async function handleBusinessHunterOperationRequest(req, res, {
       return sendJson(res, 409, {
         ok: false,
         code: error.code,
-        message: 'Business Hunter readonly cycle is already running.',
+        message: 'Ya existe un análisis en curso.',
       });
     }
 
@@ -132,7 +132,7 @@ async function handleBusinessHunterOperationRequest(req, res, {
       return sendJson(res, 504, {
         ok: false,
         code: error.code,
-        message: 'Business Hunter readonly cycle timed out.',
+        message: 'El análisis tardó más de lo permitido y se detuvo de forma segura.',
       });
     }
 
@@ -140,14 +140,22 @@ async function handleBusinessHunterOperationRequest(req, res, {
       return sendJson(res, 400, {
         ok: false,
         code: 'invalid_json',
-        message: 'Invalid JSON body.',
+        message: 'La solicitud de análisis no tiene un formato válido.',
+      });
+    }
+
+    if (error && ['invalid_worker_result', 'unsafe_worker_result'].includes(error.code)) {
+      return sendJson(res, 500, {
+        ok: false,
+        code: error.code,
+        message: 'El resultado no superó las comprobaciones de seguridad.',
       });
     }
 
     return sendJson(res, 500, {
       ok: false,
       code: 'business_hunter_operation_failed',
-      message: 'Business Hunter readonly cycle failed.',
+      message: 'No se pudo completar el análisis comercial.',
     });
   }
 }

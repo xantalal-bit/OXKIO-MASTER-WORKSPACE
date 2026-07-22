@@ -825,27 +825,27 @@
           <div class="panel-header">
             <div>
               <h2>Operaciones OXKIO</h2>
-              <p class="meta">Análisis readonly para preparar valor económico sin ejecutar acciones reales.</p>
+              <p class="meta">Análisis preparatorio para obtener información útil sin ejecutar acciones reales.</p>
             </div>
-            <span class="badge" data-bh-status>Listo</span>
+            <span class="badge" data-bh-status>Preparado</span>
           </div>
           <p class="executive-summary" data-bh-summary>Sin ejecuciones todavía.</p>
           <div class="operations-grid">
             <div class="operations-kv">
-              <span class="operations-label">Worker</span>
-              <p class="operations-value" data-bh-worker>business-hunter-readonly</p>
+              <span class="operations-label">Módulo responsable</span>
+              <p class="operations-value" data-bh-worker>Análisis comercial</p>
             </div>
             <div class="operations-kv">
-              <span class="operations-label">Modo</span>
-              <p class="operations-value" data-bh-mode>manual</p>
+              <span class="operations-label">Inicio</span>
+              <p class="operations-value" data-bh-mode>Iniciado por José Antonio</p>
             </div>
             <div class="operations-kv">
               <span class="operations-label">Fase</span>
-              <p class="operations-value" data-bh-phase>En espera</p>
+              <p class="operations-value" data-bh-phase>Preparando análisis</p>
             </div>
             <div class="operations-kv">
-              <span class="operations-label">executionEnabled</span>
-              <p class="operations-value" data-bh-execution-enabled>false</p>
+              <span class="operations-label">Acciones reales</span>
+              <p class="operations-value" data-bh-execution-enabled>Desactivadas</p>
             </div>
             <div class="operations-kv">
               <span class="operations-label">Última ejecución</span>
@@ -856,20 +856,20 @@
               <p class="operations-value" data-bh-duration>No disponible</p>
             </div>
             <div class="operations-kv">
-              <span class="operations-label">Estado de fuentes</span>
-              <p class="operations-value" data-bh-source-status>No disponible</p>
+              <span class="operations-label">Información disponible</span>
+              <p class="operations-value" data-bh-source-status>Información no disponible</p>
             </div>
             <div class="operations-kv">
-              <span class="operations-label">Evidencias / oportunidades</span>
+              <span class="operations-label">Información localizada</span>
               <p class="operations-value" data-bh-opportunities-count>0</p>
             </div>
             <div class="operations-kv">
               <span class="operations-label">Propuesta</span>
-              <p class="operations-value" data-bh-proposal-created>No creada</p>
+              <p class="operations-value" data-bh-proposal-created>No se ha preparado ninguna propuesta</p>
             </div>
             <div class="operations-kv">
-              <span class="operations-label">Approval Queue</span>
-              <p class="operations-value" data-bh-approval-id>No aplica</p>
+              <span class="operations-label">Aprobación</span>
+              <p class="operations-value" data-bh-approval-id>No hay ninguna aprobación pendiente</p>
             </div>
           </div>
           <div class="operations-actions">
@@ -882,7 +882,7 @@
             </summary>
             <div class="operations-details-content">
               <div>
-                <p class="meta">Evidencias documentales / oportunidades</p>
+                <p class="meta">Información para análisis posterior</p>
                 <ul class="list" data-bh-opportunities></ul>
               </div>
               <div>
@@ -890,7 +890,7 @@
                 <ul class="list" data-bh-recommendations></ul>
               </div>
               <div>
-                <p class="meta">Últimas operaciones</p>
+                <p class="meta">Actividad reciente</p>
                 <ul class="list" data-bh-recent-operations></ul>
               </div>
               <p class="note">Solo análisis. No se contacta ni se ejecutan acciones.</p>
@@ -1233,26 +1233,75 @@
 
     function formatBusinessHunterOperationStatus(status) {
       const labels = {
-        ready: "Listo",
-        running: "Trabajando",
-        completed: "Completado",
-        completed_with_warnings: "Completado con avisos",
-        failed: "Error",
+        ready: "Preparado",
+        pending: "Pendiente",
+        running: "En curso",
+        completed: "Completada",
+        completed_with_warnings: "Completada con avisos",
+        failed: "No completada",
       };
       return labels[status] || labels.ready;
     }
 
     function formatBusinessHunterOperationPhase(phase) {
       const labels = {
-        queued: "En espera",
-        validating: "Validando",
-        running_worker: "Ejecutando worker",
-        validating_result: "Validando resultado",
-        logging: "Registrando",
-        completed: "Completada",
-        failed: "Fallida"
+        queued: "Preparando análisis",
+        validating: "Comprobando la solicitud",
+        running_worker: "Analizando información",
+        validating_result: "Verificando el resultado",
+        logging: "Registrando el resultado",
+        completed: "Análisis finalizado",
+        failed: "Análisis interrumpido"
       };
       return labels[phase] || labels.queued;
+    }
+
+    function formatBusinessHunterSourceStatus(sourceStatus) {
+      const labels = {
+        real: "Información disponible",
+        partial: "Información parcial disponible",
+        unavailable: "Información no disponible"
+      };
+      return labels[sourceStatus] || labels.unavailable;
+    }
+
+    function getBusinessHunterExecutiveSummary(data, businessResult) {
+      const opportunities = Array.isArray(businessResult.opportunities)
+        ? businessResult.opportunities
+        : [];
+      const hasDocumentaryInformation = opportunities.some((item) => item && item.kind === "documentary_evidence");
+      const hasVerifiedOpportunity = opportunities.some((item) => item && item.kind === "commercial_opportunity");
+
+      if (data.sourceStatus === "unavailable") {
+        return "No se ha encontrado información suficiente para completar el análisis.";
+      }
+      if (data.sourceStatus === "partial") {
+        return "Hay información útil, aunque todavía es insuficiente para realizar un análisis comercial completo.";
+      }
+      if (hasVerifiedOpportunity) {
+        return "Se ha encontrado información suficiente para presentar oportunidades comerciales verificadas.";
+      }
+      if (hasDocumentaryInformation) {
+        return "Se ha localizado información relacionada con Business Hunter. Este resultado sirve como base preparatoria, pero todavía no representa empresas, leads ni oportunidades comerciales verificadas.";
+      }
+      return textOrFallback(
+        data.resultSummary || businessResult.summary,
+        "El análisis ha finalizado sin información comercial verificable."
+      );
+    }
+
+    function formatBusinessHunterRecommendation(value) {
+      const recommendation = textOrFallback(value, "Recomendación no disponible.");
+      const normalized = recommendation.toLowerCase();
+      if (normalized.includes("evidencia documental") || normalized.includes("evidencia sanitizada")) {
+        return normalized.includes("no tratar")
+          ? "Mantener esta información como referencia preparatoria: todavía no representa empresas ni leads verificados."
+          : "Revisar la información localizada antes de iniciar una búsqueda comercial más profunda.";
+      }
+      if (normalized.includes("inventario local")) {
+        return "Completar la información disponible antes de realizar un análisis comercial más profundo.";
+      }
+      return recommendation;
     }
 
     function updateBusinessHunterOperationBadge(badge, status) {
@@ -1311,16 +1360,21 @@
         const entry = document.createElement("li");
         entry.className = "item";
         if (typeof item === "string") {
-          entry.textContent = textOrFallback(item, fallback);
+          entry.textContent = formatBusinessHunterRecommendation(item);
           listElement.appendChild(entry);
           return;
         }
         const title = document.createElement("span");
         title.className = "item-title";
-        title.textContent = textOrFallback(item && item.title, "Oportunidad");
+        const isDocumentary = item && item.kind === "documentary_evidence";
+        title.textContent = isDocumentary
+          ? "Información documental relacionada"
+          : textOrFallback(item && item.title, "Información comercial");
         const detail = document.createElement("p");
         detail.className = "item-text";
-        detail.textContent = textOrFallback(item && item.summary, fallback);
+        detail.textContent = isDocumentary
+          ? "Tipo: información documental. Utilidad: base para análisis posterior. No representa todavía una empresa o lead verificado."
+          : textOrFallback(item && item.summary, fallback);
         entry.append(title, detail);
         listElement.appendChild(entry);
       });
@@ -1342,10 +1396,12 @@
         entry.className = "item";
         const title = document.createElement("span");
         title.className = "item-title";
-        title.textContent = `${formatBusinessHunterOperationStatus(operation.status)} · ${formatBusinessHunterOperationTimestamp(operation.completedAt || operation.startedAt)}`;
+        title.textContent = `Análisis comercial · ${formatBusinessHunterOperationStatus(operation.status)} · ${formatBusinessHunterOperationTimestamp(operation.completedAt || operation.startedAt)}`;
         const detail = document.createElement("p");
         detail.className = "item-text";
-        detail.textContent = textOrFallback(operation.resultSummary, "Sin resumen disponible.");
+        const operationResult = operation.result && typeof operation.result === "object" ? operation.result : {};
+        const summary = getBusinessHunterExecutiveSummary(operation, operationResult);
+        detail.textContent = `${summary} ${formatBusinessHunterSourceStatus(operation.sourceStatus)} · ${formatBusinessHunterOperationDuration(operation.durationMs)}`;
         entry.append(title, detail);
         listElement.appendChild(entry);
       });
@@ -1381,10 +1437,10 @@
       const button = panel.querySelector("[data-bh-run]");
 
       updateBusinessHunterOperationBadge(panel.querySelector("[data-bh-status]"), status);
-      setText(panel.querySelector("[data-bh-worker]"), data.worker, "business-hunter-readonly");
-      setText(panel.querySelector("[data-bh-mode]"), data.mode, "manual");
+      setText(panel.querySelector("[data-bh-worker]"), "Análisis comercial", "Análisis comercial");
+      setText(panel.querySelector("[data-bh-mode]"), data.mode === "manual" ? "Iniciado por José Antonio" : "Inicio supervisado", "Iniciado por José Antonio");
       setText(panel.querySelector("[data-bh-phase]"), formatBusinessHunterOperationPhase(data.phase), "En espera");
-      setText(panel.querySelector("[data-bh-execution-enabled]"), data.executionEnabled === true ? "true" : "false", "false");
+      setText(panel.querySelector("[data-bh-execution-enabled]"), data.executionEnabled === true ? "Activadas" : "Desactivadas", "Desactivadas");
       setText(
         panel.querySelector("[data-bh-last-execution]"),
         data.completedAt
@@ -1405,14 +1461,12 @@
       );
       setText(
         panel.querySelector("[data-bh-source-status]"),
-        ["real", "partial", "unavailable"].includes(data.sourceStatus)
-          ? data.sourceStatus
-          : "unavailable",
-        "unavailable"
+        formatBusinessHunterSourceStatus(data.sourceStatus),
+        "Información no disponible"
       );
       setText(
         panel.querySelector("[data-bh-summary]"),
-        data.resultSummary || businessResult.summary,
+        getBusinessHunterExecutiveSummary(data, businessResult),
         "Sin ejecuciones todavía."
       );
       setText(
@@ -1424,13 +1478,13 @@
       );
       setText(
         panel.querySelector("[data-bh-proposal-created]"),
-        data.proposalCreated === true ? "Creada" : "No creada",
-        "No creada"
+        data.proposalCreated === true ? "Propuesta preparada" : "No se ha preparado ninguna propuesta",
+        "No se ha preparado ninguna propuesta"
       );
       setText(
         panel.querySelector("[data-bh-approval-id]"),
-        data.approvalId || "No aplica",
-        "No aplica"
+        data.approvalId ? "Existe una aprobación relacionada" : "No hay ninguna aprobación pendiente",
+        "No hay ninguna aprobación pendiente"
       );
       setText(
         panel.querySelector("[data-bh-state]"),
@@ -1442,7 +1496,7 @@
       renderBusinessHunterList(
         panel.querySelector("[data-bh-opportunities]"),
         businessResult.opportunities,
-        "Sin oportunidades sanitizadas."
+        "No se ha localizado información suficiente."
       );
       renderBusinessHunterList(
         panel.querySelector("[data-bh-recommendations]"),

@@ -150,30 +150,30 @@ function buildSourceStatus(findings, opportunities) {
 
 function buildSummary(sourceStatus, opportunities) {
   if (sourceStatus === 'unavailable') {
-    return 'Business Hunter no está disponible en el inventario local.';
+    return 'No se ha encontrado información suficiente para completar el análisis.';
   }
 
   if (sourceStatus === 'partial') {
-    return 'Business Hunter está identificado, pero la evidencia local todavía es parcial.';
+    return 'Hay información útil, aunque todavía es insuficiente para realizar un análisis comercial completo.';
   }
 
   const count = Array.isArray(opportunities) ? opportunities.length : 0;
 
   return count > 0
-    ? `Business Hunter local ha devuelto ${count} evidencia${count === 1 ? '' : 's'} documental${count === 1 ? '' : 'es'} sanitizada${count === 1 ? '' : 's'}; no son leads comerciales.`
-    : 'Business Hunter está disponible, pero no ha devuelto evidencia comercial estructurada.';
+    ? 'Se ha localizado información relacionada con Business Hunter. Este resultado sirve como base preparatoria, pero todavía no representa empresas, leads ni oportunidades comerciales verificadas.'
+    : 'El análisis ha finalizado sin información comercial verificable.';
 }
 
 function buildRecommendations(sourceStatus, opportunities) {
   const recommendations = [];
 
   if (sourceStatus === 'real' && Array.isArray(opportunities) && opportunities.length > 0) {
-    recommendations.push('Revisar la evidencia documental sanitizada antes de cualquier análisis comercial posterior.');
-    recommendations.push('No tratar la evidencia documental como empresas o leads ni contactar a terceros.');
+    recommendations.push('Revisar la información localizada antes de iniciar una búsqueda comercial más profunda.');
+    recommendations.push('Mantener esta información como referencia preparatoria: todavía no representa empresas ni leads verificados.');
   } else if (sourceStatus === 'partial') {
-    recommendations.push('Completar el inventario local de Business Hunter antes de profundizar.');
+    recommendations.push('Completar la información disponible antes de realizar un análisis comercial más profundo.');
   } else {
-    recommendations.push('Localizar o registrar la carpeta oficial de Business Hunter en el inventario local.');
+    recommendations.push('Reunir información adicional de Business Hunter antes de repetir el análisis.');
   }
 
   return freezeDeep(recommendations.slice(0, MAX_RECOMMENDATIONS).map((entry) => normalizeText(entry, 240)));
@@ -210,11 +210,11 @@ function buildOpportunities(findings) {
       ),
       kind: 'documentary_evidence',
       title: normalizeText(
-        `Evidencia documental: ${classification.type || 'documento relevante'}`,
+        'Información documental relacionada',
         120,
-      ) || 'Evidencia documental',
+      ) || 'Información documental relacionada',
       summary: normalizeText(
-        `${classification.type || 'Documento'} identificado en el inventario local; no representa una empresa ni un lead comercial.`,
+        'Información útil como base para análisis posterior; no representa todavía una empresa ni un lead verificado.',
         220,
       ),
       confidence: Number.isFinite(Number(classification.confidence))

@@ -99,7 +99,7 @@ test('runs Business Hunter readonly in sandbox, sanitizes output and keeps runti
     assert.ok(result.opportunities.every((item) => {
       const serialized = JSON.stringify(item);
       return item.kind === 'documentary_evidence'
-        && /no representa una empresa ni un lead comercial/i.test(item.summary)
+        && /no representa todavía una empresa ni un lead verificado/i.test(item.summary)
         && !serialized.includes('\\')
         && !serialized.includes('/')
         && !serialized.includes('secret')
@@ -158,7 +158,7 @@ test('fails closed when Business Hunter is unavailable and keeps last error sani
   assert.equal(result.opportunitiesCount, 0);
   assert.equal(result.proposalCreated, false);
   assert.equal(result.approvalId, null);
-  assert.match(result.summary, /no está disponible/i);
+  assert.match(result.summary, /no se ha encontrado información suficiente/i);
   assert.ok(result.recommendations.length > 0);
   assert.equal(service.getStatus().lastError, null);
 });

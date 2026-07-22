@@ -163,6 +163,32 @@ test('fails closed for invalid method, invalid content type, invalid JSON and co
     },
   );
   assert.equal(conflictResponse.statusCode, 409);
+  assert.equal(conflictResponse.getJson().message, 'Ya existe un análisis en curso.');
+});
+
+test('translates timeout and invalid result failures without changing their HTTP contracts', async () => {
+  const identity = () => ({
+    clientId: 'cliente-cero',
+    expectedClientId: 'cliente-cero',
+    authorization: { status: 'granted', provider: 'google-oauth' },
+  });
+  const cases = [
+    ['business_hunter_timeout', 504, /tardó más de lo permitido/i],
+    ['invalid_worker_result', 500, /comprobaciones de seguridad/i],
+  ];
+
+  for (const [code, expectedStatus, expectedMessage] of cases) {
+    const response = createResponse();
+    await handleBusinessHunterOperationRequest(createRequest({}), response, {
+      getIdentity: identity,
+      operationsCoordinator: {
+        runBusinessAnalysis() { throw Object.assign(new Error('internal detail'), { code }); },
+      },
+    });
+    assert.equal(response.statusCode, expectedStatus);
+    assert.match(response.getJson().message, expectedMessage);
+    assert.equal(JSON.stringify(response.getJson()).includes('internal detail'), false);
+  }
 });
 
 test('dashboard markup exposes the readonly business analysis card and sanitized copy', () => {
@@ -186,5 +212,32 @@ test('dashboard markup exposes the readonly business analysis card and sanitized
   assert.doesNotMatch(html, /data-worker-selector|data-scheduler/);
   assert.match(html, /typeof item === "string"/);
   assert.match(html, /Array\.isArray\(businessResult\.opportunities\) \? businessResult\.opportunities\.length : 0/);
+  assert.doesNotMatch(html, /innerHTML/);
+});
+
+test('operations card presents internal values in executive language without changing the contract vocabulary', () => {
+  const html = fs.readFileSync(path.join(__dirname, '..', '..', '..', 'app', 'executive-dashboard.html'), 'utf8');
+  const cardStart = html.indexOf('<article class="panel span-12 dashboard-operations"');
+  const cardEnd = html.indexOf('</article>', cardStart);
+  const visibleCardText = html.slice(cardStart, cardEnd).replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ');
+
+  [
+    'Módulo responsable', 'Análisis comercial', 'Iniciado por José Antonio',
+    'Acciones reales', 'Desactivadas', 'Información no disponible', 'Actividad reciente',
+    'No se ha preparado ninguna propuesta', 'No hay ninguna aprobación pendiente',
+  ].forEach((label) => assert.match(visibleCardText, new RegExp(label, 'i')));
+  ['business-hunter-readonly', 'executionEnabled=false', 'documentary_evidence', 'sourceStatus', 'null', 'undefined', 'Markdown']
+    .forEach((technical) => assert.equal(visibleCardText.includes(technical), false));
+
+  assert.match(html, /running_worker:\s*"Analizando información"/);
+  assert.match(html, /validating_result:\s*"Verificando el resultado"/);
+  assert.match(html, /real:\s*"Información disponible"/);
+  assert.match(html, /partial:\s*"Información parcial disponible"/);
+  assert.match(html, /unavailable:\s*"Información no disponible"/);
+  assert.match(html, /data\.mode === "manual" \? "Iniciado por José Antonio"/);
+  assert.match(html, /data\.executionEnabled === true \? "Activadas" : "Desactivadas"/);
+  assert.match(html, /No representa todavía una empresa o lead verificado/);
+  assert.match(html, /operation\.result && typeof operation\.result === "object"/);
+  assert.doesNotMatch(html, /title\.textContent\s*=\s*operation\.operationId|detail\.textContent[\s\S]{0,80}interactionId/);
   assert.doesNotMatch(html, /innerHTML/);
 });
