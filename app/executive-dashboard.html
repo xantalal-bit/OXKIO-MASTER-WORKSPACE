@@ -916,25 +916,30 @@
               <div class="radio-mic" aria-hidden="true"></div>
               <div class="conversation">
                 <div class="input-row">
-                  <input type="text" value="estado del ecosistema" aria-label="Entrada conversacional de OXKIO" data-executive-chat-input>
+                  <input type="text" placeholder="¿En qué necesitas ayuda?" aria-label="Entrada conversacional de OXKIO" data-executive-chat-input>
                   <button type="button" data-executive-chat-submit>Enviar</button>
-                </div>
-                <div class="future-tools" aria-label="Capacidades futuras">
-                  <span class="tool-chip">Subir documentos</span>
-                  <span class="tool-chip">Analizar archivos</span>
-                  <span class="tool-chip">Consultar información</span>
                 </div>
               </div>
             </div>
             <p class="note" data-executive-chat-state>Consulta disponible.</p>
             <div class="item" data-executive-chat-result hidden>
               <p class="item-title" data-chat-response></p>
-              <p class="item-text" data-chat-intent></p>
-              <p class="item-text" data-chat-priority></p>
-              <p class="item-text" data-chat-confidence></p>
-              <p class="item-text" data-chat-proposal hidden></p>
-              <p class="item-text" data-chat-approval hidden></p>
-              <p class="item-text" data-chat-interaction></p>
+              <div class="operations-details" data-chat-decision hidden>
+                <p class="item-title" data-chat-decision-message></p>
+                <p class="item-text" data-chat-decision-safety></p>
+                <ol class="list" data-chat-plan hidden></ol>
+                <div class="operations-actions">
+                  <button type="button" data-chat-decision-confirm>Ejecutar revisión</button>
+                  <button type="button" class="btn-secondary" data-chat-decision-dismiss>Ahora no</button>
+                </div>
+              </div>
+              <details class="operations-details" data-chat-followup hidden>
+                <summary>Ver seguimiento</summary>
+                <div class="operations-details-content">
+                  <p class="item-text" data-chat-proposal hidden></p>
+                  <p class="item-text" data-chat-approval hidden></p>
+                </div>
+              </details>
             </div>
           </div>
         </article>
@@ -1124,6 +1129,7 @@
 
     let executiveChatSending = false;
     let businessHunterOperationSending = false;
+    let pendingPlanSteps = [];
 
     function setExecutiveChatState(message, state) {
       const stateElement = document.querySelector("[data-executive-chat-state]");
@@ -1132,50 +1138,120 @@
       stateElement.dataset.state = state;
     }
 
-    function formatOptionalExecutiveMetadata(value, fallback) {
-      if (typeof value === "string" && value.trim()) return value.trim();
-      if (!value || typeof value !== "object") return fallback;
-      return textOrFallback(value.summary || value.status || value.type || value.id, fallback);
-    }
-
     function renderExecutiveChatResult(data) {
       const result = document.querySelector("[data-executive-chat-result]");
       if (!result) return;
-      const analysis = data && data.analysis && typeof data.analysis === "object"
-        ? data.analysis
-        : {};
       const proposal = data && data.proposal ? data.proposal : null;
       const approval = data && data.approval ? data.approval : null;
-      const confidence = data && Number.isFinite(data.confidence)
-        ? data.confidence
-        : (Number.isFinite(analysis.confidence) ? analysis.confidence : null);
+      const recommendation = data && data.decisionRecommendation && typeof data.decisionRecommendation === "object"
+        ? data.decisionRecommendation
+        : null;
+      const plan = data && data.operationPlan && Array.isArray(data.operationPlan.steps)
+        ? data.operationPlan.steps.filter((step) => [
+          "business-analysis-readonly",
+          "knowledge-review-readonly"
+        ].includes(step)).slice(0, 3)
+        : [];
+      const supportedDecision = recommendation && [
+        "business-analysis-readonly",
+        "knowledge-review-readonly"
+      ].includes(recommendation.decision);
 
+      const firstPlannedStep = plan.length > 0 ? plan[0] : null;
+      pendingPlanSteps = plan.slice(1);
+      const actionDecision = firstPlannedStep || (supportedDecision ? recommendation.decision : null);
       setText(
         result.querySelector("[data-chat-response]"),
-        data && typeof data.response === "string" ? data.response : null,
+        actionDecision
+          ? (plan.length > 0 ? "He preparado un plan de trabajo." : "He revisado tu petición.")
+          : (data && typeof data.response === "string" ? data.response : null),
         "Respuesta no disponible."
-      );
-      setText(result.querySelector("[data-chat-intent]"), `Intención: ${textOrFallback(analysis.intent, "No disponible")}`);
-      setText(result.querySelector("[data-chat-priority]"), `Prioridad: ${textOrFallback(analysis.priority, "No disponible")}`);
-      setText(
-        result.querySelector("[data-chat-confidence]"),
-        `Confianza: ${confidence === null ? "No disponible" : confidence}`
       );
       const proposalElement = result.querySelector("[data-chat-proposal]");
       proposalElement.hidden = !proposal;
       if (proposal) {
-        proposalElement.textContent = `Propuesta: ${formatOptionalExecutiveMetadata(proposal, "Disponible")}`;
+        proposalElement.textContent = "Hay una propuesta preparada para tu revisión.";
       }
       const approvalElement = result.querySelector("[data-chat-approval]");
       approvalElement.hidden = !approval;
       if (approval) {
-        approvalElement.textContent = `Aprobación: ${formatOptionalExecutiveMetadata(approval, "Disponible")}`;
+        approvalElement.textContent = "Hay una decisión pendiente de tu aprobación.";
       }
-      setText(
-        result.querySelector("[data-chat-interaction]"),
-        `Interaction ID: ${textOrFallback(data && data.interactionId, "No disponible")}`
-      );
+      result.querySelector("[data-chat-followup]").hidden = !proposal && !approval;
+      const decisionBox = result.querySelector("[data-chat-decision]");
+      const planList = decisionBox.querySelector("[data-chat-plan]");
+      planList.replaceChildren();
+      plan.forEach((step, index) => {
+        const item = document.createElement("li");
+        item.textContent = `Paso ${index + 1}: ${step === "business-analysis-readonly" ? "Analizar Business." : "Revisar el conocimiento disponible."}`;
+        planList.appendChild(item);
+      });
+      planList.hidden = plan.length === 0;
+      decisionBox.hidden = !actionDecision;
+      decisionBox.dataset.decision = actionDecision || "";
+      if (actionDecision) {
+        const isBusiness = actionDecision === "business-analysis-readonly";
+        setText(
+          decisionBox.querySelector("[data-chat-decision-message]"),
+          plan.length > 0
+            ? "Solo se ejecutará el primer paso cuando lo confirmes."
+            : (isBusiness
+              ? "Creo que el siguiente paso más útil es realizar un análisis comercial preparatorio."
+              : "Creo que el siguiente paso más útil es revisar el conocimiento disponible.")
+        );
+        setText(
+          decisionBox.querySelector("[data-chat-decision-safety]"),
+          isBusiness
+            ? "Este análisis no realizará acciones reales ni contactará con terceros."
+            : "La revisión será únicamente de consulta."
+        );
+        decisionBox.querySelector("[data-chat-decision-confirm]").textContent = isBusiness
+          ? "Ejecutar análisis"
+          : "Ejecutar revisión";
+      }
       result.hidden = false;
+    }
+
+    function dismissDecisionRecommendation(clearPlan = true) {
+      const decisionBox = document.querySelector("[data-chat-decision]");
+      if (!decisionBox) return;
+      decisionBox.hidden = true;
+      decisionBox.dataset.decision = "";
+      if (clearPlan) pendingPlanSteps = [];
+    }
+
+    function showNextPlannedStep() {
+      const decisionBox = document.querySelector("[data-chat-decision]");
+      const result = document.querySelector("[data-executive-chat-result]");
+      const nextStep = pendingPlanSteps.shift();
+      if (!decisionBox || !result || !nextStep) return;
+      decisionBox.dataset.decision = nextStep;
+      decisionBox.hidden = false;
+      decisionBox.querySelector("[data-chat-plan]").hidden = true;
+      setText(result.querySelector("[data-chat-response]"), "El paso anterior ha terminado.");
+      setText(
+        decisionBox.querySelector("[data-chat-decision-message]"),
+        nextStep === "business-analysis-readonly"
+          ? "El siguiente paso recomendado es realizar el análisis comercial."
+          : "El siguiente paso recomendado es revisar el conocimiento disponible."
+      );
+      setText(
+        decisionBox.querySelector("[data-chat-decision-safety]"),
+        "Este paso solo se iniciará cuando lo confirmes."
+      );
+      decisionBox.querySelector("[data-chat-decision-confirm]").textContent = nextStep === "business-analysis-readonly"
+        ? "Ejecutar análisis"
+        : "Ejecutar revisión";
+    }
+
+    async function confirmDecisionRecommendation() {
+      const decisionBox = document.querySelector("[data-chat-decision]");
+      if (!decisionBox || decisionBox.hidden) return;
+      const decision = decisionBox.dataset.decision;
+      dismissDecisionRecommendation(false);
+      if (decision === "business-analysis-readonly") await submitBusinessHunterOperation();
+      if (decision === "knowledge-review-readonly") await submitKnowledgeOperation();
+      showNextPlannedStep();
     }
 
     function getExecutiveChatError(status) {
@@ -1224,6 +1300,10 @@
       const button = document.querySelector("[data-executive-chat-submit]");
       if (!input || !button) return;
       button.addEventListener("click", submitExecutiveChat);
+      const confirmButton = document.querySelector("[data-chat-decision-confirm]");
+      const dismissButton = document.querySelector("[data-chat-decision-dismiss]");
+      if (confirmButton) confirmButton.addEventListener("click", confirmDecisionRecommendation);
+      if (dismissButton) dismissButton.addEventListener("click", dismissDecisionRecommendation);
       input.addEventListener("keydown", (event) => {
         if (event.key === "Enter" && !event.shiftKey) {
           event.preventDefault();

@@ -188,12 +188,14 @@ test('L ignores all client-supplied selection, dependency, identity, and runtime
     gmail: true, calendar: true, dashboard: true, privateContext: { secret: true },
     privateContextMode: 'all', dependencies: { attack: true }, identity: { authorization: 'granted' },
     authorization: 'granted', runtimeMode: 'production', sandbox: false,
+    operationPlan: { steps: ['evil'] }, steps: ['evil'],
   });
   assert.equal(response.statusCode, 200);
   assert.deepEqual(calls, { gmail: 0, calendar: 0, dashboard: 0 });
   assert.equal(capturedOptions.contextSelection.reason, 'general_query');
   assert.equal(Object.hasOwn(capturedOptions, 'privateContextMetadata'), false);
   assert.equal(response.getJson().interactionId, 'stable-id');
+  assert.equal(JSON.stringify(response.getJson()).includes('evil'), false);
 });
 
 test('denied internal identity blocks private providers but leaves general queries working', async (t) => {
@@ -204,6 +206,71 @@ test('denied internal identity blocks private providers but leaves general queri
   assert.match(denied.getJson().response, /no esta autorizado/i);
   const general = await requestChat('Consulta general.', dependencies);
   assert.equal(general.statusCode, 200);
+});
+
+test('adds an optional supervised recommendation without executing or accepting client decisions', async (t) => {
+  let decisionCalls = 0;
+  let plannerCalls = 0;
+  const { dependencies, runtime } = createHarness(t, {
+    recommendSupervisedOperation({ query, analysis }) {
+      decisionCalls += 1;
+      assert.equal(query, 'Analiza oportunidades comerciales.');
+      assert.equal(typeof analysis, 'object');
+      return {
+        decision: 'business-analysis-readonly',
+        reason: 'Conviene revisar la información comercial disponible.',
+        confidence: 'high',
+        requiresConfirmation: true,
+      };
+    },
+    planOperations({ query, analysis }) {
+      plannerCalls += 1;
+      assert.equal(query, 'Analiza oportunidades comerciales.');
+      assert.equal(typeof analysis, 'object');
+      return { steps: ['business-analysis-readonly'], requiresConfirmation: true };
+    },
+  });
+  const response = await requestChat('Analiza oportunidades comerciales.', dependencies, {
+    decision: 'knowledge-review-readonly', worker: 'evil', type: 'evil',
+  });
+  const payload = response.getJson();
+  assert.equal(response.statusCode, 200);
+  assert.equal(decisionCalls, 1);
+  assert.equal(plannerCalls, 1);
+  assert.equal(payload.decisionRecommendation.decision, 'business-analysis-readonly');
+  assert.deepEqual(payload.operationPlan, { steps: ['business-analysis-readonly'], requiresConfirmation: true });
+  assert.equal(payload.decisionRecommendation.requiresConfirmation, true);
+  assert.equal(runtime.approvalQueue.listPending().length, 0);
+  assert.equal(JSON.stringify(payload).includes('evil'), false);
+});
+
+test('omits none recommendations and every recommendation for denied identity', async (t) => {
+  const noneHarness = createHarness(t, {
+    recommendSupervisedOperation: () => ({ decision: 'none', reason: 'No procede.', confidence: 'low', requiresConfirmation: true }),
+  });
+  const none = await requestChat('Consulta ambigua.', noneHarness.dependencies);
+  assert.equal(Object.hasOwn(none.getJson(), 'decisionRecommendation'), false);
+
+  const emptyPlanHarness = createHarness(t, {
+    planOperations: () => ({ steps: [], requiresConfirmation: true }),
+  });
+  const emptyPlan = await requestChat('Consulta sin plan.', emptyPlanHarness.dependencies);
+  assert.equal(Object.hasOwn(emptyPlan.getJson(), 'operationPlan'), false);
+
+  await t.test('denied', async (subtest) => {
+    let called = false;
+    const deniedHarness = createHarness(subtest, {
+      getClienteCeroIdentity: () => ({
+        clientId: 'cliente-cero', expectedClientId: 'cliente-cero', userId: 'user',
+        authorization: { status: 'denied', provider: 'google-oauth' },
+      }),
+      recommendSupervisedOperation: () => { called = true; return {}; },
+      planOperations: () => { called = true; return {}; },
+    });
+    const denied = await requestChat('Analiza empresas.', deniedHarness.dependencies);
+    assert.equal(Object.hasOwn(denied.getJson(), 'decisionRecommendation'), false);
+    assert.equal(called, false);
+  });
 });
 
 test('M isolates each unavailable source and never fabricates context or proposals', async (t) => {

@@ -30,11 +30,11 @@ test('uses only the official executive chat POST contract', () => {
     .forEach((field) => assert.doesNotMatch(source, new RegExp(`JSON\\.stringify\\([^)]*${field}`)));
 });
 
-test('registers the chat and two operation click listeners and supports Enter without Shift', () => {
+test('registers chat, supervised confirmation and operation listeners and supports Enter without Shift', () => {
   const source = getChatScript(readDashboard());
   const clickListeners = source.match(/addEventListener\(["']click["']/g) || [];
 
-  assert.equal(clickListeners.length, 3);
+  assert.equal(clickListeners.length, 5);
   assert.match(source, /addEventListener\(["']keydown["']/);
   assert.match(source, /event\.key\s*===\s*["']Enter["']\s*&&\s*!event\.shiftKey/);
   assert.match(source, /event\.preventDefault\(\)/);
@@ -54,18 +54,67 @@ test('blocks empty and duplicate submissions before fetch and restores the butto
   assert.match(source, /finally\s*\{[\s\S]*executiveChatSending\s*=\s*false[\s\S]*button\.disabled\s*=\s*false/);
 });
 
-test('renders only safe optional response metadata with textContent', () => {
+test('renders a clean executive response and keeps technical metadata out of the conversation', () => {
   const source = getChatScript(readDashboard());
+  const html = readDashboard();
 
   assert.match(source, /typeof data\.response === ["']string["']/);
-  assert.match(source, /data\.analysis && typeof data\.analysis === ["']object["']/);
   assert.match(source, /const proposal = data && data\.proposal \? data\.proposal : null/);
   assert.match(source, /const approval = data && data\.approval \? data\.approval : null/);
-  assert.match(source, /Interaction ID:/);
   assert.match(source, /textContent/);
+  assert.match(source, /data\.decisionRecommendation/);
+  assert.match(source, /He revisado tu petición/);
+  assert.match(source, /siguiente paso más útil es realizar un análisis comercial preparatorio/);
+  assert.match(source, /siguiente paso más útil es revisar el conocimiento disponible/);
+  assert.match(source, /no realizará acciones reales ni contactará con terceros/);
+  assert.match(source, /será únicamente de consulta/);
+  assert.match(html, /data-chat-followup hidden/);
+  assert.doesNotMatch(html, /data-chat-(intent|priority|confidence|interaction)/);
+  assert.doesNotMatch(source, /Interaction ID:|Intención:|Prioridad:|Confianza:/);
   assert.doesNotMatch(source, /innerHTML/);
   ['sources', 'limitations', 'memory', 'privateContext', 'executionPayload', 'payloadHash', 'diagnostics']
     .forEach((field) => assert.doesNotMatch(source, new RegExp(`data\\.${field}\\b`)));
+});
+
+test('confirms only closed operations and dismisses without a fetch', () => {
+  const source = getChatScript(readDashboard());
+  const dismissStart = source.indexOf('function dismissDecisionRecommendation');
+  const confirmStart = source.indexOf('function confirmDecisionRecommendation');
+  const submitStart = source.indexOf('async function submitExecutiveChat', confirmStart);
+  const dismissSource = source.slice(dismissStart, confirmStart);
+  const confirmSource = source.slice(confirmStart, submitStart);
+
+  assert.ok(dismissStart >= 0 && confirmStart > dismissStart);
+  assert.doesNotMatch(dismissSource, /fetch|submitBusinessHunterOperation|submitKnowledgeOperation/);
+  assert.match(confirmSource, /decision === ["']business-analysis-readonly["']/);
+  assert.match(confirmSource, /decision === ["']knowledge-review-readonly["']/);
+  assert.match(confirmSource, /submitBusinessHunterOperation\(\)/);
+  assert.match(confirmSource, /submitKnowledgeOperation\(\)/);
+  assert.match(confirmSource, /showNextPlannedStep\(\)/);
+  assert.doesNotMatch(source, /<select|data-(worker|operation)-select|name=["'](worker|type)["']/i);
+});
+
+test('renders at most three supervised plan steps and exposes only the first action', () => {
+  const source = getChatScript(readDashboard());
+
+  assert.match(source, /data\.operationPlan && Array\.isArray\(data\.operationPlan\.steps\)/);
+  assert.match(source, /\.slice\(0, 3\)/);
+  assert.match(source, /He preparado un plan de trabajo/);
+  assert.match(source, /Paso \$\{index \+ 1\}/);
+  assert.match(source, /pendingPlanSteps = plan\.slice\(1\)/);
+  assert.match(source, /Solo se ejecutará el primer paso cuando lo confirmes/);
+  assert.match(source, /Este paso solo se iniciará cuando lo confirmes/);
+  assert.doesNotMatch(source, /Promise\.all|forEach\([^)]*submit|map\([^)]*submit/);
+});
+
+test('shows no empty recommendation and removes inactive future controls', () => {
+  const html = readDashboard();
+  const source = getChatScript(html);
+
+  assert.match(source, /decisionBox\.hidden = !actionDecision/);
+  assert.match(source, /\[data-chat-followup\]["']\)\.hidden = !proposal && !approval/);
+  assert.doesNotMatch(html, /Capacidades futuras|Subir documentos|Analizar archivos/);
+  assert.match(html, /placeholder="¿En qué necesitas ayuda\?"/);
 });
 
 test('handles HTTP, network, invalid JSON, and absent optional fields safely', () => {

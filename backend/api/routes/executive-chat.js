@@ -9,6 +9,8 @@ const { getClienteCeroIdentity } = require('../../services/private-context/clien
 const { buildCalendarPrivateContext } = require('../../services/private-context/calendar-private-provider');
 const { buildGmailPrivateContext } = require('../../services/private-context/gmail-private-provider');
 const { getDashboardState } = require('../../services/dashboard/dashboard-intelligence');
+const { recommendSupervisedOperation } = require('../../services/executive-brain/supervised-decision-engine');
+const { planOperations } = require('../../services/executive-brain/operation-planner');
 
 function sendJson(res, statusCode, data) {
   res.writeHead(statusCode, {
@@ -259,7 +261,23 @@ async function handleExecutiveChatRequest(req, res, options) {
     const query = typeof body.query === 'string' ? body.query.trim() : '';
     if (!query) return sendJson(res, 400, { ok: false, error: 'query is required.' });
     const orchestratorOptions = await buildOrchestratorOptions(query, dependencies);
-    return sendJson(res, 200, sanitizeExecutivePayload(orchestrator(query, orchestratorOptions)));
+    const payload = sanitizeExecutivePayload(orchestrator(query, orchestratorOptions));
+    const identity = (dependencies.getClienteCeroIdentity || getClienteCeroIdentity)();
+    const decisionEngine = dependencies.recommendSupervisedOperation || recommendSupervisedOperation;
+    const planner = dependencies.planOperations || planOperations;
+    const recommendation = isInternallyAuthorized(identity)
+      ? decisionEngine({ query, analysis: payload && payload.analysis })
+      : null;
+    const operationPlan = isInternallyAuthorized(identity)
+      ? planner({ query, analysis: payload && payload.analysis })
+      : null;
+    if (recommendation && recommendation.decision !== 'none') {
+      payload.decisionRecommendation = recommendation;
+    }
+    if (operationPlan && Array.isArray(operationPlan.steps) && operationPlan.steps.length > 0) {
+      payload.operationPlan = operationPlan;
+    }
+    return sendJson(res, 200, payload);
   } catch (error) {
     return sendSafeError(res, error);
   }
