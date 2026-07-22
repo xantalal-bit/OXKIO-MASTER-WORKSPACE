@@ -30,6 +30,10 @@ const {
   handleExecutiveSecurityContextRequest,
   handleExecuteApprovedRequest
 } = require("./routes/executive-approval");
+const {
+  handleBusinessHunterOperationRequest,
+  isBusinessHunterOperationRoute
+} = require("./routes/business-hunter-operations");
 const { createExecutiveCsrf } = require("../security/executive-csrf");
 const {
   authenticateFirebaseRequest,
@@ -38,6 +42,7 @@ const {
 } = require("../security/firebase-server-auth");
 const { createExecutiveAuthorizer } = require("../security/executive-authorization");
 const { createExecutiveRuntime } = require("../services/runtime/executive-runtime-factory");
+const { businessHunterReadonlyService } = require("../services/operations/business-hunter-readonly-service");
 const { getClienteCeroIdentity } = require("../services/private-context/client-identity-resolver");
 const { buildGmailPrivateContext } = require("../services/private-context/gmail-private-provider");
 const { buildCalendarPrivateContext } = require("../services/private-context/calendar-private-provider");
@@ -802,7 +807,8 @@ if (pathname === "/api/dashboard" && req.method === "GET") {
     const dashboardState = await DashboardIntelligence.getDashboardState({
       approvalQueue,
       gmailReader: dashboardReaders.gmailReader,
-      calendarReader: dashboardReaders.calendarReader
+      calendarReader: dashboardReaders.calendarReader,
+      businessHunterOperation: businessHunterReadonlyService.getStatus()
     });
 
     return sendJson(res, 200, dashboardState);
@@ -1229,6 +1235,12 @@ if (pathname === "/api/execute-approved") {
     config: executionConfig,
     getIdentity: () => requestPrivateIdentity,
     csrf: executiveCsrf
+  });
+}
+if (isBusinessHunterOperationRoute(pathname, req.method)) {
+  return handleBusinessHunterOperationRequest(req, res, {
+    businessHunterService: businessHunterReadonlyService,
+    getIdentity: () => requestPrivateIdentity
   });
 }
 if (req.url.startsWith("/api/execution-logs")) {

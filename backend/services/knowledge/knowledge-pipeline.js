@@ -48,7 +48,7 @@ function processKnowledgeDocument(document, options = {}) {
   };
 }
 
-function processDocumentFolder(asset, folder) {
+function processDocumentFolder(asset, folder, options = {}) {
   const documentDiscovery = discoverDocuments(folder);
   const catalog = buildDocumentCatalog(documentDiscovery);
   const cache = buildKnowledgeCache(documentDiscovery.documents);
@@ -60,9 +60,9 @@ function processDocumentFolder(asset, folder) {
     }))
     .filter(({ curation }) => curation.supported)
     .map(({ curation, document }) => enrichKnowledgeObject(document, curation.knowledgeObject));
-  const persistedKnowledge = knowledgeObjects.map((knowledgeObject) => (
-    persistKnowledgeObject(knowledgeObject)
-  ));
+  const persistedKnowledge = options.persist === false
+    ? []
+    : knowledgeObjects.map((knowledgeObject) => persistKnowledgeObject(knowledgeObject));
 
   return {
     asset,
@@ -89,7 +89,7 @@ function runKnowledgePipeline(asset, options) {
     };
   }
 
-  return processDocumentFolder(asset, documentLocation.folder);
+  return processDocumentFolder(asset, documentLocation.folder, options);
 }
 
 module.exports = {

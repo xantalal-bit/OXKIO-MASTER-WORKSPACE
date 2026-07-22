@@ -36,6 +36,20 @@ function classifyVerificationError(error) {
   return 'auth_token_invalid';
 }
 
+function normalizeVerifiedUid(claims) {
+  const candidates = [
+    claims && claims.uid,
+    claims && claims.sub,
+    claims && claims.user_id,
+  ];
+  for (const candidate of candidates) {
+    if (typeof candidate === 'string' && candidate.trim()) {
+      return candidate.trim();
+    }
+  }
+  return null;
+}
+
 async function authenticateFirebaseRequest(req, {
   verifyIdToken,
   authorizeIdentity,
@@ -53,7 +67,8 @@ async function authenticateFirebaseRequest(req, {
     return { ok: false, code: classifyVerificationError(error) };
   }
 
-  if (!claims || typeof claims !== 'object' || typeof claims.uid !== 'string') {
+  const verifiedUid = normalizeVerifiedUid(claims);
+  if (!claims || typeof claims !== 'object' || !verifiedUid) {
     return { ok: false, code: 'auth_identity_unavailable' };
   }
   if (typeof authorizeIdentity !== 'function') {
@@ -61,7 +76,7 @@ async function authenticateFirebaseRequest(req, {
   }
 
   try {
-    const authorization = authorizeIdentity(claims);
+    const authorization = authorizeIdentity({ ...claims, uid: verifiedUid });
     if (!authorization || authorization.ok !== true || !authorization.identity) {
       return {
         ok: false,

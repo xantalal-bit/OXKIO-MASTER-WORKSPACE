@@ -104,6 +104,89 @@ function unavailableEcosystemEntry(name) {
   };
 }
 
+function unavailableBusinessHunterOperation() {
+  return {
+    worker: "business-hunter-readonly",
+    mode: "manual",
+    executionEnabled: false,
+    running: false,
+    status: "ready",
+    lastExecution: null,
+    durationMs: null,
+    sourceStatus: "unavailable",
+    summary: "Sin ejecuciones todavía.",
+    opportunitiesCount: 0,
+    opportunities: [],
+    recommendations: [],
+    proposalCreated: false,
+    approvalId: null,
+    errors: [],
+  };
+}
+
+function buildBusinessHunterOperationView(operation) {
+  if (!operation || typeof operation !== "object") {
+    return unavailableBusinessHunterOperation();
+  }
+
+  const currentOperation = operation.currentOperation && typeof operation.currentOperation === "object"
+    ? operation.currentOperation
+    : null;
+  const lastOperation = operation.lastOperation && typeof operation.lastOperation === "object"
+    ? operation.lastOperation
+    : null;
+  const lastResult = operation.lastResult && typeof operation.lastResult === "object"
+    ? operation.lastResult
+    : null;
+  const source = currentOperation || lastOperation || lastResult || operation;
+  const status = ["running", "completed", "completed_with_warnings", "failed"].includes(source.status)
+    ? source.status
+    : (operation.running ? "running" : "ready");
+  const running = operation.running === true || status === "running";
+  const opportunityCount = Array.isArray(source.opportunities)
+    ? source.opportunities.length
+    : 0;
+  const sourceStatus = ["real", "partial", "unavailable"].includes(source.sourceStatus)
+    ? source.sourceStatus
+    : "unavailable";
+
+  return {
+    worker: "business-hunter-readonly",
+    mode: "manual",
+    executionEnabled: false,
+    running,
+    status,
+    lastExecution: source.startedAt ? {
+      operationId: source.operationId || null,
+      interactionId: source.interactionId || null,
+      startedAt: source.startedAt || null,
+      completedAt: source.completedAt || null,
+      durationMs: Number.isFinite(source.durationMs) ? source.durationMs : null,
+    } : null,
+    durationMs: Number.isFinite(source.durationMs) ? source.durationMs : null,
+    sourceStatus,
+    summary: typeof source.summary === "string" && source.summary.trim()
+      ? source.summary.trim()
+      : sourceStatus === "unavailable"
+        ? "Business Hunter no ha proporcionado datos de fuente disponibles."
+        : "Sin resumen disponible.",
+    opportunitiesCount: opportunityCount,
+    opportunities: Array.isArray(source.opportunities)
+      ? source.opportunities.slice(0, 10)
+      : [],
+    recommendations: Array.isArray(source.recommendations)
+      ? source.recommendations.slice(0, 5).map((recommendation) => String(recommendation)).filter(Boolean)
+      : [],
+    proposalCreated: source.proposalCreated === true,
+    approvalId: typeof source.approvalId === "string" && source.approvalId.trim()
+      ? source.approvalId.trim()
+      : null,
+    errors: Array.isArray(source.errors)
+      ? source.errors.slice(0, 5).map((error) => String(error)).filter(Boolean)
+      : [],
+  };
+}
+
 function buildModuleView(name, assets, aliases, now, summaryLabel) {
   const candidates = assets.filter((asset) => matchesAliases(asset, aliases));
   const usefulAssets = candidates.filter(isUsefulAsset);
@@ -194,6 +277,7 @@ async function getDashboardState(options = {}) {
   ]);
   const knowledgeInventory = discoverKnowledge();
   const ecosystem = buildEcosystemView(knowledgeInventory);
+  const businessHunterOperation = buildBusinessHunterOperationView(options.businessHunterOperation);
   const executiveStatus = getExecutiveStatus({
     operational: true,
     sources: [agenda, gmail, memory, automations, ecosystem]
@@ -220,7 +304,10 @@ async function getDashboardState(options = {}) {
     ...dashboardStateWithSummary,
     executiveBriefing,
     knowledgeInventory,
-    ecosystem
+    ecosystem,
+    operations: {
+      businessHunter: businessHunterOperation,
+    }
   };
   const morningBriefing = buildMorningBriefing(dashboardStateWithIntelligence);
 
@@ -231,6 +318,7 @@ async function getDashboardState(options = {}) {
 }
 
 module.exports = {
+  buildBusinessHunterOperationView,
   buildEcosystemView,
   getDashboardState
 };

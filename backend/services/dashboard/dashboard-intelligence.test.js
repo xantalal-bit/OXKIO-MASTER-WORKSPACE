@@ -5,7 +5,10 @@ const fs = require('node:fs');
 const path = require('node:path');
 const test = require('node:test');
 
-const { buildEcosystemView } = require('./dashboard-intelligence');
+const {
+  buildBusinessHunterOperationView,
+  buildEcosystemView,
+} = require('./dashboard-intelligence');
 
 const NOW = '2026-07-19T12:00:00.000Z';
 
@@ -142,6 +145,50 @@ test('returns unavailable safe entries when knowledgeInventory is absent or inva
       assert.equal(entry.source, 'unavailable');
     });
   });
+});
+
+test('preserves sanitized Business Hunter readonly findings for the Executive Dashboard', () => {
+  const opportunity = {
+    id: 'document-1',
+    title: 'Documento relevante',
+    summary: 'Elemento relevante identificado en el inventario local.',
+    confidence: 0.75,
+    evidenceCount: 2,
+    source: 'knowledge-pipeline',
+  };
+  const view = buildBusinessHunterOperationView({
+    running: false,
+    lastResult: {
+      status: 'completed',
+      sourceStatus: 'real',
+      summary: 'Business Hunter ha devuelto evidencia local.',
+      opportunities: [opportunity],
+      recommendations: ['Revisar la evidencia sanitizada.'],
+      errors: [],
+    },
+  });
+
+  assert.equal(view.sourceStatus, 'real');
+  assert.equal(view.opportunitiesCount, 1);
+  assert.deepEqual(view.opportunities, [opportunity]);
+  assert.deepEqual(view.recommendations, ['Revisar la evidencia sanitizada.']);
+});
+
+test('marks missing Business Hunter source data unavailable and explains why', () => {
+  const view = buildBusinessHunterOperationView({
+    lastResult: {
+      status: 'completed_with_warnings',
+      sourceStatus: null,
+      opportunities: [],
+      recommendations: [],
+    },
+  });
+
+  assert.equal(view.sourceStatus, 'unavailable');
+  assert.equal(view.opportunitiesCount, 0);
+  assert.deepEqual(view.opportunities, []);
+  assert.deepEqual(view.recommendations, []);
+  assert.match(view.summary, /no ha proporcionado datos de fuente disponibles/i);
 });
 
 test('never exposes paths, filenames, private content, or complete inventory assets', () => {

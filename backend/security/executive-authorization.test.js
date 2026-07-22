@@ -12,6 +12,10 @@ test('parses closed comma-separated allowlists', () => {
   assert.deepEqual([...parseAllowlist(' uid-a,uid-b, uid-a, ')], ['uid-a', 'uid-b']);
 });
 
+test('normalizes quoted and noisy allowlist entries without broadening access', () => {
+  assert.deepEqual([...parseAllowlist(' "uid-a" , \uFEFFuid-b\u200B ')], ['uid-a', 'uid-b']);
+});
+
 test('authorizes an allowlisted uid as Cliente Cero admin', () => {
   const result = authorizeExecutiveClaims({
     uid: 'firebase-admin-uid',
@@ -67,4 +71,10 @@ test('builds policy only from server environment allowlists', () => {
     uid: 'other', email: 'fallback@example.test', email_verified: true,
   }).identity.clientId, 'cliente-cero');
   assert.equal(authorize({ uid: 'other' }).code, 'auth_forbidden');
+});
+
+test('accepts the canonical token uid from sub or user_id when uid is not present', () => {
+  const allow = new Set(['firebase-admin-uid']);
+  assert.equal(authorizeExecutiveClaims({ sub: 'firebase-admin-uid' }, { adminUids: allow }).ok, true);
+  assert.equal(authorizeExecutiveClaims({ user_id: 'firebase-admin-uid' }, { adminUids: allow }).ok, true);
 });

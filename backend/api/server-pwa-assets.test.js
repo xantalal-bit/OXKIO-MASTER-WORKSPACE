@@ -96,6 +96,27 @@ test('private frontends send Firebase Bearer tokens only in headers and retry on
   assert.match(sources[4], /oxkioAuthenticatedFetch\('\/api\/executive\/identity'\)/);
 });
 
+test('temporary auth diagnostics are absent from browser helpers', () => {
+  const dashboard = fs.readFileSync(path.join(appPath, 'executive-dashboard.html'), 'utf8');
+  const bootstrap = fs.readFileSync(path.join(appPath, 'js', 'firebase-authenticated-fetch.js'), 'utf8');
+
+  [
+    dashboard,
+    bootstrap,
+  ].forEach((source) => {
+    const forbiddenMarkers = [
+      ['OXKIO', 'AUTH', 'DIAGNOSTIC'].join('_'),
+      ['AUTH', 'DIAG'].join('-'),
+      ['X-OXKIO', 'Diagnostic-Id'].join('-'),
+      ['diagnostic', 'Id'].join(''),
+    ];
+    forbiddenMarkers.forEach((marker) => assert.equal(source.includes(marker), false));
+    assert.doesNotMatch(source, /console\.log/);
+  });
+
+  assert.match(dashboard, /signOut\(firebaseAuth\)/);
+});
+
 test('Business Hunter loads the shared Firebase bootstrap before its authenticated API client', () => {
   const html = fs.readFileSync(path.join(appPath, 'business-hunter-dashboard.html'), 'utf8');
   const bootstrapTag = '<script type="module" src="/js/firebase-authenticated-fetch.js"></script>';

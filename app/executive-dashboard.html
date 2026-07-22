@@ -105,6 +105,31 @@
       font-size: 14px;
     }
 
+    .topbar-actions {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-left: auto;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
+
+    .btn-secondary {
+      min-height: 44px;
+      padding: 10px 14px;
+      border: 1px solid rgba(148, 163, 184, 0.35);
+      border-radius: 8px;
+      background: rgba(15, 23, 42, 0.78);
+      color: #eef6f5;
+      font-size: 14px;
+      cursor: pointer;
+    }
+
+    .btn-secondary:hover {
+      border-color: rgba(96, 165, 250, 0.65);
+      background: rgba(30, 41, 59, 0.92);
+    }
+
     main {
       width: min(1180px, calc(100% - 32px));
       margin: 0 auto;
@@ -273,6 +298,110 @@
       gap: 12px;
     }
 
+    .operations-card {
+      display: grid;
+      gap: 14px;
+    }
+
+    .operations-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 10px;
+    }
+
+    .operations-kv {
+      display: grid;
+      gap: 4px;
+      padding: 12px;
+      border-radius: 8px;
+      background: rgba(7, 17, 31, 0.36);
+      border: 1px solid var(--line);
+      min-width: 0;
+    }
+
+    .operations-label {
+      color: var(--muted);
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+
+    .operations-value {
+      margin: 0;
+      font-weight: 700;
+      overflow-wrap: anywhere;
+    }
+
+    .operations-actions {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+
+    .operations-actions button {
+      border: 0;
+      border-radius: 8px;
+      padding: 12px 16px;
+      background: linear-gradient(135deg, #38bdf8, #6366f1);
+      color: #ffffff;
+      font-weight: 700;
+      cursor: pointer;
+      box-shadow: 0 12px 28px rgba(56, 189, 248, 0.22);
+      min-height: 48px;
+    }
+
+    .operations-actions button:disabled {
+      opacity: 0.72;
+      cursor: not-allowed;
+    }
+
+    .operations-details {
+      padding: 0;
+      overflow: hidden;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: rgba(7, 17, 31, 0.24);
+    }
+
+    .operations-details summary {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 14px 16px;
+      cursor: pointer;
+      list-style: none;
+    }
+
+    .operations-details summary::-webkit-details-marker {
+      display: none;
+    }
+
+    .operations-details summary::after {
+      content: "+";
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 28px;
+      height: 28px;
+      border-radius: 999px;
+      background: var(--surface-soft);
+      color: var(--accent-strong);
+      font-weight: 700;
+      flex: 0 0 auto;
+    }
+
+    .operations-details[open] summary::after {
+      content: "-";
+    }
+
+    .operations-details-content {
+      display: grid;
+      gap: 10px;
+      padding: 0 16px 16px;
+    }
+
     .conversation-primary {
       border: 1px solid rgba(56, 189, 248, 0.42);
       box-shadow: 0 22px 60px rgba(0, 0, 0, 0.34), 0 0 34px rgba(56, 189, 248, 0.12);
@@ -436,6 +565,12 @@
         flex-wrap: nowrap;
       }
 
+      .topbar-actions {
+        width: 100%;
+        margin-left: 0;
+        justify-content: space-between;
+      }
+
       .brand {
         min-width: 0;
         gap: 9px;
@@ -568,6 +703,10 @@
         grid-template-columns: 1fr;
       }
 
+      .operations-grid {
+        grid-template-columns: 1fr;
+      }
+
       .radio-mic {
         width: 54px;
         height: 68px;
@@ -621,7 +760,10 @@
             <p class="brand-subtitle">Director Ejecutivo IA</p>
           </div>
         </div>
-        <div class="client">Cliente Cero: José Antonio</div>
+        <div class="topbar-actions">
+          <div class="client">Cliente Cero: José Antonio</div>
+          <button class="btn-secondary" type="button" data-logout-button onclick="window.oxkioLogout()">Salir</button>
+        </div>
       </div>
     </header>
 
@@ -677,6 +819,75 @@
             <span class="badge ok">Foco</span>
           </div>
           <p class="executive-summary">Información no disponible</p>
+        </article>
+
+        <article class="panel span-12 dashboard-operations" data-business-hunter-operation>
+          <div class="panel-header">
+            <div>
+              <h2>Operaciones OXKIO</h2>
+              <p class="meta">Análisis readonly para preparar valor económico sin ejecutar acciones reales.</p>
+            </div>
+            <span class="badge" data-bh-status>Listo</span>
+          </div>
+          <p class="executive-summary" data-bh-summary>Sin ejecuciones todavía.</p>
+          <div class="operations-grid">
+            <div class="operations-kv">
+              <span class="operations-label">Worker</span>
+              <p class="operations-value" data-bh-worker>business-hunter-readonly</p>
+            </div>
+            <div class="operations-kv">
+              <span class="operations-label">Modo</span>
+              <p class="operations-value" data-bh-mode>manual</p>
+            </div>
+            <div class="operations-kv">
+              <span class="operations-label">executionEnabled</span>
+              <p class="operations-value" data-bh-execution-enabled>false</p>
+            </div>
+            <div class="operations-kv">
+              <span class="operations-label">Última ejecución</span>
+              <p class="operations-value" data-bh-last-execution>Nunca</p>
+            </div>
+            <div class="operations-kv">
+              <span class="operations-label">Duración</span>
+              <p class="operations-value" data-bh-duration>No disponible</p>
+            </div>
+            <div class="operations-kv">
+              <span class="operations-label">Estado de fuentes</span>
+              <p class="operations-value" data-bh-source-status>No disponible</p>
+            </div>
+            <div class="operations-kv">
+              <span class="operations-label">Evidencias / oportunidades</span>
+              <p class="operations-value" data-bh-opportunities-count>0</p>
+            </div>
+            <div class="operations-kv">
+              <span class="operations-label">Propuesta</span>
+              <p class="operations-value" data-bh-proposal-created>No creada</p>
+            </div>
+            <div class="operations-kv">
+              <span class="operations-label">Approval Queue</span>
+              <p class="operations-value" data-bh-approval-id>No aplica</p>
+            </div>
+          </div>
+          <div class="operations-actions">
+            <button type="button" data-bh-run>Analizar Business</button>
+            <p class="note" data-bh-state>Solo análisis. No se contacta ni se ejecutan acciones.</p>
+          </div>
+          <details class="operations-details">
+            <summary>
+              <span>Ver detalles sanitizados</span>
+            </summary>
+            <div class="operations-details-content">
+              <div>
+                <p class="meta">Evidencias documentales / oportunidades</p>
+                <ul class="list" data-bh-opportunities></ul>
+              </div>
+              <div>
+                <p class="meta">Recomendaciones</p>
+                <ul class="list" data-bh-recommendations></ul>
+              </div>
+              <p class="note">Solo análisis. No se contacta ni se ejecutan acciones.</p>
+            </div>
+          </details>
         </article>
 
         <article class="panel span-12 conversation-primary dashboard-chat">
@@ -848,7 +1059,7 @@
   </div>
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-    import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+    import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 
     const firebaseApp = initializeApp({
       apiKey: "AIzaSyDFySiO23mqJilJPUfE-dLv9Zbs9gcY_kg",
@@ -869,6 +1080,11 @@
       }
       resolveAuthReady(user);
     });
+
+    window.oxkioLogout = async function() {
+      await signOut(firebaseAuth);
+      window.location.replace("/");
+    };
 
     window.oxkioAuthenticatedFetch = async function(url, options = {}, retry = true) {
       const user = await window.oxkioAuthReady;
@@ -894,6 +1110,7 @@
     }
 
     let executiveChatSending = false;
+    let businessHunterOperationSending = false;
 
     function setExecutiveChatState(message, state) {
       const stateElement = document.querySelector("[data-executive-chat-state]");
@@ -1000,6 +1217,276 @@
           submitExecutiveChat();
         }
       });
+    }
+
+    function getBusinessHunterOperationPanel() {
+      return document.querySelector("[data-business-hunter-operation]");
+    }
+
+    function formatBusinessHunterOperationStatus(status) {
+      const labels = {
+        ready: "Listo",
+        running: "Trabajando",
+        completed: "Completado",
+        completed_with_warnings: "Completado con avisos",
+        failed: "Error",
+      };
+      return labels[status] || labels.ready;
+    }
+
+    function updateBusinessHunterOperationBadge(badge, status) {
+      if (!badge) return;
+      const classes = {
+        ready: "",
+        running: "warn",
+        completed: "ok",
+        completed_with_warnings: "warn",
+        failed: "danger",
+      };
+      badge.classList.remove("ok", "warn", "danger");
+      if (classes[status]) {
+        badge.classList.add(classes[status]);
+      }
+      badge.textContent = formatBusinessHunterOperationStatus(status);
+    }
+
+    function formatBusinessHunterOperationDuration(durationMs) {
+      if (!Number.isFinite(durationMs)) {
+        return "No disponible";
+      }
+      return `${durationMs} ms`;
+    }
+
+    function formatBusinessHunterOperationTimestamp(value) {
+      if (!value) {
+        return "Nunca";
+      }
+
+      const date = new Date(value);
+      if (Number.isNaN(date.getTime())) {
+        return "No disponible";
+      }
+
+      return date.toLocaleString("es-ES", {
+        dateStyle: "medium",
+        timeStyle: "short"
+      });
+    }
+
+    function renderBusinessHunterList(listElement, items, fallback) {
+      if (!listElement) return;
+      listElement.replaceChildren();
+      const safeItems = Array.isArray(items) ? items.slice(0, 10) : [];
+
+      if (safeItems.length === 0) {
+        const empty = document.createElement("li");
+        empty.className = "item";
+        empty.textContent = fallback;
+        listElement.appendChild(empty);
+        return;
+      }
+
+      safeItems.forEach((item) => {
+        const entry = document.createElement("li");
+        entry.className = "item";
+        if (typeof item === "string") {
+          entry.textContent = textOrFallback(item, fallback);
+          listElement.appendChild(entry);
+          return;
+        }
+        const title = document.createElement("span");
+        title.className = "item-title";
+        title.textContent = textOrFallback(item && item.title, "Oportunidad");
+        const detail = document.createElement("p");
+        detail.className = "item-text";
+        detail.textContent = textOrFallback(item && item.summary, fallback);
+        entry.append(title, detail);
+        listElement.appendChild(entry);
+      });
+    }
+
+    function buildBusinessHunterErrorView(message) {
+      return {
+        worker: "business-hunter-readonly",
+        mode: "manual",
+        executionEnabled: false,
+        running: false,
+        status: "failed",
+        lastExecution: null,
+        durationMs: null,
+        sourceStatus: "unavailable",
+        summary: textOrFallback(message, "No se pudo completar el análisis de Business."),
+        opportunitiesCount: 0,
+        proposalCreated: false,
+        approvalId: null,
+        errors: [textOrFallback(message, "No se pudo completar el análisis de Business.")],
+        opportunities: [],
+        recommendations: [textOrFallback(message, "No se pudo completar el análisis de Business.")],
+      };
+    }
+
+    function renderBusinessHunterOperation(operation) {
+      const panel = getBusinessHunterOperationPanel();
+      if (!panel) return;
+      const data = operation && typeof operation === "object" ? operation : {};
+      const status = textOrFallback(data.status, "ready");
+      const running = status === "running";
+      const button = panel.querySelector("[data-bh-run]");
+
+      updateBusinessHunterOperationBadge(panel.querySelector("[data-bh-status]"), status);
+      setText(panel.querySelector("[data-bh-worker]"), data.worker, "business-hunter-readonly");
+      setText(panel.querySelector("[data-bh-mode]"), data.mode, "manual");
+      setText(panel.querySelector("[data-bh-execution-enabled]"), data.executionEnabled === true ? "true" : "false", "false");
+      setText(
+        panel.querySelector("[data-bh-last-execution]"),
+        data.completedAt
+          || data.startedAt
+          || (data.lastExecution && (data.lastExecution.completedAt || data.lastExecution.startedAt))
+          ? formatBusinessHunterOperationTimestamp(
+            data.completedAt
+              || data.startedAt
+              || (data.lastExecution && (data.lastExecution.completedAt || data.lastExecution.startedAt))
+          )
+          : null,
+        "Nunca"
+      );
+      setText(
+        panel.querySelector("[data-bh-duration]"),
+        formatBusinessHunterOperationDuration(data.durationMs),
+        "No disponible"
+      );
+      setText(
+        panel.querySelector("[data-bh-source-status]"),
+        ["real", "partial", "unavailable"].includes(data.sourceStatus)
+          ? data.sourceStatus
+          : "unavailable",
+        "unavailable"
+      );
+      setText(
+        panel.querySelector("[data-bh-summary]"),
+        data.summary,
+        "Sin ejecuciones todavía."
+      );
+      setText(
+        panel.querySelector("[data-bh-opportunities-count]"),
+        Number.isFinite(Number(data.opportunitiesCount))
+          ? Number(data.opportunitiesCount)
+          : (Array.isArray(data.opportunities) ? data.opportunities.length : 0),
+        0
+      );
+      setText(
+        panel.querySelector("[data-bh-proposal-created]"),
+        data.proposalCreated === true ? "Creada" : "No creada",
+        "No creada"
+      );
+      setText(
+        panel.querySelector("[data-bh-approval-id]"),
+        data.approvalId || "No aplica",
+        "No aplica"
+      );
+      setText(
+        panel.querySelector("[data-bh-state]"),
+        running
+          ? "Analizando Business Hunter…"
+          : "Solo análisis. No se contacta ni se ejecutan acciones.",
+        "Solo análisis. No se contacta ni se ejecutan acciones."
+      );
+      renderBusinessHunterList(
+        panel.querySelector("[data-bh-opportunities]"),
+        data.opportunities,
+        "Sin oportunidades sanitizadas."
+      );
+      renderBusinessHunterList(
+        panel.querySelector("[data-bh-recommendations]"),
+        data.recommendations,
+        "Sin recomendaciones disponibles."
+      );
+      if (button) {
+        button.disabled = running || businessHunterOperationSending;
+        button.textContent = running || businessHunterOperationSending
+          ? "Analizando…"
+          : "Analizar Business";
+      }
+    }
+
+    function setBusinessHunterOperationSending(isSending) {
+      businessHunterOperationSending = isSending;
+      const button = document.querySelector("[data-bh-run]");
+      if (button) {
+        button.disabled = isSending;
+        button.textContent = isSending ? "Analizando…" : "Analizar Business";
+      }
+    }
+
+    async function submitBusinessHunterOperation() {
+      if (businessHunterOperationSending) return;
+      const button = document.querySelector("[data-bh-run]");
+      const panel = getBusinessHunterOperationPanel();
+      const currentStatus = panel && panel.querySelector("[data-bh-status]");
+      if (button && button.disabled) return;
+
+      setBusinessHunterOperationSending(true);
+      if (currentStatus) {
+        currentStatus.textContent = "Trabajando";
+        currentStatus.classList.add("warn");
+      }
+
+      try {
+        if (typeof window.oxkioAuthenticatedFetch !== "function") {
+          throw new Error("Autenticación no disponible.");
+        }
+
+        const response = await window.oxkioAuthenticatedFetch("/api/operations/business-hunter/run", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: "{}"
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+          const errorMessage = data && typeof data.message === "string"
+            ? data.message
+            : "No se pudo ejecutar el análisis de Business.";
+          renderBusinessHunterOperation(buildBusinessHunterErrorView(errorMessage));
+          setText(panel && panel.querySelector("[data-bh-state]"), errorMessage, "Error");
+          return;
+        }
+
+        renderBusinessHunterOperation(data);
+        setText(panel && panel.querySelector("[data-bh-state]"), "Análisis completado.", "Análisis completado.");
+        const dashboardResponse = await window.oxkioAuthenticatedFetch("/api/dashboard", { cache: "no-store" });
+        if (dashboardResponse.ok) {
+          applyDashboardState(await dashboardResponse.json());
+        }
+      } catch (error) {
+        renderBusinessHunterOperation(buildBusinessHunterErrorView("No se pudo completar el análisis de Business."));
+        setText(
+          panel && panel.querySelector("[data-bh-state]"),
+          "No se pudo completar el análisis de Business.",
+          "No se pudo completar el análisis de Business."
+        );
+      } finally {
+        setBusinessHunterOperationSending(false);
+        const latestPanel = getBusinessHunterOperationPanel();
+        const latestButton = latestPanel && latestPanel.querySelector("[data-bh-run]");
+        if (latestButton) {
+          const statusValue = latestPanel && latestPanel.querySelector("[data-bh-status]")
+            ? latestPanel.querySelector("[data-bh-status]").textContent
+            : "Listo";
+          latestButton.disabled = statusValue === "Trabajando";
+          latestButton.textContent = "Analizar Business";
+        }
+      }
+    }
+
+    function initializeBusinessHunterOperation() {
+      const panel = getBusinessHunterOperationPanel();
+      const button = panel && panel.querySelector("[data-bh-run]");
+      if (!button) return;
+      button.addEventListener("click", submitBusinessHunterOperation);
     }
 
     function findPanelByTitle(title) {
@@ -1482,6 +1969,7 @@
       renderEcosystemWidget("businessHunter", ecosystem.businessHunter);
       renderEcosystemWidget("xose", ecosystem.xose);
       renderEcosystemWidget("ecosystem", ecosystem.ecosystem);
+      renderBusinessHunterOperation(state.operations && state.operations.businessHunter);
     }
 
     function createUnavailableDashboardState() {
@@ -1534,6 +2022,23 @@
           businessHunter: null,
           xose: null,
           ecosystem: null
+        },
+        operations: {
+          businessHunter: {
+            worker: "business-hunter-readonly",
+            mode: "manual",
+            executionEnabled: false,
+            running: false,
+            status: "ready",
+            lastExecution: null,
+            durationMs: null,
+            sourceStatus: "unavailable",
+            summary: "Sin ejecuciones todavía.",
+            opportunitiesCount: 0,
+            proposalCreated: false,
+            approvalId: null,
+            errors: []
+          }
         }
       };
     }
@@ -1556,6 +2061,7 @@
     document.addEventListener("DOMContentLoaded", () => {
       loadDashboardState();
       initializeExecutiveChat();
+      initializeBusinessHunterOperation();
     });
   </script>
 </body>

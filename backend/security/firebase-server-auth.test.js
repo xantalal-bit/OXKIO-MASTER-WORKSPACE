@@ -91,6 +91,25 @@ test('returns only normalized authorized identity for a valid admin token', asyn
   assert.equal(JSON.stringify(result).includes('private-token'), false);
 });
 
+test('authorizes canonical Firebase identifiers from sub and user_id when uid is absent', async () => {
+  const authorizeSub = (claims) => claims.sub === 'admin-uid'
+    ? { ok: true, identity: adminIdentity }
+    : { ok: false, code: 'auth_forbidden' };
+  const authorizeUserId = (claims) => claims.user_id === 'admin-uid'
+    ? { ok: true, identity: adminIdentity }
+    : { ok: false, code: 'auth_forbidden' };
+
+  assert.deepEqual(await authenticateFirebaseRequest(request('Bearer token'), {
+    verifyIdToken: async () => ({ sub: 'admin-uid' }),
+    authorizeIdentity: authorizeSub,
+  }), { ok: true, identity: adminIdentity });
+
+  assert.deepEqual(await authenticateFirebaseRequest(request('Bearer token'), {
+    verifyIdToken: async () => ({ user_id: 'admin-uid' }),
+    authorizeIdentity: authorizeUserId,
+  }), { ok: true, identity: adminIdentity });
+});
+
 test('sends safe no-store errors without tokens, claims, or stacks', () => {
   const response = {
     writeHead(status, headers) { this.status = status; this.headers = headers; },
@@ -99,6 +118,7 @@ test('sends safe no-store errors without tokens, claims, or stacks', () => {
   sendFirebaseAuthError(response, { code: 'auth_forbidden', token: 'private-token' });
   assert.equal(response.status, 403);
   assert.equal(response.headers['Cache-Control'], 'no-store');
+  assert.deepEqual(Object.keys(response.headers).sort(), ['Cache-Control', 'Content-Type']);
   assert.deepEqual(JSON.parse(response.body), {
     ok: false,
     code: 'auth_forbidden',

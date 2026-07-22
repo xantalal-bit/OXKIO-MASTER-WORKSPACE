@@ -3,19 +3,19 @@
 const { searchKnowledge } = require('../knowledge-query-service');
 
 function buildDiscoveryOptions(options) {
+  const discoveryOptions = {};
+
   if (options && options.root) {
-    return {
-      root: options.root,
-    };
+    discoveryOptions.root = options.root;
+  } else if (options && Array.isArray(options.searchRoots) && options.searchRoots.length > 0) {
+    discoveryOptions.root = options.searchRoots[0];
   }
 
-  if (options && Array.isArray(options.searchRoots) && options.searchRoots.length > 0) {
-    return {
-      root: options.searchRoots[0],
-    };
+  if (options && options.persist === false) {
+    discoveryOptions.persist = false;
   }
 
-  return undefined;
+  return Object.keys(discoveryOptions).length > 0 ? discoveryOptions : undefined;
 }
 
 function runBusinessHunterConnector(options) {
