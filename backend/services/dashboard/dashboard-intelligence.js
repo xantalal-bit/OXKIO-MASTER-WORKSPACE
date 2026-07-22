@@ -121,6 +121,9 @@ function unavailableBusinessHunterOperation() {
     proposalCreated: false,
     approvalId: null,
     errors: [],
+    phase: "queued",
+    activeOperation: null,
+    recentOperations: [],
   };
 }
 
@@ -129,22 +132,21 @@ function buildBusinessHunterOperationView(operation) {
     return unavailableBusinessHunterOperation();
   }
 
-  const currentOperation = operation.currentOperation && typeof operation.currentOperation === "object"
-    ? operation.currentOperation
+  const currentOperation = operation.activeOperation && typeof operation.activeOperation === "object"
+    ? operation.activeOperation
     : null;
-  const lastOperation = operation.lastOperation && typeof operation.lastOperation === "object"
-    ? operation.lastOperation
-    : null;
-  const lastResult = operation.lastResult && typeof operation.lastResult === "object"
-    ? operation.lastResult
-    : null;
-  const source = currentOperation || lastOperation || lastResult || operation;
+  const recentOperations = Array.isArray(operation.recentOperations)
+    ? operation.recentOperations.slice(0, 5)
+    : [];
+  const lastOperation = recentOperations[0] || null;
+  const source = currentOperation || lastOperation || operation;
+  const businessResult = source.result && typeof source.result === "object" ? source.result : source;
   const status = ["running", "completed", "completed_with_warnings", "failed"].includes(source.status)
     ? source.status
     : (operation.running ? "running" : "ready");
   const running = operation.running === true || status === "running";
-  const opportunityCount = Array.isArray(source.opportunities)
-    ? source.opportunities.length
+  const opportunityCount = Array.isArray(businessResult.opportunities)
+    ? businessResult.opportunities.length
     : 0;
   const sourceStatus = ["real", "partial", "unavailable"].includes(source.sourceStatus)
     ? source.sourceStatus
@@ -156,6 +158,9 @@ function buildBusinessHunterOperationView(operation) {
     executionEnabled: false,
     running,
     status,
+    phase: PHASES_FOR_DASHBOARD.has(source.phase) ? source.phase : (running ? "running_worker" : "completed"),
+    activeOperation: currentOperation,
+    recentOperations,
     lastExecution: source.startedAt ? {
       operationId: source.operationId || null,
       interactionId: source.interactionId || null,
@@ -165,27 +170,36 @@ function buildBusinessHunterOperationView(operation) {
     } : null,
     durationMs: Number.isFinite(source.durationMs) ? source.durationMs : null,
     sourceStatus,
-    summary: typeof source.summary === "string" && source.summary.trim()
-      ? source.summary.trim()
+    summary: typeof source.resultSummary === "string" && source.resultSummary.trim()
+      ? source.resultSummary.trim()
+      : typeof businessResult.summary === "string" && businessResult.summary.trim()
+        ? businessResult.summary.trim()
       : sourceStatus === "unavailable"
         ? "Business Hunter no ha proporcionado datos de fuente disponibles."
         : "Sin resumen disponible.",
     opportunitiesCount: opportunityCount,
-    opportunities: Array.isArray(source.opportunities)
-      ? source.opportunities.slice(0, 10)
+    opportunities: Array.isArray(businessResult.opportunities)
+      ? businessResult.opportunities.slice(0, 10)
       : [],
-    recommendations: Array.isArray(source.recommendations)
-      ? source.recommendations.slice(0, 5).map((recommendation) => String(recommendation)).filter(Boolean)
+    recommendations: Array.isArray(businessResult.recommendations)
+      ? businessResult.recommendations.slice(0, 5).map((recommendation) => String(recommendation)).filter(Boolean)
       : [],
     proposalCreated: source.proposalCreated === true,
     approvalId: typeof source.approvalId === "string" && source.approvalId.trim()
       ? source.approvalId.trim()
       : null,
+    warnings: Array.isArray(source.warnings)
+      ? source.warnings.slice(0, 5).map((warning) => String(warning)).filter(Boolean)
+      : [],
     errors: Array.isArray(source.errors)
       ? source.errors.slice(0, 5).map((error) => String(error)).filter(Boolean)
       : [],
   };
 }
+
+const PHASES_FOR_DASHBOARD = new Set([
+  "queued", "validating", "running_worker", "validating_result", "logging", "completed", "failed"
+]);
 
 function buildModuleView(name, assets, aliases, now, summaryLabel) {
   const candidates = assets.filter((asset) => matchesAliases(asset, aliases));
@@ -277,7 +291,7 @@ async function getDashboardState(options = {}) {
   ]);
   const knowledgeInventory = discoverKnowledge();
   const ecosystem = buildEcosystemView(knowledgeInventory);
-  const businessHunterOperation = buildBusinessHunterOperationView(options.businessHunterOperation);
+  const businessHunterOperation = buildBusinessHunterOperationView(options.operationsStatus);
   const executiveStatus = getExecutiveStatus({
     operational: true,
     sources: [agenda, gmail, memory, automations, ecosystem]

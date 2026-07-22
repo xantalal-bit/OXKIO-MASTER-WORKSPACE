@@ -148,7 +148,7 @@ test('dashboard and frontend use the shared public provider without changing oth
   const renderer = html.slice(renderStart, renderEnd);
 
   assert.match(dashboardSource, /getAutomations\(timestamp, options\.approvalQueue\)/);
-  assert.match(serverSource, /getDashboardState\(\{[\s\S]*approvalQueue[\s\S]*businessHunterOperation:/);
+  assert.match(serverSource, /getDashboardState\(\{[\s\S]*approvalQueue[\s\S]*operationsStatus:/);
   ['greeting', 'executiveStatus', 'agenda', 'gmail', 'memory', 'automations']
     .forEach((field) => assert.match(dashboardSource, new RegExp(`\\b${field}\\b`)));
   assert.match(renderer, /replaceChildren\(\)/);

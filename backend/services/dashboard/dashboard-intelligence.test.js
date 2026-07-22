@@ -157,15 +157,18 @@ test('preserves sanitized Business Hunter readonly findings for the Executive Da
     source: 'knowledge-pipeline',
   };
   const view = buildBusinessHunterOperationView({
-    running: false,
-    lastResult: {
+    activeOperation: null,
+    recentOperations: [{
       status: 'completed',
+      phase: 'completed',
       sourceStatus: 'real',
-      summary: 'Business Hunter ha devuelto evidencia local.',
-      opportunities: [opportunity],
-      recommendations: ['Revisar la evidencia sanitizada.'],
+      resultSummary: 'Business Hunter ha devuelto evidencia local.',
+      result: {
+        opportunities: [opportunity],
+        recommendations: ['Revisar la evidencia sanitizada.'],
+      },
       errors: [],
-    },
+    }],
   });
 
   assert.equal(view.sourceStatus, 'real');
@@ -176,12 +179,12 @@ test('preserves sanitized Business Hunter readonly findings for the Executive Da
 
 test('marks missing Business Hunter source data unavailable and explains why', () => {
   const view = buildBusinessHunterOperationView({
-    lastResult: {
+    recentOperations: [{
       status: 'completed_with_warnings',
+      phase: 'completed',
       sourceStatus: null,
-      opportunities: [],
-      recommendations: [],
-    },
+      result: { opportunities: [], recommendations: [] },
+    }],
   });
 
   assert.equal(view.sourceStatus, 'unavailable');

@@ -43,6 +43,7 @@ const {
 const { createExecutiveAuthorizer } = require("../security/executive-authorization");
 const { createExecutiveRuntime } = require("../services/runtime/executive-runtime-factory");
 const { businessHunterReadonlyService } = require("../services/operations/business-hunter-readonly-service");
+const { createOperationsCoordinator } = require("../services/operations/operations-coordinator");
 const { getClienteCeroIdentity } = require("../services/private-context/client-identity-resolver");
 const { buildGmailPrivateContext } = require("../services/private-context/gmail-private-provider");
 const { buildCalendarPrivateContext } = require("../services/private-context/calendar-private-provider");
@@ -87,6 +88,10 @@ const executionAdapter = new ExecutionAdapter({ emailProvider: gmailDraftProvide
 const executionService = new ExecutionService({ approvalQueue, executionAdapter });
 const universalKnowledgeSupervisor = new UniversalKnowledgeSupervisor({ approvalQueue });
 const executionLogger = new ExecutionLogger();
+const operationsCoordinator = createOperationsCoordinator({
+  businessHunterService: businessHunterReadonlyService,
+  executionLogger,
+});
 const actionExecutor = new ActionExecutor();
 const gmailConnector = new GmailConnector();
 gmailConnector.connect();
@@ -808,7 +813,7 @@ if (pathname === "/api/dashboard" && req.method === "GET") {
       approvalQueue,
       gmailReader: dashboardReaders.gmailReader,
       calendarReader: dashboardReaders.calendarReader,
-      businessHunterOperation: businessHunterReadonlyService.getStatus()
+      operationsStatus: operationsCoordinator.getStatus()
     });
 
     return sendJson(res, 200, dashboardState);
@@ -1239,7 +1244,7 @@ if (pathname === "/api/execute-approved") {
 }
 if (isBusinessHunterOperationRoute(pathname, req.method)) {
   return handleBusinessHunterOperationRequest(req, res, {
-    businessHunterService: businessHunterReadonlyService,
+    operationsCoordinator,
     getIdentity: () => requestPrivateIdentity
   });
 }

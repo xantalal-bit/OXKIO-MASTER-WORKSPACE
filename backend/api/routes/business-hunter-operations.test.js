@@ -44,8 +44,8 @@ test('matches the official manual readonly route', () => {
 test('handles authenticated readonly execution with no-store response and ignores client fields', async () => {
   const response = createResponse();
   let capturedOptions = null;
-  const service = {
-    async runBusinessHunterReadonly(options) {
+  const coordinator = {
+    async runBusinessAnalysis(options) {
       capturedOptions = options;
       return {
         operationId: 'operation-id',
@@ -77,7 +77,7 @@ test('handles authenticated readonly execution with no-store response and ignore
     }),
     response,
     {
-      businessHunterService: service,
+      operationsCoordinator: coordinator,
       getIdentity: () => ({
         clientId: 'cliente-cero',
         expectedClientId: 'cliente-cero',
@@ -90,11 +90,13 @@ test('handles authenticated readonly execution with no-store response and ignore
   assert.equal(response.statusCode, 200);
   assert.equal(response.headers['Cache-Control'], 'no-store');
   assert.equal(capturedOptions && typeof capturedOptions === 'object', true);
+  assert.deepEqual(Object.keys(capturedOptions), ['identity']);
   assert.equal(body.worker, 'business-hunter-readonly');
   assert.equal(body.mode, 'manual');
   assert.equal(body.proposalCreated, false);
   assert.equal(body.approvalId, null);
   assert.equal(Array.isArray(body.errors), true);
+  assert.equal(body.executionEnabled, undefined);
   assert.equal(JSON.stringify(body).includes('/tmp/secret'), false);
 });
 
@@ -103,7 +105,7 @@ test('fails closed for invalid method, invalid content type, invalid JSON and co
   await handleBusinessHunterOperationRequest(
     createRequest({}, 'GET'),
     deniedResponse,
-    { businessHunterService: { runBusinessHunterReadonly() {} } },
+    { operationsCoordinator: { runBusinessAnalysis() {} } },
   );
   assert.equal(deniedResponse.statusCode, 405);
 
@@ -112,7 +114,7 @@ test('fails closed for invalid method, invalid content type, invalid JSON and co
     createRequest({}, 'POST', 'text/plain'),
     contentTypeResponse,
     {
-      businessHunterService: { runBusinessHunterReadonly() {} },
+      operationsCoordinator: { runBusinessAnalysis() {} },
       getIdentity: () => ({
         clientId: 'cliente-cero',
         expectedClientId: 'cliente-cero',
@@ -131,7 +133,7 @@ test('fails closed for invalid method, invalid content type, invalid JSON and co
     invalidJsonRequest,
     invalidJsonResponse,
     {
-      businessHunterService: { runBusinessHunterReadonly() { return Promise.resolve({}); } },
+      operationsCoordinator: { runBusinessAnalysis() { return Promise.resolve({}); } },
       getIdentity: () => ({
         clientId: 'cliente-cero',
         expectedClientId: 'cliente-cero',
@@ -146,8 +148,8 @@ test('fails closed for invalid method, invalid content type, invalid JSON and co
     createRequest({}, 'POST'),
     conflictResponse,
     {
-      businessHunterService: {
-        runBusinessHunterReadonly() {
+      operationsCoordinator: {
+        runBusinessAnalysis() {
           const error = new Error('busy');
           error.code = 'business_hunter_operation_in_progress';
           throw error;
@@ -177,7 +179,12 @@ test('dashboard markup exposes the readonly business analysis card and sanitized
   assert.match(html, /window\.oxkioLogout = async function\(\)/);
   assert.match(html, /initializeBusinessHunterOperation\(\)/);
   assert.match(html, /renderBusinessHunterOperation\(state\.operations && state\.operations\.businessHunter\)/);
+  assert.match(html, /data-bh-phase/);
+  assert.match(html, /data-bh-recent-operations/);
+  assert.match(html, /operations\.slice\(0, 3\)/);
+  assert.doesNotMatch(html, />Cancelar</);
+  assert.doesNotMatch(html, /data-worker-selector|data-scheduler/);
   assert.match(html, /typeof item === "string"/);
-  assert.match(html, /Array\.isArray\(data\.opportunities\) \? data\.opportunities\.length : 0/);
+  assert.match(html, /Array\.isArray\(businessResult\.opportunities\) \? businessResult\.opportunities\.length : 0/);
   assert.doesNotMatch(html, /innerHTML/);
 });

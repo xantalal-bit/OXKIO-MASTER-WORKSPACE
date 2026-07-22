@@ -840,6 +840,10 @@
               <p class="operations-value" data-bh-mode>manual</p>
             </div>
             <div class="operations-kv">
+              <span class="operations-label">Fase</span>
+              <p class="operations-value" data-bh-phase>En espera</p>
+            </div>
+            <div class="operations-kv">
               <span class="operations-label">executionEnabled</span>
               <p class="operations-value" data-bh-execution-enabled>false</p>
             </div>
@@ -884,6 +888,10 @@
               <div>
                 <p class="meta">Recomendaciones</p>
                 <ul class="list" data-bh-recommendations></ul>
+              </div>
+              <div>
+                <p class="meta">Últimas operaciones</p>
+                <ul class="list" data-bh-recent-operations></ul>
               </div>
               <p class="note">Solo análisis. No se contacta ni se ejecutan acciones.</p>
             </div>
@@ -1234,6 +1242,19 @@
       return labels[status] || labels.ready;
     }
 
+    function formatBusinessHunterOperationPhase(phase) {
+      const labels = {
+        queued: "En espera",
+        validating: "Validando",
+        running_worker: "Ejecutando worker",
+        validating_result: "Validando resultado",
+        logging: "Registrando",
+        completed: "Completada",
+        failed: "Fallida"
+      };
+      return labels[phase] || labels.queued;
+    }
+
     function updateBusinessHunterOperationBadge(badge, status) {
       if (!badge) return;
       const classes = {
@@ -1305,6 +1326,31 @@
       });
     }
 
+    function renderRecentOperations(listElement, operations) {
+      if (!listElement) return;
+      listElement.replaceChildren();
+      const recent = Array.isArray(operations) ? operations.slice(0, 3) : [];
+      if (recent.length === 0) {
+        const empty = document.createElement("li");
+        empty.className = "item";
+        empty.textContent = "Sin operaciones anteriores.";
+        listElement.appendChild(empty);
+        return;
+      }
+      recent.forEach((operation) => {
+        const entry = document.createElement("li");
+        entry.className = "item";
+        const title = document.createElement("span");
+        title.className = "item-title";
+        title.textContent = `${formatBusinessHunterOperationStatus(operation.status)} · ${formatBusinessHunterOperationTimestamp(operation.completedAt || operation.startedAt)}`;
+        const detail = document.createElement("p");
+        detail.className = "item-text";
+        detail.textContent = textOrFallback(operation.resultSummary, "Sin resumen disponible.");
+        entry.append(title, detail);
+        listElement.appendChild(entry);
+      });
+    }
+
     function buildBusinessHunterErrorView(message) {
       return {
         worker: "business-hunter-readonly",
@@ -1329,6 +1375,7 @@
       const panel = getBusinessHunterOperationPanel();
       if (!panel) return;
       const data = operation && typeof operation === "object" ? operation : {};
+      const businessResult = data.result && typeof data.result === "object" ? data.result : data;
       const status = textOrFallback(data.status, "ready");
       const running = status === "running";
       const button = panel.querySelector("[data-bh-run]");
@@ -1336,6 +1383,7 @@
       updateBusinessHunterOperationBadge(panel.querySelector("[data-bh-status]"), status);
       setText(panel.querySelector("[data-bh-worker]"), data.worker, "business-hunter-readonly");
       setText(panel.querySelector("[data-bh-mode]"), data.mode, "manual");
+      setText(panel.querySelector("[data-bh-phase]"), formatBusinessHunterOperationPhase(data.phase), "En espera");
       setText(panel.querySelector("[data-bh-execution-enabled]"), data.executionEnabled === true ? "true" : "false", "false");
       setText(
         panel.querySelector("[data-bh-last-execution]"),
@@ -1364,14 +1412,14 @@
       );
       setText(
         panel.querySelector("[data-bh-summary]"),
-        data.summary,
+        data.resultSummary || businessResult.summary,
         "Sin ejecuciones todavía."
       );
       setText(
         panel.querySelector("[data-bh-opportunities-count]"),
         Number.isFinite(Number(data.opportunitiesCount))
           ? Number(data.opportunitiesCount)
-          : (Array.isArray(data.opportunities) ? data.opportunities.length : 0),
+          : (Array.isArray(businessResult.opportunities) ? businessResult.opportunities.length : 0),
         0
       );
       setText(
@@ -1393,13 +1441,17 @@
       );
       renderBusinessHunterList(
         panel.querySelector("[data-bh-opportunities]"),
-        data.opportunities,
+        businessResult.opportunities,
         "Sin oportunidades sanitizadas."
       );
       renderBusinessHunterList(
         panel.querySelector("[data-bh-recommendations]"),
-        data.recommendations,
+        businessResult.recommendations,
         "Sin recomendaciones disponibles."
+      );
+      renderRecentOperations(
+        panel.querySelector("[data-bh-recent-operations]"),
+        data.recentOperations
       );
       if (button) {
         button.disabled = running || businessHunterOperationSending;

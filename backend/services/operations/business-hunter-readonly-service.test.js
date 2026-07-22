@@ -189,6 +189,23 @@ test('does not invent opportunities when Business Hunter is found without knowle
   assert.ok(result.recommendations.length > 0);
 });
 
+test('uses coordinator identifiers when supplied and still supports legacy internal calls', async () => {
+  const service = createBusinessHunterReadonlyService({
+    createExecutiveRuntime() { return { cleanup() {} }; },
+    runBusinessHunterConnector() { return { found: false }; },
+  });
+  const coordinated = await service.runBusinessHunterReadonly({
+    operationId: 'coordinator-operation',
+    interactionId: 'coordinator-interaction',
+  });
+  assert.equal(coordinated.operationId, 'coordinator-operation');
+  assert.equal(coordinated.interactionId, 'coordinator-interaction');
+
+  const legacy = await service.runBusinessHunterReadonly();
+  assert.match(legacy.operationId, /^[0-9a-f-]{36}$/i);
+  assert.match(legacy.interactionId, /^[0-9a-f-]{36}$/i);
+});
+
 test('rejects concurrent executions and releases the lock after timeout failure', async () => {
   let cleanupCalls = 0;
   const service = createBusinessHunterReadonlyService({

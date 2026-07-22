@@ -3,7 +3,6 @@
 const crypto = require('crypto');
 const { createExecutiveRuntime } = require('../runtime/executive-runtime-factory');
 const { runBusinessHunterConnector } = require('../knowledge/connectors/business-hunter-connector');
-const ProposalEngine = require('../../core/proposalEngine');
 
 const WORKER_NAME = 'business-hunter-readonly';
 const OPERATION_MODE = 'manual';
@@ -279,37 +278,6 @@ function withTimeout(promise, timeoutMs) {
   });
 }
 
-function buildProposalPreview(result, dependencies = {}) {
-  const proposalEngine = dependencies.proposalEngine || new ProposalEngine();
-
-  if (!proposalEngine || typeof proposalEngine.generate !== 'function') {
-    return null;
-  }
-
-  try {
-    const proposal = proposalEngine.generate({
-      message: 'Business Hunter readonly summary.',
-      analysis: {
-        intent: 'business',
-        urgency: 'normal',
-        requiresApproval: true,
-      },
-      decision: {
-        recommendation: result.summary,
-        requiresApproval: true,
-      },
-    });
-
-    if (!proposal || proposal.type !== 'general') {
-      return null;
-    }
-  } catch (error) {
-    return null;
-  }
-
-  return null;
-}
-
 function createBusinessHunterReadonlyService(dependencies = {}) {
   let state = createEmptyState();
   let lock = false;
@@ -323,9 +291,15 @@ function createBusinessHunterReadonlyService(dependencies = {}) {
 
     lock = true;
     const startedAt = new Date().toISOString();
+    const operationId = typeof options.operationId === 'string' && options.operationId.trim()
+      ? options.operationId.trim()
+      : safeUuid();
+    const interactionId = typeof options.interactionId === 'string' && options.interactionId.trim()
+      ? options.interactionId.trim()
+      : safeUuid();
     const operation = freezeDeep({
-      operationId: safeUuid(),
-      interactionId: safeUuid(),
+      operationId,
+      interactionId,
       worker: WORKER_NAME,
       mode: OPERATION_MODE,
       status: 'running',
@@ -368,13 +342,7 @@ function createBusinessHunterReadonlyService(dependencies = {}) {
       );
 
       const result = buildOperationResult(operation, findings || {});
-      const proposalPreview = buildProposalPreview(result, dependencies);
-      const finalResult = proposalPreview
-        ? sanitizeOperationLog({
-          ...result,
-          proposalCreated: true,
-        })
-        : result;
+      const finalResult = result;
 
       state = {
         currentOperation: null,

@@ -89,7 +89,7 @@ function isBusinessHunterOperationRoute(pathname, method) {
 }
 
 async function handleBusinessHunterOperationRequest(req, res, {
-  businessHunterService,
+  operationsCoordinator,
   getIdentity = getClienteCeroIdentity,
 } = {}) {
   if (!validateBusinessHunterRequest(req, res, getIdentity)) {
@@ -106,8 +106,8 @@ async function handleBusinessHunterOperationRequest(req, res, {
       });
     }
 
-    const service = businessHunterService;
-    if (!service || typeof service.runBusinessHunterReadonly !== 'function') {
+    const coordinator = operationsCoordinator;
+    if (!coordinator || typeof coordinator.runBusinessAnalysis !== 'function') {
       return sendJson(res, 500, {
         ok: false,
         code: 'business_hunter_service_unavailable',
@@ -115,11 +115,8 @@ async function handleBusinessHunterOperationRequest(req, res, {
       });
     }
 
-    const result = await service.runBusinessHunterReadonly({
-      root: null,
-      searchRoots: null,
-      body,
-    });
+    const identity = getIdentity();
+    const result = await coordinator.runBusinessAnalysis({ identity });
 
     return sendJson(res, 200, result);
   } catch (error) {
