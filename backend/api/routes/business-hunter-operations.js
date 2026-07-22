@@ -120,7 +120,7 @@ async function handleBusinessHunterOperationRequest(req, res, {
 
     return sendJson(res, 200, result);
   } catch (error) {
-    if (error && error.code === 'business_hunter_operation_in_progress') {
+    if (error && ['business_hunter_operation_in_progress', 'operation_in_progress'].includes(error.code)) {
       return sendJson(res, 409, {
         ok: false,
         code: error.code,

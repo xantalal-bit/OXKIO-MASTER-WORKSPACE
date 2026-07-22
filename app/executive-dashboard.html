@@ -874,6 +874,7 @@
           </div>
           <div class="operations-actions">
             <button type="button" data-bh-run>Analizar Business</button>
+            <button type="button" class="btn-secondary" data-knowledge-run>Revisar conocimiento</button>
             <p class="note" data-bh-state>Solo análisis. No se contacta ni se ejecutan acciones.</p>
           </div>
           <details class="operations-details">
@@ -888,6 +889,10 @@
               <div>
                 <p class="meta">Recomendaciones</p>
                 <ul class="list" data-bh-recommendations></ul>
+              </div>
+              <div>
+                <p class="meta">Temas principales</p>
+                <ul class="list" data-knowledge-topics></ul>
               </div>
               <div>
                 <p class="meta">Actividad reciente</p>
@@ -1272,6 +1277,15 @@
       const hasDocumentaryInformation = opportunities.some((item) => item && item.kind === "documentary_evidence");
       const hasVerifiedOpportunity = opportunities.some((item) => item && item.kind === "commercial_opportunity");
 
+      if (data.worker === "knowledge-readonly") {
+        if (data.sourceStatus === "unavailable") return "No se ha encontrado información suficiente para completar la revisión.";
+        if (data.sourceStatus === "partial") return "Hay información disponible, aunque todavía es limitada o incompleta.";
+        return textOrFallback(
+          data.resultSummary || businessResult.summary,
+          "Se ha revisado la información disponible para consulta y trabajo posterior."
+        );
+      }
+
       if (data.sourceStatus === "unavailable") {
         return "No se ha encontrado información suficiente para completar el análisis.";
       }
@@ -1288,6 +1302,10 @@
         data.resultSummary || businessResult.summary,
         "El análisis ha finalizado sin información comercial verificable."
       );
+    }
+
+    function formatOperationModule(worker) {
+      return worker === "knowledge-readonly" ? "Revisión de conocimiento" : "Análisis comercial";
     }
 
     function formatBusinessHunterRecommendation(value) {
@@ -1396,7 +1414,7 @@
         entry.className = "item";
         const title = document.createElement("span");
         title.className = "item-title";
-        title.textContent = `Análisis comercial · ${formatBusinessHunterOperationStatus(operation.status)} · ${formatBusinessHunterOperationTimestamp(operation.completedAt || operation.startedAt)}`;
+        title.textContent = `${formatOperationModule(operation.worker)} · ${formatBusinessHunterOperationStatus(operation.status)} · ${formatBusinessHunterOperationTimestamp(operation.completedAt || operation.startedAt)}`;
         const detail = document.createElement("p");
         detail.className = "item-text";
         const operationResult = operation.result && typeof operation.result === "object" ? operation.result : {};
@@ -1435,9 +1453,10 @@
       const status = textOrFallback(data.status, "ready");
       const running = status === "running";
       const button = panel.querySelector("[data-bh-run]");
+      const knowledgeButton = panel.querySelector("[data-knowledge-run]");
 
       updateBusinessHunterOperationBadge(panel.querySelector("[data-bh-status]"), status);
-      setText(panel.querySelector("[data-bh-worker]"), "Análisis comercial", "Análisis comercial");
+      setText(panel.querySelector("[data-bh-worker]"), formatOperationModule(data.worker), "Análisis comercial");
       setText(panel.querySelector("[data-bh-mode]"), data.mode === "manual" ? "Iniciado por José Antonio" : "Inicio supervisado", "Iniciado por José Antonio");
       setText(panel.querySelector("[data-bh-phase]"), formatBusinessHunterOperationPhase(data.phase), "En espera");
       setText(panel.querySelector("[data-bh-execution-enabled]"), data.executionEnabled === true ? "Activadas" : "Desactivadas", "Desactivadas");
@@ -1473,7 +1492,9 @@
         panel.querySelector("[data-bh-opportunities-count]"),
         Number.isFinite(Number(data.opportunitiesCount))
           ? Number(data.opportunitiesCount)
-          : (Array.isArray(businessResult.opportunities) ? businessResult.opportunities.length : 0),
+          : (Number.isFinite(Number(businessResult.itemsCount))
+            ? Number(businessResult.itemsCount)
+            : (Array.isArray(businessResult.opportunities) ? businessResult.opportunities.length : 0)),
         0
       );
       setText(
@@ -1507,11 +1528,20 @@
         panel.querySelector("[data-bh-recent-operations]"),
         data.recentOperations
       );
+      renderBusinessHunterList(
+        panel.querySelector("[data-knowledge-topics]"),
+        businessResult.topics,
+        "Sin temas adicionales para mostrar."
+      );
       if (button) {
         button.disabled = running || businessHunterOperationSending;
         button.textContent = running || businessHunterOperationSending
           ? "Analizando…"
           : "Analizar Business";
+      }
+      if (knowledgeButton) {
+        knowledgeButton.disabled = running || businessHunterOperationSending;
+        knowledgeButton.textContent = running || businessHunterOperationSending ? "Revisando…" : "Revisar conocimiento";
       }
     }
 
@@ -1521,6 +1551,38 @@
       if (button) {
         button.disabled = isSending;
         button.textContent = isSending ? "Analizando…" : "Analizar Business";
+      }
+      const knowledgeButton = document.querySelector("[data-knowledge-run]");
+      if (knowledgeButton) {
+        knowledgeButton.disabled = isSending;
+        knowledgeButton.textContent = isSending ? "Revisando…" : "Revisar conocimiento";
+      }
+    }
+
+    async function submitKnowledgeOperation() {
+      if (businessHunterOperationSending) return;
+      const panel = getBusinessHunterOperationPanel();
+      setBusinessHunterOperationSending(true);
+      try {
+        const response = await window.oxkioAuthenticatedFetch("/api/operations/knowledge/run", {
+          method: "POST", headers: { "Content-Type": "application/json" }, body: "{}"
+        });
+        const data = await response.json();
+        if (!response.ok) {
+          const message = data && typeof data.message === "string"
+            ? data.message
+            : "No se pudo completar la revisión de conocimiento.";
+          setText(panel && panel.querySelector("[data-bh-state]"), message, "No se pudo completar la revisión de conocimiento.");
+          return;
+        }
+        renderBusinessHunterOperation(data);
+        setText(panel && panel.querySelector("[data-bh-state]"), "Revisión completada.", "Revisión completada.");
+        const dashboardResponse = await window.oxkioAuthenticatedFetch("/api/dashboard", { cache: "no-store" });
+        if (dashboardResponse.ok) applyDashboardState(await dashboardResponse.json());
+      } catch (error) {
+        setText(panel && panel.querySelector("[data-bh-state]"), "No se pudo completar la revisión de conocimiento.", "No se pudo completar la revisión de conocimiento.");
+      } finally {
+        setBusinessHunterOperationSending(false);
       }
     }
 
@@ -1593,6 +1655,8 @@
       const button = panel && panel.querySelector("[data-bh-run]");
       if (!button) return;
       button.addEventListener("click", submitBusinessHunterOperation);
+      const knowledgeButton = panel.querySelector("[data-knowledge-run]");
+      if (knowledgeButton) knowledgeButton.addEventListener("click", submitKnowledgeOperation);
     }
 
     function findPanelByTitle(title) {

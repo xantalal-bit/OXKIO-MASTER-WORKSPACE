@@ -35,6 +35,9 @@ test('logs terminal operations through a strict whitelist and lists defensive li
     assert.equal(logger.list({ limit: 0 }).length, 0);
     assert.throws(() => logger.logOperation(operation({ executionEnabled: true })), /Invalid/);
     assert.throws(() => logger.logOperation(operation({ resultSummary: 'Contactar a person@example.com' })), /Unsafe/);
+    const knowledge = logger.logOperation(operation({ type: 'knowledge-review-readonly', worker: 'knowledge-readonly' }));
+    assert.equal(knowledge.worker, 'knowledge-readonly');
+    assert.throws(() => logger.logOperation(operation({ type: 'arbitrary', worker: 'arbitrary' })), /Invalid/);
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }

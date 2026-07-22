@@ -12,6 +12,10 @@ const OPERATION_FIELDS = Object.freeze([
 ]);
 const TERMINAL_STATUSES = new Set(['completed', 'completed_with_warnings', 'failed']);
 const SOURCE_STATUSES = new Set(['real', 'partial', 'unavailable']);
+const ALLOWED_OPERATIONS = new Set([
+  'business-analysis-readonly:business-hunter-readonly',
+  'knowledge-review-readonly:knowledge-readonly',
+]);
 
 function clone(value) {
   return JSON.parse(JSON.stringify(value));
@@ -92,8 +96,7 @@ class ExecutionLogger {
     };
 
     if (!operation.operationId || !operation.interactionId
-      || operation.type !== 'business-analysis-readonly'
-      || operation.worker !== 'business-hunter-readonly'
+      || !ALLOWED_OPERATIONS.has(`${operation.type}:${operation.worker}`)
       || operation.mode !== 'manual') {
       throw new Error('Invalid operation logger contract.');
     }

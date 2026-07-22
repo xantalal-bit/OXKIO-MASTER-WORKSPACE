@@ -194,6 +194,22 @@ test('marks missing Business Hunter source data unavailable and explains why', (
   assert.match(view.summary, /no ha proporcionado datos de fuente disponibles/i);
 });
 
+test('projects Knowledge results through the same operations view without exposing documents', () => {
+  const view = buildBusinessHunterOperationView({
+    activeOperation: null,
+    recentOperations: [{
+      worker: 'knowledge-readonly', status: 'completed', phase: 'completed', sourceStatus: 'real',
+      resultSummary: 'Conocimiento revisado.', durationMs: 20,
+      result: { summary: 'Conocimiento revisado.', itemsCount: 3, topics: ['Gobernanza'], recommendations: ['Revisar temas.'] },
+      errors: [], warnings: [],
+    }],
+  });
+  assert.equal(view.worker, 'knowledge-readonly');
+  assert.equal(view.itemsCount, 3);
+  assert.deepEqual(view.topics, ['Gobernanza']);
+  assert.equal(JSON.stringify(view).includes('document'), false);
+});
+
 test('never exposes paths, filenames, private content, or complete inventory assets', () => {
   const view = buildEcosystemView(inventory([asset('Business Hunter', {
     path: 'C:\\private\\Business Hunter\\secret.md',

@@ -14,6 +14,16 @@ const IDENTITY = Object.freeze({
   expectedClientId: 'cliente-cero',
   authorization: { status: 'granted' },
 });
+const KNOWLEDGE_SERVICE = Object.freeze({
+  async runKnowledgeReadonly(options) {
+    return {
+      ...options, worker: 'knowledge-readonly', mode: 'manual', status: 'completed',
+      startedAt: '2026-07-22T10:00:00.000Z', completedAt: '2026-07-22T10:00:01.000Z', durationMs: 1000,
+      sourceStatus: 'real', summary: 'Conocimiento revisado.', itemsCount: 1,
+      topics: ['gobernanza'], recommendations: ['Revisar temas.'], warnings: [], errors: [],
+    };
+  },
+});
 
 function workerResult(options, overrides = {}) {
   return {
@@ -45,6 +55,7 @@ test('owns one ID pair, lifecycle, sanitized snapshots and safe terminal logging
   let resolveWorker;
   const logged = [];
   const coordinator = createOperationsCoordinator({
+    knowledgeReadonlyService: KNOWLEDGE_SERVICE,
     randomUUID: (() => {
       const ids = ['operation-id', 'interaction-id'];
       return () => ids.shift();
@@ -62,7 +73,7 @@ test('owns one ID pair, lifecycle, sanitized snapshots and safe terminal logging
   const active = coordinator.getStatus().activeOperation;
   assert.equal(active.status, 'running');
   assert.equal(active.phase, 'running_worker');
-  assert.deepEqual(adapterOptions, { operationId: 'operation-id', interactionId: 'interaction-id' });
+  assert.deepEqual(adapterOptions, { operationId: 'operation-id', interactionId: 'interaction-id', identity: IDENTITY });
   await assert.rejects(() => coordinator.runBusinessAnalysis({ identity: IDENTITY }), /already running/);
 
   resolveWorker(workerResult(adapterOptions));
@@ -84,6 +95,7 @@ test('owns one ID pair, lifecycle, sanitized snapshots and safe terminal logging
 test('keeps only five operations and releases active state after success', async () => {
   let sequence = 0;
   const coordinator = createOperationsCoordinator({
+    knowledgeReadonlyService: KNOWLEDGE_SERVICE,
     randomUUID: () => `id-${++sequence}`,
     businessHunterService: { async runBusinessHunterReadonly(options) { return workerResult(options); } },
   });
@@ -97,6 +109,7 @@ test('keeps only five operations and releases active state after success', async
 test('fails closed for worker failure or invalid unsafe result and always releases lock', async () => {
   let invalid = false;
   const coordinator = createOperationsCoordinator({
+    knowledgeReadonlyService: KNOWLEDGE_SERVICE,
     randomUUID: (() => { let id = 0; return () => `uuid-${++id}`; })(),
     businessHunterService: {
       async runBusinessHunterReadonly(options) {
@@ -105,11 +118,36 @@ test('fails closed for worker failure or invalid unsafe result and always releas
       },
     },
   });
-  await assert.rejects(() => coordinator.runBusinessAnalysis({ identity: IDENTITY }), /failed/i);
+  await assert.rejects(() => coordinator.runBusinessAnalysis({ identity: IDENTITY }), /no se pudo completar/i);
   assert.equal(coordinator.getStatus().activeOperation, null);
-  assert.deepEqual(coordinator.getRecentOperations()[0].errors, ['Business Hunter readonly cycle failed.']);
+  assert.deepEqual(coordinator.getRecentOperations()[0].errors, ['No se pudo completar la operación.']);
   invalid = true;
-  await assert.rejects(() => coordinator.runBusinessAnalysis({ identity: IDENTITY }), /failed|opportunities/i);
+  await assert.rejects(() => coordinator.runBusinessAnalysis({ identity: IDENTITY }), /no se pudo completar|opportunities/i);
   assert.equal(coordinator.getStatus().activeOperation, null);
   assert.equal(coordinator.getRecentOperations()[0].status, 'failed');
+});
+
+test('runs Knowledge through the same global lifecycle and shared history', async () => {
+  let sequence = 0;
+  let releaseBusiness;
+  const coordinator = createOperationsCoordinator({
+    randomUUID: () => `shared-${++sequence}`,
+    knowledgeReadonlyService: KNOWLEDGE_SERVICE,
+    businessHunterService: {
+      runBusinessHunterReadonly() { return new Promise((resolve) => { releaseBusiness = resolve; }); },
+    },
+  });
+  const knowledge = await coordinator.runKnowledgeReview({ identity: IDENTITY });
+  assert.equal(knowledge.type, 'knowledge-review-readonly');
+  assert.equal(knowledge.worker, 'knowledge-readonly');
+  assert.equal(knowledge.executionEnabled, false);
+  assert.equal(knowledge.proposalId, null);
+  assert.equal(knowledge.approvalId, null);
+  const businessRun = coordinator.runBusinessAnalysis({ identity: IDENTITY });
+  await assert.rejects(() => coordinator.runKnowledgeReview({ identity: IDENTITY }), /already running/i);
+  releaseBusiness(workerResult({ operationId: 'shared-3', interactionId: 'shared-4' }));
+  await businessRun;
+  assert.deepEqual(coordinator.getRecentOperations().map((item) => item.worker), [
+    'business-hunter-readonly', 'knowledge-readonly',
+  ]);
 });

@@ -118,6 +118,8 @@ function unavailableBusinessHunterOperation() {
     opportunitiesCount: 0,
     opportunities: [],
     recommendations: [],
+    itemsCount: 0,
+    topics: [],
     proposalCreated: false,
     approvalId: null,
     errors: [],
@@ -153,7 +155,7 @@ function buildBusinessHunterOperationView(operation) {
     : "unavailable";
 
   return {
-    worker: "business-hunter-readonly",
+    worker: typeof source.worker === "string" ? source.worker : "business-hunter-readonly",
     mode: "manual",
     executionEnabled: false,
     running,
@@ -183,6 +185,10 @@ function buildBusinessHunterOperationView(operation) {
       : [],
     recommendations: Array.isArray(businessResult.recommendations)
       ? businessResult.recommendations.slice(0, 5).map((recommendation) => String(recommendation)).filter(Boolean)
+      : [],
+    itemsCount: Number.isInteger(businessResult.itemsCount) ? businessResult.itemsCount : opportunityCount,
+    topics: Array.isArray(businessResult.topics)
+      ? businessResult.topics.slice(0, 5).map((topic) => String(topic)).filter(Boolean)
       : [],
     proposalCreated: source.proposalCreated === true,
     approvalId: typeof source.approvalId === "string" && source.approvalId.trim()

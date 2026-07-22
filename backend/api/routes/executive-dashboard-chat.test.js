@@ -30,11 +30,11 @@ test('uses only the official executive chat POST contract', () => {
     .forEach((field) => assert.doesNotMatch(source, new RegExp(`JSON\\.stringify\\([^)]*${field}`)));
 });
 
-test('registers both click listeners and supports Enter without Shift', () => {
+test('registers the chat and two operation click listeners and supports Enter without Shift', () => {
   const source = getChatScript(readDashboard());
   const clickListeners = source.match(/addEventListener\(["']click["']/g) || [];
 
-  assert.equal(clickListeners.length, 2);
+  assert.equal(clickListeners.length, 3);
   assert.match(source, /addEventListener\(["']keydown["']/);
   assert.match(source, /event\.key\s*===\s*["']Enter["']\s*&&\s*!event\.shiftKey/);
   assert.match(source, /event\.preventDefault\(\)/);

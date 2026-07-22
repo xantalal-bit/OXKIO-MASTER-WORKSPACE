@@ -4,6 +4,8 @@ const crypto = require('crypto');
 
 const OPERATION_TYPE = 'business-analysis-readonly';
 const WORKER_NAME = 'business-hunter-readonly';
+const KNOWLEDGE_OPERATION_TYPE = 'knowledge-review-readonly';
+const KNOWLEDGE_WORKER_NAME = 'knowledge-readonly';
 const MODE = 'manual';
 const TRIGGER = 'manual';
 const MAX_RECENT_OPERATIONS = 5;
@@ -14,6 +16,7 @@ const STATUSES = new Set(['pending', 'running', 'completed', 'completed_with_war
 const TERMINAL_STATUSES = new Set(['completed', 'completed_with_warnings', 'failed']);
 const PHASES = new Set(['queued', 'validating', 'running_worker', 'validating_result', 'logging', 'completed', 'failed']);
 const SOURCE_STATUSES = new Set(['real', 'partial', 'unavailable']);
+const OPERATION_TYPES = new Set([OPERATION_TYPE, KNOWLEDGE_OPERATION_TYPE]);
 const FORBIDDEN_KEYS = new Set([
   'token', 'claims', 'dependencies', 'runtime', 'path', 'paths',
   'sandboxPath', 'payload', 'private_key', 'credentials', 'stack',
@@ -62,7 +65,7 @@ function validateRunInput(input) {
   if (!input || typeof input !== 'object' || Array.isArray(input)) {
     throw createError('invalid_operation_input', 'Invalid operation request.');
   }
-  if (input.type !== OPERATION_TYPE || input.trigger !== TRIGGER) {
+  if (!OPERATION_TYPES.has(input.type) || input.trigger !== TRIGGER) {
     throw createError('unsupported_operation', 'Unsupported operation.');
   }
   if (!isAuthorizedIdentity(input.identity)) {
@@ -86,25 +89,32 @@ function containsForbiddenData(value, key = '') {
   return false;
 }
 
-function validateWorkerResult(result, ids) {
+function validateWorkerResult(result, ids, expected = { type: OPERATION_TYPE, worker: WORKER_NAME }) {
   if (!result || typeof result !== 'object' || Array.isArray(result)) {
     throw createError('invalid_worker_result', 'Worker returned an invalid result.');
   }
   if (result.operationId !== ids.operationId || result.interactionId !== ids.interactionId) {
     throw createError('invalid_worker_result', 'Worker returned mismatched operation identifiers.');
   }
-  if (result.worker !== WORKER_NAME || result.mode !== MODE || !TERMINAL_STATUSES.has(result.status)) {
+  if (result.worker !== expected.worker || result.mode !== MODE || !TERMINAL_STATUSES.has(result.status)) {
     throw createError('invalid_worker_result', 'Worker returned an invalid contract.');
   }
   if (!SOURCE_STATUSES.has(result.sourceStatus)) {
     throw createError('invalid_worker_result', 'Worker returned an invalid source status.');
   }
-  if (!Array.isArray(result.opportunities) || result.opportunities.length > 10
+  const businessValid = expected.type === OPERATION_TYPE
+    && Array.isArray(result.opportunities) && result.opportunities.length <= 10;
+  const knowledgeValid = expected.type === KNOWLEDGE_OPERATION_TYPE
+    && Number.isInteger(result.itemsCount) && result.itemsCount >= 0 && result.itemsCount <= 10
+    && Array.isArray(result.topics) && result.topics.length <= 5
+    && Array.isArray(result.warnings) && result.warnings.length <= MAX_WARNINGS;
+  if ((!businessValid && !knowledgeValid)
     || !Array.isArray(result.recommendations) || result.recommendations.length > 5
     || !Array.isArray(result.errors) || result.errors.length > MAX_ERRORS) {
     throw createError('invalid_worker_result', 'Worker result limits were exceeded.');
   }
-  if (result.sourceStatus === 'unavailable' && result.opportunities.length > 0) {
+  if (result.sourceStatus === 'unavailable'
+    && ((businessValid && result.opportunities.length > 0) || (knowledgeValid && result.itemsCount > 0))) {
     throw createError('invalid_worker_result', 'Unavailable sources cannot produce opportunities.');
   }
   if (containsForbiddenData(result)) {
@@ -121,15 +131,18 @@ function createError(code, message) {
   return Object.assign(new Error(message), { code });
 }
 
-function createOperationsCoordinator({ businessHunterService, executionLogger, randomUUID = crypto.randomUUID } = {}) {
+function createOperationsCoordinator({ businessHunterService, knowledgeReadonlyService, executionLogger, randomUUID = crypto.randomUUID } = {}) {
   if (!businessHunterService || typeof businessHunterService.runBusinessHunterReadonly !== 'function') {
     throw new Error('Business Hunter readonly adapter is required.');
   }
+  if (!knowledgeReadonlyService || typeof knowledgeReadonlyService.runKnowledgeReadonly !== 'function') {
+    throw new Error('Knowledge readonly adapter is required.');
+  }
 
-  const adapters = new Map([[OPERATION_TYPE, Object.freeze({
-    worker: WORKER_NAME,
-    run: (context) => businessHunterService.runBusinessHunterReadonly(context),
-  })]]);
+  const adapters = new Map([
+    [OPERATION_TYPE, Object.freeze({ worker: WORKER_NAME, queuedSummary: 'Análisis comercial en preparación.', failureCode: 'business_hunter_operation_failed', run: (context) => businessHunterService.runBusinessHunterReadonly(context) })],
+    [KNOWLEDGE_OPERATION_TYPE, Object.freeze({ worker: KNOWLEDGE_WORKER_NAME, queuedSummary: 'Revisión de conocimiento en preparación.', failureCode: 'knowledge_review_failed', run: (context) => knowledgeReadonlyService.runKnowledgeReadonly(context) })],
+  ]);
   let activeOperation = null;
   let recentOperations = [];
 
@@ -145,12 +158,12 @@ function createOperationsCoordinator({ businessHunterService, executionLogger, r
     recentOperations = [snapshot(record), ...recentOperations].slice(0, MAX_RECENT_OPERATIONS);
   }
 
-  function baseRecord(operationId, interactionId, startedAt) {
+  function baseRecord(operationId, interactionId, startedAt, type, adapter) {
     return {
       operationId,
       interactionId,
-      type: OPERATION_TYPE,
-      worker: WORKER_NAME,
+      type,
+      worker: adapter.worker,
       mode: MODE,
       status: 'pending',
       phase: 'queued',
@@ -158,7 +171,7 @@ function createOperationsCoordinator({ businessHunterService, executionLogger, r
       completedAt: null,
       durationMs: null,
       sourceStatus: 'unavailable',
-      resultSummary: 'Operación Business readonly en cola.',
+      resultSummary: adapter.queuedSummary,
       warnings: [],
       errors: [],
       proposalId: null,
@@ -182,9 +195,11 @@ function createOperationsCoordinator({ businessHunterService, executionLogger, r
       resultSummary: sanitizeText(result.summary),
       warnings,
       errors: sanitizeMessages(result.errors, MAX_ERRORS),
-      result: freezeClone({
-        summary: sanitizeText(result.summary),
-        opportunities: result.opportunities,
+      result: freezeClone(base.type === KNOWLEDGE_OPERATION_TYPE ? {
+        summary: sanitizeText(result.summary), itemsCount: result.itemsCount,
+        topics: result.topics, recommendations: result.recommendations,
+      } : {
+        summary: sanitizeText(result.summary), opportunities: result.opportunities,
         recommendations: result.recommendations,
       }),
     };
@@ -199,11 +214,13 @@ function createOperationsCoordinator({ businessHunterService, executionLogger, r
       completedAt,
       durationMs: Math.max(0, Date.parse(completedAt) - Date.parse(base.startedAt)),
       sourceStatus: 'unavailable',
-      resultSummary: 'Business Hunter readonly cycle failed.',
+      resultSummary: base.type === KNOWLEDGE_OPERATION_TYPE
+        ? 'No se pudo completar la revisión de conocimiento.'
+        : 'No se pudo completar el análisis comercial.',
       warnings: [],
-      errors: [error && error.code === 'business_hunter_timeout'
-        ? 'Business Hunter readonly cycle timed out.'
-        : 'Business Hunter readonly cycle failed.'],
+      errors: [error && ['business_hunter_timeout', 'knowledge_review_timeout'].includes(error.code)
+        ? 'La operación tardó más de lo permitido y se detuvo de forma segura.'
+        : 'No se pudo completar la operación.'],
       result: null,
     };
   }
@@ -214,24 +231,21 @@ function createOperationsCoordinator({ businessHunterService, executionLogger, r
     }
   }
 
-  async function runBusinessAnalysis({ identity } = {}) {
-    validateRunInput({ type: OPERATION_TYPE, identity, trigger: TRIGGER });
-    if (activeOperation && activeOperation.worker === WORKER_NAME) {
-      throw createError('business_hunter_operation_in_progress', 'Business Hunter readonly cycle is already running.');
-    }
+  async function runOperation(type, identity) {
+    validateRunInput({ type, identity, trigger: TRIGGER });
+    if (activeOperation) throw createError('operation_in_progress', 'An operation is already running.');
 
     const operationId = randomUUID();
     const interactionId = randomUUID();
     const startedAt = new Date().toISOString();
-    const base = baseRecord(operationId, interactionId, startedAt);
+    const adapter = adapters.get(type);
+    const base = baseRecord(operationId, interactionId, startedAt, type, adapter);
     setActive({ ...base, status: 'running', phase: 'validating' });
-    const adapter = adapters.get(OPERATION_TYPE);
-
     try {
       setActive({ ...base, status: 'running', phase: 'running_worker' });
-      const result = await adapter.run({ operationId, interactionId });
+      const result = await adapter.run({ operationId, interactionId, identity });
       setActive({ ...base, status: 'running', phase: 'validating_result' });
-      validateWorkerResult(result, { operationId, interactionId });
+      validateWorkerResult(result, { operationId, interactionId }, { type, worker: adapter.worker });
       const terminal = buildTerminal(base, result);
       setActive({ ...terminal, status: 'running', phase: 'logging' });
       logTerminal(terminal);
@@ -241,11 +255,14 @@ function createOperationsCoordinator({ businessHunterService, executionLogger, r
       const failed = buildFailure(base, error);
       logTerminal(failed);
       storeTerminal(failed);
-      throw createError(error && error.code ? error.code : 'business_hunter_operation_failed', failed.errors[0]);
+      throw createError(error && error.code ? error.code : adapter.failureCode, failed.errors[0]);
     } finally {
       activeOperation = null;
     }
   }
+
+  function runBusinessAnalysis({ identity } = {}) { return runOperation(OPERATION_TYPE, identity); }
+  function runKnowledgeReview({ identity } = {}) { return runOperation(KNOWLEDGE_OPERATION_TYPE, identity); }
 
   function getStatus() {
     return freezeClone({
@@ -260,7 +277,7 @@ function createOperationsCoordinator({ businessHunterService, executionLogger, r
     return freezeClone(recentOperations.slice(0, safeLimit));
   }
 
-  return Object.freeze({ runBusinessAnalysis, getStatus, getRecentOperations });
+  return Object.freeze({ runBusinessAnalysis, runKnowledgeReview, getStatus, getRecentOperations });
 }
 
 module.exports = {
