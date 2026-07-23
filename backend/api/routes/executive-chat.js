@@ -160,9 +160,11 @@ function calendarRangeForQuery(query) {
 async function buildOrchestratorOptions(query, dependencies = {}, controls = {}) {
   const selectedContext = controls.selectedContext
     || (dependencies.selectExecutiveContext || selectExecutiveContext)(query);
-  const selection = controls.skipGmail === true
-    ? { ...selectedContext, gmail: false }
-    : selectedContext;
+  const selection = {
+    ...selectedContext,
+    ...(controls.skipGmail === true ? { gmail: false } : {}),
+    ...(controls.skipCalendar === true ? { calendar: false } : {}),
+  };
   const identity = (dependencies.getClienteCeroIdentity || getClienteCeroIdentity)();
   const internalDependencies = getInternalOrchestratorDependencies(dependencies);
   const options = {
@@ -276,18 +278,23 @@ async function handleExecutiveChatRequest(req, res, options) {
     const selectedContext = (dependencies.selectExecutiveContext || selectExecutiveContext)(query);
     const shouldCheckSupervisedGmail = selectedContext.gmail === true
       && !isEmailActionRequest(query);
-    const preliminaryRecommendation = isInternallyAuthorized(identity) && shouldCheckSupervisedGmail
+    const shouldCheckSupervisedCalendar = selectedContext.calendar === true;
+    const preliminaryRecommendation = isInternallyAuthorized(identity)
+      && (shouldCheckSupervisedGmail || shouldCheckSupervisedCalendar)
       ? decisionEngine({ query, analysis: {} })
       : null;
     const isSupervisedGmailReview = preliminaryRecommendation
       && preliminaryRecommendation.decision === 'gmail-review-readonly';
+    const isSupervisedCalendarReview = preliminaryRecommendation
+      && preliminaryRecommendation.decision === 'calendar-review-readonly';
     const orchestratorOptions = await buildOrchestratorOptions(query, dependencies, {
       skipGmail: isSupervisedGmailReview,
+      skipCalendar: isSupervisedCalendarReview,
       selectedContext,
     });
     const payload = sanitizeExecutivePayload(orchestrator(query, orchestratorOptions));
     const planner = dependencies.planOperations || planOperations;
-    const recommendation = isSupervisedGmailReview
+    const recommendation = isSupervisedGmailReview || isSupervisedCalendarReview
       ? preliminaryRecommendation
       : (isInternallyAuthorized(identity)
         ? decisionEngine({ query, analysis: payload && payload.analysis })

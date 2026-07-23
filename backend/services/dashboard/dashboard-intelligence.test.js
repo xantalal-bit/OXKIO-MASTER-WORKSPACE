@@ -248,6 +248,33 @@ test('projects Gmail results through the common operations view without exposing
   );
 });
 
+test('projects Calendar results through the common operations view without exposing provider metadata', () => {
+  const view = buildBusinessHunterOperationView({
+    recentOperations: [{
+      worker: 'calendar-readonly', status: 'completed', phase: 'completed', sourceStatus: 'real',
+      resultSummary: 'Agenda revisada.', durationMs: 20,
+      result: {
+        summary: 'Agenda revisada.', eventsCount: 2,
+        relevantItems: [{
+          title: 'Reunión', date: '23 jul 2026', time: '10:00',
+          location: 'Sala', conflict: true,
+        }],
+        recommendations: ['Revisar solapamiento.'],
+      },
+      errors: [], warnings: [],
+    }],
+  });
+  assert.equal(view.worker, 'calendar-readonly');
+  assert.equal(view.eventsCount, 2);
+  assert.deepEqual(view.relevantItems, [{
+    title: 'Reunión', date: '23 jul 2026', time: '10:00',
+    location: 'Sala', conflict: true,
+  }]);
+  ['id', 'token', 'link', 'description', 'attendees'].forEach(
+    (forbidden) => assert.equal(JSON.stringify(view).includes(forbidden), false),
+  );
+});
+
 test('never exposes paths, filenames, private content, or complete inventory assets', () => {
   const view = buildEcosystemView(inventory([asset('Business Hunter', {
     path: 'C:\\private\\Business Hunter\\secret.md',

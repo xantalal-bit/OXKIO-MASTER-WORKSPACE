@@ -10,6 +10,8 @@ const MEMORY_OPERATION_TYPE = 'memory-review-readonly';
 const MEMORY_WORKER_NAME = 'memory-readonly';
 const GMAIL_OPERATION_TYPE = 'gmail-review-readonly';
 const GMAIL_WORKER_NAME = 'gmail-readonly';
+const CALENDAR_OPERATION_TYPE = 'calendar-review-readonly';
+const CALENDAR_WORKER_NAME = 'calendar-readonly';
 const MODE = 'manual';
 const TRIGGER = 'manual';
 const MAX_RECENT_OPERATIONS = 5;
@@ -22,12 +24,14 @@ const PHASES = new Set(['queued', 'validating', 'running_worker', 'validating_re
 const SOURCE_STATUSES = new Set(['real', 'partial', 'unavailable']);
 const OPERATION_TYPES = new Set([
   OPERATION_TYPE, KNOWLEDGE_OPERATION_TYPE, MEMORY_OPERATION_TYPE, GMAIL_OPERATION_TYPE,
+  CALENDAR_OPERATION_TYPE,
 ]);
 const FORBIDDEN_KEYS = new Set([
   'token', 'claims', 'dependencies', 'runtime', 'path', 'paths',
   'sandboxPath', 'payload', 'private_key', 'credentials', 'stack',
   'limits', 'modules', 'constructors',
 ]);
+const INTERNAL_IDENTIFIER_KEYS = new Set(['operationId', 'interactionId']);
 
 function clone(value) {
   return value === undefined ? undefined : JSON.parse(JSON.stringify(value));
@@ -85,6 +89,7 @@ function validateRunInput(input) {
 
 function containsForbiddenData(value, key = '') {
   if (FORBIDDEN_KEYS.has(key)) return true;
+  if (INTERNAL_IDENTIFIER_KEYS.has(key)) return false;
   if (typeof value === 'string') {
     return /(?:[A-Za-z]:\\|\/Users\/|\/home\/|-----BEGIN|bearer\s+|private[_-]?key|[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}|\b\+?\d[\d .()-]{7,}\d\b)/i.test(value);
   }
@@ -124,7 +129,12 @@ function validateWorkerResult(result, ids, expected = { type: OPERATION_TYPE, wo
     && Array.isArray(result.relevantItems) && result.relevantItems.length <= 5
     && Array.isArray(result.recommendations) && result.recommendations.length <= 3
     && Array.isArray(result.warnings) && result.warnings.length <= MAX_WARNINGS;
-  if ((!businessValid && !knowledgeValid && !memoryValid && !gmailValid)
+  const calendarValid = expected.type === CALENDAR_OPERATION_TYPE
+    && Number.isInteger(result.eventsCount) && result.eventsCount >= 0 && result.eventsCount <= 10
+    && Array.isArray(result.relevantItems) && result.relevantItems.length <= 5
+    && Array.isArray(result.recommendations) && result.recommendations.length <= 3
+    && Array.isArray(result.warnings) && result.warnings.length <= MAX_WARNINGS;
+  if ((!businessValid && !knowledgeValid && !memoryValid && !gmailValid && !calendarValid)
     || !Array.isArray(result.recommendations) || result.recommendations.length > 5
     || !Array.isArray(result.errors) || result.errors.length > MAX_ERRORS) {
     throw createError('invalid_worker_result', 'Worker result limits were exceeded.');
@@ -133,7 +143,8 @@ function validateWorkerResult(result, ids, expected = { type: OPERATION_TYPE, wo
     && ((businessValid && result.opportunities.length > 0)
       || (knowledgeValid && result.itemsCount > 0)
       || (memoryValid && result.itemsCount > 0)
-      || (gmailValid && result.emailsCount > 0))) {
+      || (gmailValid && result.emailsCount > 0)
+      || (calendarValid && result.eventsCount > 0))) {
     throw createError('invalid_worker_result', 'Unavailable sources cannot produce opportunities.');
   }
   if (containsForbiddenData(result)) {
@@ -155,6 +166,7 @@ function createOperationsCoordinator({
   knowledgeReadonlyService,
   memoryReadonlyService,
   gmailReadonlyService,
+  calendarReadonlyService,
   executionLogger,
   randomUUID = crypto.randomUUID,
 } = {}) {
@@ -170,12 +182,16 @@ function createOperationsCoordinator({
   if (!gmailReadonlyService || typeof gmailReadonlyService.runGmailReadonly !== 'function') {
     throw new Error('Gmail readonly adapter is required.');
   }
+  if (!calendarReadonlyService || typeof calendarReadonlyService.runCalendarReadonly !== 'function') {
+    throw new Error('Calendar readonly adapter is required.');
+  }
 
   const adapters = new Map([
     [OPERATION_TYPE, Object.freeze({ worker: WORKER_NAME, queuedSummary: 'Análisis comercial en preparación.', failureCode: 'business_hunter_operation_failed', run: (context) => businessHunterService.runBusinessHunterReadonly(context) })],
     [KNOWLEDGE_OPERATION_TYPE, Object.freeze({ worker: KNOWLEDGE_WORKER_NAME, queuedSummary: 'Revisión de conocimiento en preparación.', failureCode: 'knowledge_review_failed', run: (context) => knowledgeReadonlyService.runKnowledgeReadonly(context) })],
     [MEMORY_OPERATION_TYPE, Object.freeze({ worker: MEMORY_WORKER_NAME, queuedSummary: 'Revisión de memoria en preparación.', failureCode: 'memory_review_failed', run: (context) => memoryReadonlyService.runMemoryReadonly(context) })],
     [GMAIL_OPERATION_TYPE, Object.freeze({ worker: GMAIL_WORKER_NAME, queuedSummary: 'Revisión de correo en preparación.', failureCode: 'gmail_review_failed', run: (context) => gmailReadonlyService.runGmailReadonly(context) })],
+    [CALENDAR_OPERATION_TYPE, Object.freeze({ worker: CALENDAR_WORKER_NAME, queuedSummary: 'Revisión de agenda en preparación.', failureCode: 'calendar_review_failed', run: (context) => calendarReadonlyService.runCalendarReadonly(context) })],
   ]);
   let activeOperation = null;
   let recentOperations = [];
@@ -235,6 +251,9 @@ function createOperationsCoordinator({
       } : base.type === GMAIL_OPERATION_TYPE ? {
         summary: sanitizeText(result.summary), emailsCount: result.emailsCount,
         relevantItems: result.relevantItems, recommendations: result.recommendations,
+      } : base.type === CALENDAR_OPERATION_TYPE ? {
+        summary: sanitizeText(result.summary), eventsCount: result.eventsCount,
+        relevantItems: result.relevantItems, recommendations: result.recommendations,
       } : {
         summary: sanitizeText(result.summary), opportunities: result.opportunities,
         recommendations: result.recommendations,
@@ -257,9 +276,11 @@ function createOperationsCoordinator({
           ? 'No se pudo completar la revisión de memoria.'
           : base.type === GMAIL_OPERATION_TYPE
             ? 'No se pudo completar la revisión de correo.'
+            : base.type === CALENDAR_OPERATION_TYPE
+              ? 'No se pudo completar la revisión de agenda.'
             : 'No se pudo completar el análisis comercial.',
       warnings: [],
-      errors: [error && ['business_hunter_timeout', 'knowledge_review_timeout', 'memory_review_timeout', 'gmail_review_timeout'].includes(error.code)
+      errors: [error && ['business_hunter_timeout', 'knowledge_review_timeout', 'memory_review_timeout', 'gmail_review_timeout', 'calendar_review_timeout'].includes(error.code)
         ? 'La operación tardó más de lo permitido y se detuvo de forma segura.'
         : 'No se pudo completar la operación.'],
       result: null,
@@ -306,6 +327,7 @@ function createOperationsCoordinator({
   function runKnowledgeReview({ identity } = {}) { return runOperation(KNOWLEDGE_OPERATION_TYPE, identity); }
   function runMemoryReview({ identity } = {}) { return runOperation(MEMORY_OPERATION_TYPE, identity); }
   function runGmailReview({ identity } = {}) { return runOperation(GMAIL_OPERATION_TYPE, identity); }
+  function runCalendarReview({ identity } = {}) { return runOperation(CALENDAR_OPERATION_TYPE, identity); }
 
   function getStatus() {
     return freezeClone({
@@ -321,7 +343,7 @@ function createOperationsCoordinator({
   }
 
   return Object.freeze({
-    runBusinessAnalysis, runKnowledgeReview, runMemoryReview, runGmailReview,
+    runBusinessAnalysis, runKnowledgeReview, runMemoryReview, runGmailReview, runCalendarReview,
     getStatus, getRecentOperations,
   });
 }

@@ -45,6 +45,17 @@ const GMAIL_SERVICE = Object.freeze({
     };
   },
 });
+const CALENDAR_SERVICE = Object.freeze({
+  async runCalendarReadonly(options) {
+    return {
+      ...options, worker: 'calendar-readonly', mode: 'manual', status: 'completed',
+      startedAt: '2026-07-22T10:00:00.000Z', completedAt: '2026-07-22T10:00:01.000Z', durationMs: 1000,
+      sourceStatus: 'real', summary: 'Agenda revisada.', eventsCount: 1,
+      relevantItems: [{ title: 'Reunión', date: '23 jul 2026', time: '10:00', location: 'Sala', conflict: false }],
+      recommendations: ['Confirmar compromiso.'], warnings: [], errors: [],
+    };
+  },
+});
 
 function workerResult(options, overrides = {}) {
   return {
@@ -79,6 +90,7 @@ test('owns one ID pair, lifecycle, sanitized snapshots and safe terminal logging
     knowledgeReadonlyService: KNOWLEDGE_SERVICE,
     memoryReadonlyService: MEMORY_SERVICE,
     gmailReadonlyService: GMAIL_SERVICE,
+    calendarReadonlyService: CALENDAR_SERVICE,
     randomUUID: (() => {
       const ids = ['operation-id', 'interaction-id'];
       return () => ids.shift();
@@ -121,6 +133,7 @@ test('keeps only five operations and releases active state after success', async
     knowledgeReadonlyService: KNOWLEDGE_SERVICE,
     memoryReadonlyService: MEMORY_SERVICE,
     gmailReadonlyService: GMAIL_SERVICE,
+    calendarReadonlyService: CALENDAR_SERVICE,
     randomUUID: () => `id-${++sequence}`,
     businessHunterService: { async runBusinessHunterReadonly(options) { return workerResult(options); } },
   });
@@ -137,6 +150,7 @@ test('fails closed for worker failure or invalid unsafe result and always releas
     knowledgeReadonlyService: KNOWLEDGE_SERVICE,
     memoryReadonlyService: MEMORY_SERVICE,
     gmailReadonlyService: GMAIL_SERVICE,
+    calendarReadonlyService: CALENDAR_SERVICE,
     randomUUID: (() => { let id = 0; return () => `uuid-${++id}`; })(),
     businessHunterService: {
       async runBusinessHunterReadonly(options) {
@@ -162,6 +176,7 @@ test('runs Knowledge through the same global lifecycle and shared history', asyn
     knowledgeReadonlyService: KNOWLEDGE_SERVICE,
     memoryReadonlyService: MEMORY_SERVICE,
     gmailReadonlyService: GMAIL_SERVICE,
+    calendarReadonlyService: CALENDAR_SERVICE,
     businessHunterService: {
       runBusinessHunterReadonly() { return new Promise((resolve) => { releaseBusiness = resolve; }); },
     },
@@ -189,6 +204,7 @@ test('runs Memory through the same global lifecycle and shared history', async (
     knowledgeReadonlyService: KNOWLEDGE_SERVICE,
     memoryReadonlyService: MEMORY_SERVICE,
     gmailReadonlyService: GMAIL_SERVICE,
+    calendarReadonlyService: CALENDAR_SERVICE,
   });
   const business = await coordinator.runBusinessAnalysis({ identity: IDENTITY });
   const memory = await coordinator.runMemoryReview({ identity: IDENTITY });
@@ -214,6 +230,7 @@ test('fails closed when Memory exceeds its specialized public limits', async () 
       },
     },
     gmailReadonlyService: GMAIL_SERVICE,
+    calendarReadonlyService: CALENDAR_SERVICE,
   });
   await assert.rejects(() => coordinator.runMemoryReview({ identity: IDENTITY }), /no se pudo completar/i);
   assert.equal(coordinator.getStatus().activeOperation, null);
@@ -228,6 +245,7 @@ test('runs Gmail through the same global lifecycle and shared history', async ()
     knowledgeReadonlyService: KNOWLEDGE_SERVICE,
     memoryReadonlyService: MEMORY_SERVICE,
     gmailReadonlyService: GMAIL_SERVICE,
+    calendarReadonlyService: CALENDAR_SERVICE,
   });
   const memory = await coordinator.runMemoryReview({ identity: IDENTITY });
   const gmail = await coordinator.runGmailReview({ identity: IDENTITY });
@@ -241,4 +259,47 @@ test('runs Gmail through the same global lifecycle and shared history', async ()
   assert.deepEqual(coordinator.getRecentOperations().map((item) => item.worker), [
     'gmail-readonly', 'memory-readonly',
   ]);
+});
+
+test('runs Calendar through the same global lifecycle and shared history', async () => {
+  let sequence = 0;
+  const coordinator = createOperationsCoordinator({
+    randomUUID: () => `calendar-${++sequence}`,
+    businessHunterService: { async runBusinessHunterReadonly(options) { return workerResult(options); } },
+    knowledgeReadonlyService: KNOWLEDGE_SERVICE,
+    memoryReadonlyService: MEMORY_SERVICE,
+    gmailReadonlyService: GMAIL_SERVICE,
+    calendarReadonlyService: CALENDAR_SERVICE,
+  });
+  await coordinator.runGmailReview({ identity: IDENTITY });
+  const calendar = await coordinator.runCalendarReview({ identity: IDENTITY });
+  assert.equal(calendar.type, 'calendar-review-readonly');
+  assert.equal(calendar.worker, 'calendar-readonly');
+  assert.equal(calendar.executionEnabled, false);
+  assert.equal(calendar.proposalId, null);
+  assert.equal(calendar.approvalId, null);
+  assert.equal(calendar.result.eventsCount, 1);
+  assert.deepEqual(coordinator.getRecentOperations().map((item) => item.worker), [
+    'calendar-readonly', 'gmail-readonly',
+  ]);
+});
+
+test('does not reject coordinator-owned Calendar UUIDs as phone-like private data', async () => {
+  const ids = [
+    '868b7a82-0807-4412-bccb-32247ee6cf12',
+    '763db817-9862-4578-ad7c-9af698aa0bcc',
+  ];
+  const coordinator = createOperationsCoordinator({
+    randomUUID: () => ids.shift(),
+    businessHunterService: { async runBusinessHunterReadonly(options) { return workerResult(options); } },
+    knowledgeReadonlyService: KNOWLEDGE_SERVICE,
+    memoryReadonlyService: MEMORY_SERVICE,
+    gmailReadonlyService: GMAIL_SERVICE,
+    calendarReadonlyService: CALENDAR_SERVICE,
+  });
+
+  const calendar = await coordinator.runCalendarReview({ identity: IDENTITY });
+
+  assert.equal(calendar.status, 'completed');
+  assert.equal(calendar.result.eventsCount, 1);
 });

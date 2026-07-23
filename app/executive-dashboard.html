@@ -877,6 +877,7 @@
             <button type="button" class="btn-secondary" data-knowledge-run>Revisar conocimiento</button>
             <button type="button" class="btn-secondary" data-memory-run>Revisar memoria</button>
             <button type="button" class="btn-secondary" data-gmail-run>Revisar correo</button>
+            <button type="button" class="btn-secondary" data-calendar-run>Revisar agenda</button>
             <p class="note" data-bh-state>Solo análisis. No se contacta ni se ejecutan acciones.</p>
           </div>
           <details class="operations-details">
@@ -1158,7 +1159,8 @@
         "business-analysis-readonly",
         "knowledge-review-readonly",
         "memory-review-readonly",
-        "gmail-review-readonly"
+        "gmail-review-readonly",
+        "calendar-review-readonly"
       ].includes(recommendation.decision);
 
       const firstPlannedStep = plan.length > 0 ? plan[0] : null;
@@ -1184,10 +1186,18 @@
       result.querySelector("[data-chat-followup]").hidden = !proposal && !approval;
       const decisionBox = result.querySelector("[data-chat-decision]");
       const planList = decisionBox.querySelector("[data-chat-plan]");
+      decisionBox.querySelector(".operations-actions").hidden = !actionDecision;
       planList.replaceChildren();
       plan.forEach((step, index) => {
         const item = document.createElement("li");
-        item.textContent = `Paso ${index + 1}: ${step === "business-analysis-readonly" ? "Analizar Business." : "Revisar el conocimiento disponible."}`;
+        const labels = {
+          "business-analysis-readonly": "Analizar Business.",
+          "knowledge-review-readonly": "Revisar el conocimiento disponible.",
+          "memory-review-readonly": "Revisar la memoria disponible.",
+          "gmail-review-readonly": "Revisar el correo reciente.",
+          "calendar-review-readonly": "Revisar la agenda próxima.",
+        };
+        item.textContent = `Paso ${index + 1}: ${labels[step] || "Revisar información disponible."}`;
         planList.appendChild(item);
       });
       planList.hidden = plan.length === 0;
@@ -1197,6 +1207,7 @@
         const isBusiness = actionDecision === "business-analysis-readonly";
         const isMemory = actionDecision === "memory-review-readonly";
         const isGmail = actionDecision === "gmail-review-readonly";
+        const isCalendar = actionDecision === "calendar-review-readonly";
         setText(
           decisionBox.querySelector("[data-chat-decision-message]"),
           plan.length > 0
@@ -1207,7 +1218,9 @@
                 ? "Creo que el siguiente paso más útil es revisar la memoria disponible."
                 : (isGmail
                   ? "Creo que el siguiente paso más útil es revisar el correo reciente."
-                  : "Creo que el siguiente paso más útil es revisar el conocimiento disponible.")))
+                  : (isCalendar
+                    ? "Creo que el siguiente paso más útil es revisar la agenda próxima."
+                    : "Creo que el siguiente paso más útil es revisar el conocimiento disponible."))))
         );
         setText(
           decisionBox.querySelector("[data-chat-decision-safety]"),
@@ -1266,6 +1279,8 @@
           plan.replaceChildren();
           plan.hidden = true;
         }
+        const actions = decisionBox.querySelector(".operations-actions");
+        if (actions) actions.hidden = true;
       }
       setText(
         result && result.querySelector("[data-chat-response]"),
@@ -1286,6 +1301,7 @@
       if (decision === "knowledge-review-readonly") completed = await submitKnowledgeOperation();
       if (decision === "memory-review-readonly") completed = await submitMemoryOperation();
       if (decision === "gmail-review-readonly") completed = await submitGmailOperation();
+      if (decision === "calendar-review-readonly") completed = await submitCalendarOperation();
       if (completed) {
         completeDecisionRecommendation(hadFollowingSteps);
       } else {
@@ -1421,6 +1437,13 @@
           "Se ha revisado el correo reciente y hay asuntos que requieren atención."
         );
       }
+      if (data.worker === "calendar-readonly") {
+        if (data.sourceStatus === "unavailable") return "No hay eventos seguros disponibles para completar la revisión.";
+        return textOrFallback(
+          data.resultSummary || businessResult.summary,
+          "Se ha revisado la agenda próxima y los compromisos relevantes."
+        );
+      }
 
       if (data.sourceStatus === "unavailable") {
         return "No se ha encontrado información suficiente para completar el análisis.";
@@ -1444,6 +1467,7 @@
       if (worker === "knowledge-readonly") return "Revisión de conocimiento";
       if (worker === "memory-readonly") return "Revisión de memoria";
       if (worker === "gmail-readonly") return "Revisión de correo";
+      if (worker === "calendar-readonly") return "Revisión de agenda";
       return "Análisis comercial";
     }
 
@@ -1525,8 +1549,11 @@
         title.className = "item-title";
         const isDocumentary = item && item.kind === "documentary_evidence";
         const isGmailItem = item && typeof item.subject === "string";
+        const isCalendarItem = item && typeof item.date === "string";
         title.textContent = isGmailItem
           ? textOrFallback(item.subject, "Sin asunto")
+          : isCalendarItem
+          ? textOrFallback(item.title, "Evento sin título")
           : isDocumentary
           ? "Información documental relacionada"
           : textOrFallback(item && item.title, "Información comercial");
@@ -1534,6 +1561,8 @@
         detail.className = "item-text";
         detail.textContent = isGmailItem
           ? `${textOrFallback(item.sender, "Remitente no disponible")}. ${textOrFallback(item.summary, "Sin resumen disponible.")}`
+          : isCalendarItem
+          ? `${textOrFallback(item.date, "Fecha no disponible")} · ${textOrFallback(item.time, "Hora no disponible")} · ${textOrFallback(item.location, "Ubicación no indicada")}${item.conflict === true ? ". Posible solapamiento." : ""}`
           : isDocumentary
           ? "Tipo: información documental. Utilidad: base para análisis posterior. No representa todavía una empresa o lead verificado."
           : textOrFallback(item && item.summary, fallback);
@@ -1600,6 +1629,7 @@
       const knowledgeButton = panel.querySelector("[data-knowledge-run]");
       const memoryButton = panel.querySelector("[data-memory-run]");
       const gmailButton = panel.querySelector("[data-gmail-run]");
+      const calendarButton = panel.querySelector("[data-calendar-run]");
 
       updateBusinessHunterOperationBadge(panel.querySelector("[data-bh-status]"), status);
       setText(panel.querySelector("[data-bh-worker]"), formatOperationModule(data.worker), "Análisis comercial");
@@ -1638,6 +1668,8 @@
         panel.querySelector("[data-bh-opportunities-count]"),
         data.worker === "gmail-readonly" && Number.isFinite(Number(businessResult.emailsCount))
           ? Number(businessResult.emailsCount)
+          : data.worker === "calendar-readonly" && Number.isFinite(Number(businessResult.eventsCount))
+          ? Number(businessResult.eventsCount)
           : Number.isFinite(Number(data.opportunitiesCount))
           ? Number(data.opportunitiesCount)
           : (Number.isFinite(Number(businessResult.itemsCount))
@@ -1664,7 +1696,9 @@
       );
       renderBusinessHunterList(
         panel.querySelector("[data-bh-opportunities]"),
-        data.worker === "gmail-readonly" ? businessResult.relevantItems : businessResult.opportunities,
+        ["gmail-readonly", "calendar-readonly"].includes(data.worker)
+          ? businessResult.relevantItems
+          : businessResult.opportunities,
         "No se ha localizado información suficiente."
       );
       renderBusinessHunterList(
@@ -1699,6 +1733,10 @@
         gmailButton.disabled = running || businessHunterOperationSending;
         gmailButton.textContent = running || businessHunterOperationSending ? "Revisando…" : "Revisar correo";
       }
+      if (calendarButton) {
+        calendarButton.disabled = running || businessHunterOperationSending;
+        calendarButton.textContent = running || businessHunterOperationSending ? "Revisando…" : "Revisar agenda";
+      }
     }
 
     function setBusinessHunterOperationSending(isSending) {
@@ -1722,6 +1760,40 @@
       if (gmailButton) {
         gmailButton.disabled = isSending;
         gmailButton.textContent = isSending ? "Revisando…" : "Revisar correo";
+      }
+      const calendarButton = document.querySelector("[data-calendar-run]");
+      if (calendarButton) {
+        calendarButton.disabled = isSending;
+        calendarButton.textContent = isSending ? "Revisando…" : "Revisar agenda";
+      }
+    }
+
+    async function submitCalendarOperation() {
+      if (businessHunterOperationSending) return false;
+      const panel = getBusinessHunterOperationPanel();
+      setBusinessHunterOperationSending(true);
+      try {
+        const response = await window.oxkioAuthenticatedFetch("/api/operations/calendar/run", {
+          method: "POST", headers: { "Content-Type": "application/json" }, body: "{}"
+        });
+        const data = await response.json();
+        if (!response.ok) {
+          const message = data && typeof data.message === "string"
+            ? data.message
+            : "No se pudo completar la revisión de agenda.";
+          setText(panel && panel.querySelector("[data-bh-state]"), message, "No se pudo completar la revisión de agenda.");
+          return false;
+        }
+        renderBusinessHunterOperation(data);
+        setText(panel && panel.querySelector("[data-bh-state]"), "Revisión completada.", "Revisión completada.");
+        const dashboardResponse = await window.oxkioAuthenticatedFetch("/api/dashboard", { cache: "no-store" });
+        if (dashboardResponse.ok) applyDashboardState(await dashboardResponse.json());
+        return true;
+      } catch (error) {
+        setText(panel && panel.querySelector("[data-bh-state]"), "No se pudo completar la revisión de agenda.", "No se pudo completar la revisión de agenda.");
+        return false;
+      } finally {
+        setBusinessHunterOperationSending(false);
       }
     }
 
@@ -1889,6 +1961,8 @@
       if (memoryButton) memoryButton.addEventListener("click", submitMemoryOperation);
       const gmailButton = panel.querySelector("[data-gmail-run]");
       if (gmailButton) gmailButton.addEventListener("click", submitGmailOperation);
+      const calendarButton = panel.querySelector("[data-calendar-run]");
+      if (calendarButton) calendarButton.addEventListener("click", submitCalendarOperation);
     }
 
     function findPanelByTitle(title) {

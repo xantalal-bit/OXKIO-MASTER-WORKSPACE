@@ -87,7 +87,7 @@ test('matches only the unchanged POST route', () => {
 test('A-D select Gmail, Calendar, Dashboard, and combined context once and minimally', async (t) => {
   const cases = [
     ['¿Qué correos tengo pendientes?', { gmail: 0, calendar: 0, dashboard: 0 }, false],
-    ['¿Qué reuniones tengo hoy?', { gmail: 0, calendar: 1, dashboard: 0 }, true],
+    ['¿Qué reuniones tengo hoy?', { gmail: 0, calendar: 0, dashboard: 0 }, false],
     ['¿Cómo está mi día?', { gmail: 0, calendar: 0, dashboard: 1 }, true],
     ['Resume mis correos y reuniones de hoy.', { gmail: 1, calendar: 1, dashboard: 0 }, true],
   ];
@@ -259,6 +259,21 @@ test('recommends supervised Gmail review without reading Gmail before confirmati
   assert.doesNotMatch(payload.response, /Gmail readonly no esta disponible/i);
 });
 
+test('recommends supervised Calendar review without reading Calendar before confirmation', async (t) => {
+  const { calls, dependencies } = createHarness(t, {
+    async buildCalendarPrivateContext() {
+      throw new Error('Calendar must not be read before confirmation.');
+    },
+  });
+  const response = await requestChat('Revisa mi agenda', dependencies);
+  const payload = response.getJson();
+  assert.equal(response.statusCode, 200);
+  assert.equal(calls.calendar, 0);
+  assert.equal(payload.decisionRecommendation.decision, 'calendar-review-readonly');
+  assert.equal(payload.decisionRecommendation.requiresConfirmation, true);
+  assert.doesNotMatch(payload.response, /Calendar readonly no esta disponible/i);
+});
+
 test('omits none recommendations and every recommendation for denied identity', async (t) => {
   const noneHarness = createHarness(t, {
     recommendSupervisedOperation: () => ({ decision: 'none', reason: 'No procede.', confidence: 'low', requiresConfirmation: true }),
@@ -290,7 +305,6 @@ test('omits none recommendations and every recommendation for denied identity', 
 
 test('M isolates each unavailable source and never fabricates context or proposals', async (t) => {
   const cases = [
-    ['¿Qué reuniones tengo hoy?', { buildCalendarPrivateContext: async () => { throw new Error('secret calendar stack'); } }, /Calendar readonly/i],
     ['¿Qué tengo pendiente de aprobar?', { approvalQueue: { listPending() { throw new Error('secret queue'); }, getHistory() { return []; } } }, /Approval Queue/i],
     ['¿Cómo está mi día?', { getDashboardState: async () => { throw new Error('secret dashboard'); } }, /resumen agregado/i],
   ];

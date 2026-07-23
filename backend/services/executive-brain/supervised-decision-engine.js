@@ -5,6 +5,7 @@ const DECISIONS = Object.freeze({
   KNOWLEDGE: 'knowledge-review-readonly',
   MEMORY: 'memory-review-readonly',
   GMAIL: 'gmail-review-readonly',
+  CALENDAR: 'calendar-review-readonly',
   NONE: 'none',
 });
 
@@ -25,9 +26,14 @@ const GMAIL_TERMS = Object.freeze([
   'gmail', 'correo', 'correos', 'email', 'emails', 'revisa mi correo',
   'que correos tengo', 'resume mis emails', 'requiere mi atencion',
 ]);
+const CALENDAR_TERMS = Object.freeze([
+  'agenda', 'calendario', 'calendar', 'que tengo hoy', 'que reuniones tengo',
+  'reuniones',
+  'revisa mi agenda', 'revisa mi calendario', 'tengo algun compromiso',
+  'hay huecos en mi agenda',
+]);
 const EXCLUDED_TERMS = Object.freeze([
-  'hola', 'buenos dias', 'buenas tardes', 'calendar', 'calendario', 'agenda',
-  'reunion', 'reuniones',
+  'hola', 'buenos dias', 'buenas tardes',
 ]);
 
 function normalizeText(value) {
@@ -74,6 +80,7 @@ function recommendSupervisedOperation(input = {}) {
   const knowledgeMatches = matches(normalized, KNOWLEDGE_TERMS);
   const memoryMatches = matches(normalized, MEMORY_TERMS);
   const gmailMatches = matches(normalized, GMAIL_TERMS);
+  const calendarMatches = matches(normalized, CALENDAR_TERMS);
   if (analysis.project === 'Business Hunter' && !businessMatches.includes('analisis comercial')) {
     businessMatches.push('business hunter');
   }
@@ -84,7 +91,7 @@ function recommendSupervisedOperation(input = {}) {
     knowledgeMatches.length = 0;
   }
 
-  const matchedCategories = [businessMatches, knowledgeMatches, memoryMatches, gmailMatches]
+  const matchedCategories = [businessMatches, knowledgeMatches, memoryMatches, gmailMatches, calendarMatches]
     .filter((category) => category.length > 0).length;
   if (matchedCategories > 1) {
     return buildDecision(DECISIONS.NONE, 'La petición puede corresponder a más de una revisión.', 'low');
@@ -115,6 +122,13 @@ function recommendSupervisedOperation(input = {}) {
       DECISIONS.GMAIL,
       'La petición puede resolverse revisando el correo reciente en modo de solo consulta.',
       gmailMatches.length > 1 ? 'high' : 'medium',
+    );
+  }
+  if (calendarMatches.length > 0) {
+    return buildDecision(
+      DECISIONS.CALENDAR,
+      'La petición puede resolverse revisando la agenda próxima en modo de solo consulta.',
+      calendarMatches.length > 1 ? 'high' : 'medium',
     );
   }
   return buildDecision(DECISIONS.NONE, 'No hay una operación especializada claramente indicada.', 'low');

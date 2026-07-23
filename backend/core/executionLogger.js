@@ -17,6 +17,7 @@ const ALLOWED_OPERATIONS = new Set([
   'knowledge-review-readonly:knowledge-readonly',
   'memory-review-readonly:memory-readonly',
   'gmail-review-readonly:gmail-readonly',
+  'calendar-review-readonly:calendar-readonly',
 ]);
 
 function clone(value) {

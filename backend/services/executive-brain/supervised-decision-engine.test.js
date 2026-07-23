@@ -4,19 +4,22 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const { recommendSupervisedOperation } = require('./supervised-decision-engine');
 
-test('recommends only the four closed readonly operations', () => {
+test('recommends only the five closed readonly operations', () => {
   const business = recommendSupervisedOperation({ query: 'Analiza empresas y oportunidades de mercado', analysis: {} });
   const knowledge = recommendSupervisedOperation({ query: 'Revisa el estado del conocimiento y sus temas', analysis: {} });
   const memory = recommendSupervisedOperation({ query: 'Revisa la memoria ejecutiva y los recuerdos', analysis: {} });
   const gmail = recommendSupervisedOperation({ query: 'Revisa mi correo y resume mis emails', analysis: {} });
+  const calendar = recommendSupervisedOperation({ query: 'Revisa mi agenda y dime si hay huecos', analysis: {} });
   assert.equal(business.decision, 'business-analysis-readonly');
   assert.equal(knowledge.decision, 'knowledge-review-readonly');
   assert.equal(memory.decision, 'memory-review-readonly');
   assert.equal(gmail.decision, 'gmail-review-readonly');
+  assert.equal(calendar.decision, 'calendar-review-readonly');
   assert.equal(business.confidence, 'high');
   assert.equal(knowledge.confidence, 'high');
   assert.equal(memory.confidence, 'high');
   assert.equal(gmail.confidence, 'high');
+  assert.equal(calendar.confidence, 'high');
 });
 
 test('fails to none for ambiguity, greetings, unrelated private services and general requests', () => {
