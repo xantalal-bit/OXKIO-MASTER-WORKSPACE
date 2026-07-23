@@ -150,6 +150,9 @@ function buildBusinessHunterOperationView(operation) {
   const opportunityCount = Array.isArray(businessResult.opportunities)
     ? businessResult.opportunities.length
     : 0;
+  const emailsCount = Number.isInteger(businessResult.emailsCount)
+    ? Math.max(0, Math.min(10, businessResult.emailsCount))
+    : 0;
   const sourceStatus = ["real", "partial", "unavailable"].includes(source.sourceStatus)
     ? source.sourceStatus
     : "unavailable";
@@ -179,16 +182,26 @@ function buildBusinessHunterOperationView(operation) {
       : sourceStatus === "unavailable"
         ? (source.worker === "memory-readonly"
           ? "No se ha encontrado memoria suficiente para completar la revisión."
+          : source.worker === "gmail-readonly"
+            ? "No hay correo seguro disponible para completar la revisión."
           : "Business Hunter no ha proporcionado datos de fuente disponibles.")
         : "Sin resumen disponible.",
     opportunitiesCount: opportunityCount,
     opportunities: Array.isArray(businessResult.opportunities)
       ? businessResult.opportunities.slice(0, 10)
       : [],
+    relevantItems: Array.isArray(businessResult.relevantItems)
+      ? businessResult.relevantItems.slice(0, 5).map((item) => ({
+        sender: typeof item.sender === "string" ? item.sender.slice(0, 100) : "Remitente no disponible",
+        subject: typeof item.subject === "string" ? item.subject.slice(0, 140) : "Sin asunto",
+        summary: typeof item.summary === "string" ? item.summary.slice(0, 180) : "Sin resumen disponible.",
+      }))
+      : [],
     recommendations: Array.isArray(businessResult.recommendations)
       ? businessResult.recommendations.slice(0, 5).map((recommendation) => String(recommendation)).filter(Boolean)
       : [],
     itemsCount: Number.isInteger(businessResult.itemsCount) ? businessResult.itemsCount : opportunityCount,
+    emailsCount,
     topics: Array.isArray(businessResult.topics)
       ? businessResult.topics.slice(0, 5).map((topic) => String(topic)).filter(Boolean)
       : [],

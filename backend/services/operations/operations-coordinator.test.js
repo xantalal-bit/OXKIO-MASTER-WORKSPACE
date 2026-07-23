@@ -34,6 +34,17 @@ const MEMORY_SERVICE = Object.freeze({
     };
   },
 });
+const GMAIL_SERVICE = Object.freeze({
+  async runGmailReadonly(options) {
+    return {
+      ...options, worker: 'gmail-readonly', mode: 'manual', status: 'completed',
+      startedAt: '2026-07-22T10:00:00.000Z', completedAt: '2026-07-22T10:00:01.000Z', durationMs: 1000,
+      sourceStatus: 'real', summary: 'Correo revisado.', emailsCount: 1,
+      relevantItems: [{ sender: 'Equipo', subject: 'Asunto', summary: 'Resumen.' }],
+      recommendations: ['Revisar asunto.'], warnings: [], errors: [],
+    };
+  },
+});
 
 function workerResult(options, overrides = {}) {
   return {
@@ -67,6 +78,7 @@ test('owns one ID pair, lifecycle, sanitized snapshots and safe terminal logging
   const coordinator = createOperationsCoordinator({
     knowledgeReadonlyService: KNOWLEDGE_SERVICE,
     memoryReadonlyService: MEMORY_SERVICE,
+    gmailReadonlyService: GMAIL_SERVICE,
     randomUUID: (() => {
       const ids = ['operation-id', 'interaction-id'];
       return () => ids.shift();
@@ -108,6 +120,7 @@ test('keeps only five operations and releases active state after success', async
   const coordinator = createOperationsCoordinator({
     knowledgeReadonlyService: KNOWLEDGE_SERVICE,
     memoryReadonlyService: MEMORY_SERVICE,
+    gmailReadonlyService: GMAIL_SERVICE,
     randomUUID: () => `id-${++sequence}`,
     businessHunterService: { async runBusinessHunterReadonly(options) { return workerResult(options); } },
   });
@@ -123,6 +136,7 @@ test('fails closed for worker failure or invalid unsafe result and always releas
   const coordinator = createOperationsCoordinator({
     knowledgeReadonlyService: KNOWLEDGE_SERVICE,
     memoryReadonlyService: MEMORY_SERVICE,
+    gmailReadonlyService: GMAIL_SERVICE,
     randomUUID: (() => { let id = 0; return () => `uuid-${++id}`; })(),
     businessHunterService: {
       async runBusinessHunterReadonly(options) {
@@ -147,6 +161,7 @@ test('runs Knowledge through the same global lifecycle and shared history', asyn
     randomUUID: () => `shared-${++sequence}`,
     knowledgeReadonlyService: KNOWLEDGE_SERVICE,
     memoryReadonlyService: MEMORY_SERVICE,
+    gmailReadonlyService: GMAIL_SERVICE,
     businessHunterService: {
       runBusinessHunterReadonly() { return new Promise((resolve) => { releaseBusiness = resolve; }); },
     },
@@ -173,6 +188,7 @@ test('runs Memory through the same global lifecycle and shared history', async (
     businessHunterService: { async runBusinessHunterReadonly(options) { return workerResult(options); } },
     knowledgeReadonlyService: KNOWLEDGE_SERVICE,
     memoryReadonlyService: MEMORY_SERVICE,
+    gmailReadonlyService: GMAIL_SERVICE,
   });
   const business = await coordinator.runBusinessAnalysis({ identity: IDENTITY });
   const memory = await coordinator.runMemoryReview({ identity: IDENTITY });
@@ -197,8 +213,32 @@ test('fails closed when Memory exceeds its specialized public limits', async () 
         return { ...result, recommendations: ['1', '2', '3', '4'] };
       },
     },
+    gmailReadonlyService: GMAIL_SERVICE,
   });
   await assert.rejects(() => coordinator.runMemoryReview({ identity: IDENTITY }), /no se pudo completar/i);
   assert.equal(coordinator.getStatus().activeOperation, null);
   assert.equal(coordinator.getRecentOperations()[0].status, 'failed');
+});
+
+test('runs Gmail through the same global lifecycle and shared history', async () => {
+  let sequence = 0;
+  const coordinator = createOperationsCoordinator({
+    randomUUID: () => `gmail-${++sequence}`,
+    businessHunterService: { async runBusinessHunterReadonly(options) { return workerResult(options); } },
+    knowledgeReadonlyService: KNOWLEDGE_SERVICE,
+    memoryReadonlyService: MEMORY_SERVICE,
+    gmailReadonlyService: GMAIL_SERVICE,
+  });
+  const memory = await coordinator.runMemoryReview({ identity: IDENTITY });
+  const gmail = await coordinator.runGmailReview({ identity: IDENTITY });
+  assert.equal(gmail.type, 'gmail-review-readonly');
+  assert.equal(gmail.worker, 'gmail-readonly');
+  assert.equal(gmail.operationId === memory.operationId, false);
+  assert.equal(gmail.executionEnabled, false);
+  assert.equal(gmail.proposalId, null);
+  assert.equal(gmail.approvalId, null);
+  assert.equal(gmail.result.emailsCount, 1);
+  assert.deepEqual(coordinator.getRecentOperations().map((item) => item.worker), [
+    'gmail-readonly', 'memory-readonly',
+  ]);
 });

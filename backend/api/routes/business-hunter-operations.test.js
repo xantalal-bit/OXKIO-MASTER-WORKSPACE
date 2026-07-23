@@ -198,11 +198,14 @@ test('dashboard markup exposes the readonly business analysis card and sanitized
   assert.match(html, /Analizar Business/);
   assert.match(html, /Revisar conocimiento/);
   assert.match(html, /Revisar memoria/);
+  assert.match(html, /Revisar correo/);
   assert.match(html, /\/api\/operations\/knowledge\/run/);
   assert.match(html, /\/api\/operations\/memory\/run/);
+  assert.match(html, /\/api\/operations\/gmail\/run/);
   assert.match(html, /data-knowledge-topics/);
   assert.match(html, /data\.worker === "knowledge-readonly"/);
   assert.match(html, /data\.worker === "memory-readonly"/);
+  assert.match(html, /data\.worker === "gmail-readonly"/);
   assert.match(html, /Hay información disponible, aunque todavía es limitada o incompleta/);
   assert.match(html, /Solo análisis\. No se contacta ni se ejecutan acciones\./);
   assert.match(html, /data-bh-execution-enabled/);

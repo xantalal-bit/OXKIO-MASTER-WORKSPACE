@@ -36,6 +36,7 @@ const {
 } = require("./routes/business-hunter-operations");
 const { handleKnowledgeOperationRequest, isKnowledgeOperationRoute } = require("./routes/knowledge-operations");
 const { handleMemoryOperationRequest, isMemoryOperationRoute } = require("./routes/memory-operations");
+const { handleGmailOperationRequest, isGmailOperationRoute } = require("./routes/gmail-operations");
 const { createExecutiveCsrf } = require("../security/executive-csrf");
 const {
   authenticateFirebaseRequest,
@@ -47,6 +48,7 @@ const { createExecutiveRuntime } = require("../services/runtime/executive-runtim
 const { businessHunterReadonlyService } = require("../services/operations/business-hunter-readonly-service");
 const { createKnowledgeReadonlyService } = require("../services/operations/knowledge-readonly-service");
 const { createMemoryReadonlyService } = require("../services/operations/memory-readonly-service");
+const { createGmailReadonlyService } = require("../services/operations/gmail-readonly-service");
 const { createOperationsCoordinator } = require("../services/operations/operations-coordinator");
 const { getClienteCeroIdentity } = require("../services/private-context/client-identity-resolver");
 const { buildGmailPrivateContext } = require("../services/private-context/gmail-private-provider");
@@ -94,10 +96,12 @@ const universalKnowledgeSupervisor = new UniversalKnowledgeSupervisor({ approval
 const executionLogger = new ExecutionLogger();
 const knowledgeReadonlyService = createKnowledgeReadonlyService();
 const memoryReadonlyService = createMemoryReadonlyService({ memoryEngine: executiveRuntime.memory });
+const gmailReadonlyService = createGmailReadonlyService();
 const operationsCoordinator = createOperationsCoordinator({
   businessHunterService: businessHunterReadonlyService,
   knowledgeReadonlyService,
   memoryReadonlyService,
+  gmailReadonlyService,
   executionLogger,
 });
 const actionExecutor = new ActionExecutor();
@@ -1264,6 +1268,12 @@ if (isKnowledgeOperationRoute(pathname, req.method)) {
 }
 if (isMemoryOperationRoute(pathname, req.method)) {
   return handleMemoryOperationRequest(req, res, {
+    operationsCoordinator,
+    getIdentity: () => requestPrivateIdentity
+  });
+}
+if (isGmailOperationRoute(pathname, req.method)) {
+  return handleGmailOperationRequest(req, res, {
     operationsCoordinator,
     getIdentity: () => requestPrivateIdentity
   });

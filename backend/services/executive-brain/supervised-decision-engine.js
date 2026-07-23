@@ -4,6 +4,7 @@ const DECISIONS = Object.freeze({
   BUSINESS: 'business-analysis-readonly',
   KNOWLEDGE: 'knowledge-review-readonly',
   MEMORY: 'memory-review-readonly',
+  GMAIL: 'gmail-review-readonly',
   NONE: 'none',
 });
 
@@ -20,9 +21,13 @@ const MEMORY_TERMS = Object.freeze([
   'memoria', 'recuerdo', 'recuerdos', 'que recuerdas', 'historial de decisiones',
   'revisar memoria', 'memoria ejecutiva',
 ]);
+const GMAIL_TERMS = Object.freeze([
+  'gmail', 'correo', 'correos', 'email', 'emails', 'revisa mi correo',
+  'que correos tengo', 'resume mis emails', 'requiere mi atencion',
+]);
 const EXCLUDED_TERMS = Object.freeze([
-  'hola', 'buenos dias', 'buenas tardes', 'gmail', 'correo', 'correos',
-  'calendar', 'calendario', 'agenda', 'reunion', 'reuniones',
+  'hola', 'buenos dias', 'buenas tardes', 'calendar', 'calendario', 'agenda',
+  'reunion', 'reuniones',
 ]);
 
 function normalizeText(value) {
@@ -68,6 +73,7 @@ function recommendSupervisedOperation(input = {}) {
   const businessMatches = matches(normalized, BUSINESS_TERMS);
   const knowledgeMatches = matches(normalized, KNOWLEDGE_TERMS);
   const memoryMatches = matches(normalized, MEMORY_TERMS);
+  const gmailMatches = matches(normalized, GMAIL_TERMS);
   if (analysis.project === 'Business Hunter' && !businessMatches.includes('analisis comercial')) {
     businessMatches.push('business hunter');
   }
@@ -78,7 +84,7 @@ function recommendSupervisedOperation(input = {}) {
     knowledgeMatches.length = 0;
   }
 
-  const matchedCategories = [businessMatches, knowledgeMatches, memoryMatches]
+  const matchedCategories = [businessMatches, knowledgeMatches, memoryMatches, gmailMatches]
     .filter((category) => category.length > 0).length;
   if (matchedCategories > 1) {
     return buildDecision(DECISIONS.NONE, 'La petición puede corresponder a más de una revisión.', 'low');
@@ -102,6 +108,13 @@ function recommendSupervisedOperation(input = {}) {
       DECISIONS.MEMORY,
       'La petición puede resolverse revisando la memoria disponible.',
       memoryMatches.length > 1 ? 'high' : 'medium',
+    );
+  }
+  if (gmailMatches.length > 0) {
+    return buildDecision(
+      DECISIONS.GMAIL,
+      'La petición puede resolverse revisando el correo reciente en modo de solo consulta.',
+      gmailMatches.length > 1 ? 'high' : 'medium',
     );
   }
   return buildDecision(DECISIONS.NONE, 'No hay una operación especializada claramente indicada.', 'low');

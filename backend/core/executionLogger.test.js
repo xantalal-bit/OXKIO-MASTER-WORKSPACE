@@ -39,6 +39,8 @@ test('logs terminal operations through a strict whitelist and lists defensive li
     assert.equal(knowledge.worker, 'knowledge-readonly');
     const memory = logger.logOperation(operation({ type: 'memory-review-readonly', worker: 'memory-readonly' }));
     assert.equal(memory.worker, 'memory-readonly');
+    const gmail = logger.logOperation(operation({ type: 'gmail-review-readonly', worker: 'gmail-readonly' }));
+    assert.equal(gmail.worker, 'gmail-readonly');
     assert.throws(() => logger.logOperation(operation({ type: 'arbitrary', worker: 'arbitrary' })), /Invalid/);
   } finally {
     fs.rmSync(root, { recursive: true, force: true });

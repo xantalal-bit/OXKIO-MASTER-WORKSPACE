@@ -876,6 +876,7 @@
             <button type="button" data-bh-run>Analizar Business</button>
             <button type="button" class="btn-secondary" data-knowledge-run>Revisar conocimiento</button>
             <button type="button" class="btn-secondary" data-memory-run>Revisar memoria</button>
+            <button type="button" class="btn-secondary" data-gmail-run>Revisar correo</button>
             <p class="note" data-bh-state>Solo análisis. No se contacta ni se ejecutan acciones.</p>
           </div>
           <details class="operations-details">
@@ -1156,7 +1157,8 @@
       const supportedDecision = recommendation && [
         "business-analysis-readonly",
         "knowledge-review-readonly",
-        "memory-review-readonly"
+        "memory-review-readonly",
+        "gmail-review-readonly"
       ].includes(recommendation.decision);
 
       const firstPlannedStep = plan.length > 0 ? plan[0] : null;
@@ -1194,6 +1196,7 @@
       if (actionDecision) {
         const isBusiness = actionDecision === "business-analysis-readonly";
         const isMemory = actionDecision === "memory-review-readonly";
+        const isGmail = actionDecision === "gmail-review-readonly";
         setText(
           decisionBox.querySelector("[data-chat-decision-message]"),
           plan.length > 0
@@ -1202,7 +1205,9 @@
               ? "Creo que el siguiente paso más útil es realizar un análisis comercial preparatorio."
               : (isMemory
                 ? "Creo que el siguiente paso más útil es revisar la memoria disponible."
-                : "Creo que el siguiente paso más útil es revisar el conocimiento disponible."))
+                : (isGmail
+                  ? "Creo que el siguiente paso más útil es revisar el correo reciente."
+                  : "Creo que el siguiente paso más útil es revisar el conocimiento disponible.")))
         );
         setText(
           decisionBox.querySelector("[data-chat-decision-safety]"),
@@ -1249,15 +1254,44 @@
         : "Ejecutar revisión";
     }
 
+    function completeDecisionRecommendation(hadFollowingSteps) {
+      const decisionBox = document.querySelector("[data-chat-decision]");
+      const result = document.querySelector("[data-executive-chat-result]");
+      pendingPlanSteps = [];
+      if (decisionBox) {
+        decisionBox.hidden = true;
+        decisionBox.dataset.decision = "";
+        const plan = decisionBox.querySelector("[data-chat-plan]");
+        if (plan) {
+          plan.replaceChildren();
+          plan.hidden = true;
+        }
+      }
+      setText(
+        result && result.querySelector("[data-chat-response]"),
+        hadFollowingSteps
+          ? "He completado el primer paso. Si lo deseas, puedo continuar con el siguiente."
+          : "Revisión completada correctamente."
+      );
+    }
+
     async function confirmDecisionRecommendation() {
       const decisionBox = document.querySelector("[data-chat-decision]");
       if (!decisionBox || decisionBox.hidden) return;
       const decision = decisionBox.dataset.decision;
+      const hadFollowingSteps = pendingPlanSteps.length > 0;
       dismissDecisionRecommendation(false);
-      if (decision === "business-analysis-readonly") await submitBusinessHunterOperation();
-      if (decision === "knowledge-review-readonly") await submitKnowledgeOperation();
-      if (decision === "memory-review-readonly") await submitMemoryOperation();
-      showNextPlannedStep();
+      let completed = false;
+      if (decision === "business-analysis-readonly") completed = await submitBusinessHunterOperation();
+      if (decision === "knowledge-review-readonly") completed = await submitKnowledgeOperation();
+      if (decision === "memory-review-readonly") completed = await submitMemoryOperation();
+      if (decision === "gmail-review-readonly") completed = await submitGmailOperation();
+      if (completed) {
+        completeDecisionRecommendation(hadFollowingSteps);
+      } else {
+        decisionBox.dataset.decision = decision;
+        decisionBox.hidden = false;
+      }
     }
 
     function getExecutiveChatError(status) {
@@ -1379,6 +1413,14 @@
           "He encontrado información relacionada en la memoria disponible."
         );
       }
+      if (data.worker === "gmail-readonly") {
+        if (data.sourceStatus === "unavailable") return "No hay correo seguro disponible para completar la revisión.";
+        if (data.sourceStatus === "partial") return "Se ha revisado el correo sin asuntos prioritarios claramente identificados.";
+        return textOrFallback(
+          data.resultSummary || businessResult.summary,
+          "Se ha revisado el correo reciente y hay asuntos que requieren atención."
+        );
+      }
 
       if (data.sourceStatus === "unavailable") {
         return "No se ha encontrado información suficiente para completar el análisis.";
@@ -1401,6 +1443,7 @@
     function formatOperationModule(worker) {
       if (worker === "knowledge-readonly") return "Revisión de conocimiento";
       if (worker === "memory-readonly") return "Revisión de memoria";
+      if (worker === "gmail-readonly") return "Revisión de correo";
       return "Análisis comercial";
     }
 
@@ -1481,12 +1524,17 @@
         const title = document.createElement("span");
         title.className = "item-title";
         const isDocumentary = item && item.kind === "documentary_evidence";
-        title.textContent = isDocumentary
+        const isGmailItem = item && typeof item.subject === "string";
+        title.textContent = isGmailItem
+          ? textOrFallback(item.subject, "Sin asunto")
+          : isDocumentary
           ? "Información documental relacionada"
           : textOrFallback(item && item.title, "Información comercial");
         const detail = document.createElement("p");
         detail.className = "item-text";
-        detail.textContent = isDocumentary
+        detail.textContent = isGmailItem
+          ? `${textOrFallback(item.sender, "Remitente no disponible")}. ${textOrFallback(item.summary, "Sin resumen disponible.")}`
+          : isDocumentary
           ? "Tipo: información documental. Utilidad: base para análisis posterior. No representa todavía una empresa o lead verificado."
           : textOrFallback(item && item.summary, fallback);
         entry.append(title, detail);
@@ -1551,6 +1599,7 @@
       const button = panel.querySelector("[data-bh-run]");
       const knowledgeButton = panel.querySelector("[data-knowledge-run]");
       const memoryButton = panel.querySelector("[data-memory-run]");
+      const gmailButton = panel.querySelector("[data-gmail-run]");
 
       updateBusinessHunterOperationBadge(panel.querySelector("[data-bh-status]"), status);
       setText(panel.querySelector("[data-bh-worker]"), formatOperationModule(data.worker), "Análisis comercial");
@@ -1587,7 +1636,9 @@
       );
       setText(
         panel.querySelector("[data-bh-opportunities-count]"),
-        Number.isFinite(Number(data.opportunitiesCount))
+        data.worker === "gmail-readonly" && Number.isFinite(Number(businessResult.emailsCount))
+          ? Number(businessResult.emailsCount)
+          : Number.isFinite(Number(data.opportunitiesCount))
           ? Number(data.opportunitiesCount)
           : (Number.isFinite(Number(businessResult.itemsCount))
             ? Number(businessResult.itemsCount)
@@ -1613,7 +1664,7 @@
       );
       renderBusinessHunterList(
         panel.querySelector("[data-bh-opportunities]"),
-        businessResult.opportunities,
+        data.worker === "gmail-readonly" ? businessResult.relevantItems : businessResult.opportunities,
         "No se ha localizado información suficiente."
       );
       renderBusinessHunterList(
@@ -1644,6 +1695,10 @@
         memoryButton.disabled = running || businessHunterOperationSending;
         memoryButton.textContent = running || businessHunterOperationSending ? "Revisando…" : "Revisar memoria";
       }
+      if (gmailButton) {
+        gmailButton.disabled = running || businessHunterOperationSending;
+        gmailButton.textContent = running || businessHunterOperationSending ? "Revisando…" : "Revisar correo";
+      }
     }
 
     function setBusinessHunterOperationSending(isSending) {
@@ -1663,10 +1718,44 @@
         memoryButton.disabled = isSending;
         memoryButton.textContent = isSending ? "Revisando…" : "Revisar memoria";
       }
+      const gmailButton = document.querySelector("[data-gmail-run]");
+      if (gmailButton) {
+        gmailButton.disabled = isSending;
+        gmailButton.textContent = isSending ? "Revisando…" : "Revisar correo";
+      }
+    }
+
+    async function submitGmailOperation() {
+      if (businessHunterOperationSending) return false;
+      const panel = getBusinessHunterOperationPanel();
+      setBusinessHunterOperationSending(true);
+      try {
+        const response = await window.oxkioAuthenticatedFetch("/api/operations/gmail/run", {
+          method: "POST", headers: { "Content-Type": "application/json" }, body: "{}"
+        });
+        const data = await response.json();
+        if (!response.ok) {
+          const message = data && typeof data.message === "string"
+            ? data.message
+            : "No se pudo completar la revisión de correo.";
+          setText(panel && panel.querySelector("[data-bh-state]"), message, "No se pudo completar la revisión de correo.");
+          return false;
+        }
+        renderBusinessHunterOperation(data);
+        setText(panel && panel.querySelector("[data-bh-state]"), "Revisión completada.", "Revisión completada.");
+        const dashboardResponse = await window.oxkioAuthenticatedFetch("/api/dashboard", { cache: "no-store" });
+        if (dashboardResponse.ok) applyDashboardState(await dashboardResponse.json());
+        return true;
+      } catch (error) {
+        setText(panel && panel.querySelector("[data-bh-state]"), "No se pudo completar la revisión de correo.", "No se pudo completar la revisión de correo.");
+        return false;
+      } finally {
+        setBusinessHunterOperationSending(false);
+      }
     }
 
     async function submitMemoryOperation() {
-      if (businessHunterOperationSending) return;
+      if (businessHunterOperationSending) return false;
       const panel = getBusinessHunterOperationPanel();
       setBusinessHunterOperationSending(true);
       try {
@@ -1679,21 +1768,23 @@
             ? data.message
             : "No se pudo completar la revisión de memoria.";
           setText(panel && panel.querySelector("[data-bh-state]"), message, "No se pudo completar la revisión de memoria.");
-          return;
+          return false;
         }
         renderBusinessHunterOperation(data);
         setText(panel && panel.querySelector("[data-bh-state]"), "Revisión completada.", "Revisión completada.");
         const dashboardResponse = await window.oxkioAuthenticatedFetch("/api/dashboard", { cache: "no-store" });
         if (dashboardResponse.ok) applyDashboardState(await dashboardResponse.json());
+        return true;
       } catch (error) {
         setText(panel && panel.querySelector("[data-bh-state]"), "No se pudo completar la revisión de memoria.", "No se pudo completar la revisión de memoria.");
+        return false;
       } finally {
         setBusinessHunterOperationSending(false);
       }
     }
 
     async function submitKnowledgeOperation() {
-      if (businessHunterOperationSending) return;
+      if (businessHunterOperationSending) return false;
       const panel = getBusinessHunterOperationPanel();
       setBusinessHunterOperationSending(true);
       try {
@@ -1706,25 +1797,27 @@
             ? data.message
             : "No se pudo completar la revisión de conocimiento.";
           setText(panel && panel.querySelector("[data-bh-state]"), message, "No se pudo completar la revisión de conocimiento.");
-          return;
+          return false;
         }
         renderBusinessHunterOperation(data);
         setText(panel && panel.querySelector("[data-bh-state]"), "Revisión completada.", "Revisión completada.");
         const dashboardResponse = await window.oxkioAuthenticatedFetch("/api/dashboard", { cache: "no-store" });
         if (dashboardResponse.ok) applyDashboardState(await dashboardResponse.json());
+        return true;
       } catch (error) {
         setText(panel && panel.querySelector("[data-bh-state]"), "No se pudo completar la revisión de conocimiento.", "No se pudo completar la revisión de conocimiento.");
+        return false;
       } finally {
         setBusinessHunterOperationSending(false);
       }
     }
 
     async function submitBusinessHunterOperation() {
-      if (businessHunterOperationSending) return;
+      if (businessHunterOperationSending) return false;
       const button = document.querySelector("[data-bh-run]");
       const panel = getBusinessHunterOperationPanel();
       const currentStatus = panel && panel.querySelector("[data-bh-status]");
-      if (button && button.disabled) return;
+      if (button && button.disabled) return false;
 
       setBusinessHunterOperationSending(true);
       if (currentStatus) {
@@ -1753,7 +1846,7 @@
             : "No se pudo ejecutar el análisis de Business.";
           renderBusinessHunterOperation(buildBusinessHunterErrorView(errorMessage));
           setText(panel && panel.querySelector("[data-bh-state]"), errorMessage, "Error");
-          return;
+          return false;
         }
 
         renderBusinessHunterOperation(data);
@@ -1762,6 +1855,7 @@
         if (dashboardResponse.ok) {
           applyDashboardState(await dashboardResponse.json());
         }
+        return true;
       } catch (error) {
         renderBusinessHunterOperation(buildBusinessHunterErrorView("No se pudo completar el análisis de Business."));
         setText(
@@ -1769,6 +1863,7 @@
           "No se pudo completar el análisis de Business.",
           "No se pudo completar el análisis de Business."
         );
+        return false;
       } finally {
         setBusinessHunterOperationSending(false);
         const latestPanel = getBusinessHunterOperationPanel();
@@ -1792,6 +1887,8 @@
       if (knowledgeButton) knowledgeButton.addEventListener("click", submitKnowledgeOperation);
       const memoryButton = panel.querySelector("[data-memory-run]");
       if (memoryButton) memoryButton.addEventListener("click", submitMemoryOperation);
+      const gmailButton = panel.querySelector("[data-gmail-run]");
+      if (gmailButton) gmailButton.addEventListener("click", submitGmailOperation);
     }
 
     function findPanelByTitle(title) {

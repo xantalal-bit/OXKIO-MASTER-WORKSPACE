@@ -8,6 +8,8 @@ const KNOWLEDGE_OPERATION_TYPE = 'knowledge-review-readonly';
 const KNOWLEDGE_WORKER_NAME = 'knowledge-readonly';
 const MEMORY_OPERATION_TYPE = 'memory-review-readonly';
 const MEMORY_WORKER_NAME = 'memory-readonly';
+const GMAIL_OPERATION_TYPE = 'gmail-review-readonly';
+const GMAIL_WORKER_NAME = 'gmail-readonly';
 const MODE = 'manual';
 const TRIGGER = 'manual';
 const MAX_RECENT_OPERATIONS = 5;
@@ -18,7 +20,9 @@ const STATUSES = new Set(['pending', 'running', 'completed', 'completed_with_war
 const TERMINAL_STATUSES = new Set(['completed', 'completed_with_warnings', 'failed']);
 const PHASES = new Set(['queued', 'validating', 'running_worker', 'validating_result', 'logging', 'completed', 'failed']);
 const SOURCE_STATUSES = new Set(['real', 'partial', 'unavailable']);
-const OPERATION_TYPES = new Set([OPERATION_TYPE, KNOWLEDGE_OPERATION_TYPE, MEMORY_OPERATION_TYPE]);
+const OPERATION_TYPES = new Set([
+  OPERATION_TYPE, KNOWLEDGE_OPERATION_TYPE, MEMORY_OPERATION_TYPE, GMAIL_OPERATION_TYPE,
+]);
 const FORBIDDEN_KEYS = new Set([
   'token', 'claims', 'dependencies', 'runtime', 'path', 'paths',
   'sandboxPath', 'payload', 'private_key', 'credentials', 'stack',
@@ -115,7 +119,12 @@ function validateWorkerResult(result, ids, expected = { type: OPERATION_TYPE, wo
     && Array.isArray(result.topics) && result.topics.length <= 5
     && Array.isArray(result.recommendations) && result.recommendations.length <= 3
     && Array.isArray(result.warnings) && result.warnings.length <= MAX_WARNINGS;
-  if ((!businessValid && !knowledgeValid && !memoryValid)
+  const gmailValid = expected.type === GMAIL_OPERATION_TYPE
+    && Number.isInteger(result.emailsCount) && result.emailsCount >= 0 && result.emailsCount <= 10
+    && Array.isArray(result.relevantItems) && result.relevantItems.length <= 5
+    && Array.isArray(result.recommendations) && result.recommendations.length <= 3
+    && Array.isArray(result.warnings) && result.warnings.length <= MAX_WARNINGS;
+  if ((!businessValid && !knowledgeValid && !memoryValid && !gmailValid)
     || !Array.isArray(result.recommendations) || result.recommendations.length > 5
     || !Array.isArray(result.errors) || result.errors.length > MAX_ERRORS) {
     throw createError('invalid_worker_result', 'Worker result limits were exceeded.');
@@ -123,7 +132,8 @@ function validateWorkerResult(result, ids, expected = { type: OPERATION_TYPE, wo
   if (result.sourceStatus === 'unavailable'
     && ((businessValid && result.opportunities.length > 0)
       || (knowledgeValid && result.itemsCount > 0)
-      || (memoryValid && result.itemsCount > 0))) {
+      || (memoryValid && result.itemsCount > 0)
+      || (gmailValid && result.emailsCount > 0))) {
     throw createError('invalid_worker_result', 'Unavailable sources cannot produce opportunities.');
   }
   if (containsForbiddenData(result)) {
@@ -140,7 +150,14 @@ function createError(code, message) {
   return Object.assign(new Error(message), { code });
 }
 
-function createOperationsCoordinator({ businessHunterService, knowledgeReadonlyService, memoryReadonlyService, executionLogger, randomUUID = crypto.randomUUID } = {}) {
+function createOperationsCoordinator({
+  businessHunterService,
+  knowledgeReadonlyService,
+  memoryReadonlyService,
+  gmailReadonlyService,
+  executionLogger,
+  randomUUID = crypto.randomUUID,
+} = {}) {
   if (!businessHunterService || typeof businessHunterService.runBusinessHunterReadonly !== 'function') {
     throw new Error('Business Hunter readonly adapter is required.');
   }
@@ -150,11 +167,15 @@ function createOperationsCoordinator({ businessHunterService, knowledgeReadonlyS
   if (!memoryReadonlyService || typeof memoryReadonlyService.runMemoryReadonly !== 'function') {
     throw new Error('Memory readonly adapter is required.');
   }
+  if (!gmailReadonlyService || typeof gmailReadonlyService.runGmailReadonly !== 'function') {
+    throw new Error('Gmail readonly adapter is required.');
+  }
 
   const adapters = new Map([
     [OPERATION_TYPE, Object.freeze({ worker: WORKER_NAME, queuedSummary: 'Análisis comercial en preparación.', failureCode: 'business_hunter_operation_failed', run: (context) => businessHunterService.runBusinessHunterReadonly(context) })],
     [KNOWLEDGE_OPERATION_TYPE, Object.freeze({ worker: KNOWLEDGE_WORKER_NAME, queuedSummary: 'Revisión de conocimiento en preparación.', failureCode: 'knowledge_review_failed', run: (context) => knowledgeReadonlyService.runKnowledgeReadonly(context) })],
     [MEMORY_OPERATION_TYPE, Object.freeze({ worker: MEMORY_WORKER_NAME, queuedSummary: 'Revisión de memoria en preparación.', failureCode: 'memory_review_failed', run: (context) => memoryReadonlyService.runMemoryReadonly(context) })],
+    [GMAIL_OPERATION_TYPE, Object.freeze({ worker: GMAIL_WORKER_NAME, queuedSummary: 'Revisión de correo en preparación.', failureCode: 'gmail_review_failed', run: (context) => gmailReadonlyService.runGmailReadonly(context) })],
   ]);
   let activeOperation = null;
   let recentOperations = [];
@@ -211,6 +232,9 @@ function createOperationsCoordinator({ businessHunterService, knowledgeReadonlyS
       result: freezeClone([KNOWLEDGE_OPERATION_TYPE, MEMORY_OPERATION_TYPE].includes(base.type) ? {
         summary: sanitizeText(result.summary), itemsCount: result.itemsCount,
         topics: result.topics, recommendations: result.recommendations,
+      } : base.type === GMAIL_OPERATION_TYPE ? {
+        summary: sanitizeText(result.summary), emailsCount: result.emailsCount,
+        relevantItems: result.relevantItems, recommendations: result.recommendations,
       } : {
         summary: sanitizeText(result.summary), opportunities: result.opportunities,
         recommendations: result.recommendations,
@@ -231,9 +255,11 @@ function createOperationsCoordinator({ businessHunterService, knowledgeReadonlyS
         ? 'No se pudo completar la revisión de conocimiento.'
         : base.type === MEMORY_OPERATION_TYPE
           ? 'No se pudo completar la revisión de memoria.'
-        : 'No se pudo completar el análisis comercial.',
+          : base.type === GMAIL_OPERATION_TYPE
+            ? 'No se pudo completar la revisión de correo.'
+            : 'No se pudo completar el análisis comercial.',
       warnings: [],
-      errors: [error && ['business_hunter_timeout', 'knowledge_review_timeout', 'memory_review_timeout'].includes(error.code)
+      errors: [error && ['business_hunter_timeout', 'knowledge_review_timeout', 'memory_review_timeout', 'gmail_review_timeout'].includes(error.code)
         ? 'La operación tardó más de lo permitido y se detuvo de forma segura.'
         : 'No se pudo completar la operación.'],
       result: null,
@@ -279,6 +305,7 @@ function createOperationsCoordinator({ businessHunterService, knowledgeReadonlyS
   function runBusinessAnalysis({ identity } = {}) { return runOperation(OPERATION_TYPE, identity); }
   function runKnowledgeReview({ identity } = {}) { return runOperation(KNOWLEDGE_OPERATION_TYPE, identity); }
   function runMemoryReview({ identity } = {}) { return runOperation(MEMORY_OPERATION_TYPE, identity); }
+  function runGmailReview({ identity } = {}) { return runOperation(GMAIL_OPERATION_TYPE, identity); }
 
   function getStatus() {
     return freezeClone({
@@ -293,7 +320,10 @@ function createOperationsCoordinator({ businessHunterService, knowledgeReadonlyS
     return freezeClone(recentOperations.slice(0, safeLimit));
   }
 
-  return Object.freeze({ runBusinessAnalysis, runKnowledgeReview, runMemoryReview, getStatus, getRecentOperations });
+  return Object.freeze({
+    runBusinessAnalysis, runKnowledgeReview, runMemoryReview, runGmailReview,
+    getStatus, getRecentOperations,
+  });
 }
 
 module.exports = {

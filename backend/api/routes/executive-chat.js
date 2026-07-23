@@ -157,8 +157,12 @@ function calendarRangeForQuery(query) {
   return 'next24Hours';
 }
 
-async function buildOrchestratorOptions(query, dependencies = {}) {
-  const selection = (dependencies.selectExecutiveContext || selectExecutiveContext)(query);
+async function buildOrchestratorOptions(query, dependencies = {}, controls = {}) {
+  const selectedContext = controls.selectedContext
+    || (dependencies.selectExecutiveContext || selectExecutiveContext)(query);
+  const selection = controls.skipGmail === true
+    ? { ...selectedContext, gmail: false }
+    : selectedContext;
   const identity = (dependencies.getClienteCeroIdentity || getClienteCeroIdentity)();
   const internalDependencies = getInternalOrchestratorDependencies(dependencies);
   const options = {
@@ -244,6 +248,13 @@ async function buildOrchestratorOptions(query, dependencies = {}) {
   return options;
 }
 
+function isEmailActionRequest(query) {
+  const normalized = String(query || '').normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '').toLowerCase();
+  return /\b(?:prepara|preparar|redacta|redactar|crea|crear|genera|generar)\b/.test(normalized)
+    && /\b(?:borrador|respuesta|correo|email|contestacion)\b/.test(normalized);
+}
+
 function sanitizeExecutivePayload(payload) {
   if (!payload || typeof payload !== 'object') return payload;
   return { ...payload, sources: sanitizeExecutiveSources(payload.sources) };
@@ -260,14 +271,27 @@ async function handleExecutiveChatRequest(req, res, options) {
     const body = await readJsonBody(req);
     const query = typeof body.query === 'string' ? body.query.trim() : '';
     if (!query) return sendJson(res, 400, { ok: false, error: 'query is required.' });
-    const orchestratorOptions = await buildOrchestratorOptions(query, dependencies);
-    const payload = sanitizeExecutivePayload(orchestrator(query, orchestratorOptions));
     const identity = (dependencies.getClienteCeroIdentity || getClienteCeroIdentity)();
     const decisionEngine = dependencies.recommendSupervisedOperation || recommendSupervisedOperation;
-    const planner = dependencies.planOperations || planOperations;
-    const recommendation = isInternallyAuthorized(identity)
-      ? decisionEngine({ query, analysis: payload && payload.analysis })
+    const selectedContext = (dependencies.selectExecutiveContext || selectExecutiveContext)(query);
+    const shouldCheckSupervisedGmail = selectedContext.gmail === true
+      && !isEmailActionRequest(query);
+    const preliminaryRecommendation = isInternallyAuthorized(identity) && shouldCheckSupervisedGmail
+      ? decisionEngine({ query, analysis: {} })
       : null;
+    const isSupervisedGmailReview = preliminaryRecommendation
+      && preliminaryRecommendation.decision === 'gmail-review-readonly';
+    const orchestratorOptions = await buildOrchestratorOptions(query, dependencies, {
+      skipGmail: isSupervisedGmailReview,
+      selectedContext,
+    });
+    const payload = sanitizeExecutivePayload(orchestrator(query, orchestratorOptions));
+    const planner = dependencies.planOperations || planOperations;
+    const recommendation = isSupervisedGmailReview
+      ? preliminaryRecommendation
+      : (isInternallyAuthorized(identity)
+        ? decisionEngine({ query, analysis: payload && payload.analysis })
+        : null);
     const operationPlan = isInternallyAuthorized(identity)
       ? planner({ query, analysis: payload && payload.analysis })
       : null;

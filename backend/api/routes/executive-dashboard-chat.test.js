@@ -34,7 +34,7 @@ test('registers chat, supervised confirmation and operation listeners and suppor
   const source = getChatScript(readDashboard());
   const clickListeners = source.match(/addEventListener\(["']click["']/g) || [];
 
-  assert.equal(clickListeners.length, 6);
+  assert.equal(clickListeners.length, 7);
   assert.match(source, /addEventListener\(["']keydown["']/);
   assert.match(source, /event\.key\s*===\s*["']Enter["']\s*&&\s*!event\.shiftKey/);
   assert.match(source, /event\.preventDefault\(\)/);
@@ -86,14 +86,17 @@ test('confirms only closed operations and dismisses without a fetch', () => {
   const confirmSource = source.slice(confirmStart, submitStart);
 
   assert.ok(dismissStart >= 0 && confirmStart > dismissStart);
-  assert.doesNotMatch(dismissSource, /fetch|submitBusinessHunterOperation|submitKnowledgeOperation|submitMemoryOperation/);
+  assert.doesNotMatch(dismissSource, /fetch|submitBusinessHunterOperation|submitKnowledgeOperation|submitMemoryOperation|submitGmailOperation/);
   assert.match(confirmSource, /decision === ["']business-analysis-readonly["']/);
   assert.match(confirmSource, /decision === ["']knowledge-review-readonly["']/);
   assert.match(confirmSource, /decision === ["']memory-review-readonly["']/);
+  assert.match(confirmSource, /decision === ["']gmail-review-readonly["']/);
   assert.match(confirmSource, /submitBusinessHunterOperation\(\)/);
   assert.match(confirmSource, /submitKnowledgeOperation\(\)/);
   assert.match(confirmSource, /submitMemoryOperation\(\)/);
-  assert.match(confirmSource, /showNextPlannedStep\(\)/);
+  assert.match(confirmSource, /submitGmailOperation\(\)/);
+  assert.match(confirmSource, /if \(completed\)\s*\{\s*completeDecisionRecommendation\(hadFollowingSteps\)/);
+  assert.match(confirmSource, /decisionBox\.hidden = false/);
   assert.doesNotMatch(source, /<select|data-(worker|operation)-select|name=["'](worker|type)["']/i);
 });
 
@@ -108,6 +111,27 @@ test('renders at most three supervised plan steps and exposes only the first act
   assert.match(source, /Solo se ejecutará el primer paso cuando lo confirmes/);
   assert.match(source, /Este paso solo se iniciará cuando lo confirmes/);
   assert.doesNotMatch(source, /Promise\.all|forEach\([^)]*submit|map\([^)]*submit/);
+});
+
+test('clears the completed recommendation and pending plan only after operation success', () => {
+  const source = getChatScript(readDashboard());
+  const completionStart = source.indexOf('function completeDecisionRecommendation');
+  const confirmStart = source.indexOf('async function confirmDecisionRecommendation');
+  const completionSource = source.slice(completionStart, confirmStart);
+
+  assert.ok(completionStart >= 0 && confirmStart > completionStart);
+  assert.match(completionSource, /pendingPlanSteps = \[\]/);
+  assert.match(completionSource, /decisionBox\.hidden = true/);
+  assert.match(completionSource, /decisionBox\.dataset\.decision = ""/);
+  assert.match(completionSource, /plan\.replaceChildren\(\)/);
+  assert.match(completionSource, /Revisión completada correctamente\./);
+  assert.match(completionSource, /He completado el primer paso\. Si lo deseas, puedo continuar con el siguiente\./);
+  assert.match(source, /completed = await submitBusinessHunterOperation\(\)/);
+  assert.match(source, /completed = await submitKnowledgeOperation\(\)/);
+  assert.match(source, /completed = await submitMemoryOperation\(\)/);
+  assert.match(source, /completed = await submitGmailOperation\(\)/);
+  assert.match(source, /return true/);
+  assert.match(source, /return false/);
 });
 
 test('shows no empty recommendation and removes inactive future controls', () => {

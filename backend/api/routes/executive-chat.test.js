@@ -86,19 +86,19 @@ test('matches only the unchanged POST route', () => {
 
 test('A-D select Gmail, Calendar, Dashboard, and combined context once and minimally', async (t) => {
   const cases = [
-    ['¿Qué correos tengo pendientes?', { gmail: 1, calendar: 0, dashboard: 0 }],
-    ['¿Qué reuniones tengo hoy?', { gmail: 0, calendar: 1, dashboard: 0 }],
-    ['¿Cómo está mi día?', { gmail: 0, calendar: 0, dashboard: 1 }],
-    ['Resume mis correos y reuniones de hoy.', { gmail: 1, calendar: 1, dashboard: 0 }],
+    ['¿Qué correos tengo pendientes?', { gmail: 0, calendar: 0, dashboard: 0 }, false],
+    ['¿Qué reuniones tengo hoy?', { gmail: 0, calendar: 1, dashboard: 0 }, true],
+    ['¿Cómo está mi día?', { gmail: 0, calendar: 0, dashboard: 1 }, true],
+    ['Resume mis correos y reuniones de hoy.', { gmail: 1, calendar: 1, dashboard: 0 }, true],
   ];
-  for (const [query, expected] of cases) {
+  for (const [query, expected, privateContextUsed] of cases) {
     await t.test(query, async (subtest) => {
       const { calls, dependencies } = createHarness(subtest);
       const response = await requestChat(query, dependencies);
       const payload = response.getJson();
       assert.equal(response.statusCode, 200);
       assert.deepEqual(calls, expected);
-      assert.equal(payload.privateContextUsed, true);
+      assert.equal(payload.privateContextUsed, privateContextUsed);
       assert.equal(payload.proposal, null);
       assert.equal(payload.approval, null);
       const serialized = JSON.stringify(payload);
@@ -244,6 +244,21 @@ test('adds an optional supervised recommendation without executing or accepting 
   assert.equal(JSON.stringify(payload).includes('evil'), false);
 });
 
+test('recommends supervised Gmail review without reading Gmail before confirmation', async (t) => {
+  const { calls, dependencies } = createHarness(t, {
+    async buildGmailPrivateContext() {
+      throw new Error('Gmail must not be read before confirmation.');
+    },
+  });
+  const response = await requestChat('Revisa mi correo', dependencies);
+  const payload = response.getJson();
+  assert.equal(response.statusCode, 200);
+  assert.equal(calls.gmail, 0);
+  assert.equal(payload.decisionRecommendation.decision, 'gmail-review-readonly');
+  assert.equal(payload.decisionRecommendation.requiresConfirmation, true);
+  assert.doesNotMatch(payload.response, /Gmail readonly no esta disponible/i);
+});
+
 test('omits none recommendations and every recommendation for denied identity', async (t) => {
   const noneHarness = createHarness(t, {
     recommendSupervisedOperation: () => ({ decision: 'none', reason: 'No procede.', confidence: 'low', requiresConfirmation: true }),
@@ -275,7 +290,6 @@ test('omits none recommendations and every recommendation for denied identity', 
 
 test('M isolates each unavailable source and never fabricates context or proposals', async (t) => {
   const cases = [
-    ['¿Qué correos tengo?', { buildGmailPrivateContext: async () => { throw new Error('secret gmail stack'); } }, /Gmail readonly/i],
     ['¿Qué reuniones tengo hoy?', { buildCalendarPrivateContext: async () => { throw new Error('secret calendar stack'); } }, /Calendar readonly/i],
     ['¿Qué tengo pendiente de aprobar?', { approvalQueue: { listPending() { throw new Error('secret queue'); }, getHistory() { return []; } } }, /Approval Queue/i],
     ['¿Cómo está mi día?', { getDashboardState: async () => { throw new Error('secret dashboard'); } }, /resumen agregado/i],

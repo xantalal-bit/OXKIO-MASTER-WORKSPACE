@@ -225,6 +225,29 @@ test('projects Memory results through the common operations view without exposin
   assert.equal(JSON.stringify(view).includes('content'), false);
 });
 
+test('projects Gmail results through the common operations view without exposing provider metadata', () => {
+  const view = buildBusinessHunterOperationView({
+    recentOperations: [{
+      worker: 'gmail-readonly', status: 'completed', phase: 'completed', sourceStatus: 'real',
+      resultSummary: 'Correo revisado.', durationMs: 20,
+      result: {
+        summary: 'Correo revisado.', emailsCount: 2,
+        relevantItems: [{ sender: 'Equipo', subject: 'Revisión', summary: 'Requiere atención.' }],
+        recommendations: ['Revisar asunto.'],
+      },
+      errors: [], warnings: [],
+    }],
+  });
+  assert.equal(view.worker, 'gmail-readonly');
+  assert.equal(view.emailsCount, 2);
+  assert.deepEqual(view.relevantItems, [{
+    sender: 'Equipo', subject: 'Revisión', summary: 'Requiere atención.',
+  }]);
+  ['id', 'token', 'headers', 'body', 'attachment'].forEach(
+    (forbidden) => assert.equal(JSON.stringify(view).includes(forbidden), false),
+  );
+});
+
 test('never exposes paths, filenames, private content, or complete inventory assets', () => {
   const view = buildEcosystemView(inventory([asset('Business Hunter', {
     path: 'C:\\private\\Business Hunter\\secret.md',
