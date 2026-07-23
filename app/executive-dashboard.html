@@ -875,6 +875,7 @@
           <div class="operations-actions">
             <button type="button" data-bh-run>Analizar Business</button>
             <button type="button" class="btn-secondary" data-knowledge-run>Revisar conocimiento</button>
+            <button type="button" class="btn-secondary" data-memory-run>Revisar memoria</button>
             <p class="note" data-bh-state>Solo análisis. No se contacta ni se ejecutan acciones.</p>
           </div>
           <details class="operations-details">
@@ -1154,7 +1155,8 @@
         : [];
       const supportedDecision = recommendation && [
         "business-analysis-readonly",
-        "knowledge-review-readonly"
+        "knowledge-review-readonly",
+        "memory-review-readonly"
       ].includes(recommendation.decision);
 
       const firstPlannedStep = plan.length > 0 ? plan[0] : null;
@@ -1191,13 +1193,16 @@
       decisionBox.dataset.decision = actionDecision || "";
       if (actionDecision) {
         const isBusiness = actionDecision === "business-analysis-readonly";
+        const isMemory = actionDecision === "memory-review-readonly";
         setText(
           decisionBox.querySelector("[data-chat-decision-message]"),
           plan.length > 0
             ? "Solo se ejecutará el primer paso cuando lo confirmes."
             : (isBusiness
               ? "Creo que el siguiente paso más útil es realizar un análisis comercial preparatorio."
-              : "Creo que el siguiente paso más útil es revisar el conocimiento disponible.")
+              : (isMemory
+                ? "Creo que el siguiente paso más útil es revisar la memoria disponible."
+                : "Creo que el siguiente paso más útil es revisar el conocimiento disponible."))
         );
         setText(
           decisionBox.querySelector("[data-chat-decision-safety]"),
@@ -1251,6 +1256,7 @@
       dismissDecisionRecommendation(false);
       if (decision === "business-analysis-readonly") await submitBusinessHunterOperation();
       if (decision === "knowledge-review-readonly") await submitKnowledgeOperation();
+      if (decision === "memory-review-readonly") await submitMemoryOperation();
       showNextPlannedStep();
     }
 
@@ -1365,6 +1371,14 @@
           "Se ha revisado la información disponible para consulta y trabajo posterior."
         );
       }
+      if (data.worker === "memory-readonly") {
+        if (data.sourceStatus === "unavailable") return "No se ha encontrado memoria suficiente para completar la revisión.";
+        if (data.sourceStatus === "partial") return "Hay información relacionada, aunque todavía es limitada o incompleta.";
+        return textOrFallback(
+          data.resultSummary || businessResult.summary,
+          "He encontrado información relacionada en la memoria disponible."
+        );
+      }
 
       if (data.sourceStatus === "unavailable") {
         return "No se ha encontrado información suficiente para completar el análisis.";
@@ -1385,7 +1399,9 @@
     }
 
     function formatOperationModule(worker) {
-      return worker === "knowledge-readonly" ? "Revisión de conocimiento" : "Análisis comercial";
+      if (worker === "knowledge-readonly") return "Revisión de conocimiento";
+      if (worker === "memory-readonly") return "Revisión de memoria";
+      return "Análisis comercial";
     }
 
     function formatBusinessHunterRecommendation(value) {
@@ -1534,6 +1550,7 @@
       const running = status === "running";
       const button = panel.querySelector("[data-bh-run]");
       const knowledgeButton = panel.querySelector("[data-knowledge-run]");
+      const memoryButton = panel.querySelector("[data-memory-run]");
 
       updateBusinessHunterOperationBadge(panel.querySelector("[data-bh-status]"), status);
       setText(panel.querySelector("[data-bh-worker]"), formatOperationModule(data.worker), "Análisis comercial");
@@ -1623,6 +1640,10 @@
         knowledgeButton.disabled = running || businessHunterOperationSending;
         knowledgeButton.textContent = running || businessHunterOperationSending ? "Revisando…" : "Revisar conocimiento";
       }
+      if (memoryButton) {
+        memoryButton.disabled = running || businessHunterOperationSending;
+        memoryButton.textContent = running || businessHunterOperationSending ? "Revisando…" : "Revisar memoria";
+      }
     }
 
     function setBusinessHunterOperationSending(isSending) {
@@ -1636,6 +1657,38 @@
       if (knowledgeButton) {
         knowledgeButton.disabled = isSending;
         knowledgeButton.textContent = isSending ? "Revisando…" : "Revisar conocimiento";
+      }
+      const memoryButton = document.querySelector("[data-memory-run]");
+      if (memoryButton) {
+        memoryButton.disabled = isSending;
+        memoryButton.textContent = isSending ? "Revisando…" : "Revisar memoria";
+      }
+    }
+
+    async function submitMemoryOperation() {
+      if (businessHunterOperationSending) return;
+      const panel = getBusinessHunterOperationPanel();
+      setBusinessHunterOperationSending(true);
+      try {
+        const response = await window.oxkioAuthenticatedFetch("/api/operations/memory/run", {
+          method: "POST", headers: { "Content-Type": "application/json" }, body: "{}"
+        });
+        const data = await response.json();
+        if (!response.ok) {
+          const message = data && typeof data.message === "string"
+            ? data.message
+            : "No se pudo completar la revisión de memoria.";
+          setText(panel && panel.querySelector("[data-bh-state]"), message, "No se pudo completar la revisión de memoria.");
+          return;
+        }
+        renderBusinessHunterOperation(data);
+        setText(panel && panel.querySelector("[data-bh-state]"), "Revisión completada.", "Revisión completada.");
+        const dashboardResponse = await window.oxkioAuthenticatedFetch("/api/dashboard", { cache: "no-store" });
+        if (dashboardResponse.ok) applyDashboardState(await dashboardResponse.json());
+      } catch (error) {
+        setText(panel && panel.querySelector("[data-bh-state]"), "No se pudo completar la revisión de memoria.", "No se pudo completar la revisión de memoria.");
+      } finally {
+        setBusinessHunterOperationSending(false);
       }
     }
 
@@ -1737,6 +1790,8 @@
       button.addEventListener("click", submitBusinessHunterOperation);
       const knowledgeButton = panel.querySelector("[data-knowledge-run]");
       if (knowledgeButton) knowledgeButton.addEventListener("click", submitKnowledgeOperation);
+      const memoryButton = panel.querySelector("[data-memory-run]");
+      if (memoryButton) memoryButton.addEventListener("click", submitMemoryOperation);
     }
 
     function findPanelByTitle(title) {

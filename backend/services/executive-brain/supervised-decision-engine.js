@@ -3,6 +3,7 @@
 const DECISIONS = Object.freeze({
   BUSINESS: 'business-analysis-readonly',
   KNOWLEDGE: 'knowledge-review-readonly',
+  MEMORY: 'memory-review-readonly',
   NONE: 'none',
 });
 
@@ -14,6 +15,10 @@ const BUSINESS_TERMS = Object.freeze([
 const KNOWLEDGE_TERMS = Object.freeze([
   'conocimiento', 'biblioteca', 'documentacion', 'informacion', 'aprendizaje',
   'temas', 'estado del conocimiento',
+]);
+const MEMORY_TERMS = Object.freeze([
+  'memoria', 'recuerdo', 'recuerdos', 'que recuerdas', 'historial de decisiones',
+  'revisar memoria', 'memoria ejecutiva',
 ]);
 const EXCLUDED_TERMS = Object.freeze([
   'hola', 'buenos dias', 'buenas tardes', 'gmail', 'correo', 'correos',
@@ -62,6 +67,7 @@ function recommendSupervisedOperation(input = {}) {
 
   const businessMatches = matches(normalized, BUSINESS_TERMS);
   const knowledgeMatches = matches(normalized, KNOWLEDGE_TERMS);
+  const memoryMatches = matches(normalized, MEMORY_TERMS);
   if (analysis.project === 'Business Hunter' && !businessMatches.includes('analisis comercial')) {
     businessMatches.push('business hunter');
   }
@@ -72,7 +78,9 @@ function recommendSupervisedOperation(input = {}) {
     knowledgeMatches.length = 0;
   }
 
-  if (businessMatches.length > 0 && knowledgeMatches.length > 0) {
+  const matchedCategories = [businessMatches, knowledgeMatches, memoryMatches]
+    .filter((category) => category.length > 0).length;
+  if (matchedCategories > 1) {
     return buildDecision(DECISIONS.NONE, 'La petición puede corresponder a más de una revisión.', 'low');
   }
   if (businessMatches.length > 0) {
@@ -87,6 +95,13 @@ function recommendSupervisedOperation(input = {}) {
       DECISIONS.KNOWLEDGE,
       'La petición puede resolverse revisando el conocimiento disponible.',
       knowledgeMatches.length > 1 ? 'high' : 'medium',
+    );
+  }
+  if (memoryMatches.length > 0) {
+    return buildDecision(
+      DECISIONS.MEMORY,
+      'La petición puede resolverse revisando la memoria disponible.',
+      memoryMatches.length > 1 ? 'high' : 'medium',
     );
   }
   return buildDecision(DECISIONS.NONE, 'No hay una operación especializada claramente indicada.', 'low');

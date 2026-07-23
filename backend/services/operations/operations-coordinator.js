@@ -6,6 +6,8 @@ const OPERATION_TYPE = 'business-analysis-readonly';
 const WORKER_NAME = 'business-hunter-readonly';
 const KNOWLEDGE_OPERATION_TYPE = 'knowledge-review-readonly';
 const KNOWLEDGE_WORKER_NAME = 'knowledge-readonly';
+const MEMORY_OPERATION_TYPE = 'memory-review-readonly';
+const MEMORY_WORKER_NAME = 'memory-readonly';
 const MODE = 'manual';
 const TRIGGER = 'manual';
 const MAX_RECENT_OPERATIONS = 5;
@@ -16,7 +18,7 @@ const STATUSES = new Set(['pending', 'running', 'completed', 'completed_with_war
 const TERMINAL_STATUSES = new Set(['completed', 'completed_with_warnings', 'failed']);
 const PHASES = new Set(['queued', 'validating', 'running_worker', 'validating_result', 'logging', 'completed', 'failed']);
 const SOURCE_STATUSES = new Set(['real', 'partial', 'unavailable']);
-const OPERATION_TYPES = new Set([OPERATION_TYPE, KNOWLEDGE_OPERATION_TYPE]);
+const OPERATION_TYPES = new Set([OPERATION_TYPE, KNOWLEDGE_OPERATION_TYPE, MEMORY_OPERATION_TYPE]);
 const FORBIDDEN_KEYS = new Set([
   'token', 'claims', 'dependencies', 'runtime', 'path', 'paths',
   'sandboxPath', 'payload', 'private_key', 'credentials', 'stack',
@@ -108,13 +110,20 @@ function validateWorkerResult(result, ids, expected = { type: OPERATION_TYPE, wo
     && Number.isInteger(result.itemsCount) && result.itemsCount >= 0 && result.itemsCount <= 10
     && Array.isArray(result.topics) && result.topics.length <= 5
     && Array.isArray(result.warnings) && result.warnings.length <= MAX_WARNINGS;
-  if ((!businessValid && !knowledgeValid)
+  const memoryValid = expected.type === MEMORY_OPERATION_TYPE
+    && Number.isInteger(result.itemsCount) && result.itemsCount >= 0 && result.itemsCount <= 10
+    && Array.isArray(result.topics) && result.topics.length <= 5
+    && Array.isArray(result.recommendations) && result.recommendations.length <= 3
+    && Array.isArray(result.warnings) && result.warnings.length <= MAX_WARNINGS;
+  if ((!businessValid && !knowledgeValid && !memoryValid)
     || !Array.isArray(result.recommendations) || result.recommendations.length > 5
     || !Array.isArray(result.errors) || result.errors.length > MAX_ERRORS) {
     throw createError('invalid_worker_result', 'Worker result limits were exceeded.');
   }
   if (result.sourceStatus === 'unavailable'
-    && ((businessValid && result.opportunities.length > 0) || (knowledgeValid && result.itemsCount > 0))) {
+    && ((businessValid && result.opportunities.length > 0)
+      || (knowledgeValid && result.itemsCount > 0)
+      || (memoryValid && result.itemsCount > 0))) {
     throw createError('invalid_worker_result', 'Unavailable sources cannot produce opportunities.');
   }
   if (containsForbiddenData(result)) {
@@ -131,17 +140,21 @@ function createError(code, message) {
   return Object.assign(new Error(message), { code });
 }
 
-function createOperationsCoordinator({ businessHunterService, knowledgeReadonlyService, executionLogger, randomUUID = crypto.randomUUID } = {}) {
+function createOperationsCoordinator({ businessHunterService, knowledgeReadonlyService, memoryReadonlyService, executionLogger, randomUUID = crypto.randomUUID } = {}) {
   if (!businessHunterService || typeof businessHunterService.runBusinessHunterReadonly !== 'function') {
     throw new Error('Business Hunter readonly adapter is required.');
   }
   if (!knowledgeReadonlyService || typeof knowledgeReadonlyService.runKnowledgeReadonly !== 'function') {
     throw new Error('Knowledge readonly adapter is required.');
   }
+  if (!memoryReadonlyService || typeof memoryReadonlyService.runMemoryReadonly !== 'function') {
+    throw new Error('Memory readonly adapter is required.');
+  }
 
   const adapters = new Map([
     [OPERATION_TYPE, Object.freeze({ worker: WORKER_NAME, queuedSummary: 'Análisis comercial en preparación.', failureCode: 'business_hunter_operation_failed', run: (context) => businessHunterService.runBusinessHunterReadonly(context) })],
     [KNOWLEDGE_OPERATION_TYPE, Object.freeze({ worker: KNOWLEDGE_WORKER_NAME, queuedSummary: 'Revisión de conocimiento en preparación.', failureCode: 'knowledge_review_failed', run: (context) => knowledgeReadonlyService.runKnowledgeReadonly(context) })],
+    [MEMORY_OPERATION_TYPE, Object.freeze({ worker: MEMORY_WORKER_NAME, queuedSummary: 'Revisión de memoria en preparación.', failureCode: 'memory_review_failed', run: (context) => memoryReadonlyService.runMemoryReadonly(context) })],
   ]);
   let activeOperation = null;
   let recentOperations = [];
@@ -195,7 +208,7 @@ function createOperationsCoordinator({ businessHunterService, knowledgeReadonlyS
       resultSummary: sanitizeText(result.summary),
       warnings,
       errors: sanitizeMessages(result.errors, MAX_ERRORS),
-      result: freezeClone(base.type === KNOWLEDGE_OPERATION_TYPE ? {
+      result: freezeClone([KNOWLEDGE_OPERATION_TYPE, MEMORY_OPERATION_TYPE].includes(base.type) ? {
         summary: sanitizeText(result.summary), itemsCount: result.itemsCount,
         topics: result.topics, recommendations: result.recommendations,
       } : {
@@ -216,9 +229,11 @@ function createOperationsCoordinator({ businessHunterService, knowledgeReadonlyS
       sourceStatus: 'unavailable',
       resultSummary: base.type === KNOWLEDGE_OPERATION_TYPE
         ? 'No se pudo completar la revisión de conocimiento.'
+        : base.type === MEMORY_OPERATION_TYPE
+          ? 'No se pudo completar la revisión de memoria.'
         : 'No se pudo completar el análisis comercial.',
       warnings: [],
-      errors: [error && ['business_hunter_timeout', 'knowledge_review_timeout'].includes(error.code)
+      errors: [error && ['business_hunter_timeout', 'knowledge_review_timeout', 'memory_review_timeout'].includes(error.code)
         ? 'La operación tardó más de lo permitido y se detuvo de forma segura.'
         : 'No se pudo completar la operación.'],
       result: null,
@@ -263,6 +278,7 @@ function createOperationsCoordinator({ businessHunterService, knowledgeReadonlyS
 
   function runBusinessAnalysis({ identity } = {}) { return runOperation(OPERATION_TYPE, identity); }
   function runKnowledgeReview({ identity } = {}) { return runOperation(KNOWLEDGE_OPERATION_TYPE, identity); }
+  function runMemoryReview({ identity } = {}) { return runOperation(MEMORY_OPERATION_TYPE, identity); }
 
   function getStatus() {
     return freezeClone({
@@ -277,7 +293,7 @@ function createOperationsCoordinator({ businessHunterService, knowledgeReadonlyS
     return freezeClone(recentOperations.slice(0, safeLimit));
   }
 
-  return Object.freeze({ runBusinessAnalysis, runKnowledgeReview, getStatus, getRecentOperations });
+  return Object.freeze({ runBusinessAnalysis, runKnowledgeReview, runMemoryReview, getStatus, getRecentOperations });
 }
 
 module.exports = {

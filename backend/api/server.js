@@ -35,6 +35,7 @@ const {
   isBusinessHunterOperationRoute
 } = require("./routes/business-hunter-operations");
 const { handleKnowledgeOperationRequest, isKnowledgeOperationRoute } = require("./routes/knowledge-operations");
+const { handleMemoryOperationRequest, isMemoryOperationRoute } = require("./routes/memory-operations");
 const { createExecutiveCsrf } = require("../security/executive-csrf");
 const {
   authenticateFirebaseRequest,
@@ -45,6 +46,7 @@ const { createExecutiveAuthorizer } = require("../security/executive-authorizati
 const { createExecutiveRuntime } = require("../services/runtime/executive-runtime-factory");
 const { businessHunterReadonlyService } = require("../services/operations/business-hunter-readonly-service");
 const { createKnowledgeReadonlyService } = require("../services/operations/knowledge-readonly-service");
+const { createMemoryReadonlyService } = require("../services/operations/memory-readonly-service");
 const { createOperationsCoordinator } = require("../services/operations/operations-coordinator");
 const { getClienteCeroIdentity } = require("../services/private-context/client-identity-resolver");
 const { buildGmailPrivateContext } = require("../services/private-context/gmail-private-provider");
@@ -91,9 +93,11 @@ const executionService = new ExecutionService({ approvalQueue, executionAdapter 
 const universalKnowledgeSupervisor = new UniversalKnowledgeSupervisor({ approvalQueue });
 const executionLogger = new ExecutionLogger();
 const knowledgeReadonlyService = createKnowledgeReadonlyService();
+const memoryReadonlyService = createMemoryReadonlyService({ memoryEngine: executiveRuntime.memory });
 const operationsCoordinator = createOperationsCoordinator({
   businessHunterService: businessHunterReadonlyService,
   knowledgeReadonlyService,
+  memoryReadonlyService,
   executionLogger,
 });
 const actionExecutor = new ActionExecutor();
@@ -1254,6 +1258,12 @@ if (isBusinessHunterOperationRoute(pathname, req.method)) {
 }
 if (isKnowledgeOperationRoute(pathname, req.method)) {
   return handleKnowledgeOperationRequest(req, res, {
+    operationsCoordinator,
+    getIdentity: () => requestPrivateIdentity
+  });
+}
+if (isMemoryOperationRoute(pathname, req.method)) {
+  return handleMemoryOperationRequest(req, res, {
     operationsCoordinator,
     getIdentity: () => requestPrivateIdentity
   });

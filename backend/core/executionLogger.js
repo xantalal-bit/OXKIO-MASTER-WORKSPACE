@@ -15,6 +15,7 @@ const SOURCE_STATUSES = new Set(['real', 'partial', 'unavailable']);
 const ALLOWED_OPERATIONS = new Set([
   'business-analysis-readonly:business-hunter-readonly',
   'knowledge-review-readonly:knowledge-readonly',
+  'memory-review-readonly:memory-readonly',
 ]);
 
 function clone(value) {

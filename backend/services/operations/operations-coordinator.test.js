@@ -24,6 +24,16 @@ const KNOWLEDGE_SERVICE = Object.freeze({
     };
   },
 });
+const MEMORY_SERVICE = Object.freeze({
+  async runMemoryReadonly(options) {
+    return {
+      ...options, worker: 'memory-readonly', mode: 'manual', status: 'completed',
+      startedAt: '2026-07-22T10:00:00.000Z', completedAt: '2026-07-22T10:00:01.000Z', durationMs: 1000,
+      sourceStatus: 'real', summary: 'Memoria revisada.', itemsCount: 1,
+      topics: ['Decisiones'], recommendations: ['Revisar los temas.'], warnings: [], errors: [],
+    };
+  },
+});
 
 function workerResult(options, overrides = {}) {
   return {
@@ -56,6 +66,7 @@ test('owns one ID pair, lifecycle, sanitized snapshots and safe terminal logging
   const logged = [];
   const coordinator = createOperationsCoordinator({
     knowledgeReadonlyService: KNOWLEDGE_SERVICE,
+    memoryReadonlyService: MEMORY_SERVICE,
     randomUUID: (() => {
       const ids = ['operation-id', 'interaction-id'];
       return () => ids.shift();
@@ -96,6 +107,7 @@ test('keeps only five operations and releases active state after success', async
   let sequence = 0;
   const coordinator = createOperationsCoordinator({
     knowledgeReadonlyService: KNOWLEDGE_SERVICE,
+    memoryReadonlyService: MEMORY_SERVICE,
     randomUUID: () => `id-${++sequence}`,
     businessHunterService: { async runBusinessHunterReadonly(options) { return workerResult(options); } },
   });
@@ -110,6 +122,7 @@ test('fails closed for worker failure or invalid unsafe result and always releas
   let invalid = false;
   const coordinator = createOperationsCoordinator({
     knowledgeReadonlyService: KNOWLEDGE_SERVICE,
+    memoryReadonlyService: MEMORY_SERVICE,
     randomUUID: (() => { let id = 0; return () => `uuid-${++id}`; })(),
     businessHunterService: {
       async runBusinessHunterReadonly(options) {
@@ -133,6 +146,7 @@ test('runs Knowledge through the same global lifecycle and shared history', asyn
   const coordinator = createOperationsCoordinator({
     randomUUID: () => `shared-${++sequence}`,
     knowledgeReadonlyService: KNOWLEDGE_SERVICE,
+    memoryReadonlyService: MEMORY_SERVICE,
     businessHunterService: {
       runBusinessHunterReadonly() { return new Promise((resolve) => { releaseBusiness = resolve; }); },
     },
@@ -150,4 +164,41 @@ test('runs Knowledge through the same global lifecycle and shared history', asyn
   assert.deepEqual(coordinator.getRecentOperations().map((item) => item.worker), [
     'business-hunter-readonly', 'knowledge-readonly',
   ]);
+});
+
+test('runs Memory through the same global lifecycle and shared history', async () => {
+  let sequence = 0;
+  const coordinator = createOperationsCoordinator({
+    randomUUID: () => `memory-${++sequence}`,
+    businessHunterService: { async runBusinessHunterReadonly(options) { return workerResult(options); } },
+    knowledgeReadonlyService: KNOWLEDGE_SERVICE,
+    memoryReadonlyService: MEMORY_SERVICE,
+  });
+  const business = await coordinator.runBusinessAnalysis({ identity: IDENTITY });
+  const memory = await coordinator.runMemoryReview({ identity: IDENTITY });
+  assert.equal(memory.type, 'memory-review-readonly');
+  assert.equal(memory.worker, 'memory-readonly');
+  assert.equal(memory.operationId === business.operationId, false);
+  assert.equal(memory.executionEnabled, false);
+  assert.equal(memory.proposalId, null);
+  assert.equal(memory.approvalId, null);
+  assert.deepEqual(coordinator.getRecentOperations().map((item) => item.worker), [
+    'memory-readonly', 'business-hunter-readonly',
+  ]);
+});
+
+test('fails closed when Memory exceeds its specialized public limits', async () => {
+  const coordinator = createOperationsCoordinator({
+    businessHunterService: { async runBusinessHunterReadonly(options) { return workerResult(options); } },
+    knowledgeReadonlyService: KNOWLEDGE_SERVICE,
+    memoryReadonlyService: {
+      async runMemoryReadonly(options) {
+        const result = await MEMORY_SERVICE.runMemoryReadonly(options);
+        return { ...result, recommendations: ['1', '2', '3', '4'] };
+      },
+    },
+  });
+  await assert.rejects(() => coordinator.runMemoryReview({ identity: IDENTITY }), /no se pudo completar/i);
+  assert.equal(coordinator.getStatus().activeOperation, null);
+  assert.equal(coordinator.getRecentOperations()[0].status, 'failed');
 });

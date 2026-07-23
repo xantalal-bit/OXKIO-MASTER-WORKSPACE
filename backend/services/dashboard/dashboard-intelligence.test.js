@@ -210,6 +210,21 @@ test('projects Knowledge results through the same operations view without exposi
   assert.equal(JSON.stringify(view).includes('document'), false);
 });
 
+test('projects Memory results through the common operations view without exposing private records', () => {
+  const view = buildBusinessHunterOperationView({
+    recentOperations: [{
+      worker: 'memory-readonly', status: 'completed', phase: 'completed', sourceStatus: 'real',
+      resultSummary: 'Memoria revisada.', durationMs: 20,
+      result: { summary: 'Memoria revisada.', itemsCount: 2, topics: ['Decisiones'], recommendations: ['Revisar temas.'] },
+      errors: [], warnings: [],
+    }],
+  });
+  assert.equal(view.worker, 'memory-readonly');
+  assert.equal(view.itemsCount, 2);
+  assert.deepEqual(view.topics, ['Decisiones']);
+  assert.equal(JSON.stringify(view).includes('content'), false);
+});
+
 test('never exposes paths, filenames, private content, or complete inventory assets', () => {
   const view = buildEcosystemView(inventory([asset('Business Hunter', {
     path: 'C:\\private\\Business Hunter\\secret.md',

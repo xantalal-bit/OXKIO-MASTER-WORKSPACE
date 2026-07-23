@@ -34,7 +34,7 @@ test('registers chat, supervised confirmation and operation listeners and suppor
   const source = getChatScript(readDashboard());
   const clickListeners = source.match(/addEventListener\(["']click["']/g) || [];
 
-  assert.equal(clickListeners.length, 5);
+  assert.equal(clickListeners.length, 6);
   assert.match(source, /addEventListener\(["']keydown["']/);
   assert.match(source, /event\.key\s*===\s*["']Enter["']\s*&&\s*!event\.shiftKey/);
   assert.match(source, /event\.preventDefault\(\)/);
@@ -66,6 +66,7 @@ test('renders a clean executive response and keeps technical metadata out of the
   assert.match(source, /He revisado tu petición/);
   assert.match(source, /siguiente paso más útil es realizar un análisis comercial preparatorio/);
   assert.match(source, /siguiente paso más útil es revisar el conocimiento disponible/);
+  assert.match(source, /siguiente paso más útil es revisar la memoria disponible/);
   assert.match(source, /no realizará acciones reales ni contactará con terceros/);
   assert.match(source, /será únicamente de consulta/);
   assert.match(html, /data-chat-followup hidden/);
@@ -85,11 +86,13 @@ test('confirms only closed operations and dismisses without a fetch', () => {
   const confirmSource = source.slice(confirmStart, submitStart);
 
   assert.ok(dismissStart >= 0 && confirmStart > dismissStart);
-  assert.doesNotMatch(dismissSource, /fetch|submitBusinessHunterOperation|submitKnowledgeOperation/);
+  assert.doesNotMatch(dismissSource, /fetch|submitBusinessHunterOperation|submitKnowledgeOperation|submitMemoryOperation/);
   assert.match(confirmSource, /decision === ["']business-analysis-readonly["']/);
   assert.match(confirmSource, /decision === ["']knowledge-review-readonly["']/);
+  assert.match(confirmSource, /decision === ["']memory-review-readonly["']/);
   assert.match(confirmSource, /submitBusinessHunterOperation\(\)/);
   assert.match(confirmSource, /submitKnowledgeOperation\(\)/);
+  assert.match(confirmSource, /submitMemoryOperation\(\)/);
   assert.match(confirmSource, /showNextPlannedStep\(\)/);
   assert.doesNotMatch(source, /<select|data-(worker|operation)-select|name=["'](worker|type)["']/i);
 });

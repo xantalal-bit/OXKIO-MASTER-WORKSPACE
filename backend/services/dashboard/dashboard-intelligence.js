@@ -177,7 +177,9 @@ function buildBusinessHunterOperationView(operation) {
       : typeof businessResult.summary === "string" && businessResult.summary.trim()
         ? businessResult.summary.trim()
       : sourceStatus === "unavailable"
-        ? "Business Hunter no ha proporcionado datos de fuente disponibles."
+        ? (source.worker === "memory-readonly"
+          ? "No se ha encontrado memoria suficiente para completar la revisión."
+          : "Business Hunter no ha proporcionado datos de fuente disponibles.")
         : "Sin resumen disponible.",
     opportunitiesCount: opportunityCount,
     opportunities: Array.isArray(businessResult.opportunities)
