@@ -295,8 +295,35 @@ test('dashboard reuses the existing inventory once and preserves its surrounding
   assert.equal(discoveryCalls.length, 1);
   assert.match(source, /const ecosystem = buildEcosystemView\(knowledgeInventory\)/);
   assert.match(source, /knowledgeInventory,\s*ecosystem/);
-  ['greeting', 'executiveStatus', 'agenda', 'gmail', 'memory', 'automations', 'executiveBriefing', 'morningBriefing']
+  ['greeting', 'executiveStatus', 'agenda', 'gmail', 'memory', 'automations', 'executiveBriefing', 'executiveFusion', 'morningBriefing']
     .forEach((field) => assert.match(source, new RegExp(`\\b${field}\\b`)));
+});
+
+test('builds executive fusion only from already composed sanitized dashboard data', () => {
+  const source = fs.readFileSync(path.join(__dirname, 'dashboard-intelligence.js'), 'utf8');
+  const fusionCalls = source.match(/buildExecutiveFusion\(\{/g) || [];
+
+  assert.equal(fusionCalls.length, 1);
+  assert.match(source, /generatedAt:\s*timestamp,\s*agenda,\s*gmail,\s*memory,\s*ecosystem,/);
+  assert.match(source, /recentOperations:\s*businessHunterOperation\.recentOperations/);
+  assert.doesNotMatch(source, /await\s+buildExecutiveFusion|executiveFusionReader|fusionProvider/);
+});
+
+test('existing Dashboard keeps one mobile-first executive summary card with only unified output', () => {
+  const html = fs.readFileSync(
+    path.join(__dirname, '..', '..', '..', 'app', 'executive-dashboard.html'),
+    'utf8',
+  );
+  const cards = html.match(/id="morning-briefing-card"/g) || [];
+
+  assert.equal(cards.length, 1);
+  assert.match(html, /class="panel span-12 dashboard-briefing"/);
+  assert.match(html, /updateMorningBriefing\(state\.executiveFusion\)/);
+  assert.match(html, /briefing\.headline/);
+  assert.match(html, /briefing\.priorities/);
+  assert.match(html, /briefing\.recommendation/);
+  assert.doesNotMatch(html, /data-morning-briefing-(alerts|sources|generated|title)/);
+  assert.match(html, /@media \(max-width: 600px\)/);
 });
 
 test('frontend renders only the three ecosystem widgets with safe DOM operations', () => {

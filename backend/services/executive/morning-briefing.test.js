@@ -136,7 +136,7 @@ test('fails closed with an ISO timestamp when total construction throws', () => 
   assert.equal(new Date(result.generatedAt).toISOString(), result.generatedAt);
 });
 
-test('frontend renders briefing objects and source status with safe DOM operations', () => {
+test('frontend renders only unified executive fusion with safe DOM operations', () => {
   const html = fs.readFileSync(
     path.resolve(__dirname, '../../../app/executive-dashboard.html'),
     'utf8',
@@ -146,11 +146,10 @@ test('frontend renders briefing objects and source status with safe DOM operatio
     html.indexOf('function applyDashboardState'),
   );
 
-  assert.match(renderer, /briefing\.summary/);
+  assert.match(renderer, /briefing\.headline/);
   assert.match(renderer, /briefing\.priorities/);
-  assert.match(renderer, /briefing\.alerts/);
-  assert.match(renderer, /briefing\.sourceStatus/);
-  assert.match(renderer, /briefing\.generatedAt/);
+  assert.match(renderer, /briefing\.recommendation/);
+  assert.doesNotMatch(renderer, /briefing\.(alerts|sourceStatus|generatedAt)/);
   assert.match(renderer, /textContent/);
   assert.match(renderer, /replaceChildren/);
   assert.doesNotMatch(renderer, /innerHTML/);

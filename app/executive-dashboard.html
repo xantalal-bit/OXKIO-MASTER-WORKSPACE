@@ -777,21 +777,12 @@
             </div>
             <span class="badge ok">Briefing</span>
           </div>
-          <p class="item-title" data-morning-briefing-title>Resumen ejecutivo del día</p>
           <p class="executive-summary" data-morning-briefing-summary>Información no disponible</p>
           <div data-morning-briefing-priorities-block hidden>
             <p class="meta">Prioridades</p>
             <ul class="list" data-morning-briefing-priorities></ul>
           </div>
-          <div data-morning-briefing-alerts-block hidden>
-            <p class="meta">Alertas</p>
-            <ul class="list" data-morning-briefing-alerts></ul>
-          </div>
-          <div data-morning-briefing-sources-block hidden>
-            <p class="meta">Fuentes</p>
-            <ul class="list" data-morning-briefing-sources></ul>
-          </div>
-          <p class="meta" data-morning-briefing-generated></p>
+          <p class="item-text" data-morning-briefing-recommendation>Recomendación no disponible</p>
         </article>
 
         <article class="panel span-12 greeting dashboard-intro">
@@ -2314,42 +2305,14 @@
       blockElement.hidden = false;
     }
 
-    function renderBriefingSources(listElement, blockElement, sourceStatus) {
-      if (!listElement || !blockElement) return;
-      listElement.replaceChildren();
-      const labels = {
-        gmail: "Gmail",
-        calendar: "Calendar",
-        approvals: "Aprobaciones",
-        memory: "Memoria",
-        ecosystem: "Ecosistema"
-      };
-      const statusLabels = { real: "Real", partial: "Parcial", unavailable: "No disponible" };
-      Object.entries(labels).forEach(([key, label]) => {
-        const item = document.createElement("li");
-        item.className = "item";
-        const text = document.createElement("p");
-        text.className = "item-text";
-        text.textContent = `${label}: ${statusLabels[sourceStatus && sourceStatus[key]] || "No disponible"}`;
-        item.appendChild(text);
-        listElement.appendChild(item);
-      });
-      blockElement.hidden = false;
-    }
-
-    function updateMorningBriefing(morningBriefing) {
+    function updateMorningBriefing(executiveFusion) {
       const card = document.getElementById("morning-briefing-card");
       if (!card) return;
 
-      const briefing = morningBriefing || {};
-      setText(
-        card.querySelector("[data-morning-briefing-title]"),
-        briefing.title,
-        "Resumen ejecutivo del día"
-      );
+      const briefing = executiveFusion || {};
       setText(
         card.querySelector("[data-morning-briefing-summary]"),
-        briefing.summary,
+        briefing.headline,
         "Información no disponible"
       );
       renderTextList(
@@ -2357,26 +2320,16 @@
         card.querySelector("[data-morning-briefing-priorities-block]"),
         briefing.priorities
       );
-      renderTextList(
-        card.querySelector("[data-morning-briefing-alerts]"),
-        card.querySelector("[data-morning-briefing-alerts-block]"),
-        briefing.alerts
-      );
-      renderBriefingSources(
-        card.querySelector("[data-morning-briefing-sources]"),
-        card.querySelector("[data-morning-briefing-sources-block]"),
-        briefing.sourceStatus
-      );
       setText(
-        card.querySelector("[data-morning-briefing-generated]"),
-        briefing.generatedAt ? `Generado: ${formatAgendaDate(briefing.generatedAt)}` : null,
-        ""
+        card.querySelector("[data-morning-briefing-recommendation]"),
+        briefing.recommendation,
+        "Recomendación no disponible"
       );
     }
 
     function applyDashboardState(state) {
       const executiveResponse = getExecutiveResponse(state);
-      updateMorningBriefing(state.morningBriefing);
+      updateMorningBriefing(state.executiveFusion);
       const greetingPanel = document.querySelector(".greeting");
       setText(
         greetingPanel && greetingPanel.querySelector("h2"),

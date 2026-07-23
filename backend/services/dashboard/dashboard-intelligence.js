@@ -7,6 +7,7 @@ const { getAutomations } = require("./providers/automations-provider");
 const { buildExecutiveSummary } = require("./executive-summary-builder");
 const { buildExecutiveState } = require("../executive/executive-orchestrator");
 const { buildMorningBriefing } = require("../executive/morning-briefing");
+const { buildExecutiveFusion } = require("../executive-brain/executive-fusion-engine");
 const { discoverKnowledge } = require("../knowledge/discovery-engine");
 const { getExecutiveBrain } = require("../../runtime/executive-runtime");
 
@@ -356,10 +357,21 @@ async function getDashboardState(options = {}) {
       businessHunter: businessHunterOperation,
     }
   };
+  const executiveFusion = buildExecutiveFusion({
+    generatedAt: timestamp,
+    agenda,
+    gmail,
+    memory,
+    ecosystem,
+    operations: {
+      recentOperations: businessHunterOperation.recentOperations,
+    },
+  });
   const morningBriefing = buildMorningBriefing(dashboardStateWithIntelligence);
 
   return {
     ...dashboardStateWithIntelligence,
+    executiveFusion,
     morningBriefing
   };
 }
