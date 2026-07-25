@@ -295,7 +295,7 @@ test('dashboard reuses the existing inventory once and preserves its surrounding
   assert.equal(discoveryCalls.length, 1);
   assert.match(source, /const ecosystem = buildEcosystemView\(knowledgeInventory\)/);
   assert.match(source, /knowledgeInventory,\s*ecosystem/);
-  ['greeting', 'executiveStatus', 'agenda', 'gmail', 'memory', 'automations', 'executiveBriefing', 'executiveFusion', 'morningBriefing']
+  ['greeting', 'executiveStatus', 'agenda', 'gmail', 'memory', 'automations', 'executiveBriefing', 'executiveFusion', 'executiveActionProposal', 'executiveActionPreparation', 'ecosystemObserver', 'morningBriefing']
     .forEach((field) => assert.match(source, new RegExp(`\\b${field}\\b`)));
 });
 
@@ -307,6 +307,51 @@ test('builds executive fusion only from already composed sanitized dashboard dat
   assert.match(source, /generatedAt:\s*timestamp,\s*agenda,\s*gmail,\s*memory,\s*ecosystem,/);
   assert.match(source, /recentOperations:\s*businessHunterOperation\.recentOperations/);
   assert.doesNotMatch(source, /await\s+buildExecutiveFusion|executiveFusionReader|fusionProvider/);
+});
+
+test('builds one action proposal directly from executive fusion without operational dependencies', () => {
+  const source = fs.readFileSync(path.join(__dirname, 'dashboard-intelligence.js'), 'utf8');
+  const calls = source.match(/buildExecutiveActionProposal\(executiveFusion\)/g) || [];
+
+  assert.equal(calls.length, 1);
+  assert.doesNotMatch(source, /executiveActionProposalReader|actionProposalProvider|await\s+buildExecutiveActionProposal/);
+});
+
+test('prepares the proposed action from sanitized dashboard views after proposal construction', () => {
+  const source = fs.readFileSync(path.join(__dirname, 'dashboard-intelligence.js'), 'utf8');
+  const calls = source.match(/buildExecutiveActionPreparation\(\{/g) || [];
+
+  assert.equal(calls.length, 1);
+  assert.match(source, /proposal:\s*executiveActionProposal/);
+  assert.match(source, /executiveSummary:\s*executiveFusion/);
+  assert.match(source, /dashboard:\s*\{\s*agenda,\s*gmail,\s*ecosystem,/);
+  assert.doesNotMatch(source, /await\s+buildExecutiveActionPreparation/);
+});
+
+test('builds the ecosystem observer after Executive Brain outputs from sanitized public state', () => {
+  const source = fs.readFileSync(path.join(__dirname, 'dashboard-intelligence.js'), 'utf8');
+  const calls = source.match(/buildEcosystemObserver\(\{/g) || [];
+
+  assert.equal(calls.length, 1);
+  assert.match(source, /systemStateView,\s*projectStateView,\s*governanceStateView,/);
+  assert.doesNotMatch(source, /await\s+buildEcosystemObserver|ecosystemObserverProvider/);
+  assert.doesNotMatch(source, /currentPhase:\s*"5C\.6E|currentBlock:\s*"Sistema Nervioso|moduleStatus:\s*\{/);
+  assert.doesNotMatch(source, /strategicObjective:\s*"Gobernar|nextRecommendedStep:\s*"Validar el observador/);
+});
+
+test('server injects closed owner views into every Dashboard Intelligence composition', () => {
+  const server = fs.readFileSync(
+    path.join(__dirname, '..', '..', 'api', 'server.js'),
+    'utf8',
+  );
+  const dashboardCalls = server.match(/DashboardIntelligence\.getDashboardState\(\{/g) || [];
+  const injectedViews = server.match(/\.\.\.getEcosystemObserverViews\(\)/g) || [];
+
+  assert.ok(dashboardCalls.length > 0);
+  assert.equal(injectedViews.length, dashboardCalls.length);
+  assert.match(server, /systemStateManager\.getPublicView\(\)/);
+  assert.match(server, /ProjectManagerService\.getProjectStateView\("OXKIO"\)/);
+  assert.match(server, /readGovernanceStateView\(\)/);
 });
 
 test('existing Dashboard keeps one mobile-first executive summary card with only unified output', () => {
@@ -322,8 +367,156 @@ test('existing Dashboard keeps one mobile-first executive summary card with only
   assert.match(html, /briefing\.headline/);
   assert.match(html, /briefing\.priorities/);
   assert.match(html, /briefing\.recommendation/);
-  assert.doesNotMatch(html, /data-morning-briefing-(alerts|sources|generated|title)/);
+  assert.doesNotMatch(html, /data-morning-briefing-(alerts|sources|title)/);
+  assert.match(html, /data-morning-briefing-date/);
+  assert.match(html, /data-morning-briefing-time/);
+  assert.match(html, /formatBriefingGeneratedAt\(briefing\.generatedAt\)/);
+  assert.match(html, /new Intl\.DateTimeFormat\("es-ES"/);
+  assert.doesNotMatch(html, /timeZone:\s*["']UTC["']/);
+  assert.match(html, /data-executive-action-preparation/);
+  assert.match(html, /Todavía no se ejecutará\. Revisa la información antes de aprobarla\./);
   assert.match(html, /@media \(max-width: 600px\)/);
+});
+
+test('Dashboard back navigation returns to Control Center without ending the persistent Firebase session', () => {
+  const dashboard = fs.readFileSync(
+    path.join(__dirname, '..', '..', '..', 'app', 'executive-dashboard.html'),
+    'utf8',
+  );
+  const login = fs.readFileSync(
+    path.join(__dirname, '..', '..', '..', 'app', 'index.html'),
+    'utf8',
+  );
+
+  assert.match(login, /initializeAuth\(app,\s*\{\s*persistence:\s*browserLocalPersistence\s*\}\)/);
+  assert.match(dashboard, /initializeAuth\(firebaseApp,\s*\{\s*persistence:\s*browserLocalPersistence\s*\}\)/);
+  assert.doesNotMatch(login, /\bgetAuth\(/);
+  assert.doesNotMatch(dashboard, /\bgetAuth\(/);
+  assert.match(dashboard, /onAuthStateChanged\(firebaseAuth/);
+  assert.match(dashboard, /user\.getIdToken\(!retry\)/);
+  assert.match(dashboard, /response\.status === 401/);
+  assert.match(login, /href="executive-dashboard\.html">Executive Dashboard/);
+  assert.match(dashboard, /data-back-link href="\/">Atrás<\/a>/);
+  assert.doesNotMatch(dashboard, /signOut\(|oxkioLogout|data-logout-button/);
+  assert.doesNotMatch(dashboard, /sessionStorage|localStorage/);
+});
+
+test('Dashboard requests a fresh state and renders the real fusion generation time', () => {
+  const html = fs.readFileSync(
+    path.join(__dirname, '..', '..', '..', 'app', 'executive-dashboard.html'),
+    'utf8',
+  );
+
+  assert.match(html, /oxkioAuthenticatedFetch\("\/api\/dashboard",\s*\{\s*cache:\s*"no-store"\s*\}\)/);
+  assert.match(html, /formatBriefingGeneratedAt\(briefing\.generatedAt\)/);
+  assert.doesNotMatch(html, /new Date\(\)(?:\.toISOString\(\))?/);
+});
+
+test('preparation controls only reveal or dismiss local DOM and never fetch or create approvals', () => {
+  const html = fs.readFileSync(
+    path.join(__dirname, '..', '..', '..', 'app', 'executive-dashboard.html'),
+    'utf8',
+  );
+  const start = html.indexOf('function initializeExecutiveActionPreparation');
+  const end = html.indexOf('function applyDashboardState', start);
+  const handlers = html.slice(start, end);
+
+  assert.match(handlers, /detail\.hidden = false/);
+  assert.match(handlers, /container\.hidden = true/);
+  assert.match(handlers, /feedback\.textContent = "[^"]+ descartada\."/);
+  assert.match(handlers, /feedback\.hidden = false/);
+  assert.doesNotMatch(handlers, /fetch\(|oxkioAuthenticatedFetch|approval|execute|submit/);
+  assert.doesNotMatch(handlers, /innerHTML/);
+  assert.match(html, /data-executive-action-feedback role="status" aria-live="polite" hidden/);
+});
+
+test('preparation renderer uses safe DOM operations and keeps one executive summary card', () => {
+  const html = fs.readFileSync(
+    path.join(__dirname, '..', '..', '..', 'app', 'executive-dashboard.html'),
+    'utf8',
+  );
+  const cards = html.match(/id="morning-briefing-card"/g) || [];
+  const start = html.indexOf('function renderPreparationFields');
+  const end = html.indexOf('function initializeExecutiveActionPreparation', start);
+  const renderer = html.slice(start, end);
+
+  assert.equal(cards.length, 1);
+  assert.match(renderer, /document\.createElement\("li"\)/);
+  assert.match(renderer, /textContent/);
+  assert.match(renderer, /replaceChildren\(\)/);
+  assert.doesNotMatch(renderer, /innerHTML|insertAdjacentHTML|fetch\(/);
+  assert.match(html, /Revisar preparación/);
+  assert.match(html, /Descartar/);
+});
+
+test('ecosystem observer is folded inside the existing top card and renders through safe DOM APIs', () => {
+  const html = fs.readFileSync(
+    path.join(__dirname, '..', '..', '..', 'app', 'executive-dashboard.html'),
+    'utf8',
+  );
+  const cards = html.match(/id="morning-briefing-card"/g) || [];
+  const observerBlocks = html.match(/<details class="operations-details" data-ecosystem-observer>/g) || [];
+  const start = html.indexOf('function renderObserverList');
+  const end = html.indexOf('function fieldLabel', start);
+  const renderer = html.slice(start, end);
+
+  assert.equal(cards.length, 1);
+  assert.equal(observerBlocks.length, 1);
+  assert.doesNotMatch(observerBlocks[0], /\sopen(?:\s|>)/);
+  assert.match(html, /Estado del Ecosistema/);
+  assert.match(renderer, /document\.createElement\("li"\)/);
+  assert.match(renderer, /textContent/);
+  assert.match(renderer, /replaceChildren\(\)/);
+  assert.doesNotMatch(renderer, /innerHTML|insertAdjacentHTML|fetch\(/);
+  [
+    'data-ecosystem-observer-project',
+    'data-ecosystem-observer-strategic-objective',
+    'data-ecosystem-observer-alignment',
+    'data-ecosystem-observer-milestone',
+  ].forEach((attribute) => assert.match(html, new RegExp(attribute)));
+  assert.match(renderer, /container\.hidden = !text/);
+  assert.match(renderer, /target\.textContent = text/);
+  assert.match(html, /data-ecosystem-observer-project-block hidden/);
+  assert.match(html, /data-ecosystem-observer-strategic-objective-block hidden/);
+  assert.match(html, /data-ecosystem-observer-alignment-block hidden/);
+  assert.match(html, /data-ecosystem-observer-milestone-block hidden/);
+  assert.match(html, /data-ecosystem-observer-progress-block hidden/);
+  assert.match(html, /data-ecosystem-observer-scope-status-block hidden/);
+  assert.match(html, /data-ecosystem-observer-consolidated-block hidden/);
+  assert.match(html, /data-ecosystem-observer-phase-summary/);
+  assert.match(html, /data-ecosystem-observer-closure-status/);
+  assert.match(html, /data-ecosystem-observer-next-action-summary/);
+  assert.match(html, /data-ecosystem-observer-warning-summary hidden/);
+  assert.match(html, /data-ecosystem-observer-remaining-block hidden/);
+  assert.match(html, /data-ecosystem-observer-drift-block hidden/);
+  assert.match(html, /data-ecosystem-observer-reuse-block hidden/);
+  assert.match(html, /data-ecosystem-observer-lessons-block hidden/);
+  assert.match(html, /data-ecosystem-observer-strategic-recommendations-block hidden/);
+  assert.match(html, /data-ecosystem-observer-confidence-block hidden/);
+  assert.match(html, /data-ecosystem-observer-audit-block hidden/);
+  assert.match(html, /data-ecosystem-observer-session-block hidden/);
+  assert.match(html, /data-ecosystem-observer-session-achievements/);
+  assert.match(html, /data-ecosystem-observer-session-next/);
+  assert.match(renderer, /supervisorRecommendation\.action \|\| guidance\.nextBestAction/);
+  assert.doesNotMatch(
+    html.slice(
+      html.indexOf('<summary>', html.indexOf('data-ecosystem-observer')),
+      html.indexOf('</summary>', html.indexOf('data-ecosystem-observer')),
+    ),
+    /strategic-recommendations/,
+  );
+  assert.match(renderer, /phaseClosureLabel/);
+  assert.match(renderer, /renderOptionalObserverList/);
+  assert.match(html, /@media \(max-width: 600px\)/);
+});
+
+test('future ecosystem command adds no endpoint or conversational processing', () => {
+  const server = fs.readFileSync(
+    path.join(__dirname, '..', '..', 'api', 'server.js'),
+    'utf8',
+  );
+  assert.doesNotMatch(server, /req\.url\s*===\s*["']\/ecosistema["']/);
+  assert.doesNotMatch(server, /pathname\s*===\s*["']\/ecosistema["']/);
 });
 
 test('frontend renders only the three ecosystem widgets with safe DOM operations', () => {

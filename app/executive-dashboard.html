@@ -115,6 +115,9 @@
     }
 
     .btn-secondary {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
       min-height: 44px;
       padding: 10px 14px;
       border: 1px solid rgba(148, 163, 184, 0.35);
@@ -123,6 +126,7 @@
       color: #eef6f5;
       font-size: 14px;
       cursor: pointer;
+      text-decoration: none;
     }
 
     .btn-secondary:hover {
@@ -762,7 +766,7 @@
         </div>
         <div class="topbar-actions">
           <div class="client">Cliente Cero: José Antonio</div>
-          <button class="btn-secondary" type="button" data-logout-button onclick="window.oxkioLogout()">Salir</button>
+          <a class="btn-secondary" data-back-link href="/">Atrás</a>
         </div>
       </div>
     </header>
@@ -773,16 +777,133 @@
           <div class="panel-header">
             <div>
               <h2>Resumen Ejecutivo del Día</h2>
+              <p class="item-text" data-morning-briefing-date>Fecha no disponible</p>
+              <p class="meta" data-morning-briefing-time>Hora no disponible</p>
               <p class="meta">Briefing operativo generado desde Dashboard Intelligence.</p>
             </div>
             <span class="badge ok">Briefing</span>
           </div>
+          <details class="operations-details" data-ecosystem-observer>
+            <summary>
+              <span>
+                <span>Estado del Ecosistema</span>
+                <span class="meta" data-ecosystem-observer-phase-summary></span>
+                <span class="item-text" data-ecosystem-observer-next-action-summary></span>
+                <span class="note" data-ecosystem-observer-warning-summary hidden></span>
+              </span>
+              <span class="badge" data-ecosystem-observer-closure-status>No disponible</span>
+            </summary>
+            <div class="collapsed-content">
+              <div data-ecosystem-observer-progress-block hidden>
+                <p class="item-text" data-ecosystem-observer-progress></p>
+              </div>
+              <div data-ecosystem-observer-scope-status-block hidden>
+                <p class="meta">Estado de cierre</p>
+                <ul class="list" data-ecosystem-observer-scope-status></ul>
+              </div>
+              <div data-ecosystem-observer-consolidated-block hidden>
+                <p class="meta">Capacidades consolidadas</p>
+                <ul class="list" data-ecosystem-observer-consolidated></ul>
+              </div>
+              <div data-ecosystem-observer-project-block hidden>
+                <p class="meta">Proyecto</p>
+                <p class="item-text" data-ecosystem-observer-project></p>
+              </div>
+              <p class="meta">Bloque</p>
+              <p class="item-text" data-ecosystem-observer-block>No disponible</p>
+              <p class="meta">Objetivo</p>
+              <p class="item-text" data-ecosystem-observer-objective>No disponible</p>
+              <div data-ecosystem-observer-strategic-objective-block hidden>
+                <p class="meta">Objetivo estratégico</p>
+                <p class="item-text" data-ecosystem-observer-strategic-objective></p>
+              </div>
+              <div data-ecosystem-observer-alignment-block hidden>
+                <p class="meta">Alineación con el roadmap</p>
+                <p class="item-text" data-ecosystem-observer-alignment></p>
+              </div>
+              <div data-ecosystem-observer-milestone-block hidden>
+                <p class="meta">Último hito</p>
+                <p class="item-text" data-ecosystem-observer-milestone></p>
+              </div>
+              <div data-ecosystem-observer-remaining-block hidden>
+                <p class="meta">Pasos pendientes</p>
+                <ul class="list" data-ecosystem-observer-remaining></ul>
+              </div>
+              <div data-ecosystem-observer-drift-block hidden>
+                <p class="meta">Desviaciones</p>
+                <ul class="list" data-ecosystem-observer-drift></ul>
+              </div>
+              <div data-ecosystem-observer-reuse-block hidden>
+                <p class="meta">Elementos a reutilizar</p>
+                <ul class="list" data-ecosystem-observer-reuse></ul>
+              </div>
+              <div data-ecosystem-observer-lessons-block hidden>
+                <p class="meta">Lecciones aprendidas</p>
+                <ul class="list" data-ecosystem-observer-lessons></ul>
+              </div>
+              <div data-ecosystem-observer-strategic-recommendations-block hidden>
+                <p class="meta">Recomendaciones estratégicas</p>
+                <ul class="list" data-ecosystem-observer-strategic-recommendations></ul>
+              </div>
+              <div data-ecosystem-observer-confidence-block hidden>
+                <p class="meta" data-ecosystem-observer-confidence></p>
+                <ul class="list" data-ecosystem-observer-confidence-evidence></ul>
+              </div>
+              <div data-ecosystem-observer-audit-block hidden>
+                <p class="meta">Auditoría de cierre</p>
+                <p class="item-text">¿Qué hemos reutilizado?</p>
+                <ul class="list" data-ecosystem-observer-audit-reused></ul>
+                <p class="item-text">¿Qué duplicación hemos eliminado o evitado?</p>
+                <ul class="list" data-ecosystem-observer-audit-duplication></ul>
+                <p class="item-text">¿Qué falta exactamente para cerrar?</p>
+                <ul class="list" data-ecosystem-observer-audit-remaining></ul>
+                <p class="item-text">Única siguiente acción con mayor impacto</p>
+                <p class="item-text" data-ecosystem-observer-audit-next></p>
+              </div>
+              <div data-ecosystem-observer-session-block hidden>
+                <p class="meta">Resumen de la sesión</p>
+                <p class="item-text">Hoy hemos conseguido:</p>
+                <ul class="list" data-ecosystem-observer-session-achievements></ul>
+                <p class="item-text">Siguiente acción:</p>
+                <p class="item-text" data-ecosystem-observer-session-next></p>
+              </div>
+              <p class="meta">Riesgos</p>
+              <ul class="list" data-ecosystem-observer-risks></ul>
+              <p class="meta">Latencia resumida</p>
+              <ul class="list" data-ecosystem-observer-latency></ul>
+              <div data-ecosystem-observer-reminders hidden>
+                <p class="meta">Recordatorio</p>
+                <ul class="list" data-ecosystem-observer-reminder-list></ul>
+              </div>
+            </div>
+          </details>
           <p class="executive-summary" data-morning-briefing-summary>Información no disponible</p>
           <div data-morning-briefing-priorities-block hidden>
             <p class="meta">Prioridades</p>
             <ul class="list" data-morning-briefing-priorities></ul>
           </div>
           <p class="item-text" data-morning-briefing-recommendation>Recomendación no disponible</p>
+          <div class="operations-card" data-executive-action-preparation hidden>
+            <p class="meta">Acción preparada</p>
+            <p class="item-title" data-executive-action-title></p>
+            <div data-executive-action-detail hidden>
+              <p class="item-text" data-executive-action-summary></p>
+              <div>
+                <p class="meta">Campos disponibles</p>
+                <ul class="list" data-executive-action-fields></ul>
+              </div>
+              <div data-executive-action-missing-block hidden>
+                <p class="meta">Campos que faltan</p>
+                <ul class="list" data-executive-action-missing></ul>
+              </div>
+              <p class="meta">Todavía no se ejecutará. Revisa la información antes de aprobarla.</p>
+            </div>
+            <div class="operations-actions">
+              <button type="button" data-executive-action-review>Revisar preparación</button>
+              <button type="button" class="btn-secondary" data-executive-action-dismiss>Descartar</button>
+            </div>
+          </div>
+          <p class="note" data-executive-action-feedback role="status" aria-live="polite" hidden></p>
         </article>
 
         <article class="panel span-12 greeting dashboard-intro">
@@ -1071,7 +1192,11 @@
   </div>
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-    import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+    import {
+      browserLocalPersistence,
+      initializeAuth,
+      onAuthStateChanged
+    } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 
     const firebaseApp = initializeApp({
       apiKey: "AIzaSyDFySiO23mqJilJPUfE-dLv9Zbs9gcY_kg",
@@ -1081,7 +1206,9 @@
       messagingSenderId: "975887789346",
       appId: "1:975887789346:web:fa581107285b989d90897b"
     });
-    const firebaseAuth = getAuth(firebaseApp);
+    const firebaseAuth = initializeAuth(firebaseApp, {
+      persistence: browserLocalPersistence
+    });
     let resolveAuthReady;
     window.oxkioAuthReady = new Promise((resolve) => { resolveAuthReady = resolve; });
 
@@ -1092,11 +1219,6 @@
       }
       resolveAuthReady(user);
     });
-
-    window.oxkioLogout = async function() {
-      await signOut(firebaseAuth);
-      window.location.replace("/");
-    };
 
     window.oxkioAuthenticatedFetch = async function(url, options = {}, retry = true) {
       const user = await window.oxkioAuthReady;
@@ -2305,11 +2427,43 @@
       blockElement.hidden = false;
     }
 
+    function formatBriefingGeneratedAt(value) {
+      const generatedAt = new Date(value);
+      if (!value || !Number.isFinite(generatedAt.getTime())) return null;
+
+      const date = new Intl.DateTimeFormat("es-ES", {
+        weekday: "long",
+        day: "2-digit",
+        month: "2-digit",
+        year: "numeric"
+      }).format(generatedAt);
+      const time = new Intl.DateTimeFormat("es-ES", {
+        hour: "2-digit",
+        minute: "2-digit"
+      }).format(generatedAt);
+
+      return {
+        date: date.charAt(0).toUpperCase() + date.slice(1),
+        time
+      };
+    }
+
     function updateMorningBriefing(executiveFusion) {
       const card = document.getElementById("morning-briefing-card");
       if (!card) return;
 
       const briefing = executiveFusion || {};
+      const generatedAt = formatBriefingGeneratedAt(briefing.generatedAt);
+      setText(
+        card.querySelector("[data-morning-briefing-date]"),
+        generatedAt && generatedAt.date,
+        "Fecha no disponible"
+      );
+      setText(
+        card.querySelector("[data-morning-briefing-time]"),
+        generatedAt && generatedAt.time,
+        "Hora no disponible"
+      );
       setText(
         card.querySelector("[data-morning-briefing-summary]"),
         briefing.headline,
@@ -2327,9 +2481,393 @@
       );
     }
 
+    function renderObserverList(list, values, fallback) {
+      if (!list) return;
+      list.replaceChildren();
+      const safeValues = Array.isArray(values) && values.length ? values : [fallback];
+      safeValues.forEach((value) => {
+        const item = document.createElement("li");
+        item.textContent = textOrFallback(value, fallback);
+        list.appendChild(item);
+      });
+    }
+
+    function renderOptionalObserverList(block, blockSelector, listSelector, values) {
+      const container = block.querySelector(blockSelector);
+      const list = block.querySelector(listSelector);
+      const safeValues = Array.isArray(values) ? values.filter(Boolean) : [];
+      if (safeValues.length > 0) {
+        renderObserverList(list, safeValues, "");
+      } else if (list) {
+        list.replaceChildren();
+      }
+      if (container) container.hidden = safeValues.length === 0;
+    }
+
+    function setOptionalObserverField(block, blockSelector, valueSelector, value) {
+      const container = block.querySelector(blockSelector);
+      const target = block.querySelector(valueSelector);
+      const text = typeof value === "string" ? value.trim() : "";
+      if (target) target.textContent = text;
+      if (container) container.hidden = !text;
+    }
+
+    function roadmapAlignmentLabel(value) {
+      if (value === "aligned") return "Alineado";
+      if (value === "attention") return "Requiere atención";
+      if (value === "unknown") return "Alineación desconocida";
+      return "";
+    }
+
+    function phaseClosureLabel(value) {
+      if (value === "ready_to_close") return "Listo para cerrar";
+      if (value === "work_remaining") return "Trabajo pendiente";
+      if (value === "blocked") return "Bloqueado";
+      return "Estado desconocido";
+    }
+
+    function confidenceLabel(value) {
+      if (value === "high") return "Confianza: Alta";
+      if (value === "medium") return "Confianza: Media";
+      return "Confianza: Desconocida";
+    }
+
+    function supervisorStateLabel(value) {
+      if (value === "closed" || value === "published") return "Cerrado y publicado";
+      if (value === "ready_to_close") return "Listo para cerrar";
+      if (value === "in_progress" || value === "work_remaining") return "En curso";
+      if (value === "pending") return "Pendiente";
+      if (value === "blocked") return "Bloqueado";
+      return "Desconocido";
+    }
+
+    function updateEcosystemObserver(observer) {
+      const block = document.querySelector("[data-ecosystem-observer]");
+      if (!block) return;
+      const value = observer && typeof observer === "object" ? observer : {};
+      const ecosystemStatus = value.ecosystemStatus && typeof value.ecosystemStatus === "object"
+        ? value.ecosystemStatus
+        : {};
+      const guidance = value.operationalGuidance && typeof value.operationalGuidance === "object"
+        ? value.operationalGuidance
+        : {};
+      const supervisorRecommendation = value.supervisorRecommendation
+        && typeof value.supervisorRecommendation === "object"
+        ? value.supervisorRecommendation
+        : {};
+      const strategicRecommendations = Array.isArray(value.strategicRecommendations)
+        ? value.strategicRecommendations
+        : [];
+      const sessionHistory = value.sessionHistory && typeof value.sessionHistory === "object"
+        ? value.sessionHistory
+        : {};
+      const auditAnswers = value.auditAnswers && typeof value.auditAnswers === "object"
+        ? value.auditAnswers
+        : {};
+      const blockStatus = value.blockStatus && typeof value.blockStatus === "object"
+        ? value.blockStatus
+        : {};
+      const subphaseStatus = value.subphaseStatus && typeof value.subphaseStatus === "object"
+        ? value.subphaseStatus
+        : {};
+      const releaseStatus = value.releaseStatus && typeof value.releaseStatus === "object"
+        ? value.releaseStatus
+        : {};
+      setText(
+        block.querySelector("[data-ecosystem-observer-closure-status]"),
+        phaseClosureLabel(guidance.phaseClosureStatus),
+        "Estado desconocido"
+      );
+      setText(block.querySelector("[data-ecosystem-observer-phase-summary]"), value.currentPhase, "");
+      setText(
+        block.querySelector("[data-ecosystem-observer-next-action-summary]"),
+        supervisorRecommendation.action || guidance.nextBestAction,
+        ""
+      );
+      setText(block.querySelector("[data-ecosystem-observer-block]"), value.currentBlock, "No disponible");
+      setText(block.querySelector("[data-ecosystem-observer-objective]"), value.currentObjective, "No disponible");
+      setOptionalObserverField(
+        block,
+        "[data-ecosystem-observer-progress-block]",
+        "[data-ecosystem-observer-progress]",
+        value.progressMessage
+      );
+      const scopeStatus = [
+        blockStatus.phase
+          ? `Bloque ${blockStatus.phase}: ${supervisorStateLabel(blockStatus.state)}`
+          : "",
+        subphaseStatus.phase
+          ? `Subfase ${subphaseStatus.phase}: ${supervisorStateLabel(subphaseStatus.state)}`
+          : "",
+        `Publicación: ${supervisorStateLabel(releaseStatus.state)}`
+      ].filter(Boolean);
+      renderOptionalObserverList(
+        block,
+        "[data-ecosystem-observer-scope-status-block]",
+        "[data-ecosystem-observer-scope-status]",
+        scopeStatus
+      );
+      renderOptionalObserverList(
+        block,
+        "[data-ecosystem-observer-consolidated-block]",
+        "[data-ecosystem-observer-consolidated]",
+        value.consolidatedCapabilities
+      );
+      setOptionalObserverField(
+        block,
+        "[data-ecosystem-observer-project-block]",
+        "[data-ecosystem-observer-project]",
+        ecosystemStatus.project
+      );
+      setOptionalObserverField(
+        block,
+        "[data-ecosystem-observer-strategic-objective-block]",
+        "[data-ecosystem-observer-strategic-objective]",
+        value.strategicObjective
+      );
+      setOptionalObserverField(
+        block,
+        "[data-ecosystem-observer-alignment-block]",
+        "[data-ecosystem-observer-alignment]",
+        roadmapAlignmentLabel(value.roadmapAlignment)
+      );
+      setOptionalObserverField(
+        block,
+        "[data-ecosystem-observer-milestone-block]",
+        "[data-ecosystem-observer-milestone]",
+        ecosystemStatus.lastMilestone
+      );
+
+      renderOptionalObserverList(
+        block,
+        "[data-ecosystem-observer-remaining-block]",
+        "[data-ecosystem-observer-remaining]",
+        guidance.remainingSteps
+      );
+      renderOptionalObserverList(
+        block,
+        "[data-ecosystem-observer-drift-block]",
+        "[data-ecosystem-observer-drift]",
+        [
+          ...(Array.isArray(guidance.driftWarnings) ? guidance.driftWarnings : []),
+          ...(Array.isArray(guidance.experienceWarnings) ? guidance.experienceWarnings : [])
+        ].slice(0, 3)
+      );
+      renderOptionalObserverList(
+        block,
+        "[data-ecosystem-observer-reuse-block]",
+        "[data-ecosystem-observer-reuse]",
+        guidance.reuseWarnings
+      );
+      renderOptionalObserverList(
+        block,
+        "[data-ecosystem-observer-lessons-block]",
+        "[data-ecosystem-observer-lessons]",
+        guidance.learnedLessons
+      );
+      renderOptionalObserverList(
+        block,
+        "[data-ecosystem-observer-strategic-recommendations-block]",
+        "[data-ecosystem-observer-strategic-recommendations]",
+        strategicRecommendations.map((recommendation) => recommendation && recommendation.action)
+      );
+      const confidence = supervisorRecommendation.confidenceExplanation
+        && typeof supervisorRecommendation.confidenceExplanation === "object"
+        ? supervisorRecommendation.confidenceExplanation
+        : {};
+      const confidenceEvidence = [
+        ...(Array.isArray(confidence.supportingEvidence)
+          ? confidence.supportingEvidence.map((item) => `✔ ${item}`)
+          : []),
+        ...(Array.isArray(confidence.missingEvidence)
+          ? confidence.missingEvidence.map((item) => `✘ ${item}`)
+          : [])
+      ];
+      setOptionalObserverField(
+        block,
+        "[data-ecosystem-observer-confidence-block]",
+        "[data-ecosystem-observer-confidence]",
+        confidenceLabel(confidence.level)
+      );
+      renderObserverList(
+        block.querySelector("[data-ecosystem-observer-confidence-evidence]"),
+        confidenceEvidence,
+        "Evidencia no disponible"
+      );
+
+      const auditBlock = block.querySelector("[data-ecosystem-observer-audit-block]");
+      if (auditBlock) auditBlock.hidden = false;
+      renderObserverList(
+        block.querySelector("[data-ecosystem-observer-audit-reused]"),
+        auditAnswers.reused,
+        "Evidencia no disponible"
+      );
+      renderObserverList(
+        block.querySelector("[data-ecosystem-observer-audit-duplication]"),
+        auditAnswers.duplicationAvoided,
+        "Evidencia no disponible"
+      );
+      renderObserverList(
+        block.querySelector("[data-ecosystem-observer-audit-remaining]"),
+        auditAnswers.remainingToClose,
+        "Evidencia no disponible"
+      );
+      setText(
+        block.querySelector("[data-ecosystem-observer-audit-next]"),
+        auditAnswers.nextHighestImpactAction,
+        "Evidencia no disponible"
+      );
+
+      const achievements = Array.isArray(sessionHistory.achievements)
+        ? sessionHistory.achievements
+        : [];
+      const sessionAchievements = block.querySelector(
+        "[data-ecosystem-observer-session-achievements]"
+      );
+      if (achievements.length > 0) {
+        renderObserverList(sessionAchievements, achievements, "");
+      } else if (sessionAchievements) {
+        sessionAchievements.replaceChildren();
+      }
+      setText(
+        block.querySelector("[data-ecosystem-observer-session-next]"),
+        sessionHistory.nextAction,
+        ""
+      );
+      const sessionBlock = block.querySelector("[data-ecosystem-observer-session-block]");
+      if (sessionBlock) {
+        sessionBlock.hidden = achievements.length === 0 && !sessionHistory.nextAction;
+      }
+
+      const risks = Array.isArray(value.activeRisks)
+        ? value.activeRisks.map((risk) => risk && risk.evidence).filter(Boolean)
+        : [];
+      renderObserverList(
+        block.querySelector("[data-ecosystem-observer-risks]"),
+        risks,
+        "Sin riesgos evidenciados"
+      );
+
+      const latency = value.projectLatency && typeof value.projectLatency === "object"
+        ? Object.entries(value.projectLatency)
+          .filter(([, level]) => level && level !== "no observado")
+          .slice(0, 6)
+          .map(([area, level]) => `${area}: ${level}`)
+        : [];
+      renderObserverList(
+        block.querySelector("[data-ecosystem-observer-latency]"),
+        latency,
+        "Sin latencia observada"
+      );
+
+      const reminders = Array.isArray(value.reminders) ? value.reminders : [];
+      renderObserverList(
+        block.querySelector("[data-ecosystem-observer-reminder-list]"),
+        reminders,
+        ""
+      );
+      const reminderBlock = block.querySelector("[data-ecosystem-observer-reminders]");
+      if (reminderBlock) reminderBlock.hidden = reminders.length === 0;
+      const surfaceWarning = Array.isArray(guidance.driftWarnings) && guidance.driftWarnings.length
+        ? guidance.driftWarnings[0]
+        : (Array.isArray(guidance.experienceWarnings) && guidance.experienceWarnings.length
+          ? guidance.experienceWarnings[0]
+          : risks[0] || "");
+      setOptionalObserverField(
+        block,
+        "[data-ecosystem-observer-warning-summary]",
+        "[data-ecosystem-observer-warning-summary]",
+        surfaceWarning
+      );
+    }
+
+    function fieldLabel(name) {
+      const labels = {
+        recipientLabel: "Destinatario",
+        subjectPreview: "Asunto",
+        bodyPreview: "Cuerpo",
+        titlePreview: "Título",
+        datePreview: "Fecha",
+        timePreview: "Hora",
+        durationPreview: "Duración",
+        locationPreview: "Ubicación",
+        attendeeLabels: "Asistentes",
+        objective: "Objetivo",
+        sector: "Sector",
+        location: "Ubicación",
+        limits: "Límites",
+        topics: "Temas"
+      };
+      return labels[name] || "Campo";
+    }
+
+    function renderPreparationFields(list, values) {
+      if (!list) return;
+      list.replaceChildren();
+      Object.entries(values || {}).forEach(([name, value]) => {
+        const item = document.createElement("li");
+        const normalized = Array.isArray(value) ? value.join(", ") : value;
+        item.textContent = `${fieldLabel(name)}: ${textOrFallback(normalized, "No disponible")}`;
+        list.appendChild(item);
+      });
+    }
+
+    function updateExecutiveActionPreparation(preparation) {
+      const card = document.getElementById("morning-briefing-card");
+      const container = card && card.querySelector("[data-executive-action-preparation]");
+      if (!container) return;
+
+      const visible = preparation && preparation.status === "prepared";
+      container.hidden = !visible;
+      const detail = container.querySelector("[data-executive-action-detail]");
+      if (detail) detail.hidden = true;
+      if (!visible) return;
+
+      setText(container.querySelector("[data-executive-action-title]"), preparation.title, "");
+      setText(container.querySelector("[data-executive-action-summary]"), preparation.summary, "");
+      renderPreparationFields(
+        container.querySelector("[data-executive-action-fields]"),
+        preparation.fields
+      );
+      const missing = Array.isArray(preparation.missingFields) ? preparation.missingFields : [];
+      renderPreparationFields(
+        container.querySelector("[data-executive-action-missing]"),
+        Object.fromEntries(missing.map((name) => [name, "Pendiente"]))
+      );
+      const missingBlock = container.querySelector("[data-executive-action-missing-block]");
+      if (missingBlock) missingBlock.hidden = missing.length === 0;
+    }
+
+    function initializeExecutiveActionPreparation() {
+      const card = document.getElementById("morning-briefing-card");
+      if (!card) return;
+      const container = card.querySelector("[data-executive-action-preparation]");
+      const detail = card.querySelector("[data-executive-action-detail]");
+      const reviewButton = card.querySelector("[data-executive-action-review]");
+      const dismissButton = card.querySelector("[data-executive-action-dismiss]");
+      const feedback = card.querySelector("[data-executive-action-feedback]");
+
+      if (reviewButton) {
+        reviewButton.addEventListener("click", () => {
+          if (detail) detail.hidden = false;
+        });
+      }
+      if (dismissButton) {
+        dismissButton.addEventListener("click", () => {
+          if (container) container.hidden = true;
+          if (feedback) {
+            feedback.textContent = "Preparación descartada.";
+            feedback.hidden = false;
+          }
+        });
+      }
+    }
+
     function applyDashboardState(state) {
       const executiveResponse = getExecutiveResponse(state);
       updateMorningBriefing(state.executiveFusion);
+      updateEcosystemObserver(state.ecosystemObserver);
+      updateExecutiveActionPreparation(state.executiveActionPreparation);
       const greetingPanel = document.querySelector(".greeting");
       setText(
         greetingPanel && greetingPanel.querySelector("h2"),
@@ -2474,7 +3012,9 @@
 
     async function loadDashboardState() {
       try {
-        const response = await window.oxkioAuthenticatedFetch("/api/dashboard");
+        const response = await window.oxkioAuthenticatedFetch("/api/dashboard", {
+          cache: "no-store"
+        });
 
         if (!response.ok) {
           throw new Error("Dashboard API unavailable");
@@ -2491,6 +3031,7 @@
       loadDashboardState();
       initializeExecutiveChat();
       initializeBusinessHunterOperation();
+      initializeExecutiveActionPreparation();
     });
   </script>
 </body>

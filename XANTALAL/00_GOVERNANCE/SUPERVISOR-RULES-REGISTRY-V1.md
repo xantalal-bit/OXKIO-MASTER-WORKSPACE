@@ -135,6 +135,33 @@ Estas reglas aplican a:
 - No cerrar como aprobado un sprint que tenga auditoria pendiente o recomendacion `CORREGIR`.
 - Si hay riesgo arquitectonico abierto, documentarlo antes de avanzar a la siguiente fase.
 
+## Directiva permanente del Supervisor del Ecosistema
+
+- El Ecosystem Observer es la proyeccion asesora readonly del estado global del proyecto.
+- SupervisorAgent conserva la coordinacion de capacidades y OxkioSupervisor conserva el control humano de aprobacion.
+- El Supervisor del Ecosistema recomienda con prioridad muy alta, pero nunca decide, aprueba ni ejecuta.
+- Cada recomendacion debe incluir evidencia, incertidumbre y una unica accion prioritaria.
+- La supervision se recalcula al componer el Dashboard; no requiere scheduler, procesos background ni persistencia propia.
+- Antes de recomendar desarrollo nuevo se deben revisar capacidades operativas, parciales, documentadas o reutilizables.
+- Una fase permanece abierta mientras falten implementacion, integracion, pruebas, piloto, auditoria, documentacion, validacion del Supervisor, staging, commit o publicacion.
+- El Cliente Cero es el espacio administrador y piloto; no representa automaticamente la experiencia del futuro usuario final.
+- La inteligencia externa puede aportar alternativas, pero ninguna IA tiene autoridad unica y la gobernanza permanece dentro de XANTALAL/OXKIO.
+- Mantener una unica recomendacion operativa activa y separar de ella las recomendaciones estrategicas.
+- Antes de cerrar una fase responder con evidencia que se reutilizo, que duplicacion se evito, que falta y cual es la unica siguiente accion.
+- La confianza debe explicar evidencias favorables y elementos pendientes; una etiqueta aislada no es suficiente.
+- El Supervisor supervisa el proyecto completo: codigo, documentacion, arquitectura, pruebas, roadmap, gobernanza, reutilizacion y experiencia presente y futura.
+- Una subfase abierta no implica que todo el bloque permanezca abierto. El Supervisor distinguira siempre bloque, subfase, publicacion y capacidades consolidadas.
+
+## Lecciones aprendidas
+
+- Integrar antes de continuar.
+- Reutilizar antes de crear.
+- Evidencia antes que opinion.
+- No depender de una unica IA.
+- Auditar antes de cerrar.
+- Actualizar primero las fuentes canonicas.
+- No dejar capacidades desconectadas del ecosistema.
+
 ## Estado V1
 
 Supervisor Rules Registry V1 queda establecido como referencia oficial de reglas operativas para Oxkio/XANTALAL.

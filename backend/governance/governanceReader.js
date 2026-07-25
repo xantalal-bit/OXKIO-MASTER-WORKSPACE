@@ -13,6 +13,10 @@ const GOVERNANCE_PATH = path.join(
   "XANTALAL",
   "00_GOVERNANCE"
 );
+const REPOSITORY_GOVERNANCE_PATH = path.join(
+  __dirname,
+  "../../XANTALAL/00_GOVERNANCE"
+);
 
 const FILES = {
   manual: "MANUAL_DE_GOBIERNO_XANTALAL.md",
@@ -45,6 +49,12 @@ function readFileSafe(filename) {
     filename,
     content: fs.readFileSync(filePath, "utf8")
   };
+}
+
+function readRepositoryGovernanceFileSafe(filename) {
+  const filePath = path.join(REPOSITORY_GOVERNANCE_PATH, filename);
+  if (!fs.existsSync(filePath)) return "";
+  return fs.readFileSync(filePath, "utf8");
 }
 
 function normalizeMarkdown(content) {
@@ -351,8 +361,77 @@ function readGovernanceSummary() {
   }
 }
 
+function readGovernanceStateView() {
+  const governance = readGovernanceSummary();
+  const currentRoadmap = normalizeMarkdown(
+    readRepositoryGovernanceFileSafe("MASTER-ROADMAP-XANTALAL.md")
+  );
+  const supervisorRules = normalizeMarkdown(
+    readRepositoryGovernanceFileSafe("SUPERVISOR-RULES-REGISTRY-V1.md")
+  );
+  const strategicObjective = firstMatch(
+    currentRoadmap,
+    [/^-\s+Objetivo estratégico:\s*([^\n]+)/im],
+    ""
+  );
+  const currentPriority = firstMatch(
+    currentRoadmap,
+    [/^-\s+Prioridad vigente:\s*([^\n]+)/im],
+    ""
+  );
+  const strategicRecommendation = firstMatch(
+    currentRoadmap,
+    [/^-\s+Recomendación estratégica:\s*([^\n]+)/im],
+    ""
+  );
+  const currentReminder = firstMatch(
+    currentRoadmap,
+    [/^-\s+Recordatorio relevante:\s*([^\n]+)/im],
+    ""
+  );
+  const priorities = Array.isArray(governance.priorities)
+    ? governance.priorities.slice(0, 5)
+    : [];
+  const priorityLabels = priorities
+    .map((priority) => compactText(priority && priority.product).slice(0, 120))
+    .filter(Boolean);
+  const legacyObjective = priorities
+    .flatMap((priority) => Array.isArray(priority && priority.objective) ? priority.objective : [])
+    .map((objective) => compactText(objective).slice(0, 180))
+    .find(Boolean) || "";
+  const decisionReminders = Array.isArray(governance.decisions)
+    ? governance.decisions
+      .filter((decision) => /reutiliz|sistema paralelo|arquitectura/i.test(decision && decision.description))
+      .map((decision) => compactText(decision.description).slice(0, 180))
+      .filter(Boolean)
+      .slice(0, 2)
+    : [];
+  const reminders = [currentReminder, ...decisionReminders]
+    .map((reminder) => compactText(reminder).slice(0, 180))
+    .filter(Boolean)
+    .slice(0, 2);
+  const learnedLessons = linesFromBlock(sectionBetween(
+    supervisorRules,
+    /^## Lecciones aprendidas\s*$/im,
+    /^##\s+/im
+  )).slice(0, 10);
+
+  return Object.freeze({
+    strategicObjective: strategicObjective || legacyObjective,
+    priorities: Object.freeze(
+      currentPriority ? [currentPriority, ...priorityLabels].slice(0, 5) : priorityLabels
+    ),
+    reminders: Object.freeze(reminders),
+    learnedLessons: Object.freeze(learnedLessons),
+    strategicRecommendations: Object.freeze(
+      strategicRecommendation ? [strategicRecommendation] : []
+    )
+  });
+}
+
 module.exports = {
   readGovernance,
+  readGovernanceStateView,
   readGovernanceSummary
 };
 

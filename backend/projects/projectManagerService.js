@@ -10,7 +10,7 @@ const PROJECT_ORDER = [
 ];
 
 const PROJECT_ALIASES = {
-  OXKIO: ["oxkio", "centro de mando"],
+  OXKIO: ["oxkio", "centro de mando", "ecosystem observer"],
   "BUSINESS-HUNTER": ["business hunter"],
   GIU: ["giu"],
   "PROFESOR-IA": ["profesor ia"],
@@ -92,6 +92,135 @@ function findNextStep(projectName, candidates) {
   }) || "Pendiente de definir";
 }
 
+function findProjectRole(projectsMarkdown, projectName) {
+  const lines = projectsMarkdown.split(/\r?\n/);
+  let inProject = false;
+  for (const rawLine of lines) {
+    const line = rawLine.trim();
+    const projectMatch = line.match(/^\d+\.\s+(.+)$/);
+    if (projectMatch) {
+      inProject = projectMatch[1].trim() === projectName;
+      continue;
+    }
+    if (!inProject) continue;
+    const roleMatch = line.match(/^-\s+Rol:\s*(.+)$/i);
+    if (roleMatch) return roleMatch[1].trim();
+  }
+  return "";
+}
+
+function findProjectField(projectsMarkdown, projectName, label) {
+  const lines = projectsMarkdown.split(/\r?\n/);
+  let inProject = false;
+  const fieldPattern = new RegExp(`^-\\s+${label}:\\s*(.+)$`, "i");
+
+  for (const rawLine of lines) {
+    const line = rawLine.trim();
+    const projectMatch = line.match(/^\d+\.\s+(.+)$/);
+    if (projectMatch) {
+      inProject = projectMatch[1].trim() === projectName;
+      continue;
+    }
+    if (!inProject) continue;
+    const fieldMatch = line.match(fieldPattern);
+    if (fieldMatch) return fieldMatch[1].trim();
+  }
+  return "";
+}
+
+function findLabeledValue(markdown, label) {
+  const escapedLabel = label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const match = markdown.match(new RegExp(`^-\\s+${escapedLabel}:\\s*(.+)$`, "im"));
+  return match ? match[1].trim() : "";
+}
+
+function findActiveTask(tasksMarkdown) {
+  const activeSection = tasksMarkdown.match(
+    /^##\s+Prioridad inmediata vigente\s*$([\s\S]*?)(?=^##\s+|(?![\s\S]))/im
+  );
+  if (!activeSection) return "";
+  const task = activeSection[1].match(/^\s*1\.\s+(.+)$/m);
+  return task ? task[1].trim() : "";
+}
+
+function findSection(markdown, heading) {
+  const escapedHeading = heading.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const match = markdown.match(
+    new RegExp(`^##\\s+${escapedHeading}\\s*$([\\s\\S]*?)(?=^##\\s+|(?![\\s\\S]))`, "im")
+  );
+  return match ? match[1] : "";
+}
+
+function findNumberedItems(markdown, heading, limit = 5) {
+  return findSection(markdown, heading)
+    .split(/\r?\n/)
+    .map((line) => line.trim().match(/^\d+\.\s+(.+)$/))
+    .filter(Boolean)
+    .map((match) => match[1].trim())
+    .slice(0, limit);
+}
+
+function findBulletItems(markdown, heading, limit = 5) {
+  return findSection(markdown, heading)
+    .split(/\r?\n/)
+    .map((line) => line.trim().match(/^-\s+(.+)$/))
+    .filter(Boolean)
+    .map((match) => match[1].trim())
+    .slice(0, limit);
+}
+
+function completionValue(value) {
+  const status = normalize(value);
+  if (/^(completad|actualizad)/.test(status)) return true;
+  if (/^(pendiente|en curso|bloquead)/.test(status)) return false;
+  return null;
+}
+
+function buildClosureEvidence(roadmap) {
+  const section = findSection(roadmap, "Evidencia de cierre");
+  const fields = {
+    implementation: "Implementación",
+    integration: "Integración",
+    tests: "Pruebas",
+    manualPilot: "Piloto manual",
+    audit: "Auditoría",
+    documentation: "Documentación canónica",
+    observerAligned: "Observer alineado",
+    supervisorValidation: "Validación del Supervisor",
+    stagingPrepared: "Staging selectivo preparado",
+    commit: "Commit",
+    publication: "Publicación"
+  };
+  return Object.freeze(Object.entries(fields).reduce((result, [key, label]) => {
+    result[key] = completionValue(findLabeledValue(section, label));
+    return result;
+  }, {}));
+}
+
+function deriveRoadmapAlignment({
+  currentBlock,
+  currentPhase,
+  roadmapObjective,
+  projectObjective,
+  roadmapNextStep,
+  activeTask
+}) {
+  const required = [
+    currentBlock,
+    currentPhase,
+    roadmapObjective,
+    projectObjective,
+    roadmapNextStep,
+    activeTask
+  ];
+  if (required.every(Boolean)) {
+    const objectivesAgree = normalize(roadmapObjective) === normalize(projectObjective);
+    const nextStepsAgree = normalize(roadmapNextStep) === normalize(activeTask);
+    return objectivesAgree && nextStepsAgree ? "aligned" : "attention";
+  }
+  return required.some(Boolean) ? "attention" : "unknown";
+}
+
 function getProjects() {
   const projects = parseProjects(readDocument("PROJECTS.md"));
   const candidates = parseNextStepCandidates(
@@ -113,6 +242,93 @@ function getProjects() {
   });
 }
 
+function getProjectStateView(projectName = "OXKIO") {
+  const project = getProjects().find(item => item.name === projectName);
+  if (!project) {
+    return Object.freeze({
+      project: "",
+      blockPhase: "",
+      activeSubphase: "",
+      currentBlock: "",
+      currentPhase: "",
+      currentObjective: "",
+      roadmapAlignment: "unknown",
+      nextRecommendedStep: "",
+      lastMilestone: "",
+      nextPlannedPhase: "",
+      remainingSteps: Object.freeze([]),
+      doNotOpenYet: Object.freeze([]),
+      driftEvidence: Object.freeze([]),
+      reuseEvidence: Object.freeze([]),
+      duplicationEvidence: Object.freeze([]),
+      sessionAchievements: Object.freeze([]),
+      consolidatedCapabilities: Object.freeze([]),
+      closureEvidence: buildClosureEvidence(""),
+      sessionSummary: ""
+    });
+  }
+
+  const roadmap = readDocument("ROADMAP.md");
+  const projects = readDocument("PROJECTS.md");
+  const tasks = readDocument("TASKS.md");
+  const currentBlock = findLabeledValue(roadmap, "Bloque actual");
+  const blockPhase = findLabeledValue(roadmap, "Código de bloque");
+  const activeSubphase = findLabeledValue(roadmap, "Subfase activa");
+  const currentPhase = findLabeledValue(roadmap, "Fase actual");
+  const currentObjective = findLabeledValue(roadmap, "Objetivo inmediato");
+  const projectObjective = findProjectField(projects, project.name, "Objetivo inmediato");
+  const roadmapNextStep = findLabeledValue(roadmap, "Siguiente paso recomendado");
+  const activeTask = findActiveTask(tasks);
+  const nextRecommendedStep = activeTask || roadmapNextStep;
+  const lastMilestone = findLabeledValue(roadmap, "Último hito publicado");
+  const nextPlannedPhase = findLabeledValue(roadmap, "Siguiente fase prevista");
+  const remainingSteps = Object.freeze(findNumberedItems(tasks, "Prioridad inmediata vigente"));
+  const doNotOpenYet = Object.freeze(findBulletItems(roadmap, "No abrir todavía"));
+  const driftEvidence = Object.freeze(findBulletItems(roadmap, "Advertencias evidenciadas", 3));
+  const reuseEvidence = Object.freeze(findBulletItems(roadmap, "Elementos a reutilizar", 3));
+  const duplicationEvidence = Object.freeze(
+    findBulletItems(roadmap, "Duplicación eliminada o evitada", 3)
+  );
+  const sessionAchievements = Object.freeze(findBulletItems(roadmap, "Logros de la sesión", 5));
+  const consolidatedCapabilities = Object.freeze(
+    findBulletItems(roadmap, "Capacidades consolidadas y publicadas", 20)
+      .map((capability) => capability.replace(/[.;:]$/, "").trim())
+      .filter(Boolean)
+  );
+  const closureEvidence = buildClosureEvidence(roadmap);
+  const sessionSummary = findLabeledValue(roadmap, "Resumen de la sesión");
+
+  return Object.freeze({
+    project: project.name,
+    blockPhase,
+    activeSubphase,
+    currentBlock,
+    currentPhase,
+    currentObjective,
+    roadmapAlignment: deriveRoadmapAlignment({
+      currentBlock,
+      currentPhase,
+      roadmapObjective: currentObjective,
+      projectObjective,
+      roadmapNextStep,
+      activeTask
+    }),
+    nextRecommendedStep,
+    lastMilestone,
+    nextPlannedPhase,
+    remainingSteps,
+    doNotOpenYet,
+    driftEvidence,
+    reuseEvidence,
+    duplicationEvidence,
+    sessionAchievements,
+    consolidatedCapabilities,
+    closureEvidence,
+    sessionSummary
+  });
+}
+
 module.exports = {
+  getProjectStateView,
   getProjects
 };

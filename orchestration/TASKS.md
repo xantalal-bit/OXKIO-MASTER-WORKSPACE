@@ -1,6 +1,14 @@
 ﻿# OXKIO TASKS
 
-## Prioridad inmediata
+## Prioridad inmediata vigente
+
+1. Preparar staging selectivo y publicación del bloque 5C.6.
+2. Aplicar el staging selectivo aprobado.
+3. Publicar el cierre antes de abrir Executive Approval & Execution.
+
+## Historial sustituido — lista inicial del 22/06/2026
+
+Estas tareas se conservan como trazabilidad y ya no determinan el siguiente paso.
 
 1. Crear Centro de Mando de Proyectos en Oxkio.
 2. Inventariar proyectos activos.

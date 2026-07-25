@@ -149,7 +149,8 @@ test('frontend renders only unified executive fusion with safe DOM operations', 
   assert.match(renderer, /briefing\.headline/);
   assert.match(renderer, /briefing\.priorities/);
   assert.match(renderer, /briefing\.recommendation/);
-  assert.doesNotMatch(renderer, /briefing\.(alerts|sourceStatus|generatedAt)/);
+  assert.doesNotMatch(renderer, /briefing\.(alerts|sourceStatus)/);
+  assert.match(renderer, /formatBriefingGeneratedAt\(briefing\.generatedAt\)/);
   assert.match(renderer, /textContent/);
   assert.match(renderer, /replaceChildren/);
   assert.doesNotMatch(renderer, /innerHTML/);

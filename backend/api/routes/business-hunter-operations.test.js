@@ -213,10 +213,9 @@ test('dashboard markup exposes the readonly business analysis card and sanitized
   assert.match(html, /Solo análisis\. No se contacta ni se ejecutan acciones\./);
   assert.match(html, /data-bh-execution-enabled/);
   assert.match(html, /window\.oxkioAuthenticatedFetch\("\/api\/operations\/business-hunter\/run"/);
-  assert.match(html, /signOut\(firebaseAuth\)/);
-  assert.match(html, /data-logout-button/);
+  assert.doesNotMatch(html, /signOut\(firebaseAuth\)|oxkioLogout|data-logout-button/);
+  assert.match(html, /data-back-link href="\/">Atrás<\/a>/);
   assert.match(html, /\.btn-secondary\s*\{[\s\S]*?min-height:\s*44px/);
-  assert.match(html, /window\.oxkioLogout = async function\(\)/);
   assert.match(html, /initializeBusinessHunterOperation\(\)/);
   assert.match(html, /renderBusinessHunterOperation\(state\.operations && state\.operations\.businessHunter\)/);
   assert.match(html, /data-bh-phase/);

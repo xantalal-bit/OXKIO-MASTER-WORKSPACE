@@ -8,6 +8,9 @@ const { buildExecutiveSummary } = require("./executive-summary-builder");
 const { buildExecutiveState } = require("../executive/executive-orchestrator");
 const { buildMorningBriefing } = require("../executive/morning-briefing");
 const { buildExecutiveFusion } = require("../executive-brain/executive-fusion-engine");
+const { buildExecutiveActionProposal } = require("../executive-brain/executive-action-proposal-engine");
+const { buildExecutiveActionPreparation } = require("../executive-brain/executive-action-preparation-engine");
+const { buildEcosystemObserver } = require("../executive-brain/ecosystem-observer");
 const { discoverKnowledge } = require("../knowledge/discovery-engine");
 const { getExecutiveBrain } = require("../../runtime/executive-runtime");
 
@@ -367,11 +370,68 @@ async function getDashboardState(options = {}) {
       recentOperations: businessHunterOperation.recentOperations,
     },
   });
+  const executiveActionProposal = buildExecutiveActionProposal(executiveFusion);
+  const executiveActionPreparation = buildExecutiveActionPreparation({
+    proposal: executiveActionProposal,
+    executiveSummary: executiveFusion,
+    dashboard: {
+      agenda,
+      gmail,
+      ecosystem,
+      operations: {
+        businessHunter: businessHunterOperation,
+      },
+    },
+  });
+  const systemStateView = options.systemStateView && typeof options.systemStateView === "object"
+    ? options.systemStateView
+    : { state: "", integrationsSummary: [], workflowsSummary: [], alertsSummary: [] };
+  const projectStateView = options.projectStateView && typeof options.projectStateView === "object"
+    ? options.projectStateView
+    : {
+      project: "",
+      blockPhase: "",
+      activeSubphase: "",
+      currentBlock: "",
+      currentPhase: "",
+      currentObjective: "",
+      roadmapAlignment: "unknown",
+      nextRecommendedStep: "",
+      lastMilestone: "",
+      nextPlannedPhase: "",
+      remainingSteps: [],
+      doNotOpenYet: [],
+      driftEvidence: [],
+      reuseEvidence: [],
+      duplicationEvidence: [],
+      sessionAchievements: [],
+      consolidatedCapabilities: [],
+      closureEvidence: {},
+      sessionSummary: "",
+    };
+  const governanceStateView = options.governanceStateView && typeof options.governanceStateView === "object"
+    ? options.governanceStateView
+    : {
+      strategicObjective: "",
+      priorities: [],
+      reminders: [],
+      learnedLessons: [],
+      strategicRecommendations: [],
+    };
+  const ecosystemObserver = buildEcosystemObserver({
+    systemStateView,
+    projectStateView,
+    governanceStateView,
+    generatedAt: timestamp,
+  });
   const morningBriefing = buildMorningBriefing(dashboardStateWithIntelligence);
 
   return {
     ...dashboardStateWithIntelligence,
     executiveFusion,
+    executiveActionProposal,
+    executiveActionPreparation,
+    ecosystemObserver,
     morningBriefing
   };
 }

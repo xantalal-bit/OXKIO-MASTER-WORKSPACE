@@ -91,7 +91,7 @@ test('private frontends send Firebase Bearer tokens only in headers and retry on
     assert.match(source, /window\.location\.replace\("\/"\)/);
   });
   assert.match(sources[0], /authenticatedFetch\(executiveChatEndpoint/);
-  assert.match(sources[1], /oxkioAuthenticatedFetch\("\/api\/dashboard"\)/);
+  assert.match(sources[1], /oxkioAuthenticatedFetch\("\/api\/dashboard"(?:,\s*\{[\s\S]*?cache:\s*"no-store"[\s\S]*?\})?\)/);
   assert.match(sources[2], /oxkioAuthenticatedFetch\('\/api\/pending-approvals/);
   assert.match(sources[4], /oxkioAuthenticatedFetch\('\/api\/executive\/identity'\)/);
 });
@@ -114,7 +114,8 @@ test('temporary auth diagnostics are absent from browser helpers', () => {
     assert.doesNotMatch(source, /console\.log/);
   });
 
-  assert.match(dashboard, /signOut\(firebaseAuth\)/);
+  assert.doesNotMatch(dashboard, /signOut\(firebaseAuth\)|oxkioLogout|data-logout-button/);
+  assert.match(dashboard, /data-back-link href="\/">Atrás<\/a>/);
 });
 
 test('Business Hunter loads the shared Firebase bootstrap before its authenticated API client', () => {
@@ -134,6 +135,8 @@ test('Business Hunter loads the shared Firebase bootstrap before its authenticat
   assert.match(bootstrap, /firebase-auth\.js/);
   assert.ok(bootstrap.indexOf('firebase-app.js') < bootstrap.indexOf('firebase-auth.js'));
   assert.match(bootstrap, /onAuthStateChanged\(firebaseAuth/);
+  assert.match(bootstrap, /initializeAuth\(firebaseApp,\s*\{\s*persistence:\s*browserLocalPersistence\s*\}\)/);
+  assert.doesNotMatch(bootstrap, /\bgetAuth\(/);
   assert.match(bootstrap, /window\.oxkioAuthReady = new Promise/);
   assert.match(bootstrap, /window\.oxkioAuthenticatedFetch = async function/);
   assert.doesNotMatch(html, /initializeApp\(|firebase-app\.js|firebase-auth\.js/);

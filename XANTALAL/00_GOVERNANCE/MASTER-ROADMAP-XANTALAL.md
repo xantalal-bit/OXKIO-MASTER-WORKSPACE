@@ -8,6 +8,25 @@ Documento operativo para dirigir el desarrollo de XANTALAL, Oxkio y sus producto
 
 Una idea → una capacidad → un agente → validación → commit → producción.
 
+## Estado operativo vigente de OXKIO
+
+- Objetivo estratégico: Consolidar OXKIO como Director Ejecutivo IA readonly y preparar su transición supervisada a aprobación y ejecución.
+- Prioridad vigente: Cerrar operativamente el gobierno readonly del ecosistema antes de abrir ejecución.
+- Recomendación estratégica: Preparar el futuro Comité de Inteligencia sin habilitar modelos externos ni ejecución.
+- Recordatorio relevante: Reutilizar las capacidades y fuentes existentes antes de desarrollar componentes nuevos.
+
+Este estado sustituye únicamente las referencias operativas anteriores que
+describían Cliente Cero como pendiente. Las fases históricas se conservan como
+trazabilidad del roadmap.
+
+Comité multi-IA futuro:
+
+- Estado: planned.
+- Modelos externos habilitados: no.
+- Ejecución habilitada: no.
+- Las auditorías futuras podrán comparar opiniones sanitizadas de varios modelos.
+- Ninguna IA tendrá autoridad única ni sustituirá la aprobación del Cliente Cero.
+
 ## Fase 1 — Gobierno y mando
 
 Estado: EN CURSO

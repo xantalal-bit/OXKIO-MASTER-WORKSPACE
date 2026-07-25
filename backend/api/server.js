@@ -13,6 +13,7 @@ const systemConfig = require("../config/systemConfig");
 const WorkflowManager = require("../workflows/workflowManager");
 const SystemStateManager = require("../core/systemStateManager");
 const ProjectManagerService = require("../projects/projectManagerService");
+const { readGovernanceStateView } = require("../governance/governanceReader");
 const DashboardIntelligence = require("../services/dashboard/dashboard-intelligence");
 const { matchExecutiveQuery } = require("../services/executive/executive-query-router");
 const { searchKnowledge } = require("../services/knowledge/knowledge-query-service");
@@ -113,6 +114,27 @@ const gmailConnector = new GmailConnector();
 gmailConnector.connect();
 const workflowManager = new WorkflowManager();
 const systemStateManager = new SystemStateManager();
+
+function getEcosystemObserverViews() {
+  let projectStateView;
+  let governanceStateView;
+  try {
+    projectStateView = ProjectManagerService.getProjectStateView("OXKIO");
+  } catch (error) {
+    projectStateView = null;
+  }
+  try {
+    governanceStateView = readGovernanceStateView();
+  } catch (error) {
+    governanceStateView = null;
+  }
+  return {
+    systemStateView: systemStateManager.getPublicView(),
+    projectStateView,
+    governanceStateView,
+  };
+}
+
 function buildRequestPrivateIdentity(firebaseIdentity) {
   const privateIdentity = getClienteCeroIdentity();
   return {
@@ -244,7 +266,10 @@ if (isExecutiveChatRoute(pathname, req.method)) {
       getClienteCeroIdentity: () => requestPrivateIdentity,
       buildGmailPrivateContext,
       buildCalendarPrivateContext,
-      getDashboardState: DashboardIntelligence.getDashboardState,
+      getDashboardState: (options = {}) => DashboardIntelligence.getDashboardState({
+        ...getEcosystemObserverViews(),
+        ...options,
+      }),
       dashboardGmailReader: dashboardReaders.gmailReader,
       dashboardCalendarReader: dashboardReaders.calendarReader
     }
@@ -826,6 +851,7 @@ if (req.url === "/api/status") {
 if (pathname === "/api/dashboard" && req.method === "GET") {
   try {
     const dashboardState = await DashboardIntelligence.getDashboardState({
+      ...getEcosystemObserverViews(),
       approvalQueue,
       gmailReader: dashboardReaders.gmailReader,
       calendarReader: dashboardReaders.calendarReader,
@@ -907,7 +933,10 @@ if (pathname === "/api/projects" && req.method === "GET") {
         }
 
         if (result.found) {
-          const dashboardState = await DashboardIntelligence.getDashboardState({ approvalQueue });
+          const dashboardState = await DashboardIntelligence.getDashboardState({
+            ...getEcosystemObserverViews(),
+            approvalQueue,
+          });
           const knowledgeInventory = dashboardState.knowledgeInventory || {};
           const recommendation = knowledgeInventory.recommendation || {};
           const pipeline = result.pipeline || {};
@@ -950,7 +979,10 @@ if (pathname === "/api/projects" && req.method === "GET") {
 
     case "morningBriefing": {
       try {
-        const dashboardState = await DashboardIntelligence.getDashboardState({ approvalQueue });
+        const dashboardState = await DashboardIntelligence.getDashboardState({
+          ...getEcosystemObserverViews(),
+          approvalQueue,
+        });
         const morningBriefing = dashboardState.morningBriefing || {};
 
         return sendJson(res, 200, {
@@ -976,7 +1008,10 @@ if (pathname === "/api/projects" && req.method === "GET") {
 
     case "projects": {
       try {
-        const dashboardState = await DashboardIntelligence.getDashboardState({ approvalQueue });
+        const dashboardState = await DashboardIntelligence.getDashboardState({
+          ...getEcosystemObserverViews(),
+          approvalQueue,
+        });
         const knowledgeInventory = dashboardState.knowledgeInventory || {};
         const summary = knowledgeInventory.summary || {};
         const recommendation = knowledgeInventory.recommendation || {};
@@ -1007,7 +1042,10 @@ if (pathname === "/api/projects" && req.method === "GET") {
 
     case "knowledgeInventory": {
       try {
-        const dashboardState = await DashboardIntelligence.getDashboardState({ approvalQueue });
+        const dashboardState = await DashboardIntelligence.getDashboardState({
+          ...getEcosystemObserverViews(),
+          approvalQueue,
+        });
         const knowledgeInventory = dashboardState.knowledgeInventory || {};
         const recommendation = knowledgeInventory.recommendation || {};
         const assets = Array.isArray(knowledgeInventory.assets)
@@ -1037,7 +1075,10 @@ if (pathname === "/api/projects" && req.method === "GET") {
 
     case "greeting": {
       try {
-        const dashboardState = await DashboardIntelligence.getDashboardState({ approvalQueue });
+        const dashboardState = await DashboardIntelligence.getDashboardState({
+          ...getEcosystemObserverViews(),
+          approvalQueue,
+        });
         const executiveBriefing = dashboardState.executiveBriefing;
 
         return sendJson(res, 200, {

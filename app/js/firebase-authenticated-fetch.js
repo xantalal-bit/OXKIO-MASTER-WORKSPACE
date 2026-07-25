@@ -1,5 +1,9 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+import {
+  browserLocalPersistence,
+  initializeAuth,
+  onAuthStateChanged
+} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 
 const firebaseApp = initializeApp({
   apiKey: "AIzaSyDFySiO23mqJilJPUfE-dLv9Zbs9gcY_kg",
@@ -9,7 +13,9 @@ const firebaseApp = initializeApp({
   messagingSenderId: "975887789346",
   appId: "1:975887789346:web:fa581107285b989d90897b"
 });
-const firebaseAuth = getAuth(firebaseApp);
+const firebaseAuth = initializeAuth(firebaseApp, {
+  persistence: browserLocalPersistence
+});
 let resolveAuthReady;
 window.oxkioAuthReady = new Promise((resolve) => { resolveAuthReady = resolve; });
 
