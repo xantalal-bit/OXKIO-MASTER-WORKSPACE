@@ -84,10 +84,13 @@ const executiveRuntime = createExecutiveRuntime({
 const executiveCsrf = createExecutiveCsrf();
 const verifyFirebaseIdToken = createFirebaseAdminVerifier();
 const authorizeFirebaseIdentity = createExecutiveAuthorizer();
-const executionConfig = Object.freeze({ executionEnabled: false });
+const executionConfig = Object.freeze({
+  executionEnabled: false,
+  draftExecutionEnabled: true
+});
 const gmailDraftComposition = createAuthorizedGmailDraftProvider({
-  executionEnabled: executionConfig.executionEnabled,
-  oauthReadiness: executionConfig.executionEnabled
+  draftExecutionEnabled: executionConfig.draftExecutionEnabled,
+  oauthReadiness: executionConfig.draftExecutionEnabled
     ? inspectGoogleOAuthReadiness()
     : null,
   getGmailClient

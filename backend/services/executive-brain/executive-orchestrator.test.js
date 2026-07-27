@@ -551,7 +551,7 @@ test('generates safe proposals for explicit email, meeting, and task actions', (
     {
       query: 'Prepara un borrador',
       intent: 'email',
-      actionType: 'propose_email',
+      actionType: 'prepare-email-draft',
       proposalType: 'email_draft',
     },
     {
@@ -656,6 +656,7 @@ test('generates safe proposals for explicit email, meeting, and task actions', (
     });
     assert.deepEqual(result.proposal, {
       type: testCase.proposalType,
+      actionType: testCase.actionType,
       summary: {
         email_draft: 'Borrador de email preparado para revision.',
         meeting_proposal: 'Propuesta de reunion preparada para revision.',
@@ -718,6 +719,43 @@ test('Proposal Engine creates an internal email payload without inventing a reci
     replyMessageId: null,
     threadId: null,
   });
+});
+
+test('prepares explicit recipient, subject, and body without routing to readonly review', () => {
+  let prepared = null;
+  const result = orchestrateExecutiveQuery(
+    'Prepara un correo para pilot@example.com con asunto: Prueba OXKIO 5C.6D.1 '
+      + 'y cuerpo: Este correo es un borrador de prueba. No debe enviarse.',
+    {
+      dependencies: {
+        proposalEngine: new ProposalEngine(),
+        approvalQueue: {
+          add() {
+            throw new Error('legacy add must not be used');
+          },
+          addPreparedEmailDraft(value) {
+            prepared = value;
+            return {
+              id: 'approval-email-explicit',
+              status: 'pending',
+              createdAt: '2026-07-25T10:45:00.000Z',
+            };
+          },
+        },
+      },
+    },
+  );
+
+  assert.equal(result.proposal.actionType, 'prepare-email-draft');
+  assert.deepEqual(prepared, {
+    recipient: 'pilot@example.com',
+    subject: 'Prueba OXKIO 5C.6D.1',
+    body: 'Este correo es un borrador de prueba. No debe enviarse.',
+    replyMessageId: null,
+    threadId: null,
+    risk: 'low',
+  });
+  assert.equal(result.approval.id, 'approval-email-explicit');
 });
 
 test('keeps the executive response when Proposal Engine is absent or fails', () => {

@@ -94,9 +94,19 @@ function encodeBase64Url(value) {
 function classifyProviderError(error) {
   const status = Number(error && (error.status || error.response && error.response.status));
   const code = error && error.code;
+  const requestUrl = String(
+    error && (
+      error.config && error.config.url
+      || error.response && error.response.config && error.response.config.url
+      || error.message
+    ) || ''
+  );
 
   if (code === 'google_oauth_not_configured' || code === 'oauth_unavailable') {
     return buildFailure('oauth_unavailable', false, 'Gmail authorization is not available.');
+  }
+  if (/oauth2\.googleapis\.com\/token/i.test(requestUrl)) {
+    return buildFailure('oauth_unavailable', true, 'Gmail authorization could not be refreshed.');
   }
   if (status === 401 || status === 403) {
     return buildFailure('gmail_unauthorized', false, 'Gmail authorization was rejected.');

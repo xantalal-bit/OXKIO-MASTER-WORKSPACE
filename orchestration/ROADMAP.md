@@ -2,29 +2,29 @@
 
 ## Estado operativo vigente
 
-- Código de bloque: 5C.6
-- Subfase activa: 5C.6E.1
-- Bloque actual: Gobierno del ecosistema
-- Fase actual: Cierre operativo del gobierno del ecosistema
-- Objetivo inmediato: Cerrar operativamente el gobierno readonly del ecosistema antes de abrir ejecución.
-- Siguiente paso recomendado: Preparar staging selectivo y publicación del bloque 5C.6.
-- Siguiente fase prevista: Executive Approval & Execution.
-- Último hito publicado: Executive Fusion Engine integrado.
-- Resumen de la sesión: El piloto manual autenticado del Cliente Cero validó el Supervisor Operativo readonly, la navegación con sesión persistente y la ausencia de ejecución real.
+- Código de bloque: 5C.7
+- Subfase activa: ninguna; apertura preparada y pendiente de autorización humana
+- Bloque actual: Runtime Permanente e Infraestructura
+- Fase actual: 5C.7 — Runtime Permanente 24/7, preparada sin implementación
+- Objetivo inmediato: Obtener autorización humana para abrir 5C.7 según su documento canónico de apertura.
+- Siguiente paso recomendado: Revisar y aprobar `5C.7-RUNTIME-PERMANENTE-APERTURA.md`; no implementar antes de esa autorización.
+- Siguiente fase prevista: 5C.7 — Runtime Permanente 24/7.
+- Último hito publicado: 5C.6D.1 — Gmail Draft supervisado.
+- Resumen de la sesión: 5C.6D.1 cerrada oficialmente el 27/07/2026. Gmail Draft real, SAFE_DRAFT_ONLY, cero envíos, ausencia de duplicados, sincronización ExecutionService–Approval Queue–Dashboard y auditoría de aceptación validadas.
 
 ## Evidencia de cierre
 
 - Implementación: completada
 - Integración: completada
 - Pruebas: completadas
-- Piloto manual: completado
-- Auditoría: completada
+- Piloto manual: completado con un borrador Gmail real y cero envíos
+- Auditoría: completada; aceptación final superada
 - Documentación canónica: actualizada
 - Observer alineado: completado
 - Validación del Supervisor: completada
-- Staging selectivo preparado: completado
-- Commit: pendiente
-- Publicación: pendiente
+- Staging selectivo preparado: completado y auditado
+- Commit: completado por este cierre
+- Publicación: completada por este cierre
 
 Capacidades operativas verificadas:
 
@@ -46,21 +46,23 @@ Capacidades operativas verificadas:
 - Decision Engine.
 - Operation Planner.
 - Executive Fusion.
-
-## Capacidades implementadas pendientes de cierre selectivo
-
 - Executive Action Proposal.
 - Executive Action Preparation.
 - Ecosystem Observer y fusión con fuentes propietarias.
+- Gmail Draft supervisado bajo SAFE_DRAFT_ONLY.
 
 ## No abrir todavía
 
-- Executive Approval & Execution.
+- Envío de Gmail.
+- Calendar Execution.
+- Automatizaciones y activación de otros agentes.
 
 ## Advertencias evidenciadas
 
-- El árbol de trabajo contiene runtime modificado que debe excluirse del cierre selectivo.
-- El bloque acumula cambios todavía no publicados y debe cerrarse en un único staging coherente.
+- El árbol de trabajo contiene runtime y cambios ajenos que deben excluirse del staging selectivo.
+- 5C.6D.1 está cerrada y publicada; 5C.7 permanece sujeta a una autorización humana separada.
+- La excepción `draftExecutionEnabled` debe permanecer cerrada a Gmail Draft y separada de `executionEnabled=false`.
+- Las evidencias y auditorías ya aceptadas no se repetirán salvo invalidación objetiva del contexto.
 
 ## Elementos a reutilizar
 
@@ -79,6 +81,11 @@ Capacidades operativas verificadas:
 - Se añadió una recomendación única con evidencia y autoridad humana.
 - Se registraron lecciones permanentes y la preparación sanitizada del Comité de Inteligencia.
 - Se completó y aceptó como evidencia canónica el piloto manual autenticado del Cliente Cero.
+- Se reutilizaron Approval Queue, ExecutionService y GmailDraftProvider sin crear arquitectura paralela.
+- Se separaron explícitamente aprobación humana y creación del borrador.
+- Se creó exactamente un borrador Gmail real bajo SAFE_DRAFT_ONLY, sin envío ni duplicados.
+- Se cerró la posible divergencia final entre ExecutionService y Approval Queue.
+- Se superaron 517/517 pruebas, `node --check` y `git diff --check`.
 
 ## Historial sustituido — planificación inicial del 22/06/2026
 

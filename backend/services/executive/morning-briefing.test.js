@@ -143,7 +143,7 @@ test('frontend renders only unified executive fusion with safe DOM operations', 
   );
   const renderer = html.slice(
     html.indexOf('function renderTextList'),
-    html.indexOf('function applyDashboardState'),
+    html.indexOf('function renderObserverList'),
   );
 
   assert.match(renderer, /briefing\.headline/);

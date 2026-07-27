@@ -294,6 +294,20 @@ test('POST /api/approve approves pending item and ignores client-controlled fiel
     const internal = queue.getInternalById(added.id);
     assert.equal(internal.executionPayload.to, null);
     assert.notEqual(internal.payloadHash, 'attacker-hash');
+    assert.equal(internal.approvedBy.clientId, 'cliente-cero');
+  });
+});
+
+test('POST /api/approve rejects only when the closed decision requests rejection', async () => {
+  await withTemporaryQueue(async (queue) => {
+    const added = addEmailApproval(queue, 'interaction-reject');
+    const response = await request(handleApproveRequest, queue, {
+      body: { approvalId: added.id, decision: 'reject' },
+    });
+
+    assert.equal(response.statusCode, 200);
+    assert.equal(response.json.result.action, 'rejected');
+    assert.equal(queue.getInternalById(added.id).status, 'rejected');
   });
 });
 

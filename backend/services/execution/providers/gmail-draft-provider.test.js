@@ -184,6 +184,14 @@ test('classifies authorization, throttling, server, OAuth, and generic errors sa
     { error: { response: { status: 500 } }, code: 'gmail_unavailable', retryable: true },
     { error: { status: 503 }, code: 'gmail_unavailable', retryable: true },
     { error: { code: 'google_oauth_not_configured' }, code: 'oauth_unavailable', retryable: false },
+    {
+      error: {
+        code: 'ECONNREFUSED',
+        config: { url: 'https://oauth2.googleapis.com/token' },
+      },
+      code: 'oauth_unavailable',
+      retryable: true,
+    },
     { error: new Error('sensitive provider detail'), code: 'gmail_draft_failed', retryable: false },
   ];
 

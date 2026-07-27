@@ -129,6 +129,60 @@ test('executes one approved email through fake Gmail and persists correlated saf
   });
 });
 
+test('does not report executed when Approval Queue rejects final synchronization', async () => {
+  const queue = {
+    getInternalById() {
+      return { status: 'approved' };
+    },
+    beginExecution() {
+      return {
+        ok: true,
+        approvalId: 'approval-sync',
+        interactionId: 'interaction-sync',
+        executionId: 'execution-sync',
+        actionType: 'propose_email',
+        executionPayload: {
+          to: 'pilot@example.com',
+          subject: 'Prueba',
+          body: 'Borrador',
+          replyMessageId: null,
+          threadId: null,
+        },
+      };
+    },
+    completeExecution() {
+      return { ok: false, code: 'execution_id_mismatch' };
+    },
+  };
+  const service = new ExecutionService({
+    approvalQueue: queue,
+    executionAdapter: {
+      async execute() {
+        return {
+          success: true,
+          mode: 'SAFE_DRAFT_ONLY',
+          externalId: 'draft-id',
+          secondaryExternalId: 'message-id',
+        };
+      },
+    },
+  });
+
+  const result = await service.executeApproved('approval-sync');
+
+  assert.deepEqual(result, {
+    ok: false,
+    approvalId: 'approval-sync',
+    interactionId: 'interaction-sync',
+    executionId: 'execution-sync',
+    status: 'execution_state_unsynchronized',
+    error: {
+      code: 'execution_id_mismatch',
+      retryable: false,
+    },
+  });
+});
+
 for (const providerCase of [
   { behavior: '429', code: 'gmail_rate_limited', retryable: true },
   { behavior: '401', code: 'gmail_unauthorized', retryable: false },
@@ -241,6 +295,70 @@ test('two sequential executeApproved calls cause at most one fake Gmail call', a
     assert.equal(first.ok, true);
     assert.equal(second.ok, false);
     assert.equal(calls.length, 1);
+  });
+});
+
+test('one safe retry after pre-Gmail OAuth failure creates one draft and then blocks duplicates', async () => {
+  await withTemporaryQueue(async (queue) => {
+    const id = addApproval(queue);
+    queue.approve(id);
+    let calls = 0;
+    const executionAdapter = {
+      async execute() {
+        calls += 1;
+        if (calls === 1) {
+          return { success: false, code: 'oauth_unavailable', retryable: true };
+        }
+        return {
+          success: true,
+          mode: 'SAFE_DRAFT_ONLY',
+          externalId: 'retry-draft-id',
+          secondaryExternalId: 'retry-message-id',
+        };
+      },
+    };
+    const service = new ExecutionService({ approvalQueue: queue, executionAdapter });
+
+    const failed = await service.executeApproved(id);
+    const retried = await service.executeApproved(id);
+    const duplicate = await service.executeApproved(id);
+    const stored = queue.getInternalById(id);
+
+    assert.equal(failed.status, 'execution_failed');
+    assert.deepEqual(failed.error, { code: 'oauth_unavailable', retryable: true });
+    assert.equal(retried.status, 'executed');
+    assert.equal(retried.result.externalId, 'retry-draft-id');
+    assert.equal(duplicate.status, 'execution_rejected');
+    assert.equal(calls, 2);
+    assert.equal(stored.status, 'executed');
+    assert.equal(stored.executionAttemptCount, 2);
+    assert.equal(stored.result.externalId, 'retry-draft-id');
+  });
+});
+
+test('uncertain provider failure requires review and is never retried automatically', async () => {
+  await withTemporaryQueue(async (queue) => {
+    const id = addApproval(queue);
+    queue.approve(id);
+    let calls = 0;
+    const executionAdapter = {
+      async execute() {
+        calls += 1;
+        return { success: false, code: 'gmail_draft_failed', retryable: false };
+      },
+    };
+    const service = new ExecutionService({ approvalQueue: queue, executionAdapter });
+
+    const failed = await service.executeApproved(id);
+    const blocked = await service.executeApproved(id);
+
+    assert.equal(failed.status, 'execution_failed');
+    assert.deepEqual(failed.error, { code: 'gmail_draft_failed', retryable: false });
+    assert.equal(blocked.status, 'execution_rejected');
+    assert.equal(blocked.error.code, 'execution_not_retryable');
+    assert.equal(calls, 1);
+    assert.equal(queue.getInternalById(id).status, 'execution_failed');
+    assert.equal(queue.getInternalById(id).result, undefined);
   });
 });
 

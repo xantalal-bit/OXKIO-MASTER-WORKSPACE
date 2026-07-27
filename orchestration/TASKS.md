@@ -2,9 +2,10 @@
 
 ## Prioridad inmediata vigente
 
-1. Preparar staging selectivo y publicación del bloque 5C.6.
-2. Aplicar el staging selectivo aprobado.
-3. Publicar el cierre antes de abrir Executive Approval & Execution.
+1. Revisar la propuesta canónica de apertura de 5C.7.
+2. Esperar autorización humana separada antes de implementar 5C.7.
+
+5C.6D.1 está cerrada oficialmente desde el 27/07/2026. No implementar 5C.7 antes de autorización humana expresa.
 
 ## Historial sustituido — lista inicial del 22/06/2026
 

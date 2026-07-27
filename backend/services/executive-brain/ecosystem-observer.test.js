@@ -5,6 +5,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const test = require('node:test');
 const {
+  CONVERSATIONAL_RECOVERY_POLICY,
   ECOSYSTEM_SUPERVISOR_POLICY,
   INTELLIGENCE_COMMITTEE_READINESS,
   OBSERVED_AREAS,
@@ -364,6 +365,21 @@ test('defines one readonly advisory supervisor with final human authority', () =
   assert.equal(buildEcosystemObserver(fixture()).supervisorPolicy, ECOSYSTEM_SUPERVISOR_POLICY);
 });
 
+test('exposes the canonical session-only conversational recovery policy', () => {
+  assert.deepEqual(CONVERSATIONAL_RECOVERY_POLICY, {
+    source: 'executive-chat',
+    retainedState: 'original-request-in-session',
+    automaticSubmission: false,
+    reuseFailedPreparation: false,
+    executionEnabled: false,
+  });
+  assert.equal(Object.isFrozen(CONVERSATIONAL_RECOVERY_POLICY), true);
+  assert.equal(
+    buildEcosystemObserver(fixture()).conversationalRecoveryPolicy,
+    CONVERSATIONAL_RECOVERY_POLICY,
+  );
+});
+
 test('SystemStateManager supplies only the sanitized technical state view', () => {
   const manager = new SystemStateManager();
   manager.updateIntegration('gmail', 'connected', { token: 'secret' });
@@ -392,40 +408,46 @@ test('ProjectManagerService supplies project phase and roadmap without paths', (
     'closureEvidence', 'sessionSummary',
   ]);
   assert.equal(view.project, 'OXKIO');
-  assert.equal(view.blockPhase, '5C.6');
-  assert.equal(view.activeSubphase, '5C.6E.1');
-  assert.equal(view.currentBlock, 'Gobierno del ecosistema');
-  assert.equal(view.currentPhase, 'Cierre operativo del gobierno del ecosistema');
+  assert.equal(view.blockPhase, '5C.7');
+  assert.equal(view.activeSubphase, 'ninguna; apertura preparada y pendiente de autorización humana');
+  assert.equal(view.currentBlock, 'Runtime Permanente e Infraestructura');
+  assert.equal(view.currentPhase, '5C.7 — Runtime Permanente 24/7, preparada sin implementación');
   assert.equal(
     view.currentObjective,
-    'Cerrar operativamente el gobierno readonly del ecosistema antes de abrir ejecución.',
+    'Obtener autorización humana para abrir 5C.7 según su documento canónico de apertura.',
   );
   assert.notEqual(view.currentObjective, view.nextRecommendedStep);
-  assert.equal(view.nextRecommendedStep, 'Preparar staging selectivo y publicación del bloque 5C.6.');
-  assert.equal(view.lastMilestone, 'Executive Fusion Engine integrado.');
-  assert.equal(view.roadmapAlignment, 'aligned');
+  assert.equal(
+    view.nextRecommendedStep,
+    'Revisar la propuesta canónica de apertura de 5C.7.',
+  );
+  assert.equal(view.lastMilestone, '5C.6D.1 — Gmail Draft supervisado.');
+  assert.equal(view.roadmapAlignment, 'attention');
   assert.equal(view.closureEvidence.manualPilot, true);
   assert.equal(view.closureEvidence.integration, true);
   assert.equal(view.closureEvidence.supervisorValidation, true);
-  assert.equal(view.closureEvidence.commit, false);
-  assert.equal(view.closureEvidence.publication, false);
+  assert.equal(view.closureEvidence.commit, true);
+  assert.equal(view.closureEvidence.publication, true);
   assert.deepEqual(view.remainingSteps, [
-    'Preparar staging selectivo y publicación del bloque 5C.6.',
-    'Aplicar el staging selectivo aprobado.',
-    'Publicar el cierre antes de abrir Executive Approval & Execution.',
+    'Revisar la propuesta canónica de apertura de 5C.7.',
+    'Esperar autorización humana separada antes de implementar 5C.7.',
   ]);
   assert.ok(view.remainingSteps.length <= 5);
-  assert.deepEqual(view.doNotOpenYet, ['Executive Approval & Execution.']);
+  assert.deepEqual(view.doNotOpenYet, [
+    'Envío de Gmail.',
+    'Calendar Execution.',
+    'Automatizaciones y activación de otros agentes.',
+  ]);
   assert.ok(view.duplicationEvidence.some((item) => /otro supervisor/i.test(item)));
-  assert.equal(view.sessionAchievements.length, 4);
+  assert.equal(view.sessionAchievements.length, 5);
   assert.deepEqual(view.consolidatedCapabilities.slice(0, 3), [
     'Dashboard Intelligence',
     'Executive Summary',
     'Business Readonly',
   ]);
-  assert.doesNotMatch(
+  assert.match(
     JSON.stringify(view.consolidatedCapabilities),
-    /Action Proposal|Action Preparation|Ecosystem Observer/i,
+    /Gmail Draft supervisado bajo SAFE_DRAFT_ONLY/i,
   );
   assert.doesNotMatch(JSON.stringify(view), /[A-Za-z]:\\|path|ruta/i);
 
@@ -434,19 +456,19 @@ test('ProjectManagerService supplies project phase and roadmap without paths', (
     systemStateView: { health: 'stable', alertsSummary: [] },
     governanceStateView: {},
   });
-  assert.equal(observer.operationalGuidance.phaseClosureStatus, 'work_remaining');
-  assert.deepEqual(observer.blockStatus, { phase: '5C.6', state: 'in_progress' });
-  assert.deepEqual(observer.releaseStatus, { state: 'pending' });
+  assert.equal(observer.operationalGuidance.phaseClosureStatus, 'ready_to_close');
+  assert.deepEqual(observer.blockStatus, { phase: '5C.7', state: 'closed' });
+  assert.deepEqual(observer.releaseStatus, { state: 'published' });
   assert.equal(
     observer.supervisorRecommendation.action,
-    'Preparar staging selectivo y publicación del bloque 5C.6.',
+    'Revisar la propuesta canónica de apertura de 5C.7.',
   );
   assert.equal(
     observer.operationalGuidance.nextBestAction,
-    'Preparar staging selectivo y publicación del bloque 5C.6.',
+    'Revisar la propuesta canónica de apertura de 5C.7.',
   );
-  assert.match(observer.progressMessage, /Solo falta: Preparar staging selectivo/);
-  assert.doesNotMatch(JSON.stringify(observer), /Ejecutar el piloto manual autenticado/);
+  assert.equal(observer.progressMessage, '');
+  assert.match(JSON.stringify(view.consolidatedCapabilities), /Gmail Draft supervisado/i);
 });
 
 test('ProjectManagerService marks conflicting canonical evidence as attention', () => {
@@ -457,7 +479,7 @@ test('ProjectManagerService marks conflicting canonical evidence as attention', 
       return content;
     }
     return String(content).replace(
-      'Siguiente paso recomendado: Preparar staging selectivo y publicación del bloque 5C.6.',
+      'Siguiente paso recomendado: Repetir el piloto manual autenticado de Gmail Draft con Cliente Cero: aprobar dentro de la ventana, crear exactamente un borrador y verificar que no se envía.',
       'Siguiente paso recomendado: Abrir una fase no vigente.',
     );
   };
@@ -493,18 +515,24 @@ test('canonical orchestration sources retain stale entries only as substituted h
     supervisorRules,
     /Una subfase abierta no implica que todo el bloque permanezca abierto/,
   );
+  assert.match(supervisorRules, /Continuidad operativa y reutilizacion de evidencias/);
+  assert.match(supervisorRules, /Recuperar el ultimo estado consistente conocido/);
+  assert.match(supervisorRules, /Continuar antes que reiniciar/);
+  assert.match(supervisorRules, /cambios en el codigo que invaliden las pruebas/);
 });
 
 test('Governance supplies only strategic objective, priority labels and brief reminders', () => {
   const view = readGovernanceStateView();
   assert.deepEqual(Object.keys(view), [
     'strategicObjective', 'priorities', 'reminders', 'learnedLessons',
-    'strategicRecommendations',
+    'continuityPolicy', 'canonicalReentryPolicy', 'strategicRecommendations',
   ]);
   assert.doesNotMatch(JSON.stringify(view), /sourcePath|documentsStatus|owner|description|DECISION-\d+/);
   assert.ok(view.priorities.length <= 5);
   assert.ok(view.reminders.length <= 2);
   assert.match(view.strategicObjective, /Director Ejecutivo IA readonly/);
+  assert.match(view.continuityPolicy, /recuperar el ultimo estado consistente/i);
+  assert.match(view.canonicalReentryPolicy, /historial de ChatGPT/i);
   assert.deepEqual(view.learnedLessons, [
     'Integrar antes de continuar.',
     'Reutilizar antes de crear.',

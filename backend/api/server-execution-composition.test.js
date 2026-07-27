@@ -5,15 +5,16 @@ const fs = require('node:fs');
 const path = require('node:path');
 const test = require('node:test');
 
-test('production execution composition remains disabled and lazy', () => {
+test('production keeps global execution disabled and enables only Gmail draft composition', () => {
   const source = fs.readFileSync(path.join(__dirname, 'server.js'), 'utf8');
 
-  assert.match(source, /Object\.freeze\(\{\s*executionEnabled:\s*false\s*\}\)/);
-  assert.match(source, /createAuthorizedGmailDraftProvider\(\{[\s\S]*?executionEnabled:\s*executionConfig\.executionEnabled/);
-  assert.match(source, /oauthReadiness:\s*executionConfig\.executionEnabled\s*\?[\s\S]*?:\s*null/);
+  assert.match(source, /executionEnabled:\s*false/);
+  assert.match(source, /draftExecutionEnabled:\s*true/);
+  assert.match(source, /createAuthorizedGmailDraftProvider\(\{[\s\S]*?draftExecutionEnabled:\s*executionConfig\.draftExecutionEnabled/);
+  assert.match(source, /oauthReadiness:\s*executionConfig\.draftExecutionEnabled\s*\?/);
   assert.match(source, /const gmailDraftProvider = gmailDraftComposition\.provider/);
   assert.match(source, /new ExecutionAdapter\(\{\s*emailProvider:\s*gmailDraftProvider\s*\}\)/);
-  assert.equal(/executionEnabled:\s*true/.test(source), false);
+  assert.doesNotMatch(source, /(?:^|[^A-Za-z])executionEnabled:\s*true/);
   assert.match(source, /const executiveCsrf = createExecutiveCsrf\(\)/);
   assert.match(source, /pathname === ["']\/api\/executive\/security-context["']/);
   assert.match(source, /handleApproveRequest\(req, res, \{[\s\S]*?getIdentity:\s*\(\) => requestPrivateIdentity,[\s\S]*?csrf:\s*executiveCsrf/);

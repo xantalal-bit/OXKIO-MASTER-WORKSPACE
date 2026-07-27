@@ -432,7 +432,7 @@ function detectActionableIntent(query) {
   ) {
     return {
       intent: 'email',
-      actionType: 'propose_email',
+      actionType: 'prepare-email-draft',
       proposalType: 'email_draft',
     };
   }
@@ -524,6 +524,7 @@ function buildSafeProposalMetadata(actionableIntent, generatedProposal) {
 
   return {
     type: actionableIntent.proposalType,
+    actionType: actionableIntent.actionType,
     summary: summaries[actionableIntent.proposalType],
     requiresApproval: generatedProposal.requiresApproval === true,
   };
@@ -556,7 +557,52 @@ function buildExecutionPayload(actionableIntent, generatedProposal) {
   };
 }
 
-function generateProposalSafely(proposalEngine, query, analysis, executiveResponse, diagnostics) {
+function emailPreparationFromQuery(query) {
+  const text = typeof query === 'string' ? query.trim() : '';
+  const recipient = text.match(/[A-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i);
+  const fields = text.match(/\basunto\s*:\s*(.+?)\s+y\s+cuerpo\s*:\s*(.+)$/iu);
+  if (!recipient || !fields) return null;
+  return {
+    to: recipient[0],
+    subject: fields[1].trim(),
+    body: fields[2].trim(),
+    replyMessageId: null,
+    threadId: null,
+  };
+}
+
+function emailPreparationFromPrivateContext(generatedProposal, authorizedPrivateContext) {
+  const messages = authorizedPrivateContext
+    && authorizedPrivateContext.sourceType === 'gmail'
+    && authorizedPrivateContext.payload
+    && Array.isArray(authorizedPrivateContext.payload.messages)
+    ? authorizedPrivateContext.payload.messages
+    : [];
+  const message = messages[0];
+  if (!message || typeof message !== 'object') return null;
+  const addressMatch = String(message.from || '').match(/[A-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i);
+  const generated = generatedProposal && generatedProposal.executionPayload;
+  const subject = typeof message.subject === 'string' && message.subject.trim()
+    ? `Re: ${message.subject.trim()}` : '';
+  const body = generated && typeof generated.body === 'string' ? generated.body.trim() : '';
+  if (!addressMatch || !subject || !body) return null;
+  return {
+    to: addressMatch[0],
+    subject,
+    body,
+    replyMessageId: typeof message.id === 'string' ? message.id : null,
+    threadId: typeof message.threadId === 'string' ? message.threadId : null,
+  };
+}
+
+function generateProposalSafely(
+  proposalEngine,
+  query,
+  analysis,
+  executiveResponse,
+  authorizedPrivateContext,
+  diagnostics,
+) {
   diagnostics.proposalAttempted = false;
   diagnostics.proposalSucceeded = false;
   diagnostics.proposalType = null;
@@ -573,7 +619,13 @@ function generateProposalSafely(proposalEngine, query, analysis, executiveRespon
     const proposalInput = buildProposalEngineInput(query, analysis, executiveResponse, actionableIntent);
     const generatedProposal = proposalEngine.generate(proposalInput);
     const publicProposal = buildSafeProposalMetadata(actionableIntent, generatedProposal);
-    const executionPayload = buildExecutionPayload(actionableIntent, generatedProposal);
+    const executionPayload = actionableIntent.proposalType === 'email_draft'
+      ? (
+        emailPreparationFromQuery(query)
+        || emailPreparationFromPrivateContext(generatedProposal, authorizedPrivateContext)
+        || buildExecutionPayload(actionableIntent, generatedProposal)
+      )
+      : buildExecutionPayload(actionableIntent, generatedProposal);
 
     diagnostics.proposalSucceeded = Boolean(publicProposal);
     return publicProposal ? { publicProposal, executionPayload } : null;
@@ -646,11 +698,23 @@ function enqueueApprovalSafely(
       analysis,
       privateContextUsed,
     );
-    const approvalItem = approvalQueue.add(
-      proposalBundle.publicProposal,
-      context,
-      proposalBundle.executionPayload,
-    );
+    const usesPreparedDraft = actionableIntent.proposalType === 'email_draft'
+      && typeof approvalQueue.addPreparedEmailDraft === 'function';
+    if (usesPreparedDraft && !proposalBundle.executionPayload) return null;
+    const approvalItem = usesPreparedDraft
+      ? approvalQueue.addPreparedEmailDraft({
+        recipient: proposalBundle.executionPayload.to,
+        subject: proposalBundle.executionPayload.subject,
+        body: proposalBundle.executionPayload.body,
+        replyMessageId: proposalBundle.executionPayload.replyMessageId,
+        threadId: proposalBundle.executionPayload.threadId,
+        risk: analysis && analysis.priority === 'high' ? 'medium' : 'low',
+      }, context)
+      : approvalQueue.add(
+        proposalBundle.publicProposal,
+        context,
+        proposalBundle.executionPayload,
+      );
     const approval = buildSafeApprovalMetadata(approvalItem);
 
     diagnostics.approvalSucceeded = Boolean(approval);
@@ -779,6 +843,7 @@ function orchestrateExecutiveQuery(query, options) {
     query,
     analysis,
     executiveResponse,
+    authorizedPrivateContext,
     diagnostics,
   );
   const proposal = proposalBundle ? proposalBundle.publicProposal : null;

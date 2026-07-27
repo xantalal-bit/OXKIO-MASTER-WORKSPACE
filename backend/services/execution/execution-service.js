@@ -24,7 +24,13 @@ class ExecutionService {
       };
     }
 
-    const beginResult = this.approvalQueue.beginExecution(approvalId);
+    const storedApproval = this.approvalQueue
+      && typeof this.approvalQueue.getInternalById === 'function'
+      ? this.approvalQueue.getInternalById(approvalId)
+      : null;
+    const beginResult = storedApproval && storedApproval.status === 'execution_failed'
+      ? this.approvalQueue.retryExecution(approvalId)
+      : this.approvalQueue.beginExecution(approvalId);
     if (!beginResult || beginResult.ok !== true) {
       return {
         ok: false,
@@ -77,7 +83,7 @@ class ExecutionService {
     const type = beginResult.actionType === 'propose_email'
       ? 'email_draft'
       : beginResult.actionType;
-    this.approvalQueue.completeExecution(approvalId, {
+    const completion = this.approvalQueue.completeExecution(approvalId, {
       executionId: beginResult.executionId,
       result: {
         type,
@@ -86,19 +92,32 @@ class ExecutionService {
         secondaryExternalId: result.secondaryExternalId,
       },
     });
+    if (!completion || completion.ok !== true || completion.status !== 'executed') {
+      return {
+        ok: false,
+        approvalId: beginResult.approvalId,
+        interactionId: beginResult.interactionId,
+        executionId: beginResult.executionId,
+        status: 'execution_state_unsynchronized',
+        error: {
+          code: safeCode(completion && completion.code, 'execution_state_unsynchronized'),
+          retryable: false,
+        },
+      };
+    }
 
     return {
       ok: true,
       approvalId: beginResult.approvalId,
       interactionId: beginResult.interactionId,
       executionId: beginResult.executionId,
-      status: 'executed',
+      status: completion.status,
       result: {
         type: 'email_draft',
         provider: 'gmail',
         mode: 'SAFE_DRAFT_ONLY',
-        externalId: result.externalId,
-        secondaryExternalId: result.secondaryExternalId,
+        externalId: completion.result.externalId,
+        secondaryExternalId: completion.result.secondaryExternalId,
       },
     };
   }

@@ -4,10 +4,11 @@ const { GmailDraftProvider } = require('./providers/gmail-draft-provider');
 
 function createAuthorizedGmailDraftProvider({
   executionEnabled,
+  draftExecutionEnabled,
   oauthReadiness,
   getGmailClient,
 } = {}) {
-  if (executionEnabled !== true) {
+  if (draftExecutionEnabled !== true && executionEnabled !== true) {
     return {
       ok: true,
       connected: false,

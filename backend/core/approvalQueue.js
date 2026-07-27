@@ -3,6 +3,10 @@ const path = require("path");
 const { createHash, randomUUID } = require("crypto");
 
 const DATA_FILE = path.join(__dirname, "approvalQueue.json");
+const PREPARATION_TTL_MS = 2 * 60 * 60 * 1000;
+const APPROVAL_TTL_MS = 30 * 60 * 1000;
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const PREPARATION_LIMITS = Object.freeze({ recipient: 320, subject: 200, body: 5000 });
 const ALLOWED_STATUSES = new Set([
     "pending",
     "approved",
@@ -44,6 +48,21 @@ function calculatePayloadHash(payload) {
 
 function normalizePublicProposal(proposal) {
     if (!proposal || typeof proposal !== "object") return proposal;
+    if (proposal.actionType === "prepare-email-draft") {
+        return {
+            preparationId: typeof proposal.preparationId === "string" ? proposal.preparationId : null,
+            actionType: "prepare-email-draft",
+            type: "email_draft",
+            status: proposal.status === "prepared" ? "prepared" : "not_ready",
+            recipient: typeof proposal.recipient === "string" ? proposal.recipient : "",
+            subject: typeof proposal.subject === "string" ? proposal.subject : "",
+            body: typeof proposal.body === "string" ? proposal.body : "",
+            summary: typeof proposal.summary === "string" ? proposal.summary : "",
+            risk: proposal.risk === "medium" ? "medium" : "low",
+            requiresApproval: proposal.requiresApproval === true,
+            executionEnabled: false
+        };
+    }
 
     const {
         executionPayload,
@@ -105,13 +124,27 @@ function normalizeSafeError(error) {
 function toPublicItem(item) {
     const normalizedItem = normalizeStoredItem(item);
     if (!normalizedItem || typeof normalizedItem !== "object") return normalizedItem;
+    let publicProposal = normalizedItem.publicProposal;
+    if (
+        publicProposal && publicProposal.actionType === "prepare-email-draft"
+        && (
+            ["rejected", "expired", "executed"].includes(normalizedItem.status)
+            || (
+                normalizedItem.status === "execution_failed"
+                && !(normalizedItem.error && normalizedItem.error.retryable === true)
+            )
+        )
+    ) {
+        const { recipient, subject, body, ...terminalProposal } = publicProposal;
+        publicProposal = terminalProposal;
+    }
 
     const publicItem = {
         id: normalizedItem.id,
         interactionId: normalizedItem.interactionId,
         status: normalizedItem.status,
-        publicProposal: normalizedItem.publicProposal,
-        proposal: normalizedItem.publicProposal,
+        publicProposal,
+        proposal: publicProposal,
         createdAt: normalizedItem.createdAt
     };
 
@@ -122,7 +155,9 @@ function toPublicItem(item) {
         "executionId",
         "executionStartedAt",
         "executionCompletedAt",
-        "executionFailedAt"
+        "executionFailedAt",
+        "expiresAt",
+        "approvalExpiresAt"
     ].forEach((field) => {
         if (typeof normalizedItem[field] === "string") {
             publicItem[field] = normalizedItem[field];
@@ -200,15 +235,67 @@ class ApprovalQueue {
         return toPublicItem(item);
     }
 
+    addPreparedEmailDraft(preparation = {}, context = {}) {
+        const recipient = typeof preparation.recipient === "string"
+            ? preparation.recipient.trim() : "";
+        const subject = typeof preparation.subject === "string"
+            ? preparation.subject.trim() : "";
+        const body = typeof preparation.body === "string"
+            ? preparation.body.trim() : "";
+        if (
+            !EMAIL_PATTERN.test(recipient)
+            || !subject || subject.length > PREPARATION_LIMITS.subject
+            || !body || body.length > PREPARATION_LIMITS.body
+            || recipient.length > PREPARATION_LIMITS.recipient
+            || /[\r\n]/.test(recipient) || /[\r\n]/.test(subject)
+            || /<\s*script|javascript:|<[^>]+>/i.test(body)
+        ) {
+            return transitionError("preparation_not_ready", "La preparación no está completa");
+        }
+
+        const preparationId = randomUUID();
+        const risk = preparation.risk === "medium" ? "medium" : "low";
+        const item = this.add({
+            preparationId,
+            actionType: "prepare-email-draft",
+            type: "email_draft",
+            status: "prepared",
+            recipient,
+            subject,
+            body,
+            summary: "Borrador preparado para aprobación humana.",
+            risk,
+            requiresApproval: true,
+            executionEnabled: false
+        }, {
+            ...context,
+            preparationId,
+            actionType: "prepare-email-draft",
+            risk
+        }, {
+            to: recipient,
+            subject,
+            body,
+            replyMessageId: preparation.replyMessageId || null,
+            threadId: preparation.threadId || null
+        });
+        const stored = this.findStoredItem(item.id);
+        stored.expiresAt = new Date(Date.now() + PREPARATION_TTL_MS).toISOString();
+        this.save();
+        return toPublicItem(stored);
+    }
+
     listPending() {
+        this.expirePendingPreparations();
         return this.pending.map(toPublicItem);
     }
 
     listPendingInternal() {
+        this.expirePendingPreparations();
         return this.pending.map(normalizeStoredItem);
     }
 
-    approve(id) {
+    approve(id, authorizedIdentity = null) {
 
         const index = this.pending.findIndex(item => item.id === id);
 
@@ -226,9 +313,24 @@ class ApprovalQueue {
 
         const item = this.pending.splice(index, 1)[0];
 
+        if (item.expiresAt && Date.parse(item.expiresAt) <= Date.now()) {
+            item.status = "expired";
+            item.resolvedAt = new Date().toISOString();
+            this.history.push(item);
+            this.save();
+            return transitionError("approval_expired", "La aprobación ha expirado");
+        }
+
         item.status = "approved";
         item.approvedAt = new Date().toISOString();
+        item.approvalExpiresAt = new Date(Date.now() + APPROVAL_TTL_MS).toISOString();
         item.resolvedAt = item.approvedAt;
+        item.approvedBy = authorizedIdentity && typeof authorizedIdentity === "object"
+            ? {
+                clientId: authorizedIdentity.clientId || null,
+                userId: authorizedIdentity.userId || null
+            }
+            : null;
 
         this.history.push(item);
         this.save();
@@ -272,6 +374,7 @@ class ApprovalQueue {
     }
 
     getHistory() {
+        this.expirePendingPreparations();
         return this.history.map(toPublicItem);
     }
 
@@ -296,6 +399,9 @@ class ApprovalQueue {
         if (!ALLOWED_STATUSES.has(item.status) || item.status !== "approved") {
             return transitionError("invalid_transition", "La aprobación no está lista para ejecutar");
         }
+        if (this.expireApprovedItem(item)) {
+            return transitionError("approval_expired", "La aprobación ha expirado");
+        }
 
         const integrity = this.verifyExecutionPayload(item);
         if (!integrity.ok) return integrity;
@@ -316,6 +422,7 @@ class ApprovalQueue {
         item.executionPayload = integrity.executionPayload;
         item.status = "executing";
         item.executionId = randomUUID();
+        item.executionAttemptCount = 1;
         item.executionStartedAt = new Date().toISOString();
         delete item.executionCompletedAt;
         delete item.executionFailedAt;
@@ -336,14 +443,25 @@ class ApprovalQueue {
         if (!ALLOWED_STATUSES.has(item.status) || item.status !== "approved") {
             return transitionError("invalid_transition", "La aprobación no está lista para ejecutar");
         }
+        if (this.expireApprovedItem(item)) {
+            return transitionError("approval_expired", "La aprobación ha expirado");
+        }
 
         const integrity = this.verifyExecutionPayload(item);
         if (!integrity.ok) return integrity;
+        const publicProposal = normalizePublicProposal(item.publicProposal || item.proposal);
+        const actionType = publicProposal && typeof publicProposal.type === "string"
+            ? EXECUTION_ACTION_TYPES[publicProposal.type]
+            : null;
+        if (actionType !== "propose_email") {
+            return transitionError("execution_action_type_unavailable", "Execution action type is unavailable");
+        }
 
         return {
             ok: true,
             approvalId: item.id,
             interactionId: item.interactionId || null,
+            actionType,
             status: item.status
         };
     }
@@ -404,6 +522,12 @@ class ApprovalQueue {
         if (!item.error || item.error.retryable !== true) {
             return transitionError("execution_not_retryable", "La ejecución fallida no admite reintento");
         }
+        if (Number(item.executionAttemptCount || 1) >= 2) {
+            return transitionError("execution_retry_exhausted", "La ejecución ya utilizó su único reintento");
+        }
+        if (this.expireApprovedItem(item)) {
+            return transitionError("approval_expired", "La aprobación ha expirado");
+        }
 
         const integrity = this.verifyExecutionPayload(item);
         if (!integrity.ok) return integrity;
@@ -411,6 +535,7 @@ class ApprovalQueue {
         item.executionPayload = integrity.executionPayload;
         item.status = "executing";
         item.executionId = randomUUID();
+        item.executionAttemptCount = Number(item.executionAttemptCount || 1) + 1;
         item.executionStartedAt = new Date().toISOString();
         delete item.executionCompletedAt;
         delete item.executionFailedAt;
@@ -419,6 +544,42 @@ class ApprovalQueue {
         this.save();
 
         return this.buildInternalExecutionResult(item);
+    }
+
+    expirePendingPreparations() {
+        const now = Date.now();
+        const active = [];
+        let changed = false;
+        this.pending.forEach((item) => {
+            const proposal = normalizePublicProposal(item.publicProposal || item.proposal);
+            if (
+                proposal
+                && proposal.actionType === "prepare-email-draft"
+                && item.expiresAt
+                && Date.parse(item.expiresAt) <= now
+            ) {
+                item.status = "expired";
+                item.resolvedAt = new Date(now).toISOString();
+                this.history.push(item);
+                changed = true;
+            } else {
+                active.push(item);
+            }
+        });
+        if (changed) {
+            this.pending = active;
+            this.save();
+        }
+    }
+
+    expireApprovedItem(item) {
+        if (!item || !item.approvalExpiresAt || Date.parse(item.approvalExpiresAt) > Date.now()) {
+            return false;
+        }
+        item.status = "expired";
+        item.resolvedAt = new Date().toISOString();
+        this.save();
+        return true;
     }
 
     verifyExecutionPayload(item) {
@@ -511,3 +672,5 @@ load() {
 module.exports = ApprovalQueue;
 module.exports.calculatePayloadHash = calculatePayloadHash;
 module.exports.normalizeExecutionPayload = normalizeExecutionPayload;
+module.exports.PREPARATION_TTL_MS = PREPARATION_TTL_MS;
+module.exports.APPROVAL_TTL_MS = APPROVAL_TTL_MS;

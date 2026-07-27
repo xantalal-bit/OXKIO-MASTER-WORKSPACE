@@ -374,7 +374,7 @@ test('existing Dashboard keeps one mobile-first executive summary card with only
   assert.match(html, /new Intl\.DateTimeFormat\("es-ES"/);
   assert.doesNotMatch(html, /timeZone:\s*["']UTC["']/);
   assert.match(html, /data-executive-action-preparation/);
-  assert.match(html, /Todavía no se ejecutará\. Revisa la información antes de aprobarla\./);
+  assert.match(html, /Se creará únicamente un borrador en Gmail\. No se enviará ningún correo\./);
   assert.match(html, /@media \(max-width: 600px\)/);
 });
 
@@ -412,7 +412,7 @@ test('Dashboard requests a fresh state and renders the real fusion generation ti
   assert.doesNotMatch(html, /new Date\(\)(?:\.toISOString\(\))?/);
 });
 
-test('preparation controls only reveal or dismiss local DOM and never fetch or create approvals', () => {
+test('preparation controls keep approval and execution as separate authenticated acts', () => {
   const html = fs.readFileSync(
     path.join(__dirname, '..', '..', '..', 'app', 'executive-dashboard.html'),
     'utf8',
@@ -421,11 +421,20 @@ test('preparation controls only reveal or dismiss local DOM and never fetch or c
   const end = html.indexOf('function applyDashboardState', start);
   const handlers = html.slice(start, end);
 
-  assert.match(handlers, /detail\.hidden = false/);
+  assert.match(
+    handlers,
+    /reviewButton\.addEventListener\("click", toggleExecutivePreparationDetail\)/,
+  );
   assert.match(handlers, /container\.hidden = true/);
-  assert.match(handlers, /feedback\.textContent = "[^"]+ descartada\."/);
-  assert.match(handlers, /feedback\.hidden = false/);
-  assert.doesNotMatch(handlers, /fetch\(|oxkioAuthenticatedFetch|approval|execute|submit/);
+  assert.match(handlers, /Preparación rechazada\. No se realizó ninguna acción\./);
+  assert.match(handlers, /postExecutiveApproval\("\/api\/approve", "approve"\)/);
+  assert.match(handlers, /postExecutiveApproval\("\/api\/approve", "reject"\)/);
+  assert.match(handlers, /postExecutiveApproval\("\/api\/execute-approved"\)/);
+  assert.match(handlers, /currentDraftApprovalStatus !== "pending"/);
+  assert.match(
+    handlers,
+    /\["approved", "execution_failed"\]\.includes\(currentDraftApprovalStatus\)/,
+  );
   assert.doesNotMatch(handlers, /innerHTML/);
   assert.match(html, /data-executive-action-feedback role="status" aria-live="polite" hidden/);
 });
@@ -436,17 +445,426 @@ test('preparation renderer uses safe DOM operations and keeps one executive summ
     'utf8',
   );
   const cards = html.match(/id="morning-briefing-card"/g) || [];
-  const start = html.indexOf('function renderPreparationFields');
+  const start = html.indexOf('function isValidDraftRecipient');
   const end = html.indexOf('function initializeExecutiveActionPreparation', start);
   const renderer = html.slice(start, end);
 
   assert.equal(cards.length, 1);
-  assert.match(renderer, /document\.createElement\("li"\)/);
+  assert.match(renderer, /isValidDraftRecipient/);
+  assert.match(renderer, /DIRECCIÓN_COMPLETA/);
+  assert.match(renderer, /Falta una dirección de correo válida\./);
   assert.match(renderer, /textContent/);
-  assert.match(renderer, /replaceChildren\(\)/);
   assert.doesNotMatch(renderer, /innerHTML|insertAdjacentHTML|fetch\(/);
   assert.match(html, /Revisar preparación/);
-  assert.match(html, /Descartar/);
+  assert.doesNotMatch(html, /data-executive-action-dismiss/);
+  assert.match(html, /data-executive-action-recipient/);
+  assert.match(html, /data-executive-action-subject/);
+  assert.match(html, /data-executive-action-body/);
+  assert.match(html, /data-executive-action-risk/);
+  assert.match(html, /Estado: Pendiente de aprobación humana/);
+  assert.match(html, /@media \(max-width: 600px\)[\s\S]*?\.draft-preparation \.operations-actions button/);
+});
+
+test('email draft visual states match approval lifecycle and supervisor guidance', () => {
+  const html = fs.readFileSync(
+    path.join(__dirname, '..', '..', '..', 'app', 'executive-dashboard.html'),
+    'utf8',
+  );
+  const start = html.indexOf('function renderPreparation');
+  const end = html.indexOf('async function loadExecutiveDraftApproval', start);
+  const renderer = html.slice(start, end);
+
+  assert.match(renderer, /Pendiente de aprobación\./);
+  assert.match(renderer, /Expira a las/);
+  assert.match(renderer, /Aprobado\. Pendiente de creación\./);
+  assert.match(renderer, /Borrador creado, no enviado\./);
+  assert.match(renderer, /Preparación expirada\./);
+  assert.match(renderer, /La preparación ha expirado\. Genera una nueva para continuar\./);
+  assert.match(renderer, /approvalItem\.status !== "pending" \|\| !validRecipient/);
+  assert.match(renderer, /approvalItem\.status !== "approved"/);
+  assert.match(renderer, /Borrador preparado\. Pendiente de aprobación humana\./);
+  assert.match(renderer, /Borrador aprobado\. Pendiente de creación en Gmail\./);
+  assert.match(renderer, /Borrador creado en Gmail\. No enviado\./);
+  assert.doesNotMatch(renderer, /innerHTML|insertAdjacentHTML|fetch\(/);
+});
+
+test('prepare-email-draft renders every field and pending controls again after refresh', () => {
+  const html = fs.readFileSync(
+    path.join(__dirname, '..', '..', '..', 'app', 'executive-dashboard.html'),
+    'utf8',
+  );
+  const start = html.indexOf('function isValidDraftRecipient');
+  const end = html.indexOf('function isCompleteDraftPreparation', start);
+  const source = html.slice(start, end);
+  const elements = new Map();
+  [
+    '[data-executive-action-detail]',
+    '[data-executive-action-title]',
+    '[data-executive-action-status]',
+    '[data-executive-action-recipient]',
+    '[data-executive-action-subject]',
+    '[data-executive-action-body]',
+    '[data-executive-action-missing-block]',
+    '[data-executive-action-validation]',
+    '[data-executive-action-risk]',
+    '[data-executive-action-review]',
+    '[data-executive-action-approve]',
+    '[data-executive-action-reject]',
+    '[data-executive-action-execute]',
+  ].forEach((selector) => elements.set(selector, {
+    hidden: true,
+    textContent: '',
+    attributes: {},
+    setAttribute(name, value) { this.attributes[name] = value; },
+  }));
+  const container = {
+    hidden: true,
+    scrollCalls: 0,
+    querySelector(selector) { return elements.get(selector) || null; },
+    scrollIntoView() { this.scrollCalls += 1; },
+  };
+  const feedbackElement = { hidden: true, textContent: '' };
+  const card = {
+    querySelector(selector) {
+      if (selector === '[data-executive-action-preparation]') return container;
+      if (selector === '[data-executive-action-feedback]') return feedbackElement;
+      return null;
+    },
+  };
+  const document = {
+    getElementById(id) { return id === 'morning-briefing-card' ? card : null; },
+    querySelector() { return null; },
+  };
+  const setText = (element, value, fallback) => {
+    if (element) element.textContent = value || fallback;
+  };
+  const render = Function(
+    'document',
+    'setText',
+    `"use strict"; ${source}; return renderPreparation;`,
+  )(document, setText);
+  const preparation = {
+    preparationId: 'preparation-render',
+    actionType: 'prepare-email-draft',
+    type: 'email_draft',
+    status: 'prepared',
+    recipient: 'pilot@example.com',
+    subject: 'Prueba OXKIO',
+    body: 'Vista previa completa.',
+    risk: 'low',
+    requiresApproval: true,
+  };
+  const approval = {
+    id: 'approval-render',
+    status: 'pending',
+    createdAt: '2026-07-26T17:00:00.000Z',
+    publicProposal: preparation,
+  };
+  const assertRendered = () => {
+    assert.equal(container.hidden, false);
+    assert.equal(elements.get('[data-executive-action-recipient]').textContent, preparation.recipient);
+    assert.equal(elements.get('[data-executive-action-subject]').textContent, preparation.subject);
+    assert.equal(elements.get('[data-executive-action-body]').textContent, preparation.body);
+    assert.equal(elements.get('[data-executive-action-risk]').textContent, 'Bajo');
+    assert.equal(elements.get('[data-executive-action-status]').textContent, 'Pendiente de aprobación.');
+    assert.equal(elements.get('[data-executive-action-detail]').hidden, false);
+    assert.equal(elements.get('[data-executive-action-review]').hidden, false);
+    assert.equal(elements.get('[data-executive-action-review]').attributes['aria-expanded'], 'true');
+    assert.equal(elements.get('[data-executive-action-approve]').hidden, false);
+    assert.equal(elements.get('[data-executive-action-reject]').hidden, false);
+    assert.equal(elements.get('[data-executive-action-execute]').hidden, true);
+  };
+
+  render(approval, { focus: true });
+  assertRendered();
+  assert.equal(container.scrollCalls, 1);
+
+  elements.forEach((element) => { element.textContent = ''; });
+  render(approval);
+  assertRendered();
+  assert.equal(container.scrollCalls, 1);
+  assert.match(html, /loadExecutiveDraftApproval\(\{ focus: true \}\)/);
+});
+
+test('Dashboard rehydrates one complete pending draft after refresh without terminal shadowing', () => {
+  const html = fs.readFileSync(
+    path.join(__dirname, '..', '..', '..', 'app', 'executive-dashboard.html'),
+    'utf8',
+  );
+  const start = html.indexOf('function isCompleteDraftPreparation');
+  const end = html.indexOf('async function loadExecutiveDraftApproval', start);
+  const source = html.slice(start, end);
+  const selectApproval = Function(
+    `"use strict"; ${source}; return selectExecutiveDraftApproval;`,
+  )();
+  const pending = {
+    id: 'approval-pending',
+    status: 'pending',
+    createdAt: '2026-07-25T08:00:00.000Z',
+    publicProposal: {
+      preparationId: 'preparation-pending',
+      actionType: 'prepare-email-draft',
+      type: 'email_draft',
+      status: 'prepared',
+      recipient: 'xantalal@gmail.com',
+      subject: 'Prueba OXKIO 5C.6D.1',
+      body: 'Este correo es un borrador de prueba. No debe enviarse.',
+      risk: 'low',
+      requiresApproval: true,
+    },
+  };
+  const newerExpired = {
+    id: 'approval-expired',
+    status: 'expired',
+    createdAt: '2026-07-25T09:00:00.000Z',
+    publicProposal: {
+      preparationId: 'preparation-expired',
+      actionType: 'prepare-email-draft',
+      type: 'email_draft',
+      status: 'prepared',
+      risk: 'low',
+      requiresApproval: true,
+    },
+  };
+
+  assert.deepEqual(selectApproval([pending], [newerExpired]), pending);
+  assert.deepEqual(selectApproval([], [newerExpired]), newerExpired);
+  assert.match(source, /\["pending", "approved"\]\.includes\(item\.status\)/);
+  assert.match(html, /currentDraftPreparationId = preparation\.preparationId/);
+  assert.match(html, /approvalItem\.status !== "pending" \|\| !validRecipient/);
+});
+
+test('expired preparation exposes only safe recovery and a new preparation can continue', () => {
+  const html = fs.readFileSync(
+    path.join(__dirname, '..', '..', '..', 'app', 'executive-dashboard.html'),
+    'utf8',
+  );
+  const renderStart = html.indexOf('function isValidDraftRecipient');
+  const renderEnd = html.indexOf('function isCompleteDraftPreparation', renderStart);
+  const renderSource = html.slice(renderStart, renderEnd);
+  const selectors = [
+    '.draft-fields',
+    '.draft-notice',
+    '[data-executive-action-detail]',
+    '[data-executive-action-title]',
+    '[data-executive-action-status]',
+    '[data-executive-action-recipient]',
+    '[data-executive-action-subject]',
+    '[data-executive-action-body]',
+    '[data-executive-action-missing-block]',
+    '[data-executive-action-validation]',
+    '[data-executive-action-risk]',
+    '[data-executive-action-review]',
+    '[data-executive-action-approve]',
+    '[data-executive-action-reject]',
+    '[data-executive-action-execute]',
+    '[data-executive-action-regenerate]',
+  ];
+  const elements = new Map(selectors.map((selector) => [selector, {
+    hidden: true,
+    textContent: '',
+    setAttribute() {},
+  }]));
+  const container = {
+    hidden: true,
+    querySelector(selector) { return elements.get(selector) || null; },
+  };
+  const feedbackElement = { hidden: true, textContent: '' };
+  const input = {
+    value: 'datos anteriores',
+    focused: false,
+    focus() { this.focused = true; },
+    scrollIntoView() {},
+  };
+  const card = {
+    querySelector(selector) {
+      if (selector === '[data-executive-action-preparation]') return container;
+      if (selector === '[data-executive-action-feedback]') return feedbackElement;
+      return null;
+    },
+  };
+  const document = {
+    getElementById(id) { return id === 'morning-briefing-card' ? card : null; },
+    querySelector(selector) {
+      return selector === '[data-executive-chat-input]' ? input : null;
+    },
+  };
+  const feedback = [];
+  const supervisor = [];
+  const setText = (element, value, fallback) => {
+    if (element) element.textContent = value || fallback;
+  };
+  const render = Function(
+    'document',
+    'setText',
+    'setDraftFeedback',
+    'setDraftSupervisorState',
+    `"use strict"; ${renderSource}; return renderPreparation;`,
+  )(document, setText, (value) => feedback.push(value), (value) => supervisor.push(value));
+
+  render({
+    id: 'expired-approval',
+    status: 'expired',
+    createdAt: '2026-07-26T10:00:00.000Z',
+    publicProposal: {
+      preparationId: 'expired-preparation',
+      actionType: 'prepare-email-draft',
+      type: 'email_draft',
+      status: 'prepared',
+      risk: 'low',
+      requiresApproval: true,
+    },
+  });
+
+  assert.equal(elements.get('[data-executive-action-status]').textContent, 'La preparación ha expirado.');
+  assert.equal(elements.get('.draft-fields').hidden, true);
+  assert.equal(elements.get('.draft-notice').hidden, true);
+  assert.equal(elements.get('[data-executive-action-missing-block]').hidden, true);
+  assert.equal(elements.get('[data-executive-action-review]').hidden, true);
+  assert.equal(elements.get('[data-executive-action-approve]').hidden, true);
+  assert.equal(elements.get('[data-executive-action-reject]').hidden, true);
+  assert.equal(elements.get('[data-executive-action-execute]').hidden, true);
+  assert.equal(elements.get('[data-executive-action-regenerate]').hidden, false);
+  assert.match(feedbackElement.textContent, /Genera una nueva para continuar/);
+
+  const recoverStart = html.indexOf('function recoverExpiredPreparation');
+  const recoverEnd = html.indexOf('function initializeExecutiveActionPreparation', recoverStart);
+  const recoverSource = html.slice(recoverStart, recoverEnd);
+  const recover = Function(
+    'document',
+    'setDraftFeedback',
+    'setDraftSupervisorState',
+    `"use strict";
+      let currentDraftApprovalId = "expired-approval";
+      let currentDraftPreparationId = "expired-preparation";
+      let currentDraftApprovalStatus = "expired";
+      let lastEmailPreparationQuery = "Prepara un borrador original";
+      ${recoverSource}
+      return {
+        run: recoverExpiredPreparation,
+        state: () => [currentDraftApprovalId, currentDraftPreparationId, currentDraftApprovalStatus]
+      };`,
+  )(document, (value) => feedback.push(value), (value) => supervisor.push(value));
+
+  recover.run();
+  assert.equal(container.hidden, true);
+  assert.equal(input.value, 'Prepara un borrador original');
+  assert.equal(input.focused, true);
+  assert.deepEqual(recover.state(), ['', '', '']);
+  assert.match(feedback.at(-1), /Genera una nueva preparación para continuar/);
+  assert.match(html, /data-executive-action-regenerate hidden>Generar nueva preparación</);
+});
+
+test('conversational recovery remains session-only and never submits automatically', () => {
+  const html = fs.readFileSync(
+    path.join(__dirname, '..', '..', '..', 'app', 'executive-dashboard.html'),
+    'utf8',
+  );
+  const submitStart = html.indexOf('async function submitExecutiveChat');
+  const submitEnd = html.indexOf('function initializeExecutiveChat', submitStart);
+  const recoverStart = html.indexOf('function recoverExpiredPreparation');
+  const recoverEnd = html.indexOf('function initializeExecutiveActionPreparation', recoverStart);
+  const submit = html.slice(submitStart, submitEnd);
+  const recover = html.slice(recoverStart, recoverEnd);
+
+  assert.match(html, /let lastEmailPreparationQuery = ""/);
+  assert.match(submit, /lastEmailPreparationQuery = query/);
+  assert.match(recover, /input\.value = lastEmailPreparationQuery/);
+  assert.doesNotMatch(recover, /submitExecutiveChat|postExecutiveApproval|fetch\(/);
+  assert.match(html, /pagehide", clearLastEmailPreparationQuery/);
+  assert.match(html, /oxkio-identity-change", clearLastEmailPreparationQuery/);
+  assert.match(html, /clearLastEmailPreparationQuery\(\)[\s\S]*Preparación rechazada/);
+  assert.match(html, /if \(response\.ok\) \{\s*clearLastEmailPreparationQuery\(\);\s*await loadExecutiveDraftApproval/);
+  assert.doesNotMatch(html, /localStorage|sessionStorage/);
+});
+
+test('Dashboard distinguishes failed execution from verified draft completion', () => {
+  const html = fs.readFileSync(
+    path.join(__dirname, '..', '..', '..', 'app', 'executive-dashboard.html'),
+    'utf8',
+  );
+  const renderStart = html.indexOf('function renderPreparation');
+  const renderEnd = html.indexOf('function isCompleteDraftPreparation', renderStart);
+  const executeStart = html.indexOf('if (executeButton) executeButton.addEventListener');
+  const executeEnd = html.indexOf('if (regenerateButton)', executeStart);
+  const renderer = html.slice(renderStart, renderEnd);
+  const executionHandler = html.slice(executeStart, executeEnd);
+
+  assert.match(renderer, /execution_failed/);
+  assert.match(renderer, /No se pudo crear el borrador\. Puedes volver a intentarlo\./);
+  assert.match(renderer, /No se pudo crear el borrador\. Genera una nueva preparación\./);
+  assert.match(renderer, /executed:\s*"Borrador creado, no enviado\."/);
+  assert.match(executionHandler, /result\.error\.retryable === true/);
+  assert.doesNotMatch(executionHandler, /Acción ya ejecutada/);
+  assert.doesNotMatch(html, /setDraftFeedback\("Acción ya ejecutada\."\)/);
+});
+
+test('review preparation toggles only its detail and preserves every rendered value', () => {
+  const html = fs.readFileSync(
+    path.join(__dirname, '..', '..', '..', 'app', 'executive-dashboard.html'),
+    'utf8',
+  );
+  const start = html.indexOf('function toggleExecutivePreparationDetail');
+  const end = html.indexOf('function recoverExpiredPreparation', start);
+  const source = html.slice(start, end);
+  const toggle = Function(
+    `"use strict"; ${source}; return toggleExecutivePreparationDetail;`,
+  )();
+  const preparation = Object.freeze({
+    preparationId: 'preparation-1',
+    recipient: 'xantalal@gmail.com',
+    subject: 'Prueba OXKIO 5C.6D.1',
+    body: 'Este correo es un borrador de prueba. No debe enviarse.',
+    risk: 'low',
+  });
+  const rendered = {
+    recipient: preparation.recipient,
+    subject: preparation.subject,
+    body: preparation.body,
+    risk: preparation.risk,
+  };
+  const detail = { hidden: true };
+  const container = {
+    querySelector(selector) {
+      assert.equal(selector, '[data-executive-action-detail]');
+      return detail;
+    },
+  };
+  const attributes = {};
+  const reviewButton = {
+    closest(selector) {
+      assert.equal(selector, '[data-executive-action-preparation]');
+      return container;
+    },
+    setAttribute(name, value) {
+      attributes[name] = value;
+    },
+  };
+
+  toggle({ currentTarget: reviewButton });
+  assert.equal(detail.hidden, false);
+  assert.equal(attributes['aria-expanded'], 'true');
+  assert.deepEqual(rendered, {
+    recipient: 'xantalal@gmail.com',
+    subject: 'Prueba OXKIO 5C.6D.1',
+    body: 'Este correo es un borrador de prueba. No debe enviarse.',
+    risk: 'low',
+  });
+  assert.equal(preparation.preparationId, 'preparation-1');
+
+  toggle({ currentTarget: reviewButton });
+  assert.equal(detail.hidden, true);
+  assert.equal(attributes['aria-expanded'], 'false');
+  toggle({ currentTarget: reviewButton });
+  assert.equal(detail.hidden, false);
+  assert.deepEqual(rendered, {
+    recipient: preparation.recipient,
+    subject: preparation.subject,
+    body: preparation.body,
+    risk: preparation.risk,
+  });
+  assert.match(html, /\[hidden\]\s*\{\s*display:\s*none\s*!important;/);
+  assert.doesNotMatch(source, /fetch\(|textContent|replaceChildren|currentDraft|renderExecutive|updateExecutive/);
 });
 
 test('ecosystem observer is folded inside the existing top card and renders through safe DOM APIs', () => {
@@ -517,6 +935,23 @@ test('future ecosystem command adds no endpoint or conversational processing', (
   );
   assert.doesNotMatch(server, /req\.url\s*===\s*["']\/ecosistema["']/);
   assert.doesNotMatch(server, /pathname\s*===\s*["']\/ecosistema["']/);
+});
+
+test('Executive Dashboard keeps email preparation primary over readonly recommendations', () => {
+  const html = fs.readFileSync(
+    path.join(__dirname, '..', '..', '..', 'app', 'executive-dashboard.html'),
+    'utf8',
+  );
+  const start = html.indexOf('function renderExecutiveChatResult');
+  const end = html.indexOf('function dismissDecisionRecommendation', start);
+  const renderer = html.slice(start, end);
+
+  assert.match(renderer, /primaryCapability === "prepare-email-draft"/);
+  assert.match(renderer, /isEmailPreparation\s*\?\s*null/);
+  assert.match(renderer, /isEmailPreparation\s*\?\s*"Borrador preparado"/);
+  assert.match(renderer, /Se ha usado información disponible como contexto\./);
+  assert.match(renderer, /El borrador está pendiente de tu aprobación\./);
+  assert.doesNotMatch(renderer, /innerHTML/);
 });
 
 test('frontend renders only the three ecosystem widgets with safe DOM operations', () => {

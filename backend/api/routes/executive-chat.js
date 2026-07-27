@@ -257,6 +257,31 @@ function isEmailActionRequest(query) {
     && /\b(?:borrador|respuesta|correo|email|contestacion)\b/.test(normalized);
 }
 
+function buildCapabilityComposition(query, recommendation, operationPlan) {
+  if (isEmailActionRequest(query)) {
+    const normalized = String(query || '').normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '').toLowerCase();
+    return {
+      primaryCapability: 'prepare-email-draft',
+      supportingCapabilities: /\b(?:informacion|conocimiento|documentacion|knowledge)\b/.test(normalized)
+        ? ['knowledge-review-readonly'] : [],
+      deferredCapabilities: [],
+      rejectedCapabilities: [],
+    };
+  }
+  const planned = operationPlan && Array.isArray(operationPlan.steps) ? operationPlan.steps : [];
+  const recommended = recommendation && recommendation.decision !== 'none'
+    ? recommendation.decision : null;
+  const primaryCapability = planned[0] || recommended;
+  if (!primaryCapability) return null;
+  return {
+    primaryCapability,
+    supportingCapabilities: planned.slice(1),
+    deferredCapabilities: [],
+    rejectedCapabilities: [],
+  };
+}
+
 function sanitizeExecutivePayload(payload) {
   if (!payload || typeof payload !== 'object') return payload;
   return { ...payload, sources: sanitizeExecutiveSources(payload.sources) };
@@ -276,8 +301,9 @@ async function handleExecutiveChatRequest(req, res, options) {
     const identity = (dependencies.getClienteCeroIdentity || getClienteCeroIdentity)();
     const decisionEngine = dependencies.recommendSupervisedOperation || recommendSupervisedOperation;
     const selectedContext = (dependencies.selectExecutiveContext || selectExecutiveContext)(query);
+    const emailActionRequest = isEmailActionRequest(query);
     const shouldCheckSupervisedGmail = selectedContext.gmail === true
-      && !isEmailActionRequest(query);
+      && !emailActionRequest;
     const shouldCheckSupervisedCalendar = selectedContext.calendar === true;
     const preliminaryRecommendation = isInternallyAuthorized(identity)
       && (shouldCheckSupervisedGmail || shouldCheckSupervisedCalendar)
@@ -294,12 +320,14 @@ async function handleExecutiveChatRequest(req, res, options) {
     });
     const payload = sanitizeExecutivePayload(orchestrator(query, orchestratorOptions));
     const planner = dependencies.planOperations || planOperations;
-    const recommendation = isSupervisedGmailReview || isSupervisedCalendarReview
+    const recommendation = emailActionRequest
+      ? null
+      : (isSupervisedGmailReview || isSupervisedCalendarReview
       ? preliminaryRecommendation
       : (isInternallyAuthorized(identity)
         ? decisionEngine({ query, analysis: payload && payload.analysis })
-        : null);
-    const operationPlan = isInternallyAuthorized(identity)
+        : null));
+    const operationPlan = isInternallyAuthorized(identity) && !emailActionRequest
       ? planner({ query, analysis: payload && payload.analysis })
       : null;
     if (recommendation && recommendation.decision !== 'none') {
@@ -308,6 +336,8 @@ async function handleExecutiveChatRequest(req, res, options) {
     if (operationPlan && Array.isArray(operationPlan.steps) && operationPlan.steps.length > 0) {
       payload.operationPlan = operationPlan;
     }
+    const capabilityComposition = buildCapabilityComposition(query, recommendation, operationPlan);
+    if (capabilityComposition) payload.capabilityComposition = capabilityComposition;
     return sendJson(res, 200, payload);
   } catch (error) {
     return sendSafeError(res, error);
@@ -315,6 +345,7 @@ async function handleExecutiveChatRequest(req, res, options) {
 }
 
 module.exports = {
+  buildCapabilityComposition,
   buildOrchestratorOptions,
   getInternalOrchestratorDependencies,
   handleExecutiveChatRequest,

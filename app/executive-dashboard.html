@@ -25,6 +25,10 @@
       box-sizing: border-box;
     }
 
+    [hidden] {
+      display: none !important;
+    }
+
     body {
       margin: 0;
       font-family: Arial, Helvetica, sans-serif;
@@ -305,6 +309,72 @@
     .operations-card {
       display: grid;
       gap: 14px;
+    }
+
+    .draft-preparation {
+      display: grid;
+      gap: 16px;
+      margin-top: 18px;
+      border-color: rgba(56, 189, 248, 0.48);
+      background: linear-gradient(135deg, rgba(12, 31, 55, 0.96), rgba(30, 32, 68, 0.9));
+    }
+
+    .draft-preparation-heading {
+      margin: 0;
+      color: #ffffff;
+      font-size: clamp(20px, 4vw, 26px);
+      line-height: 1.2;
+      letter-spacing: 0.02em;
+    }
+
+    .draft-status {
+      margin: 0;
+      color: var(--warning);
+      font-size: 16px;
+      font-weight: 700;
+    }
+
+    .draft-fields {
+      display: grid;
+      gap: 14px;
+      margin: 0;
+    }
+
+    .draft-field {
+      display: grid;
+      gap: 4px;
+      min-width: 0;
+    }
+
+    .draft-field dt {
+      color: var(--muted);
+      font-size: 13px;
+      font-weight: 700;
+    }
+
+    .draft-field dd {
+      margin: 0;
+      color: var(--text);
+      font-size: 16px;
+      overflow-wrap: anywhere;
+      white-space: pre-wrap;
+    }
+
+    .draft-notice {
+      margin: 0;
+      padding: 12px 14px;
+      border-left: 4px solid var(--accent);
+      border-radius: 6px;
+      background: rgba(56, 189, 248, 0.1);
+      color: #e4f5ff;
+      font-size: 15px;
+      font-weight: 700;
+    }
+
+    .draft-validation {
+      margin: 0;
+      color: var(--danger);
+      font-weight: 700;
     }
 
     .operations-grid {
@@ -711,6 +781,21 @@
         grid-template-columns: 1fr;
       }
 
+      .draft-preparation {
+        gap: 14px;
+        padding: 16px;
+      }
+
+      .draft-preparation .operations-actions {
+        display: grid;
+        grid-template-columns: 1fr;
+      }
+
+      .draft-preparation .operations-actions button {
+        width: 100%;
+        min-height: 48px;
+      }
+
       .radio-mic {
         width: 54px;
         height: 68px;
@@ -883,24 +968,39 @@
             <ul class="list" data-morning-briefing-priorities></ul>
           </div>
           <p class="item-text" data-morning-briefing-recommendation>Recomendación no disponible</p>
-          <div class="operations-card" data-executive-action-preparation hidden>
-            <p class="meta">Acción preparada</p>
-            <p class="item-title" data-executive-action-title></p>
+          <div class="operations-card draft-preparation" data-executive-action-preparation hidden>
+            <h3 class="draft-preparation-heading" data-executive-action-title>BORRADOR PREPARADO</h3>
+            <p class="draft-status" data-executive-action-status>Estado: Pendiente de aprobación humana</p>
+            <dl class="draft-fields">
+              <div class="draft-field">
+                <dt>Destinatario</dt>
+                <dd data-executive-action-recipient></dd>
+              </div>
+              <div class="draft-field">
+                <dt>Asunto</dt>
+                <dd data-executive-action-subject></dd>
+              </div>
+              <div class="draft-field">
+                <dt>Riesgo</dt>
+                <dd data-executive-action-risk></dd>
+              </div>
+            </dl>
             <div data-executive-action-detail hidden>
-              <p class="item-text" data-executive-action-summary></p>
-              <div>
-                <p class="meta">Campos disponibles</p>
-                <ul class="list" data-executive-action-fields></ul>
+              <div class="draft-field">
+                <p class="meta">Vista previa</p>
+                <p class="item-text" data-executive-action-body></p>
               </div>
               <div data-executive-action-missing-block hidden>
-                <p class="meta">Campos que faltan</p>
-                <ul class="list" data-executive-action-missing></ul>
+                <p class="draft-validation" data-executive-action-validation></p>
               </div>
-              <p class="meta">Todavía no se ejecutará. Revisa la información antes de aprobarla.</p>
             </div>
+            <p class="draft-notice">Se creará únicamente un borrador en Gmail. No se enviará ningún correo.</p>
             <div class="operations-actions">
-              <button type="button" data-executive-action-review>Revisar preparación</button>
-              <button type="button" class="btn-secondary" data-executive-action-dismiss>Descartar</button>
+              <button type="button" data-executive-action-review aria-expanded="false">Revisar preparación</button>
+              <button type="button" data-executive-action-approve hidden>Aprobar borrador</button>
+              <button type="button" class="btn-secondary" data-executive-action-reject hidden>Rechazar</button>
+              <button type="button" data-executive-action-execute hidden>Crear borrador</button>
+              <button type="button" data-executive-action-regenerate hidden>Generar nueva preparación</button>
             </div>
           </div>
           <p class="note" data-executive-action-feedback role="status" aria-live="polite" hidden></p>
@@ -1210,13 +1310,19 @@
       persistence: browserLocalPersistence
     });
     let resolveAuthReady;
+    let activeFirebaseUid = null;
     window.oxkioAuthReady = new Promise((resolve) => { resolveAuthReady = resolve; });
 
     onAuthStateChanged(firebaseAuth, (user) => {
       if (!user) {
+        window.dispatchEvent(new Event("oxkio-identity-change"));
         window.location.replace("/");
         return;
       }
+      if (activeFirebaseUid && activeFirebaseUid !== user.uid) {
+        window.dispatchEvent(new Event("oxkio-identity-change"));
+      }
+      activeFirebaseUid = user.uid;
       resolveAuthReady(user);
     });
 
@@ -1246,6 +1352,11 @@
     let executiveChatSending = false;
     let businessHunterOperationSending = false;
     let pendingPlanSteps = [];
+    let lastEmailPreparationQuery = "";
+
+    function clearLastEmailPreparationQuery() {
+      lastEmailPreparationQuery = "";
+    }
 
     function setExecutiveChatState(message, state) {
       const stateElement = document.querySelector("[data-executive-chat-state]");
@@ -1259,6 +1370,11 @@
       if (!result) return;
       const proposal = data && data.proposal ? data.proposal : null;
       const approval = data && data.approval ? data.approval : null;
+      const primaryCapability = data && data.capabilityComposition
+        ? data.capabilityComposition.primaryCapability
+        : null;
+      const isEmailPreparation = primaryCapability === "prepare-email-draft"
+        || (proposal && proposal.actionType === "prepare-email-draft");
       const recommendation = data && data.decisionRecommendation && typeof data.decisionRecommendation === "object"
         ? data.decisionRecommendation
         : null;
@@ -1278,10 +1394,14 @@
 
       const firstPlannedStep = plan.length > 0 ? plan[0] : null;
       pendingPlanSteps = plan.slice(1);
-      const actionDecision = firstPlannedStep || (supportedDecision ? recommendation.decision : null);
+      const actionDecision = isEmailPreparation
+        ? null
+        : (firstPlannedStep || (supportedDecision ? recommendation.decision : null));
       setText(
         result.querySelector("[data-chat-response]"),
-        actionDecision
+        isEmailPreparation
+          ? "Borrador preparado"
+          : actionDecision
           ? (plan.length > 0 ? "He preparado un plan de trabajo." : "He revisado tu petición.")
           : (data && typeof data.response === "string" ? data.response : null),
         "Respuesta no disponible."
@@ -1289,12 +1409,23 @@
       const proposalElement = result.querySelector("[data-chat-proposal]");
       proposalElement.hidden = !proposal;
       if (proposal) {
-        proposalElement.textContent = "Hay una propuesta preparada para tu revisión.";
+        proposalElement.textContent = isEmailPreparation
+          ? "Revisa el destinatario, el asunto y el cuerpo antes de aprobar."
+          : "Hay una propuesta preparada para tu revisión.";
+        const supporting = data && data.capabilityComposition
+          && Array.isArray(data.capabilityComposition.supportingCapabilities)
+          ? data.capabilityComposition.supportingCapabilities
+          : [];
+        if (isEmailPreparation && supporting.includes("knowledge-review-readonly")) {
+          proposalElement.textContent += " Se ha usado información disponible como contexto.";
+        }
       }
       const approvalElement = result.querySelector("[data-chat-approval]");
       approvalElement.hidden = !approval;
       if (approval) {
-        approvalElement.textContent = "Hay una decisión pendiente de tu aprobación.";
+        approvalElement.textContent = isEmailPreparation
+          ? "El borrador está pendiente de tu aprobación."
+          : "Hay una decisión pendiente de tu aprobación.";
       }
       result.querySelector("[data-chat-followup]").hidden = !proposal && !approval;
       const decisionBox = result.querySelector("[data-chat-decision]");
@@ -1455,6 +1586,15 @@
         }
         const data = await response.json();
         renderExecutiveChatResult(data);
+        const primaryCapability = data && data.capabilityComposition
+          ? data.capabilityComposition.primaryCapability
+          : null;
+        const isEmailPreparation = primaryCapability === "prepare-email-draft"
+          || (data.proposal && data.proposal.actionType === "prepare-email-draft");
+        if (isEmailPreparation && data.approval) {
+          lastEmailPreparationQuery = query;
+          await loadExecutiveDraftApproval({ focus: true });
+        }
         setExecutiveChatState("Consulta completada.", "success");
       } catch (error) {
         setExecutiveChatState("No se pudo conectar con el servicio ejecutivo.", "error");
@@ -1479,6 +1619,8 @@
           submitExecutiveChat();
         }
       });
+      window.addEventListener("pagehide", clearLastEmailPreparationQuery);
+      window.addEventListener("oxkio-identity-change", clearLastEmailPreparationQuery);
     }
 
     function getBusinessHunterOperationPanel() {
@@ -2784,6 +2926,9 @@
     function fieldLabel(name) {
       const labels = {
         recipientLabel: "Destinatario",
+        recipient: "Para",
+        subject: "Asunto",
+        body: "Vista previa del mensaje",
         subjectPreview: "Asunto",
         bodyPreview: "Cuerpo",
         titlePreview: "Título",
@@ -2801,65 +2946,338 @@
       return labels[name] || "Campo";
     }
 
-    function renderPreparationFields(list, values) {
-      if (!list) return;
-      list.replaceChildren();
-      Object.entries(values || {}).forEach(([name, value]) => {
-        const item = document.createElement("li");
-        const normalized = Array.isArray(value) ? value.join(", ") : value;
-        item.textContent = `${fieldLabel(name)}: ${textOrFallback(normalized, "No disponible")}`;
-        list.appendChild(item);
-      });
+    function isValidDraftRecipient(value) {
+      const recipient = typeof value === "string" ? value.trim() : "";
+      return recipient !== "DIRECCIÓN_COMPLETA"
+        && recipient !== "DIRECCION_COMPLETA"
+        && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(recipient)
+        && !/[\r\n]/.test(recipient);
     }
 
-    function updateExecutiveActionPreparation(preparation) {
+    function setDraftSupervisorState(message) {
+      setText(
+        document.querySelector("[data-ecosystem-observer-next-action-summary]"),
+        message,
+        ""
+      );
+    }
+
+    function setDraftFeedback(message) {
+      const card = document.getElementById("morning-briefing-card");
+      const feedback = card && card.querySelector("[data-executive-action-feedback]");
+      if (!feedback) return;
+      feedback.textContent = message;
+      feedback.hidden = !message;
+    }
+
+    let currentDraftApprovalId = "";
+    let currentDraftPreparationId = "";
+    let currentDraftApprovalStatus = "";
+    let executiveApprovalCsrf = null;
+    let executiveApprovalCsrfExpiresAt = 0;
+
+    function renderPreparation(approvalItem, { focus = false } = {}) {
       const card = document.getElementById("morning-briefing-card");
       const container = card && card.querySelector("[data-executive-action-preparation]");
       if (!container) return;
 
-      const visible = preparation && preparation.status === "prepared";
+      const preparation = approvalItem && (approvalItem.publicProposal || approvalItem.proposal);
+      const visible = preparation
+        && preparation.actionType === "prepare-email-draft"
+        && preparation.status === "prepared"
+        && ["pending", "approved", "executed", "expired", "execution_failed"].includes(approvalItem.status);
       container.hidden = !visible;
       const detail = container.querySelector("[data-executive-action-detail]");
-      if (detail) detail.hidden = true;
-      if (!visible) return;
+      if (!visible) {
+        if (detail) detail.hidden = true;
+        currentDraftApprovalId = "";
+        currentDraftPreparationId = "";
+        currentDraftApprovalStatus = "";
+        return;
+      }
 
-      setText(container.querySelector("[data-executive-action-title]"), preparation.title, "");
-      setText(container.querySelector("[data-executive-action-summary]"), preparation.summary, "");
-      renderPreparationFields(
-        container.querySelector("[data-executive-action-fields]"),
-        preparation.fields
-      );
-      const missing = Array.isArray(preparation.missingFields) ? preparation.missingFields : [];
-      renderPreparationFields(
-        container.querySelector("[data-executive-action-missing]"),
-        Object.fromEntries(missing.map((name) => [name, "Pendiente"]))
-      );
+      const retryableFailure = approvalItem.status === "execution_failed"
+        && approvalItem.error
+        && approvalItem.error.retryable === true;
+      const actionable = ["pending", "approved"].includes(approvalItem.status) || retryableFailure;
+      currentDraftApprovalId = actionable ? approvalItem.id : "";
+      currentDraftPreparationId = preparation.preparationId;
+      currentDraftApprovalStatus = approvalItem.status;
+      if (detail) detail.hidden = approvalItem.status === "expired";
+      const validRecipient = isValidDraftRecipient(preparation.recipient);
+      const expired = approvalItem.status === "expired";
+      const expiry = approvalItem.status === "approved"
+        ? approvalItem.approvalExpiresAt
+        : approvalItem.expiresAt;
+      const expiryTime = expiry && Number.isFinite(Date.parse(expiry))
+        ? new Intl.DateTimeFormat("es-ES", {
+            hour: "2-digit",
+            minute: "2-digit"
+          }).format(new Date(expiry))
+        : "";
+      const statusMessages = {
+        pending: `Pendiente de aprobación.${expiryTime ? ` Expira a las ${expiryTime}.` : ""}`,
+        approved: `Aprobado. Pendiente de creación.${expiryTime ? ` Expira a las ${expiryTime}.` : ""}`,
+        executed: "Borrador creado, no enviado.",
+        expired: "La preparación ha expirado.",
+        execution_failed: retryableFailure
+          ? "No se pudo crear el borrador. Puedes volver a intentarlo."
+          : "No se pudo crear el borrador. Genera una nueva preparación."
+      };
+      setText(container.querySelector("[data-executive-action-title]"), "BORRADOR PREPARADO", "");
+      setText(container.querySelector("[data-executive-action-status]"), statusMessages[approvalItem.status], "");
+      setText(container.querySelector("[data-executive-action-recipient]"), preparation.recipient, "No disponible");
+      setText(container.querySelector("[data-executive-action-subject]"), preparation.subject, "No disponible");
+      setText(container.querySelector("[data-executive-action-body]"), preparation.body, "No disponible");
+      const fields = container.querySelector(".draft-fields");
+      const notice = container.querySelector(".draft-notice");
+      if (fields) fields.hidden = expired;
+      if (notice) notice.hidden = expired;
       const missingBlock = container.querySelector("[data-executive-action-missing-block]");
-      if (missingBlock) missingBlock.hidden = missing.length === 0;
+      if (missingBlock) missingBlock.hidden = expired || validRecipient;
+      setText(
+        container.querySelector("[data-executive-action-validation]"),
+        validRecipient ? "" : "Falta una dirección de correo válida.",
+        ""
+      );
+      setText(
+        container.querySelector("[data-executive-action-risk]"),
+        preparation.risk === "medium" ? "Medio" : "Bajo",
+        "Bajo"
+      );
+      const approve = container.querySelector("[data-executive-action-approve]");
+      const reject = container.querySelector("[data-executive-action-reject]");
+      const execute = container.querySelector("[data-executive-action-execute]");
+      const regenerate = container.querySelector("[data-executive-action-regenerate]");
+      const review = container.querySelector("[data-executive-action-review]");
+      if (review) {
+        review.hidden = approvalItem.status === "expired";
+        review.setAttribute("aria-expanded", String(approvalItem.status !== "expired"));
+      }
+      if (approve) approve.hidden = approvalItem.status !== "pending" || !validRecipient;
+      if (reject) reject.hidden = approvalItem.status !== "pending";
+      if (execute) execute.hidden = approvalItem.status !== "approved" && !retryableFailure;
+      if (regenerate) regenerate.hidden = !expired
+        && !(approvalItem.status === "execution_failed" && !retryableFailure);
+      if (expired) {
+        setText(container.querySelector("[data-executive-action-validation]"), "", "");
+        setDraftFeedback("La preparación ha expirado. Genera una nueva para continuar.");
+        setDraftSupervisorState("Preparación expirada. Genera una nueva preparación para continuar.");
+      } else if (!validRecipient) {
+        setDraftFeedback("Falta una dirección de correo válida.");
+      } else if (approvalItem.status === "pending") {
+        setDraftFeedback("Preparación mostrada.");
+        setDraftSupervisorState("Borrador preparado. Pendiente de aprobación humana.");
+      } else if (approvalItem.status === "approved") {
+        setDraftFeedback("Borrador aprobado.");
+        setDraftSupervisorState("Borrador aprobado. Pendiente de creación en Gmail.");
+      } else if (approvalItem.status === "executed") {
+        setDraftFeedback("Borrador creado, no enviado.");
+        setDraftSupervisorState("Borrador creado en Gmail. No enviado.");
+      } else if (approvalItem.status === "execution_failed") {
+        setDraftFeedback(retryableFailure
+          ? "No se pudo crear el borrador. Puedes volver a intentarlo."
+          : "No se pudo crear el borrador. Genera una nueva preparación.");
+      }
+      if (focus && typeof container.scrollIntoView === "function") {
+        container.scrollIntoView({ behavior: "smooth", block: "center" });
+      }
+    }
+
+    function isCompleteDraftPreparation(item) {
+      const preparation = item && (item.publicProposal || item.proposal);
+      if (
+        !preparation
+        || preparation.actionType !== "prepare-email-draft"
+        || preparation.status !== "prepared"
+        || typeof preparation.preparationId !== "string"
+        || !preparation.preparationId
+        || typeof preparation.recipient !== "string"
+        || !preparation.recipient
+        || typeof preparation.subject !== "string"
+        || !preparation.subject
+        || typeof preparation.body !== "string"
+        || !preparation.body
+        || !["low", "medium"].includes(preparation.risk)
+        || preparation.requiresApproval !== true
+      ) return false;
+      return ["pending", "approved"].includes(item.status)
+        || (
+          item.status === "execution_failed"
+          && item.error
+          && item.error.retryable === true
+        );
+    }
+
+    function selectExecutiveDraftApproval(pendingItems, historyItems) {
+      const pending = (Array.isArray(pendingItems) ? pendingItems : [])
+        .filter(isCompleteDraftPreparation);
+      const approved = (Array.isArray(historyItems) ? historyItems : [])
+        .filter(isCompleteDraftPreparation);
+      const actionable = [...pending, ...approved]
+        .sort((left, right) => Date.parse(right.createdAt || "") - Date.parse(left.createdAt || ""));
+      if (actionable.length > 0) return actionable[0];
+
+      const terminal = (Array.isArray(historyItems) ? historyItems : [])
+        .filter((item) => {
+          const preparation = item && (item.publicProposal || item.proposal);
+          return item && ["executed", "expired", "execution_failed"].includes(item.status)
+            && preparation
+            && preparation.actionType === "prepare-email-draft"
+            && preparation.status === "prepared";
+        })
+        .sort((left, right) => Date.parse(right.createdAt || "") - Date.parse(left.createdAt || ""));
+      return terminal[0] || null;
+    }
+
+    async function loadExecutiveDraftApproval({ focus = false } = {}) {
+      const [pendingResponse, historyResponse] = await Promise.all([
+        window.oxkioAuthenticatedFetch("/api/pending-approvals", { cache: "no-store" }),
+        window.oxkioAuthenticatedFetch("/api/approval-history", { cache: "no-store" })
+      ]);
+      if (!pendingResponse.ok || !historyResponse.ok) return;
+      const pendingData = await pendingResponse.json();
+      const historyData = await historyResponse.json();
+      const approvalItem = selectExecutiveDraftApproval(
+        pendingData.pending,
+        historyData.history
+      );
+      renderPreparation(approvalItem, { focus });
+    }
+
+    async function refreshExecutiveApprovalCsrf() {
+      const response = await window.oxkioAuthenticatedFetch(
+        "/api/executive/security-context",
+        { cache: "no-store" }
+      );
+      const data = await response.json();
+      if (!response.ok || typeof data.csrfToken !== "string") throw new Error("csrf_unavailable");
+      executiveApprovalCsrf = data.csrfToken;
+      executiveApprovalCsrfExpiresAt = Date.parse(data.expiresAt);
+    }
+
+    async function postExecutiveApproval(endpoint, decision) {
+      if (
+        !executiveApprovalCsrf
+        || !Number.isFinite(executiveApprovalCsrfExpiresAt)
+        || Date.now() >= executiveApprovalCsrfExpiresAt
+      ) await refreshExecutiveApprovalCsrf();
+      const body = { approvalId: currentDraftApprovalId };
+      if (decision) body.decision = decision;
+      return window.oxkioAuthenticatedFetch(endpoint, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-OXKIO-CSRF": executiveApprovalCsrf
+        },
+        body: JSON.stringify(body)
+      });
+    }
+
+    function toggleExecutivePreparationDetail(event) {
+      const reviewButton = event && event.currentTarget;
+      const container = reviewButton
+        && typeof reviewButton.closest === "function"
+        ? reviewButton.closest("[data-executive-action-preparation]")
+        : null;
+      const detail = container
+        && typeof container.querySelector === "function"
+        ? container.querySelector("[data-executive-action-detail]")
+        : null;
+      if (!reviewButton || !detail) return;
+      const willExpand = detail.hidden;
+      detail.hidden = !willExpand;
+      reviewButton.setAttribute("aria-expanded", String(willExpand));
+    }
+
+    function recoverExpiredPreparation() {
+      const card = document.getElementById("morning-briefing-card");
+      const container = card && card.querySelector("[data-executive-action-preparation]");
+      const input = document.querySelector("[data-executive-chat-input]");
+      if (container) container.hidden = true;
+      currentDraftApprovalId = "";
+      currentDraftPreparationId = "";
+      currentDraftApprovalStatus = "";
+      setDraftFeedback("Genera una nueva preparación para continuar.");
+      setDraftSupervisorState("Solicita una nueva preparación para continuar.");
+      if (input) {
+        input.value = lastEmailPreparationQuery;
+        input.focus();
+        if (typeof input.scrollIntoView === "function") {
+          input.scrollIntoView({ behavior: "smooth", block: "center" });
+        }
+      }
     }
 
     function initializeExecutiveActionPreparation() {
       const card = document.getElementById("morning-briefing-card");
       if (!card) return;
       const container = card.querySelector("[data-executive-action-preparation]");
-      const detail = card.querySelector("[data-executive-action-detail]");
       const reviewButton = card.querySelector("[data-executive-action-review]");
-      const dismissButton = card.querySelector("[data-executive-action-dismiss]");
+      const approveButton = card.querySelector("[data-executive-action-approve]");
+      const rejectButton = card.querySelector("[data-executive-action-reject]");
+      const executeButton = card.querySelector("[data-executive-action-execute]");
+      const regenerateButton = card.querySelector("[data-executive-action-regenerate]");
       const feedback = card.querySelector("[data-executive-action-feedback]");
 
-      if (reviewButton) {
-        reviewButton.addEventListener("click", () => {
-          if (detail) detail.hidden = false;
-        });
-      }
-      if (dismissButton) {
-        dismissButton.addEventListener("click", () => {
-          if (container) container.hidden = true;
-          if (feedback) {
-            feedback.textContent = "Preparación descartada.";
-            feedback.hidden = false;
+      if (reviewButton) reviewButton.addEventListener("click", toggleExecutivePreparationDetail);
+      if (approveButton) approveButton.addEventListener("click", async () => {
+        if (!currentDraftApprovalId || currentDraftApprovalStatus !== "pending") return;
+        const response = await postExecutiveApproval("/api/approve", "approve");
+        if (response.ok) {
+          setDraftFeedback("Borrador aprobado.");
+          await loadExecutiveDraftApproval();
+        } else {
+          const result = await response.json().catch(() => ({}));
+          if (result.code === "approval_expired") {
+            await loadExecutiveDraftApproval();
+            setDraftFeedback("La preparación ha expirado. Genera una nueva para continuar.");
+          } else {
+            setDraftFeedback("No se pudo aprobar el borrador.");
           }
-        });
+        }
+      });
+      if (rejectButton) rejectButton.addEventListener("click", async () => {
+        if (!currentDraftApprovalId || currentDraftApprovalStatus !== "pending") return;
+        const response = await postExecutiveApproval("/api/approve", "reject");
+        if (response.ok) {
+          if (container) container.hidden = true;
+          clearLastEmailPreparationQuery();
+          setDraftFeedback("Preparación rechazada. No se realizó ninguna acción.");
+          setDraftSupervisorState("Preparación rechazada. No se realizó ninguna acción.");
+        } else {
+          setDraftFeedback("No se pudo rechazar la preparación.");
+        }
+      });
+      if (executeButton) executeButton.addEventListener("click", async () => {
+        if (
+          !currentDraftApprovalId
+          || !["approved", "execution_failed"].includes(currentDraftApprovalStatus)
+        ) return;
+        const response = await postExecutiveApproval("/api/execute-approved");
+        if (response.ok) {
+          clearLastEmailPreparationQuery();
+          await loadExecutiveDraftApproval();
+        } else {
+          const result = await response.json().catch(() => ({}));
+          if (result.status === "execution_failed" && result.error && result.error.retryable === true) {
+            setDraftFeedback("No se pudo crear el borrador. Puedes volver a intentarlo.");
+            await loadExecutiveDraftApproval();
+          } else if (
+            result.status === "execution_failed"
+            || ["execution_not_retryable", "execution_retry_exhausted"].includes(
+              result.error && result.error.code
+            )
+          ) {
+            setDraftFeedback("No se pudo crear el borrador. Genera una nueva preparación.");
+            await loadExecutiveDraftApproval();
+          } else {
+            setDraftFeedback("No se pudo crear el borrador.");
+          }
+        }
+      });
+      if (regenerateButton) {
+        regenerateButton.addEventListener("click", recoverExpiredPreparation);
       }
     }
 
@@ -2867,7 +3285,6 @@
       const executiveResponse = getExecutiveResponse(state);
       updateMorningBriefing(state.executiveFusion);
       updateEcosystemObserver(state.ecosystemObserver);
-      updateExecutiveActionPreparation(state.executiveActionPreparation);
       const greetingPanel = document.querySelector(".greeting");
       setText(
         greetingPanel && greetingPanel.querySelector("h2"),
@@ -3032,6 +3449,7 @@
       initializeExecutiveChat();
       initializeBusinessHunterOperation();
       initializeExecutiveActionPreparation();
+      loadExecutiveDraftApproval().catch(() => {});
     });
   </script>
 </body>

@@ -7,7 +7,12 @@ const path = require('node:path');
 const test = require('node:test');
 
 const ApprovalQueue = require('./approvalQueue');
-const { calculatePayloadHash, normalizeExecutionPayload } = ApprovalQueue;
+const {
+  APPROVAL_TTL_MS,
+  PREPARATION_TTL_MS,
+  calculatePayloadHash,
+  normalizeExecutionPayload,
+} = ApprovalQueue;
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -73,6 +78,126 @@ test('stores email execution payload internally and exposes only public proposal
     assert.equal(Object.hasOwn(publicItem, 'executionPayload'), false);
     assert.equal(Object.hasOwn(publicItem, 'payloadHash'), false);
     assert.equal(JSON.stringify(added).includes('Contenido del borrador'), false);
+  });
+});
+
+test('creates one exact approvable email preparation with an internal id and immutable payload hash', () => {
+  withTemporaryQueue((queue) => {
+    const added = queue.addPreparedEmailDraft({
+      recipient: 'pilot@example.com',
+      subject: 'Piloto OXKIO',
+      body: 'Mensaje seguro para el piloto.',
+      risk: 'low',
+    }, { interactionId: 'pilot-interaction' });
+
+    assert.equal(added.status, 'pending');
+    assert.match(added.publicProposal.preparationId, UUID_PATTERN);
+    assert.deepEqual(added.publicProposal, {
+      preparationId: added.publicProposal.preparationId,
+      actionType: 'prepare-email-draft',
+      type: 'email_draft',
+      status: 'prepared',
+      recipient: 'pilot@example.com',
+      subject: 'Piloto OXKIO',
+      body: 'Mensaje seguro para el piloto.',
+      summary: 'Borrador preparado para aprobación humana.',
+      risk: 'low',
+      requiresApproval: true,
+      executionEnabled: false,
+    });
+    const internal = queue.getInternalById(added.id);
+    assert.equal(internal.context.preparationId, added.publicProposal.preparationId);
+    assert.equal(internal.executionPayload.to, added.publicProposal.recipient);
+    assert.equal(internal.payloadHash, calculatePayloadHash(internal.executionPayload));
+    assert.equal(typeof internal.expiresAt, 'string');
+  });
+});
+
+test('incomplete, active HTML and expired preparations cannot be approved', () => {
+  withTemporaryQueue((queue) => {
+    for (const preparation of [
+      { recipient: '', subject: 'Asunto', body: 'Cuerpo' },
+      { recipient: 'pilot@example.com', subject: '', body: 'Cuerpo' },
+      { recipient: 'pilot@example.com', subject: 'Asunto', body: '<script>alert(1)</script>' },
+    ]) {
+      assert.equal(queue.addPreparedEmailDraft(preparation).code, 'preparation_not_ready');
+    }
+    const added = queue.addPreparedEmailDraft({
+      recipient: 'pilot@example.com',
+      subject: 'Caducado',
+      body: 'No debe aprobarse.',
+    });
+    queue.pending.find((item) => item.id === added.id).expiresAt = new Date(0).toISOString();
+    const result = queue.approve(added.id, { clientId: 'cliente-cero', userId: 'pilot-user' });
+    assert.equal(result.code, 'approval_expired');
+    assert.equal(queue.getInternalById(added.id).status, 'expired');
+  });
+});
+
+test('uses a two-hour preparation window and a separate thirty-minute approval window', () => {
+  withTemporaryQueue((queue) => {
+    const before = Date.now();
+    const added = queue.addPreparedEmailDraft({
+      recipient: 'pilot@example.com',
+      subject: 'Ventana humana',
+      body: 'Revisión controlada.',
+    });
+    const prepared = queue.getInternalById(added.id);
+
+    assert.equal(PREPARATION_TTL_MS, 2 * 60 * 60 * 1000);
+    assert.equal(APPROVAL_TTL_MS, 30 * 60 * 1000);
+    assert.equal(Date.parse(prepared.expiresAt) >= before + PREPARATION_TTL_MS, true);
+
+    queue.approve(added.id, { clientId: 'cliente-cero', userId: 'pilot-user' });
+    const approved = queue.getInternalById(added.id);
+    assert.equal(Date.parse(approved.approvalExpiresAt) >= Date.parse(approved.approvedAt) + APPROVAL_TTL_MS, true);
+  });
+});
+
+test('expired preparations leave pending automatically and expose no operational content', () => {
+  withTemporaryQueue((queue) => {
+    const added = queue.addPreparedEmailDraft({
+      recipient: 'pilot@example.com',
+      subject: 'Caducidad automática',
+      body: 'No debe seguir accionable.',
+    });
+    queue.pending.find((item) => item.id === added.id).expiresAt = new Date(0).toISOString();
+
+    assert.equal(queue.listPending().some((item) => item.id === added.id), false);
+    const expired = queue.getHistory().find((item) => item.id === added.id);
+    assert.equal(expired.status, 'expired');
+    assert.equal(Object.hasOwn(expired.publicProposal, 'recipient'), false);
+    assert.equal(Object.hasOwn(expired.publicProposal, 'subject'), false);
+    assert.equal(Object.hasOwn(expired.publicProposal, 'body'), false);
+    assert.equal(queue.beginExecution(added.id).code, 'invalid_transition');
+  });
+});
+
+test('expired approval cannot execute and a repeated preparation is independent', () => {
+  withTemporaryQueue((queue) => {
+    const first = queue.addPreparedEmailDraft({
+      recipient: 'pilot@example.com',
+      subject: 'Primera preparación',
+      body: 'Contenido uno.',
+    });
+    queue.approve(first.id, { clientId: 'cliente-cero', userId: 'pilot-user' });
+    queue.history.find((item) => item.id === first.id).approvalExpiresAt = new Date(0).toISOString();
+    assert.equal(queue.beginExecution(first.id).code, 'approval_expired');
+    assert.equal(queue.getInternalById(first.id).status, 'expired');
+
+    const second = queue.addPreparedEmailDraft({
+      recipient: 'pilot@example.com',
+      subject: 'Segunda preparación',
+      body: 'Contenido dos.',
+    });
+    const firstInternal = queue.getInternalById(first.id);
+    const secondInternal = queue.getInternalById(second.id);
+    assert.notEqual(second.id, first.id);
+    assert.notEqual(second.publicProposal.preparationId, first.publicProposal.preparationId);
+    assert.notEqual(secondInternal.payloadHash, firstInternal.payloadHash);
+    assert.equal(secondInternal.status, 'pending');
+    assert.equal(Object.hasOwn(secondInternal, 'approvedAt'), false);
+    assert.equal(Object.hasOwn(secondInternal, 'executionId'), false);
   });
 });
 

@@ -174,7 +174,11 @@ async function handleApproveRequest(req, res, { approvalQueue, getIdentity, csrf
       });
     }
 
-    const result = approvalQueue.approve(approvalId);
+    const decision = body && body.decision === 'reject' ? 'reject' : 'approve';
+    const identity = typeof getIdentity === 'function' ? getIdentity() : null;
+    const result = decision === 'reject'
+      ? approvalQueue.reject(approvalId)
+      : approvalQueue.approve(approvalId, identity);
     if (!result.ok) {
       return sendJson(res, statusForQueueError(result), {
         ok: false,
@@ -209,7 +213,7 @@ async function handleApproveRequest(req, res, { approvalQueue, getIdentity, csrf
 async function handleExecuteApprovedRequest(req, res, {
   approvalQueue,
   executionService,
-  config = { executionEnabled: false },
+  config = { executionEnabled: false, draftExecutionEnabled: false },
   getIdentity,
   csrf,
 }) {
@@ -227,7 +231,7 @@ async function handleExecuteApprovedRequest(req, res, {
       });
     }
 
-    if (config.executionEnabled !== true) {
+    if (config.draftExecutionEnabled !== true && config.executionEnabled !== true) {
       const validation = approvalQueue.validateForExecution(approvalId);
       if (!validation.ok) {
         return sendJson(res, statusForQueueError(validation), {

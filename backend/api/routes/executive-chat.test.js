@@ -52,7 +52,7 @@ function createHarness(t, overrides = {}) {
     async buildGmailPrivateContext() {
       calls.gmail += 1;
       return privateContext('gmail', { source: 'gmail', messages: [{
-        id: 'secret-message-id', threadId: 'secret-thread-id', from: 'Equipo', subject: 'Seguimiento',
+        id: 'secret-message-id', threadId: 'secret-thread-id', from: 'Equipo <pilot@example.com>', subject: 'Seguimiento',
         date: '2026-07-20T08:00:00.000Z', snippet: 'secret-body-snippet', unread: true, important: true,
       }] });
     },
@@ -147,17 +147,20 @@ test('F-G read safe memory only when selected and keep general query privateCont
 
 test('H-J preserve supervised proposals in sandbox without real execution', async (t) => {
   const cases = [
-    ['Prepara un borrador de respuesta.', 'email_draft', 0, 0],
-    ['Prepara una respuesta al último correo.', 'email_draft', 1, 0],
-    ['Programa una reunión.', 'meeting_proposal', 0, 0],
+    ['Prepara un borrador de respuesta.', 'email_draft', 0, 0, false],
+    ['Prepara una respuesta al último correo.', 'email_draft', 1, 0, true],
+    ['Programa una reunión.', 'meeting_proposal', 0, 0, true],
   ];
-  for (const [query, type, gmailCalls, calendarCalls] of cases) {
+  for (const [query, type, gmailCalls, calendarCalls, approvalExpected] of cases) {
     await t.test(query, async (subtest) => {
       const { calls, dependencies } = createHarness(subtest);
       const response = await requestChat(query, dependencies);
       const payload = response.getJson();
       assert.equal(payload.proposal.type, type);
-      assert.equal(payload.approval.status, 'pending');
+      assert.equal(
+        approvalExpected ? payload.approval.status : payload.approval,
+        approvalExpected ? 'pending' : null,
+      );
       assert.equal(calls.gmail, gmailCalls); assert.equal(calls.calendar, calendarCalls);
       assert.equal(JSON.stringify(payload).includes('executionPayload'), false);
     });
@@ -239,6 +242,7 @@ test('adds an optional supervised recommendation without executing or accepting 
   assert.equal(plannerCalls, 1);
   assert.equal(payload.decisionRecommendation.decision, 'business-analysis-readonly');
   assert.deepEqual(payload.operationPlan, { steps: ['business-analysis-readonly'], requiresConfirmation: true });
+  assert.equal(payload.capabilityComposition.primaryCapability, 'business-analysis-readonly');
   assert.equal(payload.decisionRecommendation.requiresConfirmation, true);
   assert.equal(runtime.approvalQueue.listPending().length, 0);
   assert.equal(JSON.stringify(payload).includes('evil'), false);
@@ -255,8 +259,101 @@ test('recommends supervised Gmail review without reading Gmail before confirmati
   assert.equal(response.statusCode, 200);
   assert.equal(calls.gmail, 0);
   assert.equal(payload.decisionRecommendation.decision, 'gmail-review-readonly');
+  assert.equal(payload.capabilityComposition.primaryCapability, 'gmail-review-readonly');
   assert.equal(payload.decisionRecommendation.requiresConfirmation, true);
   assert.doesNotMatch(payload.response, /Gmail readonly no esta disponible/i);
+});
+
+test('routes an explicit email preparation to prepare-email-draft instead of Gmail review', async (t) => {
+  let decisionCalls = 0;
+  const { dependencies } = createHarness(t, {
+    orchestrateExecutiveQuery() {
+      return {
+        analysis: { intent: 'email' },
+        response: 'Preparación disponible.',
+        sources: [],
+        proposal: {
+          type: 'email_draft',
+          actionType: 'prepare-email-draft',
+          summary: 'Borrador de email preparado para revision.',
+          requiresApproval: true,
+        },
+      };
+    },
+    recommendSupervisedOperation() {
+      decisionCalls += 1;
+      return {
+        decision: 'gmail-review-readonly',
+        reason: 'Revisar correo.',
+        confidence: 'medium',
+        requiresConfirmation: true,
+      };
+    },
+    planOperations() {
+      throw new Error('supporting Knowledge must not replace explicit email preparation');
+    },
+  });
+
+  const response = await requestChat(
+    'Prepara un correo para mi dirección de Gmail con asunto: Prueba OXKIO 5C.6D.1 '
+      + 'y cuerpo: Este correo es un borrador de prueba. No debe enviarse.',
+    dependencies,
+  );
+  const payload = response.getJson();
+
+  assert.equal(response.statusCode, 200);
+  assert.equal(payload.proposal.actionType, 'prepare-email-draft');
+  assert.equal(Object.hasOwn(payload, 'decisionRecommendation'), false);
+  assert.equal(Object.hasOwn(payload, 'operationPlan'), false);
+  assert.deepEqual(payload.capabilityComposition, {
+    primaryCapability: 'prepare-email-draft',
+    supportingCapabilities: [],
+    deferredCapabilities: [],
+    rejectedCapabilities: [],
+  });
+  assert.equal(decisionCalls, 0);
+});
+
+test('keeps Knowledge auxiliary when explicit email preparation is the primary capability', async (t) => {
+  const { dependencies } = createHarness(t, {
+    orchestrateExecutiveQuery() {
+      return {
+        analysis: { intent: 'documentation' },
+        response: 'Generic Knowledge response that must remain secondary.',
+        sources: [],
+        proposal: {
+          type: 'email_draft',
+          actionType: 'prepare-email-draft',
+          summary: 'Borrador preparado.',
+          requiresApproval: true,
+        },
+        approval: {
+          id: 'approval-composed-email',
+          status: 'pending',
+          createdAt: '2026-07-25T11:00:00.000Z',
+        },
+      };
+    },
+    recommendSupervisedOperation() {
+      throw new Error('readonly decision must not compete with explicit action');
+    },
+    planOperations() {
+      throw new Error('supporting capability must not become an operation plan');
+    },
+  });
+
+  const response = await requestChat(
+    'Prepara un correo para pilot@example.com usando la información disponible sobre OXKIO '
+      + 'con asunto: Resumen y cuerpo: Contexto revisado.',
+    dependencies,
+  );
+  const payload = response.getJson();
+
+  assert.equal(payload.capabilityComposition.primaryCapability, 'prepare-email-draft');
+  assert.deepEqual(payload.capabilityComposition.supportingCapabilities, ['knowledge-review-readonly']);
+  assert.equal(payload.approval.status, 'pending');
+  assert.equal(Object.hasOwn(payload, 'decisionRecommendation'), false);
+  assert.equal(Object.hasOwn(payload, 'operationPlan'), false);
 });
 
 test('recommends supervised Calendar review without reading Calendar before confirmation', async (t) => {
@@ -270,6 +367,7 @@ test('recommends supervised Calendar review without reading Calendar before conf
   assert.equal(response.statusCode, 200);
   assert.equal(calls.calendar, 0);
   assert.equal(payload.decisionRecommendation.decision, 'calendar-review-readonly');
+  assert.equal(payload.capabilityComposition.primaryCapability, 'calendar-review-readonly');
   assert.equal(payload.decisionRecommendation.requiresConfirmation, true);
   assert.doesNotMatch(payload.response, /Calendar readonly no esta disponible/i);
 });

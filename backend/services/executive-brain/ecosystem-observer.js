@@ -40,6 +40,14 @@ const ECOSYSTEM_SUPERVISOR_POLICY = Object.freeze({
   executionEnabled: false,
 });
 
+const CONVERSATIONAL_RECOVERY_POLICY = Object.freeze({
+  source: 'executive-chat',
+  retainedState: 'original-request-in-session',
+  automaticSubmission: false,
+  reuseFailedPreparation: false,
+  executionEnabled: false,
+});
+
 function safeText(value, limit = MAX_TEXT) {
   if (typeof value !== 'string') return '';
   const text = value.replace(/[\u0000-\u001F\u007F]/g, ' ').replace(/\s+/g, ' ').trim();
@@ -495,6 +503,7 @@ function buildEcosystemObserver(input = {}) {
 
   return Object.freeze({
     supervisorPolicy: ECOSYSTEM_SUPERVISOR_POLICY,
+    conversationalRecoveryPolicy: CONVERSATIONAL_RECOVERY_POLICY,
     ecosystemStatus: Object.freeze({
       state: status,
       project: safeText(projectStateView.project),
@@ -526,6 +535,7 @@ function buildEcosystemObserver(input = {}) {
 }
 
 module.exports = {
+  CONVERSATIONAL_RECOVERY_POLICY,
   ECOSYSTEM_SUPERVISOR_POLICY,
   INTELLIGENCE_COMMITTEE_READINESS,
   OBSERVED_AREAS,
