@@ -3,14 +3,17 @@
 ## Estado operativo vigente
 
 - Código de bloque: 5C.7
-- Subfase activa: 5C.7B — Arquitectura Ejecutable del Runtime
+- Última subfase cerrada: 5C.7B.2 — Persistencia Definitiva
+- Subfase siguiente: no abierta; 5C.7B.3 permanece cerrada
 - Bloque actual: Runtime Permanente e Infraestructura
 - Fase actual: 5C.7 — Runtime Permanente 24/7
-- Objetivo inmediato: preparar staging selectivo del backend cloud-ready neutral validado.
-- Siguiente paso recomendado: revisar y autorizar staging exclusivo de 5C.7B.1.
+- Objetivo inmediato: seleccionar proveedor PostgreSQL gestionado y diseño productivo, sin contratar.
+- Siguiente paso recomendado: fijar sobre de carga y comparar Cloud SQL, Supabase, Neon y Render.
 - Siguiente fase prevista: 5C.7 — Runtime Permanente 24/7.
-- Último hito publicado: 5C.6D.1 — Gmail Draft supervisado.
-- Resumen de la sesión: 5C.6D.1 cerrada oficialmente el 27/07/2026. Gmail Draft real, SAFE_DRAFT_ONLY, cero envíos, ausencia de duplicados, sincronización ExecutionService–Approval Queue–Dashboard y auditoría de aceptación validadas.
+- Último hito publicado: 5C.7B.1 — backend cloud-ready neutral, commit `a8619c1`.
+- Resumen de la sesión: Firestore Emulator y PostgreSQL portable superaron el mismo
+  harness. La ADR ratifica PostgreSQL gestionado como persistencia operativa principal;
+  proveedor, plan, coste y diseño productivo siguen pendientes.
 
 ## Evidencia de cierre 5C.6D.1
 
@@ -26,19 +29,38 @@
 - Commit: completado por este cierre
 - Publicación: completada por este cierre
 
-## Evidencia de cierre
+## Evidencia publicada 5C.7B.1
+
+Referencia publicada: 5C.7B.1.
 
 - Implementación: completada
 - Integración: completada
-- Pruebas: completadas; 531/531
+- Pruebas: completadas según el cierre publicado
 - Piloto manual: completado en Node con puertos 3000 y 3107; Docker bloqueado por entorno
-- Auditoría: pendiente
-- Documentación canónica: actualizada
+- Auditoría: completada para el alcance cloud-ready neutral
+- Documentación canónica: actualizada y publicada
 - Observer alineado: completado
 - Validación del Supervisor: completada
-- Staging selectivo preparado: pendiente
-- Commit: pendiente
-- Publicación: pendiente
+- Staging selectivo preparado: completado
+- Commit: completado en `a8619c1`
+- Publicación: completada
+
+## Evidencia de cierre
+
+- Implementación: completada para inventario, contrato, harness y POC comparables.
+- Integración: no iniciada; no se conectó el runtime a ningún motor.
+- Pruebas: POC Firestore y PostgreSQL superadas con 13/13 operaciones.
+- Piloto manual: POC local ejecutada; no representa cloud.
+- Auditoría: ADR humana ratificada.
+- Documentación canónica: actualizada.
+- Observer alineado: completado.
+- Validación del Supervisor: pendiente.
+- Staging selectivo preparado: completado para 5C.7B.2.
+- Commit: completado por el cierre material.
+- Publicación: completada por el cierre material.
+
+Decisión: PostgreSQL gestionado como persistencia operativa principal. Proveedor
+pendiente. No se migraron datos ni se activaron servicios.
 
 Capacidades operativas verificadas:
 
@@ -67,6 +89,7 @@ Capacidades operativas verificadas:
 
 ## No abrir todavía
 
+- 5C.7B.3.
 - Envío de Gmail.
 - Calendar Execution.
 - Automatizaciones y activación de otros agentes.
@@ -76,23 +99,28 @@ Capacidades operativas verificadas:
 - El árbol de trabajo contiene cambios históricos y runtime ajenos a 5C.7B que deben permanecer separados.
 - Los tokens OAuth reales siguen en filesystem local y deben rotarse antes de cualquier despliegue.
 - Memoria, Approval Queue y logs siguen ligados a JSON local; no admiten runtime multiinstancia.
-- Firestore existe fuera del código, pero todavía no tiene repositorios ni aislamiento multiusuario implementados.
+- Las colecciones Firestore reales no están inventariadas; no borrar, escribir ni activar doble escritura.
 - La excepción `draftExecutionEnabled` debe permanecer cerrada a Gmail Draft y separada de `executionEnabled=false`.
 - Las evidencias y auditorías ya aceptadas no se repetirán salvo invalidación objetiva del contexto.
 
 ## Decisión de arquitectura 5C.7B
 
-- Candidata principal pendiente de auditoría externa: Cloud Run + Firebase Authentication + Firestore.
-- Alternativa secundaria candidata: Railway manteniendo Firebase Authentication.
+- Runtime candidato pendiente de auditoría: Cloud Run + Firebase Authentication.
+- Persistencia operativa principal ratificada: PostgreSQL gestionado.
+- Firestore: POC superada; no será BBDD operativa principal.
+- Híbrida Firestore + PostgreSQL: descartada para el núcleo.
 - Primera auditoría Antigravity: recibida; veredicto APROBADA CON CORRECCIONES.
 - Riesgos aceptados: JSON multiinstancia, secretos locales, filesystem efímero, idempotencia persistente y desacoplamiento de trabajos duraderos.
-- PostgreSQL, Redis/BullMQ y Railway no se aceptan como decisiones obligatorias.
-- Runtime y persistencia definitivos: pendientes de pruebas y métricas.
+- Redis/BullMQ y Railway no se aceptan como decisiones obligatorias.
+- Persistencia principal: ratificada mediante
+  `XANTALAL/00_GOVERNANCE/ADR-5C.7B.2-POSTGRESQL-PERSISTENCIA-PRINCIPAL.md`.
 - LucusHost: `unknown` hasta obtener datos verificables del plan.
-- Estado: 5C.7B.1 LISTA PARA STAGING SELECTIVO; no lista para despliegue.
+- Estado: 5C.7B.1 CERRADA Y PUBLICADA; 5C.7B.2 CERRADA Y PUBLICADA,
+  PERSISTENCIA PRINCIPAL RATIFICADA.
 - Segunda auditoría Antigravity: tras el piloto remoto y antes de probadores.
-- Prohibido activar Cloud Run, Blaze, Firestore nuevo, Secret Manager o facturación durante 5C.7B.1.
+- Prohibido contratar, migrar, activar doble escritura o desplegar durante esta subfase.
 - Documento canónico: `XANTALAL/00_GOVERNANCE/5C.7B-ARQUITECTURA-EJECUTABLE-RUNTIME.md`.
+- Decisión detallada: `XANTALAL/00_GOVERNANCE/5C.7B.2-PERSISTENCIA-DEFINITIVA.md`.
 
 ## Elementos a reutilizar
 

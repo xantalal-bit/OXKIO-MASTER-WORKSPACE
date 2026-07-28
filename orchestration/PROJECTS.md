@@ -6,13 +6,17 @@
 - Ruta: C:\Users\janta\OneDrive\Documentos\OXKIO
 - Rol: Orquestador principal
 - Prioridad: Estratégica
-- Estado: 5C.7B.1 validada mediante piloto Node; lista para staging selectivo
-- Objetivo inmediato: revisar staging exclusivo de 5C.7B.1 sin desplegar.
-- Candidata principal: Cloud Run + Firebase Authentication + Firestore; no definitiva.
-- Alternativa secundaria candidata: Railway; LucusHost permanece `unknown`.
+- Estado: 5C.7B.1 y 5C.7B.2 cerradas y publicadas; PostgreSQL gestionado ratificado
+- Objetivo inmediato: seleccionar proveedor PostgreSQL gestionado y diseño productivo, sin contratar.
+- Runtime candidato: Cloud Run + Firebase Authentication; no definitivo.
+- Persistencia operativa principal: PostgreSQL gestionado, ratificada mediante ADR.
+- Firestore: POC superada; no será BBDD operativa principal; colecciones reales intactas y `unknown`.
+- LucusHost permanece `unknown`.
 - Primera auditoría Antigravity: recibida; APROBADA CON CORRECCIONES.
 - Segunda auditoría Antigravity: después del piloto remoto y antes de probadores.
-- Evidencia técnica: cinco repositorios neutrales, adaptadores JSON `local_only`, idempotencia, puertos 3000/3107, probes, shutdown y stores intactos. Docker bloqueado por entorno.
+- Evidencia técnica: mismo harness de 13 operaciones superado en Firestore Emulator y
+  PostgreSQL portable; RLS, constraints, idempotencia, aislamiento y restore aprobados;
+  stores/tokens reales intactos.
 
 2. BUSINESS-HUNTER
 - Ruta: C:\Users\janta\OneDrive\Documentos\BUSINESS-HUNTER

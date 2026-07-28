@@ -2,7 +2,7 @@
 
 ## Fecha
 
-27/07/2026
+28/07/2026
 
 ## Bloque actual
 
@@ -10,60 +10,98 @@
 
 ## Subfase actual
 
-5C.7B — Arquitectura Ejecutable del Runtime.
+5C.7B.2 — Persistencia Definitiva.
 
 ## Estado
 
-5C.7B.1 implementada, validada y con piloto local satisfactorio; lista para staging selectivo. Docker bloqueado por ausencia de herramienta local.
+5C.7B.1 está cerrada y publicada en `a8619c1`. Firestore Emulator y PostgreSQL
+portable superaron el mismo harness de 13 operaciones. La decisión humana ratifica
+PostgreSQL gestionado como persistencia operativa principal mediante
+`ADR-5C.7B.2-POSTGRESQL-PERSISTENCIA-PRINCIPAL.md`. 5C.7B.2 queda cerrada y publicada.
+El proveedor y el diseño productivo siguen pendientes; 5C.7B.3 no está abierta.
 
 ## Último hito validado
 
-Gmail Draft supervisado bajo SAFE_DRAFT_ONLY con creación real, cero envíos, ausencia de duplicados y sincronización final entre ExecutionService, Approval Queue y Dashboard.
+5C.7B.1 — backend cloud-ready neutral publicado:
+
+`a8619c1 feat(5C.7B.1): preparar backend cloud-ready neutral`
 
 ## Última evidencia aceptada
 
-Registro `executed` con `executionCompletedAt`, `result.type=email_draft`, `result.mode=SAFE_DRAFT_ONLY`, `externalId` y `secondaryExternalId`; 517/517 pruebas superadas; `node --check` y `git diff --check` correctos.
+- Inventario de stores con ubicaciones, tamaños, lectores y escritores.
+- Dataset sintético único y contrato neutral de 13 operaciones.
+- Firestore Emulator: 13/13, aislamiento, idempotencia y restore; dos lock timeouts recuperados.
+- PostgreSQL portable: 13/13, RLS forzada, constraints, append-only y dump/restore.
+- ADR humana: PostgreSQL gestionado ratificado; proveedor no seleccionado.
+- Ningún store, token, OAuth ni dato real fue modificado.
 
 ## Último piloto realizado
 
-Piloto real satisfactorio: exactamente un borrador Gmail creado, ningún correo enviado y segundo intento bloqueado antes de Gmail.
+POC locales comparables, no representativas de cloud:
+
+- Firestore Emulator: 8.810,790 ms de tiempo total y dos timeouts recuperados.
+- PostgreSQL portable: 256,332 ms, cero bloqueos/deadlocks inesperados y restore con
+  digest idéntico.
 
 ## Incidencias abiertas
 
-Ninguna incidencia bloquea 5C.7B.1. Antes del despliegue siguen pendientes token OAuth local, stores JSON, persistencia multiusuario y datos reales de LucusHost.
+- Los JSON productivos siguen siendo `local_only`.
+- OAuth sigue usando un token local de un único sujeto.
+- Las colecciones Firestore reales siguen sin inventario read-only.
+- Aislamiento tenant aún no está integrado en el runtime.
+- Proveedor, región, plan, coste, SLA, pool, HA y RPO/RTO siguen `UNKNOWN`.
+- El repositorio de desarrollo continúa dentro de OneDrive.
+- El laboratorio PostgreSQL portable no es productivo.
 
 ## Siguiente acción exacta
 
-Realizar staging selectivo de 5C.7B.1, excluyendo stores, secretos y trabajo ajeno.
+Sin abrir 5C.7B.3, fijar el sobre de carga de Cliente Cero y solicitar la misma ficha
+técnica, contractual y de coste a Cloud SQL, Supabase, Neon y Render. Seleccionar
+después el proveedor PostgreSQL gestionado y aprobar el diseño productivo, sin contratar
+ni migrar.
 
 ## Archivos pendientes de staging
 
-Ninguno derivado del cierre publicado de 5C.6D.1.
+Ninguno de 5C.7B.2 tras el cierre material. El trabajo ajeno permanece sin staging.
 
 ## Exclusiones
 
-Runtime implementado, infraestructura desplegada, BBDD, OAuth, tokens, credenciales, datos locales, configuración privada, archivos temporales y trabajo ajeno a 5C.6D.1.
+Sin migración, datos reales, OAuth, tokens, Blaze, Firestore productivo, PostgreSQL
+contratado, despliegue, staging, commit, push ni apertura de 5C.7B.3.
 
-## Commit previsto
+## Commit de cierre
 
-`feat(5C.6D.1): cierre definitivo de Gmail Draft supervisado`
+`feat(5C.7B.2): ratificar PostgreSQL como persistencia principal`
 
 ## Última copia ZIP conocida
 
-No consta ninguna copia ZIP en el repositorio.
+No consta ninguna copia ZIP nueva en el repositorio.
 
 ## Riesgos abiertos
 
-Selección definitiva de runtime/BBDD, rotación de secretos, persistencia transaccional, aislamiento por tenant, restore y costes medidos permanecen pendientes. LucusHost sigue `unknown`. La segunda auditoría Antigravity será posterior al piloto remoto y anterior a probadores.
+La decisión de motor es definitiva para este alcance. Siguen pendientes proveedor,
+región, pool, coste, SLA, HA, RPO/RTO, integración RLS en runtime, gestor de secretos,
+retención y métricas cloud para 10/100/1.000 usuarios.
 
 ## Decisiones permanentes recientes
 
-Mantener SAFE_DRAFT_ONLY, aprobación humana separada, prevención de duplicados y confirmación obligatoria de la persistencia final en Approval Queue antes de informar éxito.
+- Una fuente canónica por tipo de dato.
+- `tenantId` y `userId` obligatorios en toda persistencia operativa.
+- La identidad se deriva del token verificado; nunca del body.
+- Approval, Operation y Audit deben migrarse como una unidad transaccional.
+- OAuth y secretos vivirán en el gestor de secretos futuro, nunca en PostgreSQL.
+- Google Calendar, documentos de usuario, Firebase Authentication y gobernanza
+  permanecen en sus autoridades externas.
+- `executionEnabled=false` y `SAFE_DRAFT_ONLY` permanecen intactos.
 
 ## Reglas nuevas incorporadas
 
-Una ejecución externa no se declarará completada hasta que su estado terminal y metadatos seguros estén confirmados por la fuente canónica que consume el Dashboard.
+La persistencia operativa principal exige POC comparables, aislamiento, restauración y
+decisión humana mediante ADR. La selección de proveedor exige región UE, DPA, RLS,
+backups, PITR, exportación, TLS, roles mínimos, pool, monitorización, SLA, escalado,
+coste y portabilidad verificados o `UNKNOWN` explícito.
 
 ## Próximo objetivo estratégico
 
-Abrir documentalmente 5C.7B.2 para comparar adaptadores y decidir Firestore frente a PostgreSQL con pruebas y métricas; mantener la segunda auditoría externa después del piloto remoto y antes de probadores.
+Definir el sobre de carga y seleccionar proveedor PostgreSQL gestionado en una fase
+posterior todavía no abierta ni numerada. No abrir 5C.7B.3 todavía.

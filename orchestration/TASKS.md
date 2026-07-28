@@ -2,12 +2,21 @@
 
 ## Prioridad inmediata vigente
 
-1. Revisar y autorizar staging selectivo exclusivo de 5C.7B.1.
-2. Preparar la apertura documental de 5C.7B.2: comparativa de adaptadores y decisión de persistencia.
-3. Mantener runtime y BBDD pendientes hasta comparar adaptadores, pruebas y métricas.
-4. Obtener del proveedor las respuestas técnicas y contractuales de LucusHost.
+1. Fijar el sobre de carga de Cliente Cero: región UE, almacenamiento, conexiones,
+   concurrencia, HA, RPO, RTO, retención y soporte.
+2. Obtener la misma ficha técnica, contractual y de coste para Cloud SQL, Supabase,
+   Neon y Render.
+3. Verificar DPA/RGPD, ubicación de backups, PITR, TLS, roles, pool, monitorización,
+   SLA, exportación completa, portabilidad y coste.
+4. Mantener Railway condicionado a responsabilidad gestionada equivalente y LucusHost
+   en `unknown` hasta disponer de evidencia real.
+5. Seleccionar proveedor PostgreSQL gestionado y aprobar el diseño productivo.
+6. Mantener Firestore, JSON productivos, OAuth y stores reales intactos.
 
-El primer informe Antigravity está recibido: APROBADA CON CORRECCIONES. No impone PostgreSQL, Redis/BullMQ ni Railway. El piloto Node de 5C.7B.1 fue satisfactorio; Docker está bloqueado por ausencia de la herramienta local. No desplegar, migrar, contratar ni activar servicios cloud.
+5C.7B.1 y 5C.7B.2 están cerradas y publicadas. Firestore Emulator y PostgreSQL
+portable superaron el mismo harness. PostgreSQL gestionado queda ratificado mediante
+ADR como persistencia operativa principal. No abrir 5C.7B.3, desplegar, migrar,
+contratar ni activar servicios cloud.
 
 ## Historial sustituido — lista inicial del 22/06/2026
 
