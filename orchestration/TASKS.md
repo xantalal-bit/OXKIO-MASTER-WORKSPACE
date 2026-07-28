@@ -2,10 +2,12 @@
 
 ## Prioridad inmediata vigente
 
-1. Revisar la propuesta canónica de apertura de 5C.7.
-2. Esperar autorización humana separada antes de implementar 5C.7.
+1. Revisar y autorizar staging selectivo exclusivo de 5C.7B.1.
+2. Preparar la apertura documental de 5C.7B.2: comparativa de adaptadores y decisión de persistencia.
+3. Mantener runtime y BBDD pendientes hasta comparar adaptadores, pruebas y métricas.
+4. Obtener del proveedor las respuestas técnicas y contractuales de LucusHost.
 
-5C.6D.1 está cerrada oficialmente desde el 27/07/2026. No implementar 5C.7 antes de autorización humana expresa.
+El primer informe Antigravity está recibido: APROBADA CON CORRECCIONES. No impone PostgreSQL, Redis/BullMQ ni Railway. El piloto Node de 5C.7B.1 fue satisfactorio; Docker está bloqueado por ausencia de la herramienta local. No desplegar, migrar, contratar ni activar servicios cloud.
 
 ## Historial sustituido — lista inicial del 22/06/2026
 

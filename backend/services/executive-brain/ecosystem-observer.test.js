@@ -409,28 +409,30 @@ test('ProjectManagerService supplies project phase and roadmap without paths', (
   ]);
   assert.equal(view.project, 'OXKIO');
   assert.equal(view.blockPhase, '5C.7');
-  assert.equal(view.activeSubphase, 'ninguna; apertura preparada y pendiente de autorización humana');
+  assert.equal(view.activeSubphase, '5C.7B — Arquitectura Ejecutable del Runtime');
   assert.equal(view.currentBlock, 'Runtime Permanente e Infraestructura');
-  assert.equal(view.currentPhase, '5C.7 — Runtime Permanente 24/7, preparada sin implementación');
+  assert.equal(view.currentPhase, '5C.7 — Runtime Permanente 24/7');
   assert.equal(
     view.currentObjective,
-    'Obtener autorización humana para abrir 5C.7 según su documento canónico de apertura.',
+    'preparar staging selectivo del backend cloud-ready neutral validado.',
   );
   assert.notEqual(view.currentObjective, view.nextRecommendedStep);
   assert.equal(
     view.nextRecommendedStep,
-    'Revisar la propuesta canónica de apertura de 5C.7.',
+    'Revisar y autorizar staging selectivo exclusivo de 5C.7B.1.',
   );
   assert.equal(view.lastMilestone, '5C.6D.1 — Gmail Draft supervisado.');
   assert.equal(view.roadmapAlignment, 'attention');
   assert.equal(view.closureEvidence.manualPilot, true);
   assert.equal(view.closureEvidence.integration, true);
   assert.equal(view.closureEvidence.supervisorValidation, true);
-  assert.equal(view.closureEvidence.commit, true);
-  assert.equal(view.closureEvidence.publication, true);
+  assert.equal(view.closureEvidence.commit, false);
+  assert.equal(view.closureEvidence.publication, false);
   assert.deepEqual(view.remainingSteps, [
-    'Revisar la propuesta canónica de apertura de 5C.7.',
-    'Esperar autorización humana separada antes de implementar 5C.7.',
+    'Revisar y autorizar staging selectivo exclusivo de 5C.7B.1.',
+    'Preparar la apertura documental de 5C.7B.2: comparativa de adaptadores y decisión de persistencia.',
+    'Mantener runtime y BBDD pendientes hasta comparar adaptadores, pruebas y métricas.',
+    'Obtener del proveedor las respuestas técnicas y contractuales de LucusHost.',
   ]);
   assert.ok(view.remainingSteps.length <= 5);
   assert.deepEqual(view.doNotOpenYet, [
@@ -456,18 +458,18 @@ test('ProjectManagerService supplies project phase and roadmap without paths', (
     systemStateView: { health: 'stable', alertsSummary: [] },
     governanceStateView: {},
   });
-  assert.equal(observer.operationalGuidance.phaseClosureStatus, 'ready_to_close');
-  assert.deepEqual(observer.blockStatus, { phase: '5C.7', state: 'closed' });
-  assert.deepEqual(observer.releaseStatus, { state: 'published' });
+  assert.equal(observer.operationalGuidance.phaseClosureStatus, 'work_remaining');
+  assert.deepEqual(observer.blockStatus, { phase: '5C.7', state: 'in_progress' });
+  assert.deepEqual(observer.releaseStatus, { state: 'pending' });
   assert.equal(
     observer.supervisorRecommendation.action,
-    'Revisar la propuesta canónica de apertura de 5C.7.',
+    'Revisar y autorizar staging selectivo exclusivo de 5C.7B.1.',
   );
   assert.equal(
     observer.operationalGuidance.nextBestAction,
-    'Revisar la propuesta canónica de apertura de 5C.7.',
+    'Revisar y autorizar staging selectivo exclusivo de 5C.7B.1.',
   );
-  assert.equal(observer.progressMessage, '');
+  assert.match(observer.progressMessage, /Solo falta: Revisar y autorizar staging selectivo exclusivo de 5C\.7B\.1/i);
   assert.match(JSON.stringify(view.consolidatedCapabilities), /Gmail Draft supervisado/i);
 });
 
@@ -479,7 +481,7 @@ test('ProjectManagerService marks conflicting canonical evidence as attention', 
       return content;
     }
     return String(content).replace(
-      'Siguiente paso recomendado: Repetir el piloto manual autenticado de Gmail Draft con Cliente Cero: aprobar dentro de la ventana, crear exactamente un borrador y verificar que no se envía.',
+      'Siguiente paso recomendado: ejecutar el piloto local cloud-ready con puerto dinámico, probes y shutdown, sin desplegar.',
       'Siguiente paso recomendado: Abrir una fase no vigente.',
     );
   };

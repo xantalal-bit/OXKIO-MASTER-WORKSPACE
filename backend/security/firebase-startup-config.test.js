@@ -93,7 +93,7 @@ function assertSensitiveValuesHidden(result) {
   });
 }
 
-test('versioned startup contracts use one relative PowerShell entry point', () => {
+test('standard Node start remains portable while Windows validation stays available', () => {
   assert.equal(fs.existsSync(scriptPath), true);
   const script = fs.readFileSync(scriptPath, 'utf8');
   const bat = fs.readFileSync(batPath, 'utf8');
@@ -132,9 +132,10 @@ test('versioned startup contracts use one relative PowerShell entry point', () =
   );
   assert.match(bat, /"%~dp0Start-Oxkio\.ps1" %\*/);
   assert.doesNotMatch(bat, /[A-Z]:\\Users\\/i);
+  assert.equal(packageJson.scripts.start, 'node backend/api/server.js');
   assert.equal(
-    packageJson.scripts.start,
-    'powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File ./scripts/Start-Oxkio.ps1'
+    packageJson.scripts['start:windows'],
+    'powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File ./scripts/Start-Oxkio.ps1',
   );
 });
 
@@ -204,7 +205,8 @@ test('ValidateOnly rejects missing, unreadable-format, and invalid credential co
 
 test('production execution remains disabled', () => {
   const server = fs.readFileSync(serverPath, 'utf8');
-  assert.match(server, /Object\.freeze\(\{\s*executionEnabled:\s*false\s*\}\)/);
+  assert.match(server, /executionEnabled:\s*false/);
+  assert.match(server, /draftExecutionEnabled:\s*true/);
   assert.doesNotMatch(server, /executionEnabled:\s*true/);
 });
 

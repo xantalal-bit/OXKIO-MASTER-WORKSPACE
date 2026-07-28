@@ -1,7 +1,9 @@
+const path = require("path");
+
 const ecosystemConfig = {
   ecosystemName: "XANTALAL",
   ecosystemRoot:
-    process.env.XANTALAL_ROOT || "C:\\Users\\janta\\OneDrive\\Documentos\\XANTALAL",
+    process.env.XANTALAL_ROOT || path.resolve(__dirname, "..", "..", "XANTALAL"),
   governanceFolder: "00_GOVERNANCE",
   governanceFiles: [
     "README.md",

@@ -1,11 +1,16 @@
-const fs = require("fs");
 const path = require("path");
+const { createLocalMemoryRepository } = require("../repositories/local-repository-factory");
+const { assertRepository } = require("../repositories/repository-contracts");
 
 class MemoryEngine {
 
     constructor(options = {}) {
 
         this.memoryPath = options.memoryPath || path.join(__dirname, "memory.json");
+        this.repository = assertRepository(
+            options.repository || createLocalMemoryRepository(this.memoryPath),
+            "MemoryRepository"
+        );
 
         this.maxShortTerm = 20;
 
@@ -17,30 +22,17 @@ class MemoryEngine {
 
     loadMemory() {
 
-        try {
-
-            const raw = fs.readFileSync(this.memoryPath);
-
-            const parsed = JSON.parse(raw);
-
-            this.shortTermMemory = parsed.shortTermMemory || [];
-            this.longTermMemory = parsed.longTermMemory || [];
-
-        } catch (error) {
-
-            console.log("No se pudo cargar memory.json");
-        }
+        const parsed = this.repository.loadSnapshot();
+        this.shortTermMemory = Array.isArray(parsed.shortTermMemory) ? parsed.shortTermMemory : [];
+        this.longTermMemory = Array.isArray(parsed.longTermMemory) ? parsed.longTermMemory : [];
     }
 
     persistMemory() {
 
-        fs.writeFileSync(
-            this.memoryPath,
-            JSON.stringify({
-                shortTermMemory: this.shortTermMemory,
-                longTermMemory: this.longTermMemory
-            }, null, 2)
-        );
+        this.repository.saveSnapshot({
+            shortTermMemory: this.shortTermMemory,
+            longTermMemory: this.longTermMemory
+        });
     }
 
     saveShortTerm(data) {

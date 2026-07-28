@@ -3,16 +3,16 @@
 ## Estado operativo vigente
 
 - Código de bloque: 5C.7
-- Subfase activa: ninguna; apertura preparada y pendiente de autorización humana
+- Subfase activa: 5C.7B — Arquitectura Ejecutable del Runtime
 - Bloque actual: Runtime Permanente e Infraestructura
-- Fase actual: 5C.7 — Runtime Permanente 24/7, preparada sin implementación
-- Objetivo inmediato: Obtener autorización humana para abrir 5C.7 según su documento canónico de apertura.
-- Siguiente paso recomendado: Revisar y aprobar `5C.7-RUNTIME-PERMANENTE-APERTURA.md`; no implementar antes de esa autorización.
+- Fase actual: 5C.7 — Runtime Permanente 24/7
+- Objetivo inmediato: preparar staging selectivo del backend cloud-ready neutral validado.
+- Siguiente paso recomendado: revisar y autorizar staging exclusivo de 5C.7B.1.
 - Siguiente fase prevista: 5C.7 — Runtime Permanente 24/7.
 - Último hito publicado: 5C.6D.1 — Gmail Draft supervisado.
 - Resumen de la sesión: 5C.6D.1 cerrada oficialmente el 27/07/2026. Gmail Draft real, SAFE_DRAFT_ONLY, cero envíos, ausencia de duplicados, sincronización ExecutionService–Approval Queue–Dashboard y auditoría de aceptación validadas.
 
-## Evidencia de cierre
+## Evidencia de cierre 5C.6D.1
 
 - Implementación: completada
 - Integración: completada
@@ -25,6 +25,20 @@
 - Staging selectivo preparado: completado y auditado
 - Commit: completado por este cierre
 - Publicación: completada por este cierre
+
+## Evidencia de cierre
+
+- Implementación: completada
+- Integración: completada
+- Pruebas: completadas; 531/531
+- Piloto manual: completado en Node con puertos 3000 y 3107; Docker bloqueado por entorno
+- Auditoría: pendiente
+- Documentación canónica: actualizada
+- Observer alineado: completado
+- Validación del Supervisor: completada
+- Staging selectivo preparado: pendiente
+- Commit: pendiente
+- Publicación: pendiente
 
 Capacidades operativas verificadas:
 
@@ -59,10 +73,26 @@ Capacidades operativas verificadas:
 
 ## Advertencias evidenciadas
 
-- El árbol de trabajo contiene runtime y cambios ajenos que deben excluirse del staging selectivo.
-- 5C.6D.1 está cerrada y publicada; 5C.7 permanece sujeta a una autorización humana separada.
+- El árbol de trabajo contiene cambios históricos y runtime ajenos a 5C.7B que deben permanecer separados.
+- Los tokens OAuth reales siguen en filesystem local y deben rotarse antes de cualquier despliegue.
+- Memoria, Approval Queue y logs siguen ligados a JSON local; no admiten runtime multiinstancia.
+- Firestore existe fuera del código, pero todavía no tiene repositorios ni aislamiento multiusuario implementados.
 - La excepción `draftExecutionEnabled` debe permanecer cerrada a Gmail Draft y separada de `executionEnabled=false`.
 - Las evidencias y auditorías ya aceptadas no se repetirán salvo invalidación objetiva del contexto.
+
+## Decisión de arquitectura 5C.7B
+
+- Candidata principal pendiente de auditoría externa: Cloud Run + Firebase Authentication + Firestore.
+- Alternativa secundaria candidata: Railway manteniendo Firebase Authentication.
+- Primera auditoría Antigravity: recibida; veredicto APROBADA CON CORRECCIONES.
+- Riesgos aceptados: JSON multiinstancia, secretos locales, filesystem efímero, idempotencia persistente y desacoplamiento de trabajos duraderos.
+- PostgreSQL, Redis/BullMQ y Railway no se aceptan como decisiones obligatorias.
+- Runtime y persistencia definitivos: pendientes de pruebas y métricas.
+- LucusHost: `unknown` hasta obtener datos verificables del plan.
+- Estado: 5C.7B.1 LISTA PARA STAGING SELECTIVO; no lista para despliegue.
+- Segunda auditoría Antigravity: tras el piloto remoto y antes de probadores.
+- Prohibido activar Cloud Run, Blaze, Firestore nuevo, Secret Manager o facturación durante 5C.7B.1.
+- Documento canónico: `XANTALAL/00_GOVERNANCE/5C.7B-ARQUITECTURA-EJECUTABLE-RUNTIME.md`.
 
 ## Elementos a reutilizar
 

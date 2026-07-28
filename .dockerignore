@@ -1,0 +1,15 @@
+.git
+.env
+.env.*
+node_modules
+*.log
+*.zip
+.audit-final-output
+KNOWLEDGE-CURATOR
+simulador-ia/data
+backend/auth
+backend/core/approvalQueue.json
+backend/core/executionLog.json
+backend/memory/memory.json
+backend/data/knowledge-store/objects
+backend/**/*Store.json

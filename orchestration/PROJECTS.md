@@ -6,8 +6,13 @@
 - Ruta: C:\Users\janta\OneDrive\Documentos\OXKIO
 - Rol: Orquestador principal
 - Prioridad: Estratégica
-- Estado: 5C.6D.1 cerrada; 5C.7 preparada sin implementación
-- Objetivo inmediato: Obtener autorización humana para abrir 5C.7 según su documento canónico de apertura.
+- Estado: 5C.7B.1 validada mediante piloto Node; lista para staging selectivo
+- Objetivo inmediato: revisar staging exclusivo de 5C.7B.1 sin desplegar.
+- Candidata principal: Cloud Run + Firebase Authentication + Firestore; no definitiva.
+- Alternativa secundaria candidata: Railway; LucusHost permanece `unknown`.
+- Primera auditoría Antigravity: recibida; APROBADA CON CORRECCIONES.
+- Segunda auditoría Antigravity: después del piloto remoto y antes de probadores.
+- Evidencia técnica: cinco repositorios neutrales, adaptadores JSON `local_only`, idempotencia, puertos 3000/3107, probes, shutdown y stores intactos. Docker bloqueado por entorno.
 
 2. BUSINESS-HUNTER
 - Ruta: C:\Users\janta\OneDrive\Documentos\BUSINESS-HUNTER

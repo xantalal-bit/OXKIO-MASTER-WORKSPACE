@@ -1,6 +1,7 @@
-const fs = require("fs");
 const path = require("path");
 const { createHash, randomUUID } = require("crypto");
+const { createLocalApprovalRepository } = require("../repositories/local-repository-factory");
+const { assertRepository } = require("../repositories/repository-contracts");
 
 const DATA_FILE = path.join(__dirname, "approvalQueue.json");
 const PREPARATION_TTL_MS = 2 * 60 * 60 * 1000;
@@ -206,6 +207,10 @@ class ApprovalQueue {
     this.history = [];
     this.sequence = 0;
     this.dataFile = options.dataFile || DATA_FILE;
+    this.repository = assertRepository(
+        options.repository || createLocalApprovalRepository(this.dataFile),
+        "ApprovalRepository"
+    );
 
     this.load();
 }
@@ -632,34 +637,16 @@ class ApprovalQueue {
         };
     }
 save() {
-
-    fs.writeFileSync(
-        this.dataFile,
-        JSON.stringify({
-            pending: this.pending,
-            history: this.history
-        }, null, 2)
-    );
+    this.repository.saveSnapshot({
+        pending: this.pending,
+        history: this.history
+    });
 }
 
 load() {
-
-    try {
-
-        if (fs.existsSync(this.dataFile)) {
-
-            const raw = fs.readFileSync(this.dataFile);
-
-            const data = JSON.parse(raw);
-
-            this.pending = data.pending || [];
-            this.history = data.history || [];
-        }
-
-    } catch (error) {
-
-        console.log("[ApprovalQueue] Error loading data", error);
-    }
+    const data = this.repository.loadSnapshot();
+    this.pending = Array.isArray(data.pending) ? data.pending : [];
+    this.history = Array.isArray(data.history) ? data.history : [];
 }
     getStatus() {
         return {

@@ -6,15 +6,15 @@
 
 ## Bloque actual
 
-5C.7 — Runtime Permanente e Infraestructura, preparado sin implementación.
+5C.7 — Runtime Permanente e Infraestructura.
 
 ## Subfase actual
 
-Ninguna activa. 5C.6D.1 cerrada; apertura de 5C.7 pendiente de autorización humana.
+5C.7B — Arquitectura Ejecutable del Runtime.
 
 ## Estado
 
-5C.6D.1 PUBLICADA Y CERRADA oficialmente.
+5C.7B.1 implementada, validada y con piloto local satisfactorio; lista para staging selectivo. Docker bloqueado por ausencia de herramienta local.
 
 ## Último hito validado
 
@@ -30,11 +30,11 @@ Piloto real satisfactorio: exactamente un borrador Gmail creado, ningún correo 
 
 ## Incidencias abiertas
 
-Ninguna en 5C.6D.1.
+Ninguna incidencia bloquea 5C.7B.1. Antes del despliegue siguen pendientes token OAuth local, stores JSON, persistencia multiusuario y datos reales de LucusHost.
 
 ## Siguiente acción exacta
 
-Revisar la apertura documental de 5C.7. No abrir ni implementar 5C.7 antes de una autorización humana separada.
+Realizar staging selectivo de 5C.7B.1, excluyendo stores, secretos y trabajo ajeno.
 
 ## Archivos pendientes de staging
 
@@ -54,7 +54,7 @@ No consta ninguna copia ZIP en el repositorio.
 
 ## Riesgos abiertos
 
-5C.7 todavía no dispone de decisiones aprobadas sobre cloud, BBDD, continuidad, recuperación, monitorización, observabilidad, auditoría externa ni primeros probadores.
+Selección definitiva de runtime/BBDD, rotación de secretos, persistencia transaccional, aislamiento por tenant, restore y costes medidos permanecen pendientes. LucusHost sigue `unknown`. La segunda auditoría Antigravity será posterior al piloto remoto y anterior a probadores.
 
 ## Decisiones permanentes recientes
 
@@ -66,4 +66,4 @@ Una ejecución externa no se declarará completada hasta que su estado terminal 
 
 ## Próximo objetivo estratégico
 
-Autorizar y abrir 5C.7 — Runtime Permanente 24/7 conforme al documento canónico de apertura, sin implementación anticipada.
+Abrir documentalmente 5C.7B.2 para comparar adaptadores y decidir Firestore frente a PostgreSQL con pruebas y métricas; mantener la segunda auditoría externa después del piloto remoto y antes de probadores.

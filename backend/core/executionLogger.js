@@ -1,7 +1,8 @@
 'use strict';
 
-const fs = require('fs');
 const path = require('path');
+const { createLocalOperationRepository } = require('../repositories/local-repository-factory');
+const { assertRepository } = require('../repositories/repository-contracts');
 
 const DATA_FILE = path.join(__dirname, 'executionLog.json');
 const MAX_LIST_LIMIT = 100;
@@ -52,8 +53,12 @@ function publicLog(log) {
 }
 
 class ExecutionLogger {
-  constructor({ dataFile = DATA_FILE } = {}) {
+  constructor({ dataFile = DATA_FILE, repository } = {}) {
     this.dataFile = dataFile;
+    this.repository = assertRepository(
+      repository || createLocalOperationRepository(dataFile),
+      'OperationRepository',
+    );
     this.logs = [];
     this.load();
   }
@@ -129,19 +134,12 @@ class ExecutionLogger {
   }
 
   save() {
-    fs.writeFileSync(this.dataFile, JSON.stringify({ logs: this.logs }, null, 2));
+    this.repository.saveSnapshot({ logs: this.logs });
   }
 
   load() {
-    try {
-      if (fs.existsSync(this.dataFile)) {
-        const raw = fs.readFileSync(this.dataFile, 'utf8');
-        const data = JSON.parse(raw);
-        this.logs = Array.isArray(data.logs) ? data.logs : [];
-      }
-    } catch (error) {
-      this.logs = [];
-    }
+    const data = this.repository.loadSnapshot();
+    this.logs = Array.isArray(data.logs) ? data.logs : [];
   }
 }
 

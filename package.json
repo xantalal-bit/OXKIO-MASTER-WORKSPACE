@@ -1,6 +1,7 @@
 {
   "scripts": {
-    "start": "powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File ./scripts/Start-Oxkio.ps1",
+    "start": "node backend/api/server.js",
+    "start:windows": "powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File ./scripts/Start-Oxkio.ps1",
     "simulador": "node simulador-ia/src/server.js"
   },
   "dependencies": {

@@ -47,6 +47,12 @@ const {
 } = require("../security/firebase-server-auth");
 const { createExecutiveAuthorizer } = require("../security/executive-authorization");
 const { createExecutiveRuntime } = require("../services/runtime/executive-runtime-factory");
+const {
+  createRuntimeReadiness,
+  createShutdownController,
+  getRuntimeProbe,
+  readRuntimeConfig
+} = require("../runtime/cloud-ready-contract");
 const { businessHunterReadonlyService } = require("../services/operations/business-hunter-readonly-service");
 const { createKnowledgeReadonlyService } = require("../services/operations/knowledge-readonly-service");
 const { createMemoryReadonlyService } = require("../services/operations/memory-readonly-service");
@@ -75,6 +81,7 @@ const ruleEngine = getRuleEngine();
 const executiveBrain = getExecutiveBrain();
 const proposalEngine = new ProposalEngine();
 const approvalQueue = new ApprovalQueue();
+const cloudRuntimeConfig = readRuntimeConfig();
 const runtimeConfig = Object.freeze({ runtimeMode: "production" });
 const executiveRuntime = createExecutiveRuntime({
   mode: runtimeConfig.runtimeMode,
@@ -180,7 +187,9 @@ systemStateManager.updateWorkflow(
     "available"
 );
 
-const PORT = 3000;
+const PORT = cloudRuntimeConfig.port;
+const HOST = cloudRuntimeConfig.host;
+const runtimeReadiness = createRuntimeReadiness();
 
 function normalizeAssetSearchMessage(value = "") {
   return String(value || "")
@@ -222,6 +231,17 @@ function sendJson(res, statusCode, data) {
 const server = http.createServer(async (req, res) => {
 
 const pathname = req.url.split("?")[0];
+
+const runtimeProbe = getRuntimeProbe(
+  pathname,
+  req.method,
+  runtimeReadiness,
+  cloudRuntimeConfig
+);
+if (runtimeProbe) {
+  return sendJson(res, runtimeProbe.statusCode, runtimeProbe.payload);
+}
+
 const methodMustBeHandledFirst = MUTABLE_EXECUTIVE_ROUTES.has(pathname)
   && req.method !== "POST";
 
@@ -1462,13 +1482,19 @@ const proposal = proposalEngine.generate({
   });
 });
 
-server.on("close", () => {
-  executiveRuntime.cleanup();
+const shutdownController = createShutdownController({
+  server,
+  readiness: runtimeReadiness,
+  cleanup: () => executiveRuntime.cleanup()
 });
+shutdownController.install();
 
-server.listen(PORT, () => {
+server.listen(PORT, HOST, () => {
+  runtimeReadiness.markReady();
   console.log("=================================");
   console.log("OXKIO API SERVER RUNNING");
+  console.log("Host:", HOST);
+  console.log("Port:", PORT);
   console.log("App:", systemConfig.app.name);
   console.log("Version:", systemConfig.app.version);
   console.log("Safe Mode:", systemConfig.security.safeMode);
