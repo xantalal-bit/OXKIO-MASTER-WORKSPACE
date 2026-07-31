@@ -6,6 +6,11 @@ Este registro define las reglas oficiales del Supervisor para Oxkio/XANTALAL.
 
 Su objetivo es mantener el desarrollo ordenado, auditable y alineado con la arquitectura aprobada.
 
+Estas reglas operan bajo [G0001 Rev. A — Constitución de la Capa de Coordinación
+Inteligente de XANTALAL / OXKIO](./G0001-REV-A-CONSTITUCION-CAPA-COORDINACION-INTELIGENTE-XANTALAL-OXKIO.md).
+Ninguna regla del Supervisor puede ampliar autoridad, permisos o ejecución por
+encima de la Constitución.
+
 ## Alcance
 
 Estas reglas aplican a:

@@ -6,6 +6,11 @@ Este documento declara la arquitectura objetivo minima de Oxkio/XANTALAL tras la
 
 No sustituye la vision aprobada. Ordena la arquitectura existente, fija limites conceptuales y define la linea oficial provisional para continuar el desarrollo sin duplicar motores, mezclar datos privados ni confundir laboratorio con producto final.
 
+Este documento queda subordinado a [G0001 Rev. A — Constitución de la Capa de
+Coordinación Inteligente de XANTALAL / OXKIO](./G0001-REV-A-CONSTITUCION-CAPA-COORDINACION-INTELIGENTE-XANTALAL-OXKIO.md),
+que actúa como Constitución superior. Ante contradicción, debe aplicarse la
+precedencia declarada por G0001 Rev. A y registrarse la desviación sin ocultarla.
+
 ## 1. XANTALAL
 
 XANTALAL es la empresa propietaria del ecosistema.
