@@ -472,10 +472,13 @@ test('adds and resolves blockers with in-memory domain events', () => {
   const added = addBlocker(mission, {
     blockerId: 'blocker-test-001',
     taskId: 'task-main-001',
+    type: 'synthetic_blocker',
     reasonCode: 'dependency-wait',
-  }, SCOPE, { now: NOW });
+  }, SCOPE, { now: NOW, nextAction: 'Review the synthetic blocker' });
   assert.equal(added.mission.blockers[0].status, 'active');
+  assert.equal(added.mission.blockers[0].type, 'synthetic_blocker');
   assert.equal(added.mission.tasks[0].blocker.blockerId, 'blocker-test-001');
+  assert.equal(added.mission.nextAction, 'Review the synthetic blocker');
   assert.equal(added.events[0].eventType, DOMAIN_EVENT_TYPES.BLOCKER_ADDED);
 
   const resolved = resolveBlocker(added.mission, 'blocker-test-001', SCOPE, { now: LATER });

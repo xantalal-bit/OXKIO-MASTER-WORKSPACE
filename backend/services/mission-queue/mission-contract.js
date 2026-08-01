@@ -209,10 +209,12 @@ function normalizeBlockers(value) {
     if (!isPlainObject(item)) fail('invalid_blocker', 'blocker entries must be objects.');
     const status = item.status || 'active';
     if (!['active', 'resolved'].includes(status)) fail('invalid_blocker_status', 'Invalid blocker status.');
+    const reasonCode = validateIdentifier(item.reasonCode, 'reasonCode');
     return {
       blockerId: validateIdentifier(item.blockerId, 'blockerId'),
       taskId: normalizeOptionalIdentifier(item.taskId, 'taskId'),
-      reasonCode: validateIdentifier(item.reasonCode, 'reasonCode'),
+      type: validateIdentifier(item.type || reasonCode, 'blockerType'),
+      reasonCode,
       status,
       createdAt: getTimestamp({ now: item.createdAt }),
       resolvedAt: item.resolvedAt ? getTimestamp({ now: item.resolvedAt }) : null,

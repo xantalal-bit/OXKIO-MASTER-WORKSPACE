@@ -378,17 +378,28 @@ function addBlocker(mission, blockerInput, scope, options = {}) {
   if (taskId) findTask(mission, taskId);
   const timestamp = getTimestamp(options);
   const candidate = cloneDomain(mission);
+  const reasonCode = validateIdentifier(blockerInput.reasonCode, 'reasonCode');
+  const blockerType = validateIdentifier(blockerInput.type || reasonCode, 'blockerType');
   candidate.blockers.push({
     blockerId,
     taskId,
-    reasonCode: validateIdentifier(blockerInput.reasonCode, 'reasonCode'),
+    type: blockerType,
+    reasonCode,
     status: 'active',
     createdAt: timestamp,
     resolvedAt: null,
   });
+  if (hasOwn(options, 'nextAction')) {
+    candidate.nextAction = normalizeRequiredText(options.nextAction, 'nextAction', 300);
+  }
   if (taskId) {
     const candidateTask = candidate.tasks.find((task) => task.taskId === taskId);
-    candidateTask.blocker = { blockerId, reasonCode: blockerInput.reasonCode, status: 'active' };
+    candidateTask.blocker = {
+      blockerId,
+      type: blockerType,
+      reasonCode,
+      status: 'active',
+    };
     candidateTask.updatedAt = timestamp;
   }
   const updated = finalizeMutation(candidate, mission, timestamp);
