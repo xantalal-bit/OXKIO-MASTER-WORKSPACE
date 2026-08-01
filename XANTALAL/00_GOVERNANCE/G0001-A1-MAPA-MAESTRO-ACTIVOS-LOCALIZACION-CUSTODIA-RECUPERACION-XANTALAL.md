@@ -1,13 +1,13 @@
 # G0001-A1 — MAPA MAESTRO DE ACTIVOS, LOCALIZACIÓN, CUSTODIA Y RECUPERACIÓN DE XANTALAL
 
-> **Estado documental:** BASELINE CANÓNICA DE ACTIVOS Y CONTINUIDAD. APROBACIÓN SUJETA A AUDITORÍA PRECOMMIT.
+> **Estado documental:** PROPUESTA DE CIERRE DOCUMENTAL DE LA BASELINE CANÓNICA. APROBACIÓN SUJETA A AUDITORÍA PRECOMMIT.
 
 ## 1. Control documental
 
 | Campo | Valor |
 |---|---|
 | Código | G0001-A1 |
-| Versión | 0.1.0 — baseline inicial |
+| Versión | 0.2.0 — propuesta de cierre documental |
 | Fecha | 2026-08-01 |
 | Autoridad | José Antonio, CEO de XANTALAL |
 | Dirección técnica | ChatGPT |
@@ -15,9 +15,9 @@
 | Documento superior | [G0001 Rev. A — Constitución de la capa de coordinación inteligente XANTALAL/OXKIO](./G0001-REV-A-CONSTITUCION-CAPA-COORDINACION-INTELIGENTE-XANTALAL-OXKIO.md) |
 | Repositorio canónico | OXKIO |
 | Rama de referencia | `main` |
-| HEAD de referencia | `d1354650859e97e835e1bebcc8ae61d9db19d820` |
+| Hito canónico de referencia | `a25361596bf3d5afc1c5c993290f44bd423c1ecc` |
 | Alcance | Activos, localización, custodia, fuente canónica, continuidad y recuperación |
-| Exclusiones | Valores secretos, diseño G0005, ejecución de restores, cambios de infraestructura y contratación de proveedores |
+| Exclusiones | Valores secretos, diseño G0005, restores adicionales, limpieza de sandboxes, cambios de infraestructura y contratación de proveedores |
 
 Este documento es subordinado a G0001 Rev. A. No constituye una segunda constitución, no sustituye las decisiones de la autoridad y no autoriza por sí mismo acciones técnicas, accesos, gastos, despliegues ni tratamientos de datos.
 
@@ -156,37 +156,41 @@ Solo OXKIO y XANTALALSHOP tienen remotos Git configurados, y estos cubren materi
 
 **Conclusión:** OneDrive es espacio de trabajo y sincronización; no es por sí solo una estrategia de backup ni una fuente canónica universal. Se **PROPONE** una estrategia proporcional 3-2-1, con proveedor, cifrado, presupuesto y calendario todavía **PENDIENTES DE DECISIÓN**.
 
+Google One, con una capacidad de 5 TB declarada por el Cliente Cero, queda autorizado como **CANDIDATO PRIORITARIO DE CONTINUIDAD**, sin configuración ni copia ejecutadas. No se considera backup fiable hasta diseñar selección, exclusiones, versionado y restore. Los secretos no deben copiarse como archivos ordinarios entre nubes.
+
 ## 11. Registro lógico de cuentas críticas
 
 No se registran correos, identificadores sensibles, códigos, factores, valores secretos ni materiales de recuperación.
 
 | ID | Servicio / función | Titular o administrador | MFA | Recuperación | Estado |
 |---|---|---|---|---|---|
-| ACC-MS-01 | Microsoft / OneDrive | **REQUIERE CONFIRMACIÓN** | **DESCONOCIDO** | **DESCONOCIDO** | Crítica por concentración de activos |
-| ACC-GH-ORG-01 | GitHub / organización `xantalal-bit` | **REQUIERE CONFIRMACIÓN** | **DESCONOCIDO** | **DESCONOCIDO** | Remotos OXKIO y Shop documentados |
-| ACC-GOOGLE-01 | Google / identidad e integraciones | **REQUIERE CONFIRMACIÓN** | **DESCONOCIDO** | **DESCONOCIDO** | No auditada operativamente |
-| ACC-FB-01 | Firebase | **REQUIERE CONFIRMACIÓN** | **DESCONOCIDO** | **DESCONOCIDO** | Proyecto/reglas reales no verificados |
-| ACC-GCP-01 | Google Cloud | **REQUIERE CONFIRMACIÓN** | **DESCONOCIDO** | **DESCONOCIDO** | Infraestructura real no verificada |
-| ACC-OAI-01 | OpenAI / API / ChatGPT / Codex | **REQUIERE CONFIRMACIÓN** | **DESCONOCIDO** | **DESCONOCIDO** | Cuenta crítica de capacidad y continuidad |
-| ACC-HOST-01 | Hosting / LucusHost | **REQUIERE CONFIRMACIÓN** | **DESCONOCIDO** | **DESCONOCIDO** | Estado operativo actual no demostrado |
-| ACC-DNS-01 | Registrador / DNS | **REQUIERE CONFIRMACIÓN** | **DESCONOCIDO** | **DESCONOCIDO** | Dominio, renovación y delegación no auditados |
-| ACC-MAIL-ADMIN-01 | Correo administrativo | **REQUIERE CONFIRMACIÓN** | **DESCONOCIDO** | **DESCONOCIDO** | Debe evitar punto único de fallo |
-| ACC-BACKUP-01 | Proveedor futuro de continuidad | No elegido | No aplica todavía | No aplica todavía | **PROPUESTO** |
+| ACC-MS-01 | Microsoft / OneDrive | Control de José Antonio **CONFIRMADO POR CLIENTE CERO** | Activo, **CONFIRMADO POR CLIENTE CERO** | **DESCONOCIDA** | Crítica por concentración de activos |
+| ACC-GH-ORG-01 | GitHub / organización `xantalal-bit` | Control de José Antonio **CONFIRMADO POR CLIENTE CERO** | **DESCONOCIDO** | **DESCONOCIDA** | Remotos OXKIO y Shop recuperados con éxito |
+| ACC-GOOGLE-01 | Google / identidad e integraciones | Control de José Antonio **CONFIRMADO POR CLIENTE CERO** | Activo, **CONFIRMADO POR CLIENTE CERO** | Disponible, **CONFIRMADA POR CLIENTE CERO** | Cuenta compartida por Google One, Firebase y GCP |
+| ACC-FB-01 | Firebase | Control de José Antonio **CONFIRMADO POR CLIENTE CERO** | Mediante Google, **CONFIRMADO POR CLIENTE CERO** | Otros administradores **DESCONOCIDOS** | Proyecto, reglas y datos reales no auditados |
+| ACC-GCP-01 | Google Cloud | Misma cuenta Google y control actual **CONFIRMADOS POR CLIENTE CERO** | MFA específico **DESCONOCIDO** | Administración adicional **DESCONOCIDA** | Infraestructura real no verificada |
+| ACC-OAI-01 | OpenAI / API / ChatGPT / Codex | Cuenta y facturación bajo control **CONFIRMADAS POR CLIENTE CERO** | **DESCONOCIDO** | **DESCONOCIDA** | Cuenta crítica de capacidad y continuidad |
+| ACC-HOST-01 | Hosting / LucusHost | Contrato activo, cuenta y cPanel accesibles **CONFIRMADOS POR CLIENTE CERO** | **DESCONOCIDO** | Backups **DESCONOCIDOS**; restore no probado | No se accedió al hosting en estas misiones |
+| ACC-DNS-01 | Registrador / DNS | LucusHost y control de José Antonio **DECLARADOS POR CLIENTE CERO** | **DESCONOCIDO** | Renovación automática **DECLARADA**; DNS efectivo **DESCONOCIDO** | Propiedad no verificada externamente |
+| ACC-MAIL-ADMIN-01 | Correo administrativo | Existencia y control **CONFIRMADOS POR CLIENTE CERO** | **DESCONOCIDO** | **DESCONOCIDA** | No se registra su dirección |
+| ACC-BACKUP-01 | Continuidad adicional | Google One 5 TB, candidato prioritario **DECLARADO** | Hereda la cuenta Google confirmada | Restore **PENDIENTE** | No configurado; no es todavía backup validado |
 
 ## 12. Dominios, DNS y hosting
 
 | Activo | Estado honesto | Evidencia / limitación |
 |---|---|---|
-| `oxkio.xantalalshop.com` | **DOCUMENTADO** | Referido en documentación; resolución, propiedad, SSL y operación no comprobadas en esta misión |
-| LucusHost / cPanel | **DOCUMENTADO** | Citado como entorno; estado contractual y operativo **DESCONOCIDO** |
-| WordPress | **PROPUESTO** | No se afirma implantación vigente |
+| `xantalalshop.com`, `xantalalshop.es`, `oxkio.ia`, `oxkio.es`, `oxkio.com` | **DECLARADOS POR CLIENTE CERO** | Registrador declarado: LucusHost; renovación automática declarada; no verificados externamente |
+| `oxkio.xantalalshop.com` | **DOCUMENTADO** | Referido históricamente; resolución, propiedad, SSL y operación no comprobadas en esta misión |
+| LucusHost / cPanel | **CONFIRMADO POR CLIENTE CERO** | Contrato activo, cuenta y cPanel accesibles; backups desconocidos y restore no probado |
+| WordPress | **DESCONOCIDO** | No se afirma implantación vigente |
 | Firebase Hosting | **PROPUESTO** | No se afirma despliegue vigente |
 | Cloud Run | **PROPUESTO** | No se afirma despliegue vigente |
 | Railway / Render | Alternativas **DOCUMENTADAS** | Sin elección ni contratación aprobada |
-| Registrador, DNS, SSL y renovación | **DESCONOCIDO** | Requieren auditoría de cuenta y evidencia de propiedad |
-| XANTALALSHOP publicado | **DESCONOCIDO** | El repositorio local está verificado; publicación actual no demostrada |
+| Registrador y renovación | **DECLARADOS POR CLIENTE CERO** | LucusHost y renovación automática; requieren verificación posterior |
+| DNS y SSL efectivos | **DESCONOCIDO** | No se realizaron consultas externas |
+| Web pública XANTALAL/XANTALALSHOP | No existente, **DECLARADO POR CLIENTE CERO** | XANTALALSHOP fue recuperado desde Git, pero no desplegado ni publicado |
 
-Las afirmaciones históricas de que Vercel, LucusHost u otros servicios están operativos no prevalecen sobre la ausencia de evidencia reciente.
+Las confirmaciones del Cliente Cero actualizan el estado declarado, pero no sustituyen una futura auditoría de cuenta, DNS, SSL, backups o restore de hosting.
 
 ## 13. Frontera de datos y persistencia
 
@@ -233,7 +237,7 @@ Clasificación: I1/I2 para identificadores técnicos o personales limitados; S2 
 
 ## 15. Catálogo de copias y preservaciones
 
-Todas las entradas se consideran **COPIA NO VALIDADA** hasta superar su restore correspondiente.
+Todas las entradas se consideran **COPIA NO VALIDADA** salvo aquellas cuyo restore figure expresamente como ejecutado y satisfactorio. Un restore Git satisfactorio valida únicamente el contenido versionado, no datos privados, secretos ni infraestructura.
 
 | ID | Activo / fuente | Localización o referencia | Tamaño / referencia | Riesgo principal |
 |---|---|---|---|---|
@@ -251,44 +255,44 @@ Todas las entradas se consideran **COPIA NO VALIDADA** hasta superar su restore 
 | BKP-XOSE-02 | Snapshot Learning Heroes | OneDrive | 3.648 B | Cobertura mínima; restore pendiente |
 | COPY-OX-01 | Copia Git histórica OXKIO | Fuera de OneDrive, mismo portátil | HEAD `d0d30b7…`; 2.422.131 B versionados | No cubre pérdida del portátil |
 | COPY-OX-02 | Copia Git histórica OXKIO | Fuera de OneDrive, mismo portátil | HEAD `98b2998…`; 2.368.418 B versionados | No cubre pérdida del portátil |
-| COPY-OX-GH | Remoto Git OXKIO | GitHub configurado | HEAD remoto localmente referenciado | Visibilidad y restore no auditados |
-| COPY-SHOP-GH | Remoto Git Shop | GitHub configurado | Remoto localmente referenciado | Visibilidad y restore no auditados |
+| COPY-OX-GH | Remoto Git OXKIO | GitHub configurado | HEAD `a25361596bf3d5afc1c5c993290f44bd423c1ecc` restaurado | **RESTORE VERSIONADO VALIDADO**; no cubre secretos ni stores ignorados |
+| COPY-SHOP-GH | Remoto Git Shop | GitHub configurado | HEAD `c0f259e8f4403da7730814ea70429453087651d4` restaurado | **RESTORE VERSIONADO VALIDADO**; no demuestra hosting |
 | COPY-REPORTS-01 | Informes PDF | Descargas | 14 archivos / 733.757 B | Dispersión y fuente incierta |
 | PRES-STASH-01 | Preservación Git M0001 | `stash@{0}` en OXKIO | `81bcf4a97a7cf6c0afde328c0242ff0718297cc9` | Preservación de trabajo, no backup |
 
-No se ha demostrado cifrado, checksum lateral, inmutabilidad, retención ni recuperación de las copias, salvo la integridad interna propia de objetos Git, que tampoco equivale a una prueba de restore.
+RESTORE-01/02/05 demostraron recuperación e integridad de los remotos Git indicados. Para las demás copias no se ha demostrado cifrado, checksum lateral, inmutabilidad, retención ni recuperación.
 
-## 16. Planes de recuperación pendientes
+## 16. Estado de los planes de recuperación
 
-Todos los planes siguientes están **PENDIENTES DE EJECUCIÓN** y requieren misión/autorización separada.
+RESTORE-01, RESTORE-02 y RESTORE-05 fueron ejecutados con autorización separada. Los demás planes permanecen **PENDIENTES DE EJECUCIÓN**.
 
 | Plan | Objetivo y fuente | Destino controlado | Evidencia de éxito | Riesgo / rollback |
 |---|---|---|---|---|
-| RESTORE-01 | Clonar OXKIO desde el remoto | Temporal fuera de OneDrive | HEAD, recuento y G0001 coinciden; sin secretos ni runtime | No tocar origen; eliminar temporal solo con autorización |
-| RESTORE-02 | Recuperar G0001 desde Git | Temporal aislado | Hash, contenido y enlaces coherentes | No sustituir documento vigente |
+| RESTORE-01 — **GO** | OXKIO clonado desde GitHub | Sandbox nuevo fuera de OneDrive, preservado | HEAD `a253615…`, 352 archivos, árbol limpio y `git fsck` satisfactorio; clone 7,04 s | Mismo portátil; no recupera secretos, stores ignorados ni infraestructura |
+| RESTORE-02 — **GO CON INCIDENCIA EOL** | G0001 y G0001-A1 recuperados desde el clone RESTORE-01 | Mismo sandbox preservado | Blobs Git exactos; auditoría principal 1,03 s | Working tree CRLF por `core.autocrlf=true`; índice LF y diff lógico limpio |
 | RESTORE-03 | Recuperar Business Hunter desde Git local o mejor copia | Temporal aislado | HEAD y catálogo/datasets esperados | Sin escrituras sobre datos activos |
 | RESTORE-04 | Recuperar Xose desde repositorio legado | Temporal aislado | Separación Git/multimedia/instaladores y catálogo verificable | No ejecutar binarios; no renombrar origen |
-| RESTORE-05 | Clonar XANTALALSHOP desde GitHub | Temporal fuera de OneDrive | HEAD, 15 archivos y activos coinciden | No desplegar ni cambiar DNS |
+| RESTORE-05 — **GO CON INCIDENCIA EOL** | XANTALALSHOP clonado desde GitHub | Sandbox nuevo fuera de OneDrive, preservado | HEAD `c0f259e…`, 15 archivos, 14 assets y `git fsck` satisfactorio; clone 2,20 s | No demuestra hosting; 9 textos CRLF y 6 binarios preservados |
 | RESTORE-06 | Validar snapshot JSON | Sandbox sin datos reales activos | Parseo, esquema y recuentos válidos | Nunca sobrescribir store operativo |
 | RESTORE-07 | Simular pérdida de OneDrive | Fuentes independientes solamente | Lista de activos recuperables y brechas documentada | No desconectar ni borrar OneDrive |
 | RESTORE-08 | Ejercicio de recuperación de cuentas | Tabletop o solo lectura | Propietario, MFA, canales y tiempos confirmados sin exponer secretos | No cambiar cuentas, factores ni códigos |
 
-Cada ejecución deberá registrar fuente exacta, destino, precondiciones, actor autorizado, fecha, riesgos, evidencia, criterio de éxito, incidencias y rollback.
+Las pruebas se realizaron en el mismo portátil y no simulan una pérdida física total. No se iniciaron runtimes, instalaron dependencias, recuperaron secretos ni reconstruyeron datos privados. Los sandboxes permanecen preservados y su limpieza requiere autorización separada.
 
 ## 17. RPO y RTO preliminares
 
-> **PROPUESTA PRELIMINAR — NO RATIFICADO**
+> **OBJETIVOS INTERNOS PARCIALMENTE RATIFICADOS — NO SON SLA CONTRACTUALES**
 
-| Clase | Ejemplos | RPO propuesto | RTO propuesto |
-|---|---|---|---|
-| Identidad, secretos y dominio | Cuentas admin, DNS, recuperación | Cercano a cero por cada cambio autorizado | 4–8 horas |
-| Datos operativos críticos | Aprobaciones, memoria, agenda, registros esenciales | ≤ 4 horas | ≤ 8 horas |
-| Constitución y código | Gobierno, repositorios, releases | Cada commit aprobado | 2–4 horas |
-| Productos e IP | Datasets, documentación, multimedia vigente | 24 horas | 24–48 horas |
-| Histórico | Archivos y snapshots no operativos | 7 días | 3–7 días |
-| Temporal/regenerable | Cachés, salidas reproducibles | Mejor esfuerzo / regeneración | Según coste de regeneración |
+| Clase | Ejemplos | RPO propuesto | RTO objetivo | Estado |
+|---|---|---|---|---|
+| Identidad, secretos y dominio | Cuentas admin, DNS, recuperación | Cercano a cero por cada cambio autorizado | 4–8 horas | Preliminar |
+| Datos operativos críticos | Aprobaciones, memoria, agenda, registros esenciales | ≤ 4 horas | Menos de 8 horas o antes | **RATIFICADO COMO OBJETIVO INTERNO** |
+| Constitución y código | Gobierno, repositorios, releases | Cada commit aprobado | 2–4 horas o antes | **RATIFICADO COMO OBJETIVO INTERNO** |
+| Productos e IP | Datasets, documentación, multimedia vigente | 24 horas | 24–48 horas | Preliminar |
+| Histórico | Archivos y snapshots no operativos | 7 días | 3–7 días | Preliminar |
+| Temporal/regenerable | Cachés, salidas reproducibles | Mejor esfuerzo / regeneración | Según coste de regeneración | Preliminar |
 
-La ratificación requiere impacto, presupuesto, volumen, obligaciones legales y capacidad real de José Antonio. No se deben adquirir compromisos de servicio basados en esta tabla.
+Los restores Git realizados quedaron muy por debajo del objetivo de código y gobernanza en este entorno, pero no prueban pérdida total del portátil ni capacidad contractual. Los objetivos restantes requieren impacto, presupuesto, volumen y obligaciones legales antes de ratificarse.
 
 ## 18. Matriz de fuente canónica
 
@@ -315,15 +319,15 @@ La ratificación requiere impacto, presupuesto, volumen, obligaciones legales y 
 
 | Escenario | Impacto | Defensa/recuperación actual | Riesgo residual | Próxima evidencia |
 |---|---|---|---|---|
-| Pérdida o avería del portátil | Pérdida de activos locales, secretos y copias | OneDrive y dos remotos parciales | Crítico para activos no Git | RESTORE-01, 05 y 07 |
+| Pérdida o avería del portátil | Pérdida de activos locales, secretos y copias | Remotos OXKIO y XANTALALSHOP con restore versionado validado | Crítico para datos privados y activos no Git | RESTORE-07 y copia independiente |
 | Bloqueo o pérdida de OneDrive/Microsoft | Indisponibilidad transversal | Remotos Git parciales | Crítico por dominio común | ACC-MS-01 + copia independiente |
-| Pérdida de GitHub | Repositorios remotos inaccesibles | Git local | Alto; XANTALAL/BH/Xose sin remoto | Auditoría de cuenta + remotos aprobados |
+| Pérdida de GitHub | Repositorios remotos inaccesibles | Git local y sandboxes restaurados en el mismo portátil | Alto; XANTALAL/BH/Xose sin remoto y sin independencia física | Auditoría de cuenta + remotos aprobados |
 | Pérdida de Google | OAuth, Drive e identidad afectados | No demostrada | Alto | ACC-GOOGLE-01 y RESTORE-08 |
 | Pérdida de OpenAI | Capacidad de IA y flujos asociados | Código/documentos locales | Medio/alto | Plan de continuidad funcional |
 | Pérdida de Firebase | Login y datos potenciales afectados | Reglas/estado reales desconocidos | Crítico antes de Cliente Cero | Auditoría estática/solo lectura autorizada |
 | Revocación/corrupción OAuth | Integraciones interrumpidas o acceso indebido | Token local identificado | Alto | Aislamiento, rotación gobernada y prueba futura |
-| Pérdida de hosting | Servicio no disponible | Hosting vigente no demostrado | Desconocido/alto | Confirmar proveedor y restore de configuración |
-| Pérdida o secuestro de dominio | Identidad pública y acceso comprometidos | Registrador/DNS desconocidos | Crítico | Confirmación de propiedad, MFA y renovación |
+| Pérdida de hosting | Servicio no disponible | LucusHost y cPanel declarados activos; backups desconocidos | Alto | Auditar backups y restore de configuración |
+| Pérdida o secuestro de dominio | Identidad pública y acceso comprometidos | Registrador y renovación declarados; DNS efectivo desconocido | Crítico | Confirmar DNS, MFA y evidencia de propiedad |
 | Ransomware/borrado sincronizado | Daño simultáneo local + nube sincronizada | Copias no validadas | Crítico | Copia independiente e inmutable proporcional |
 | Corrupción silenciosa | Copias replican datos dañados | Sin checksums/restore periódicos | Alto | Catálogo, hashes y pruebas de restore |
 | Error de agente u operador | Cambios, borrados o accesos indebidos | Git y aprobaciones parciales | Alto | Privilegio mínimo, límites y trazabilidad |
@@ -341,8 +345,9 @@ La decisión deberá definir alcance, activación, doble control, información m
 |---|---|---|
 | Ruta/repositorio físico `PROFESOR-IA` | **LEGACY** | Conservar por trazabilidad; el activo vigente se denomina Xose |
 | Usos públicos o actuales de «Profesor IA» | Deuda P1 | Auditar y corregir antes de publicación, sin renombrado físico automático |
+| `profesor-ia.html` en XANTALALSHOP | Archivo versionado; deuda de nomenclatura orientada a superficie pública pendiente antes de publicación, **VERIFICADA** por RESTORE-05 | Sustituir identidad visible por Xose en una misión específica; no sanear durante este cierre |
 | ecoSoft | **LEGACY** / prohibición / deuda | No presentarlo como producto vigente |
-| Rutas antiguas en `orchestration/PROJECTS.md` | Deuda P1 | Corregir en microfase posterior aprobada |
+| Rutas antiguas en `orchestration/PROJECTS.md` | Deuda P1 | Corregidas en la propuesta de cierre con rutas físicamente verificadas |
 | Comentario de `.gitignore` raíz sobre habilitar OXKIO posteriormente | Deuda documental | Revisar sin alterar la separación de repositorios |
 | Estados divergentes en README y gobierno raíz | Doble gobernanza | Consolidar mediante enlaces y autoridad, no copias divergentes |
 
@@ -368,7 +373,7 @@ Este documento no inicia ningún microproducto.
 ### Clase A — pueden permanecer desconocidas en esta baseline
 
 - visibilidad efectiva de los remotos GitHub;
-- estado exacto del hosting actual;
+- backups, restore y configuración exacta del hosting;
 - proveedor futuro de backups;
 - contenido real de Google Drive;
 - vigencia de copias históricas no operativas;
@@ -376,11 +381,11 @@ Este documento no inicia ningún microproducto.
 
 ### Clase B — necesarias antes de Cliente Cero estable
 
-- titulares, administradores, MFA y recuperación de cuentas críticas;
-- registrador, DNS, SSL, renovación y correo administrativo;
+- campos aún desconocidos de MFA, recuperación y administradores adicionales;
+- DNS efectivo, SSL y evidencia externa de los dominios declarados;
 - persona de confianza y protocolo de continuidad;
 - presupuesto y proveedor de copia independiente;
-- ratificación de RPO/RTO;
+- ratificación de los RPO/RTO todavía preliminares;
 - política de retención, privacidad y propiedad intelectual;
 - visibilidad y protección real de los remotos;
 - fuente canónica aprobada de cada dato operativo.
@@ -389,7 +394,7 @@ Este documento no inicia ningún microproducto.
 
 - crear remotos privados donde proceda;
 - crear copia independiente de OneDrive;
-- ejecutar RESTORE-01 a RESTORE-08;
+- ejecutar RESTORE-03, RESTORE-04 y RESTORE-06 a RESTORE-08; RESTORE-01/02/05 están cerrados con GO;
 - auditar Firestore en solo lectura;
 - diseñar e implantar aislamiento bajo G0005;
 - implantar gestor seguro de secretos;
@@ -397,16 +402,15 @@ Este documento no inicia ningún microproducto.
 - migrar nomenclatura y rutas legacy;
 - automatizar backup, checksums, retención y alertas.
 
-## 24. Propuesta mínima de enlaces posteriores
+## 24. Enlaces de cierre y referencia corporativa futura
 
-No se modifican enlaces durante esta fase. Tras aprobar y versionar G0001-A1, se propone una microfase separada que afecte solo a:
+La propuesta de cierre actualiza únicamente los tres consumidores mínimos que contienen estado operativo o inventario obsoleto:
 
-1. `G0001-REV-A-CONSTITUCION-CAPA-COORDINACION-INTELIGENTE-XANTALAL-OXKIO.md`: declarar G0001-A1 como anexo subordinado de activos y continuidad;
-2. `OXKIO-MASTER-SESSION.md`: registrar el hito canónico y su commit;
-3. `CLIENTE-CERO-ASSET-REGISTRY.md`: declarar su relación, alcance parcial o supersesión por G0001-A1;
-4. `orchestration/PROJECTS.md`: corregir rutas físicas obsoletas, usar Xose como nombre vigente y enlazar el mapa.
+1. `OXKIO-MASTER-SESSION.md`: hito `a253615…`, restores y continuidad pendiente;
+2. `CLIENTE-CERO-ASSET-REGISTRY.md`: subordinación a G0001-A1, confirmaciones sin secretos y nomenclatura vigente;
+3. `orchestration/PROJECTS.md`: rutas verificadas, Xose vigente y enlace al mapa.
 
-En el repositorio raíz XANTALAL se propone, en otra microfase y sin duplicar este texto, añadir una referencia mínima desde el punto de entrada corporativo aprobado. `orchestration/ROADMAP.md` solo debería cambiar si la autoridad exige registrar este hito como cierre de fase.
+G0001 Rev. A permanece como documento superior y no necesita modificación para registrar estos hechos. En el repositorio raíz XANTALAL se propone, en otra microfase y sin duplicar este texto, añadir desde `README.md` una referencia al repositorio OXKIO y a G0001/G0001-A1. `orchestration/ROADMAP.md` y `orchestration/TASKS.md` no requieren cambios para este cierre.
 
 ## 25. Condiciones de continuidad por activo
 
@@ -421,7 +425,7 @@ Un activo solo podrá declararse recuperable cuando exista:
 7. incidencias y brechas registradas;
 8. revisión periódica asignada.
 
-A fecha de esta baseline, ningún conjunto transversal cumple de forma demostrada todas las condiciones. Los repositorios con remoto aportan resiliencia parcial del contenido Git, no continuidad completa.
+OXKIO y XANTALALSHOP cumplen de forma demostrada la recuperación de contenido Git versionado desde sus remotos. No cumplen todavía continuidad integral: los tests se realizaron en el mismo portátil y no cubren datos privados, secretos, hosting, DNS, multimedia no Git ni infraestructura.
 
 ## 26. Reglas de mantenimiento del mapa
 
@@ -435,7 +439,9 @@ A fecha de esta baseline, ningún conjunto transversal cumple de forma demostrad
 
 ## 27. Limitaciones de la baseline
 
-Esta baseline se construyó con inspección estática local y decisiones aprobadas. No se realizaron conexiones a Firebase, Google, GitHub, Microsoft, OpenAI, hosting, DNS ni proveedores externos. No se iniciaron servicios, no se ejecutaron logins, no se leyeron valores de secretos, no se probaron restores y no se verificó el contenido real de cuentas cloud.
+Esta baseline se construyó con inspección estática local, declaraciones aprobadas del Cliente Cero y conexiones a GitHub limitadas a los clones autorizados de RESTORE-01 y RESTORE-05. No se realizaron conexiones a Firebase, Google APIs, Microsoft, OpenAI, hosting ni DNS. No se iniciaron servicios, ejecutaron logins, leyeron valores de secretos ni restauraron stores ignorados.
+
+RESTORE-01/02/05 probaron recuperación versionada en sandboxes fuera de OneDrive, pero dentro del mismo portátil. La incidencia EOL `i/lf, w/crlf` causada por `core.autocrlf=true` queda registrada como deuda técnica no bloqueante porque blobs, árboles, `git fsck`, status y diff fueron íntegros. No se modifican ahora `core.autocrlf` ni `.gitattributes`.
 
 Los tamaños, rutas, HEAD y estados corresponden a la evidencia auditada; pueden cambiar después de la fecha de referencia. La titularidad jurídica, obligaciones regulatorias, licencias, consentimientos y fiscalidad están fuera del alcance técnico y **REQUIEREN CONFIRMACIÓN** profesional cuando proceda.
 
@@ -450,14 +456,14 @@ La auditoría precommit deberá comprobar:
 - arquitectura central + aislamiento privado y Cliente Cero dual;
 - cuentas sin valores sensibles;
 - dominios, datos, secretos y OneDrive sin afirmaciones no demostradas;
-- catálogo de copias con estado no validado;
-- ocho restores pendientes;
-- RPO/RTO marcados como no ratificados;
+- catálogo de copias distinguiendo restores validados y pendientes;
+- RESTORE-01/02/05 cerrados y los restantes pendientes;
+- RTO de código/gobernanza y datos críticos como objetivos internos ratificados, no SLA;
 - Xose vigente, `PROFESOR-IA` legacy y ecoSoft no vigente;
 - microproductos no prioritarios;
 - decisiones A/B/C y enlaces propuestos;
 - ausencia de valores secretos, correos privados y credenciales;
-- diff limitado a este archivo antes de `git add`.
+- diff limitado a G0001-A1 y los tres consumidores mínimos autorizados antes de `git add`.
 
 ## 29. Fuentes utilizadas
 
@@ -467,6 +473,7 @@ La auditoría precommit deberá comprobar:
 4. Evidencia Git local de los cinco repositorios identificados.
 5. Documentación de gobernanza, roadmap, orquestación, arquitectura, stores y pruebas de concepto del proyecto.
 6. Decisiones posteriores expresamente aprobadas por José Antonio y consolidadas para esta misión.
+7. Informes ratificados RESTORE-01, RESTORE-02 y RESTORE-05, ejecutados el 2026-08-01.
 
 Las conversaciones y herramientas de IA son fuentes de procedencia y trabajo, no autoridad canónica independiente.
 
@@ -475,6 +482,7 @@ Las conversaciones y herramientas de IA son fuentes de procedencia y trabajo, no
 | Versión | Fecha | Cambio | Estado |
 |---|---|---|---|
 | 0.1.0 | 2026-08-01 | Primera formalización física del mapa maestro | Baseline sujeta a auditoría precommit y aprobación |
+| 0.2.0 | 2026-08-01 | Confirmaciones del Cliente Cero, restores Git, RTO internos y enlaces mínimos de cierre | Propuesta de cierre sujeta a auditoría precommit |
 
 ---
 

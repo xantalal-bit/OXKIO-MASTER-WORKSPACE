@@ -2,106 +2,80 @@
 
 ## Fecha
 
-28/07/2026
+01/08/2026
 
-## Bloque actual
+## Bloque de gobernanza actual
 
-5C.7 — Runtime Permanente e Infraestructura.
+G0001-A1 — preparación del cierre documental de activos, custodia y continuidad.
 
-## Subfase actual
+## Estado canónico
 
-5C.7B.2 — Persistencia Definitiva.
+- [G0001 Rev. A](./G0001-REV-A-CONSTITUCION-CAPA-COORDINACION-INTELIGENTE-XANTALAL-OXKIO.md) está versionado y es el documento superior.
+- [G0001-A1](./G0001-A1-MAPA-MAESTRO-ACTIVOS-LOCALIZACION-CUSTODIA-RECUPERACION-XANTALAL.md) está versionado en el hito `a25361596bf3d5afc1c5c993290f44bd423c1ecc`.
+- La actualización de cierre de G0001-A1 está preparada y pendiente de auditoría precommit.
+- G0002 permanece cerrado.
 
-## Estado
-
-5C.7B.1 está cerrada y publicada en `a8619c1`. Firestore Emulator y PostgreSQL
-portable superaron el mismo harness de 13 operaciones. La decisión humana ratifica
-PostgreSQL gestionado como persistencia operativa principal mediante
-`ADR-5C.7B.2-POSTGRESQL-PERSISTENCIA-PRINCIPAL.md`. 5C.7B.2 queda cerrada y publicada.
-El proveedor y el diseño productivo siguen pendientes; 5C.7B.3 no está abierta.
+El bloque técnico 5C.7B.2 continúa cerrado. PostgreSQL gestionado permanece ratificado como dirección de persistencia, pero proveedor, diseño productivo y migración siguen pendientes y fuera de esta misión.
 
 ## Último hito validado
 
-5C.7B.1 — backend cloud-ready neutral publicado:
-
-`a8619c1 feat(5C.7B.1): preparar backend cloud-ready neutral`
+`a253615 docs(governance): formaliza mapa maestro G0001-A1`
 
 ## Última evidencia aceptada
 
-- Inventario de stores con ubicaciones, tamaños, lectores y escritores.
-- Dataset sintético único y contrato neutral de 13 operaciones.
-- Firestore Emulator: 13/13, aislamiento, idempotencia y restore; dos lock timeouts recuperados.
-- PostgreSQL portable: 13/13, RLS forzada, constraints, append-only y dump/restore.
-- ADR humana: PostgreSQL gestionado ratificado; proveedor no seleccionado.
-- Ningún store, token, OAuth ni dato real fue modificado.
+- RESTORE-01 — **GO**: OXKIO recuperado desde GitHub fuera de OneDrive, HEAD `a253615…`, 352 archivos y `git fsck` satisfactorio; clone en 7,04 s.
+- RESTORE-02 — **GO CON INCIDENCIA EOL**: G0001 y G0001-A1 recuperados con blobs exactos; índice LF, working tree CRLF y diff lógico limpio.
+- RESTORE-05 — **GO CON INCIDENCIA EOL**: XANTALALSHOP recuperado desde GitHub, HEAD `c0f259e…`, 15 archivos, 14 assets y clone en 2,20 s.
+- Los clones no reconstruyeron `.env`, OAuth ni stores ignorados.
+- Los sandboxes permanecen preservados fuera de OneDrive y en el mismo portátil.
 
-## Último piloto realizado
+## Confirmaciones del Cliente Cero
 
-POC locales comparables, no representativas de cloud:
+- Microsoft/OneDrive está bajo control de José Antonio y tiene MFA activo; recuperación desconocida.
+- Google/Google One está bajo control, con MFA y recuperación confirmados.
+- Firebase y Google Cloud están bajo control mediante la cuenta Google; otros administradores siguen desconocidos.
+- OpenAI está bajo control; MFA y recuperación siguen desconocidos.
+- LucusHost está activo y cPanel es accesible; backups desconocidos y restore no probado.
+- Cinco dominios fueron declarados con LucusHost como registrador y renovación automática; DNS efectivo desconocido.
+- No existe una web pública actual confirmada.
+- Google One 5 TB es candidato prioritario de continuidad, sin configuración ni copia ejecutadas.
 
-- Firestore Emulator: 8.810,790 ms de tiempo total y dos timeouts recuperados.
-- PostgreSQL portable: 256,332 ms, cero bloqueos/deadlocks inesperados y restore con
-  digest idéntico.
+No se registran direcciones de correo, contraseñas, tokens, claves ni recovery codes.
 
-## Incidencias abiertas
+## RTO internos
 
-- Los JSON productivos siguen siendo `local_only`.
-- OAuth sigue usando un token local de un único sujeto.
-- Las colecciones Firestore reales siguen sin inventario read-only.
-- Aislamiento tenant aún no está integrado en el runtime.
-- Proveedor, región, plan, coste, SLA, pool, HA y RPO/RTO siguen `UNKNOWN`.
-- El repositorio de desarrollo continúa dentro de OneDrive.
-- El laboratorio PostgreSQL portable no es productivo.
+- Código y gobernanza: objetivo 2–4 horas o antes.
+- Datos operativos críticos: objetivo inferior a 8 horas o antes.
+- Son objetivos internos, no SLA contractuales.
+
+## Incidencias y deuda abiertas
+
+- Deuda EOL: `core.autocrlf=true` materializa CRLF aunque los blobs Git conserven LF. No modificar ahora `core.autocrlf` ni `.gitattributes`.
+- Las pruebas se realizaron en el mismo portátil y no simulan pérdida física total.
+- GitHub protege contenido versionado, no secretos, stores ignorados, hosting, DNS ni infraestructura.
+- Las 15 marcas estadísticas del working tree deben permanecer intactas.
+- `profesor-ia.html` permanece versionado como deuda de nomenclatura orientada a superficie pública y deberá corregirse antes de publicación; Xose es el nombre vigente y `PROFESOR-IA` es legacy físico.
+- ecoSoft permanece prohibido como denominación vigente.
+- RESTORE-03, RESTORE-04 y RESTORE-06 no están autorizados.
+- Los sandboxes no deben limpiarse sin autorización separada.
+
+## Archivos del cierre preparados para auditoría precommit
+
+1. `G0001-A1-MAPA-MAESTRO-ACTIVOS-LOCALIZACION-CUSTODIA-RECUPERACION-XANTALAL.md`
+2. `OXKIO-MASTER-SESSION.md`
+3. `CLIENTE-CERO-ASSET-REGISTRY.md`
+4. `orchestration/PROJECTS.md`
+
+El staging selectivo fue autorizado y ejecutado exclusivamente sobre las cuatro rutas aprobadas.
 
 ## Siguiente acción exacta
 
-Sin abrir 5C.7B.3, fijar el sobre de carga de Cliente Cero y solicitar la misma ficha
-técnica, contractual y de coste a Cloud SQL, Supabase, Neon y Render. Seleccionar
-después el proveedor PostgreSQL gestionado y aprobar el diseño productivo, sin contratar
-ni migrar.
-
-## Archivos pendientes de staging
-
-Ninguno de 5C.7B.2 tras el cierre material. El trabajo ajeno permanece sin staging.
+Completar la auditoría precommit y solicitar autorización expresa para commit y push.
 
 ## Exclusiones
 
-Sin migración, datos reales, OAuth, tokens, Blaze, Firestore productivo, PostgreSQL
-contratado, despliegue, staging, commit, push ni apertura de 5C.7B.3.
+Sin código, runtime, Firebase, OAuth, PostgreSQL, datos reales, secretos, Google Drive, nuevos restores, limpieza de sandboxes, repositorio raíz XANTALAL, G0002, commit ni push.
 
-## Commit de cierre
+## Propuesta de commit de cierre
 
-`feat(5C.7B.2): ratificar PostgreSQL como persistencia principal`
-
-## Última copia ZIP conocida
-
-No consta ninguna copia ZIP nueva en el repositorio.
-
-## Riesgos abiertos
-
-La decisión de motor es definitiva para este alcance. Siguen pendientes proveedor,
-región, pool, coste, SLA, HA, RPO/RTO, integración RLS en runtime, gestor de secretos,
-retención y métricas cloud para 10/100/1.000 usuarios.
-
-## Decisiones permanentes recientes
-
-- Una fuente canónica por tipo de dato.
-- `tenantId` y `userId` obligatorios en toda persistencia operativa.
-- La identidad se deriva del token verificado; nunca del body.
-- Approval, Operation y Audit deben migrarse como una unidad transaccional.
-- OAuth y secretos vivirán en el gestor de secretos futuro, nunca en PostgreSQL.
-- Google Calendar, documentos de usuario, Firebase Authentication y gobernanza
-  permanecen en sus autoridades externas.
-- `executionEnabled=false` y `SAFE_DRAFT_ONLY` permanecen intactos.
-
-## Reglas nuevas incorporadas
-
-La persistencia operativa principal exige POC comparables, aislamiento, restauración y
-decisión humana mediante ADR. La selección de proveedor exige región UE, DPA, RLS,
-backups, PITR, exportación, TLS, roles mínimos, pool, monitorización, SLA, escalado,
-coste y portabilidad verificados o `UNKNOWN` explícito.
-
-## Próximo objetivo estratégico
-
-Definir el sobre de carga y seleccionar proveedor PostgreSQL gestionado en una fase
-posterior todavía no abierta ni numerada. No abrir 5C.7B.3 todavía.
+`docs(governance): cierra baseline de continuidad G0001-A1`
