@@ -1,6 +1,10 @@
 'use strict';
 
 const {
+  runPostgresScopedTransaction,
+} = require('../../repositories/postgres/postgres-scoped-transaction');
+
+const {
   MissionDomainError,
   SCHEMA_VERSION,
   assertMissionScope,
@@ -200,44 +204,17 @@ class PostgresMissionRepository {
   }
 
   async #withScope(rawScope, operation) {
-    const scope = normalizeRepositoryScope(rawScope);
-    let client;
-    try {
-      client = await this.#pool.connect();
-    } catch (error) {
-      throw sanitizeDatabaseError(error);
-    }
-
-    let transactionStarted = false;
-    let committing = false;
-    try {
-      await client.query('BEGIN');
-      transactionStarted = true;
-      await client.query("SELECT set_config('app.tenant_id', $1, true)", [scope.tenantId]);
-      await client.query("SELECT set_config('app.user_id', $1, true)", [scope.userId]);
-      await client.query("SELECT set_config('app.client_id', $1, true)", [scope.clientId]);
-      const result = await operation(client, scope);
-      committing = true;
-      await client.query('COMMIT');
-      return result;
-    } catch (error) {
-      if (committing) {
-        throw repositoryError(
-          'mission_commit_outcome_unknown',
-          'PostgreSQL commit outcome is unknown; reconcile before another mutation.',
-        );
-      }
-      if (transactionStarted) {
-        try {
-          await client.query('ROLLBACK');
-        } catch {
-          // Preserve the original sanitized failure; the connection is released below.
-        }
-      }
-      throw sanitizeDatabaseError(error);
-    } finally {
-      if (client && typeof client.release === 'function') client.release();
-    }
+    return runPostgresScopedTransaction({
+      pool: this.#pool,
+      rawScope,
+      normalizeScope: normalizeRepositoryScope,
+      operation,
+      sanitizeError: sanitizeDatabaseError,
+      commitUnknownError: () => repositoryError(
+        'mission_commit_outcome_unknown',
+        'PostgreSQL commit outcome is unknown; reconcile before another mutation.',
+      ),
+    });
   }
 
   async create(rawScope, mission, rawIdempotencyKey) {
