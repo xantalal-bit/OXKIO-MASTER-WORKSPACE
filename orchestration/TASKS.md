@@ -1,6 +1,15 @@
 ﻿# OXKIO TASKS
 
-## Prioridad inmediata vigente
+## Estado operativo vigente
+
+- G0002.5B.2E está cerrada, versionada y publicada en `e4c79ff`.
+- El commit atómico Confirmation → Mission superó 179/179 pruebas:
+  PostgreSQL Integration 22/22, contratos 65/65 y servicios 92/92.
+- No existe una microfase técnica siguiente abierta.
+- Mantener la baseline publicada sin desarrollar, desplegar ni conectar el runtime
+  hasta autorización expresa.
+
+## Pendientes transferidos — no abiertos
 
 1. Fijar el sobre de carga de Cliente Cero: región UE, almacenamiento, conexiones,
    concurrencia, HA, RPO, RTO, retención y soporte.
@@ -13,10 +22,8 @@
 5. Seleccionar proveedor PostgreSQL gestionado y aprobar el diseño productivo.
 6. Mantener Firestore, JSON productivos, OAuth y stores reales intactos.
 
-5C.7B.1 y 5C.7B.2 están cerradas y publicadas. Firestore Emulator y PostgreSQL
-portable superaron el mismo harness. PostgreSQL gestionado queda ratificado mediante
-ADR como persistencia operativa principal. No abrir 5C.7B.3, desplegar, migrar,
-contratar ni activar servicios cloud.
+Estos pendientes no constituyen la siguiente microfase ni quedan abiertos por el cierre
+de G0002.5B.2E. No abrir 5C.7B.3, desplegar, migrar, contratar ni activar servicios cloud.
 
 ## Historial sustituido — lista inicial del 22/06/2026
 

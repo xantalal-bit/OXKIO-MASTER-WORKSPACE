@@ -3,17 +3,25 @@
 ## Estado operativo vigente
 
 - Código de bloque: 5C.7
-- Última subfase cerrada: 5C.7B.2 — Persistencia Definitiva
-- Subfase siguiente: no abierta; 5C.7B.3 permanece cerrada
+- Última microfase cerrada: G0002.5B.2E — commit atómico Confirmation → Mission
+- Microfase siguiente: no abierta; 5C.7B.3 permanece cerrada
 - Bloque actual: Runtime Permanente e Infraestructura
-- Fase actual: 5C.7 — Runtime Permanente 24/7
-- Objetivo inmediato: seleccionar proveedor PostgreSQL gestionado y diseño productivo, sin contratar.
-- Siguiente paso recomendado: fijar sobre de carga y comparar Cloud SQL, Supabase, Neon y Render.
-- Siguiente fase prevista: 5C.7 — Runtime Permanente 24/7.
-- Último hito publicado: 5C.7B.1 — backend cloud-ready neutral, commit `a8619c1`.
-- Resumen de la sesión: Firestore Emulator y PostgreSQL portable superaron el mismo
-  harness. La ADR ratifica PostgreSQL gestionado como persistencia operativa principal;
-  proveedor, plan, coste y diseño productivo siguen pendientes.
+- Fase técnica abierta: ninguna
+- Objetivo inmediato: preservar la baseline publicada y esperar autorización expresa.
+- Siguiente paso recomendado: no definido por este cierre documental.
+- Último hito publicado: G0002.5B.2E, commit `e4c79ff`.
+- Resumen de la sesión: el commit atómico Confirmation → Mission quedó implementado,
+  probado, versionado y publicado sin abrir la microfase siguiente.
+
+## Evidencia publicada G0002.5B.2E
+
+- Implementación: completada para el commit atómico Confirmation → Mission.
+- PostgreSQL Integration: 22/22 pruebas aprobadas.
+- Contratos: 65/65 pruebas aprobadas.
+- Servicios: 92/92 pruebas aprobadas.
+- Total: 179/179 pruebas aprobadas.
+- Commit y publicación: completados en `e4c79ff`.
+- Microfase siguiente: no abierta.
 
 ## Evidencia de cierre 5C.6D.1
 
@@ -89,6 +97,7 @@ Capacidades operativas verificadas:
 
 ## No abrir todavía
 
+- La microfase siguiente a G0002.5B.2E.
 - 5C.7B.3.
 - Envío de Gmail.
 - Calendar Execution.
