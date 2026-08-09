@@ -12,18 +12,20 @@
   Google Cloud SQL Enterprise la contingencia; Supabase queda tercero.
 - Fase 1.3 está aprobada y cerrada con la arquitectura operativa Neon para Cliente Cero.
 - Fase 1.4 está aprobada y cerrada; no quedan bloqueantes arquitectónicos.
-- 5C.7B.3 permanece cerrada.
+- 5C.7B.3 está abierta; 5C.7B.3A está aprobada y cerrada en
+  `XANTALAL/00_GOVERNANCE/5C.7B.3A-CONTRATO-SECRETOS-MATRIZ-CUSTODIA.md`.
+- 5C.7B.3B–F permanecen cerradas.
 
 ## Pendientes transferidos — no abiertos
 
-1. Mantener cerrada 5C.7B.3 hasta autorización humana expresa.
+1. Mantener cerrada 5C.7B.3B hasta autorización humana expresa.
 2. Exigir otra puerta humana antes de crear cuenta, seleccionar plan de pago o gastar.
 3. No cambiar PostgreSQL por MySQL ni contratar un VPS autogestionado para aprovechar
    LucusHost; el alojamiento compartido actual no admite PostgreSQL remoto.
 4. Mantener Firestore, JSON productivos, OAuth y stores reales intactos.
 
-Estos pendientes no quedan autorizados por los cierres de Fases 1.1, 1.2, 1.3 y 1.4. No abrir
-5C.7B.3, desplegar, migrar, contratar o activar servicios cloud.
+Estos pendientes no quedan autorizados por el cierre de 5C.7B.3A. No abrir 5C.7B.3B,
+desplegar, migrar, contratar o activar servicios cloud.
 
 ## Historial sustituido — lista inicial del 22/06/2026
 

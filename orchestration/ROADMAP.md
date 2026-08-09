@@ -4,11 +4,13 @@
 
 - Código de bloque: 5C.7
 - Última microfase cerrada: G0002.5B.2F — Arquitectura productiva PostgreSQL para Cliente Cero
+- Microfase abierta: 5C.7B.3 — Secret Manager, IAM, tokens cifrados y rotación
 - Bloque actual: Runtime Permanente e Infraestructura
-- Fases 1.1, 1.2, 1.3 y 1.4 de G0002.5B.2F: aprobadas y cerradas; 5C.7B.3 permanece cerrada
+- Fases 1.1, 1.2, 1.3 y 1.4 de G0002.5B.2F: aprobadas y cerradas; 5C.7B.3 está abierta
 - Selección arquitectónica: Neon Launch; contingencia: Google Cloud SQL Enterprise.
 - Objetivo inmediato: preservar el cierre arquitectónico de G0002.5B.2F.
-- Siguiente paso recomendado: mantener 5C.7B.3 cerrada hasta autorización expresa.
+- 5C.7B.3A: contrato de secretos y matriz de custodia aprobado y cerrado.
+- Siguiente paso recomendado: mantener 5C.7B.3B cerrada hasta autorización expresa.
 - Último hito publicado: Fase 1.3 de G0002.5B.2F, commit `0b6bf2f`.
 - Documento canónico del sobre de carga:
   `XANTALAL/00_GOVERNANCE/G0002.5B.2F-ARQUITECTURA-PRODUCTIVA-POSTGRESQL-CLIENTE-CERO.md`.
@@ -21,7 +23,7 @@
 - Servicios: 92/92 pruebas aprobadas.
 - Total: 179/179 pruebas aprobadas.
 - Commit y publicación: completados en `e4c79ff`.
-- Continuidad: G0002.5B.2F cerrada arquitectónicamente; 5C.7B.3 no abierta.
+- Continuidad: G0002.5B.2F cerrada; 5C.7B.3 abierta con 5C.7B.3A cerrada y 5C.7B.3B–F no abiertas.
 
 ## Evidencia de cierre 5C.6D.1
 
@@ -97,7 +99,7 @@ Capacidades operativas verificadas:
 
 ## No abrir todavía
 
-- 5C.7B.3.
+- 5C.7B.3B–F.
 - Envío de Gmail.
 - Calendar Execution.
 - Automatizaciones y activación de otros agentes.
