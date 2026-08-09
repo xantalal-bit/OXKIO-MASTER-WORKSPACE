@@ -1,22 +1,30 @@
+'use strict';
+
+const { redact } = require('../security/secret-runtime');
+
 class LogEngine {
 
-    constructor() {
+    constructor({ redactor = redact, consoleRef = console } = {}) {
 
         this.logs = [];
+        this.redactor = redactor;
+        this.consoleRef = consoleRef;
     }
 
     addLog(type, message, data = null) {
 
+        const safeType = this.redactor(type);
+        const safeMessage = this.redactor(message);
         const log = {
             timestamp: new Date(),
-            type,
-            message,
-            data
+            type: safeType,
+            message: safeMessage,
+            data: this.redactor(data)
         };
 
         this.logs.push(log);
 
-        console.log(`[${type}] ${message}`);
+        this.consoleRef.log(`[${safeType}] ${safeMessage}`);
     }
 
     getLogs() {

@@ -6,6 +6,19 @@ const os = require('node:os');
 const path = require('node:path');
 const test = require('node:test');
 const ExecutionLogger = require('./executionLogger');
+const {
+  createSecretRuntime,
+  createSyntheticSecretProvider,
+} = require('../security/secret-runtime');
+
+const SYNTHETIC_SECRET = 'synthetic-execution-secret-3b';
+const syntheticRuntime = createSecretRuntime({
+  provider: createSyntheticSecretProvider({ GOOGLE_CLIENT_SECRET: SYNTHETIC_SECRET }),
+});
+
+function createLogger(dataFile) {
+  return new ExecutionLogger({ dataFile, redactor: syntheticRuntime.redact });
+}
 
 function operation(overrides = {}) {
   return {
@@ -23,7 +36,7 @@ test('logs terminal operations through a strict whitelist and lists defensive li
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'execution-logger-'));
   const dataFile = path.join(root, 'log.json');
   try {
-    const logger = new ExecutionLogger({ dataFile });
+    const logger = createLogger(dataFile);
     const logged = logger.logOperation(operation());
     assert.equal(logged.kind, 'operation');
     assert.equal(logged.warningCount, 0);
@@ -55,12 +68,31 @@ test('loads legacy records without rewriting or rejecting them', () => {
   const legacy = { logs: [{ id: 'legacy', approvalId: 'approval-1', executionResult: { ok: true } }] };
   fs.writeFileSync(dataFile, JSON.stringify(legacy));
   try {
-    const logger = new ExecutionLogger({ dataFile });
+    const logger = createLogger(dataFile);
     assert.equal(logger.hasExecuted('approval-1'), true);
     assert.deepEqual(logger.list({ limit: 1 })[0], {
       id: 'legacy', createdAt: null, kind: 'legacy',
     });
     assert.deepEqual(JSON.parse(fs.readFileSync(dataFile, 'utf8')), legacy);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('add and logOperation redact synthetic secrets before persistence', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'execution-logger-redaction-'));
+  const dataFile = path.join(root, 'log.json');
+  try {
+    const logger = createLogger(dataFile);
+    const circular = { note: SYNTHETIC_SECRET, Authorization: `Bearer ${SYNTHETIC_SECRET}` };
+    circular.self = circular;
+    const added = logger.add({ type: 'synthetic', payload: circular });
+    assert.equal(JSON.stringify(added).includes(SYNTHETIC_SECRET), false);
+    assert.equal(added.payload.self, '[Circular]');
+
+    const logged = logger.logOperation(operation({ resultSummary: `Completed ${SYNTHETIC_SECRET}` }));
+    assert.equal(logged.resultSummary.includes(SYNTHETIC_SECRET), false);
+    assert.equal(fs.readFileSync(dataFile, 'utf8').includes(SYNTHETIC_SECRET), false);
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }

@@ -1,3 +1,5 @@
+require("dotenv").config();
+
 const http = require("http");
 const EmailWorkflow = require("../workflows/emailWorkflow");
 const EmailAgent = require("../agents/emailAgent");
@@ -46,6 +48,7 @@ const {
   sendFirebaseAuthError
 } = require("../security/firebase-server-auth");
 const { createExecutiveAuthorizer } = require("../security/executive-authorization");
+const { safeDiagnostic } = require("../security/secret-runtime");
 const { createExecutiveRuntime } = require("../services/runtime/executive-runtime-factory");
 const {
   createRuntimeReadiness,
@@ -310,7 +313,7 @@ if (pathname === "/oauth/google" && req.method === "GET") {
   } catch (error) {
     return sendJson(res, 500, {
       ok: false,
-      error: error.message
+      error: safeDiagnostic(error, "oauth_config_failed").code
     });
   }
 }
@@ -338,7 +341,7 @@ return sendJson(res, 200, {
   } catch (error) {
     return sendJson(res, 500, {
       ok: false,
-      error: error.message
+      error: safeDiagnostic(error, "oauth_callback_failed").code
     });
   }
 }
@@ -392,7 +395,7 @@ if (pathname === "/api/gmail/inbox" && req.method === "GET") {
   } catch (error) {
     return sendJson(res, 500, {
       ok: false,
-      error: error.message
+      error: safeDiagnostic(error, "gmail_inbox_failed").code
     });
   }
 }
@@ -490,7 +493,7 @@ if (pathname === "/api/gmail/analyze" && req.method === "GET") {
 
     return sendJson(res, 500, {
       ok: false,
-      error: error.message
+      error: safeDiagnostic(error, "gmail_analysis_failed").code
     });
 
   }
@@ -1399,7 +1402,7 @@ if (pathname === "/api/simulator-executive-export" && req.method === "GET") {
       JSON.stringify({
         ok: false,
         message: "No se pudo conectar con Simulador IA",
-        error: error.message
+        error: safeDiagnostic(error, "simulator_unavailable").code
       })
     );
 
@@ -1463,11 +1466,11 @@ const proposal = proposalEngine.generate({
 
     } catch (error) {
 
-  console.error("[API EXECUTE ERROR]", error);
+  console.error("[API EXECUTE ERROR]", safeDiagnostic(error, "api_execute_failed"));
 
   return sendJson(res, 500, {
         ok: false,
-        error: error.message
+        error: safeDiagnostic(error, "api_execute_failed").code
       });
 
     }

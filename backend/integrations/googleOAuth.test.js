@@ -8,9 +8,14 @@ const test = require('node:test');
 
 const {
   GOOGLE_OAUTH_SCOPES,
+  createGoogleOAuthClient,
   getGmailClient,
   inspectGoogleOAuthReadiness,
 } = require('./googleOAuth');
+const {
+  createSecretRuntime,
+  createSyntheticSecretProvider,
+} = require('../security/secret-runtime');
 
 const COMPLETE_ENV = Object.freeze({
   GOOGLE_CLIENT_ID: 'fake-client-id',
@@ -202,6 +207,41 @@ test('getGmailClient constructs an injected client without refresh or network', 
     assert.equal(gmailConstructions, 1);
     assert.equal(refreshCalls, 0);
   });
+});
+
+test('constructs OAuth through the neutral secret provider and fails closed without it', () => {
+  const syntheticSecret = 'synthetic-oauth-client-secret-3b';
+  const secretRuntime = createSecretRuntime({
+    provider: createSyntheticSecretProvider({ GOOGLE_CLIENT_SECRET: syntheticSecret }),
+  });
+  const constructions = [];
+  class OAuth2 {
+    constructor(clientId, clientSecret, redirectUri) {
+      constructions.push({ clientId, clientSecret, redirectUri });
+    }
+  }
+
+  createGoogleOAuthClient({ env: COMPLETE_ENV, secretRuntime, googleApi: { auth: { OAuth2 } } });
+  assert.deepEqual(constructions, [{
+    clientId: COMPLETE_ENV.GOOGLE_CLIENT_ID,
+    clientSecret: syntheticSecret,
+    redirectUri: COMPLETE_ENV.GOOGLE_REDIRECT_URI,
+  }]);
+
+  const missingRuntime = createSecretRuntime({ provider: createSyntheticSecretProvider({}) });
+  assert.throws(
+    () => createGoogleOAuthClient({
+      env: COMPLETE_ENV,
+      secretRuntime: missingRuntime,
+      googleApi: { auth: { OAuth2 } },
+    }),
+    (error) => {
+      assert.equal(error.code, 'google_oauth_not_configured');
+      assert.equal(error.message.includes(syntheticSecret), false);
+      return true;
+    },
+  );
+  assert.equal(constructions.length, 1);
 });
 
 test('future authorization scopes exclude send and retain required read/compose scopes', () => {

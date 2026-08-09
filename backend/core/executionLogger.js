@@ -3,6 +3,7 @@
 const path = require('path');
 const { createLocalOperationRepository } = require('../repositories/local-repository-factory');
 const { assertRepository } = require('../repositories/repository-contracts');
+const { redact } = require('../security/secret-runtime');
 
 const DATA_FILE = path.join(__dirname, 'executionLog.json');
 const MAX_LIST_LIMIT = 100;
@@ -53,8 +54,9 @@ function publicLog(log) {
 }
 
 class ExecutionLogger {
-  constructor({ dataFile = DATA_FILE, repository } = {}) {
+  constructor({ dataFile = DATA_FILE, repository, redactor = redact } = {}) {
     this.dataFile = dataFile;
+    this.redactor = redactor;
     this.repository = assertRepository(
       repository || createLocalOperationRepository(dataFile),
       'OperationRepository',
@@ -68,10 +70,11 @@ class ExecutionLogger {
   }
 
   add(entry) {
+    const safeEntry = this.redactor(entry);
     const log = {
       id: Date.now().toString(),
       createdAt: new Date().toISOString(),
-      ...entry,
+      ...safeEntry,
     };
     this.logs.push(log);
     this.save();
@@ -97,7 +100,7 @@ class ExecutionLogger {
       startedAt: safeText(record.startedAt, 40),
       completedAt: safeText(record.completedAt, 40),
       durationMs: Number.isFinite(record.durationMs) ? Math.max(0, record.durationMs) : null,
-      resultSummary: safeText(record.resultSummary),
+      resultSummary: safeText(this.redactor(record.resultSummary)),
       warningCount: Array.isArray(record.warnings) ? Math.min(5, record.warnings.length) : 0,
       errorCount: Array.isArray(record.errors) ? Math.min(5, record.errors.length) : 0,
       executionEnabled: false,

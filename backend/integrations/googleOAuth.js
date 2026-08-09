@@ -1,7 +1,10 @@
 const { google } = require("googleapis");
 const fs = require("fs");
 const path = require("path");
-require("dotenv").config();
+const {
+  createEnvironmentSecretProvider,
+  createSecretRuntime,
+} = require("../security/secret-runtime");
 
 const TOKENS_PATH = path.join(__dirname, "../auth/googleTokens.json");
 const GMAIL_COMPOSE_SCOPE = "https://www.googleapis.com/auth/gmail.compose";
@@ -12,11 +15,9 @@ const GOOGLE_OAUTH_SCOPES = Object.freeze([
   "https://www.googleapis.com/auth/calendar.readonly"
 ]);
 
-const oauth2Client = new google.auth.OAuth2(
-  process.env.GOOGLE_CLIENT_ID,
-  process.env.GOOGLE_CLIENT_SECRET,
-  process.env.GOOGLE_REDIRECT_URI
-);
+function runtimeForEnvironment(env) {
+  return createSecretRuntime({ provider: createEnvironmentSecretProvider({ env }) });
+}
 
 function buildGoogleOAuthConfigError() {
   const error = new Error("Google OAuth is not configured.");
@@ -50,15 +51,12 @@ function readTokenFile({ tokensPath = TOKENS_PATH, fsModule = fs } = {}) {
 
 function inspectGoogleOAuthReadiness({
   env = process.env,
+  secretRuntime = runtimeForEnvironment(env),
   tokensPath = TOKENS_PATH,
   fsModule = fs,
   now = Date.now(),
 } = {}) {
-  const configured = [
-    "GOOGLE_CLIENT_ID",
-    "GOOGLE_CLIENT_SECRET",
-    "GOOGLE_REDIRECT_URI"
-  ].every((key) => typeof env[key] === "string" && env[key].trim());
+  const configured = getMissingGoogleOAuthConfig({ env, secretRuntime }).length === 0;
   const tokenFile = readTokenFile({ tokensPath, fsModule });
   const tokens = tokenFile.tokens || {};
   const accessTokenPresent = typeof tokens.access_token === "string" && Boolean(tokens.access_token.trim());
@@ -93,27 +91,46 @@ function inspectGoogleOAuthReadiness({
   };
 }
 
-function getMissingGoogleOAuthConfig() {
-  return [
-    "GOOGLE_CLIENT_ID",
-    "GOOGLE_CLIENT_SECRET",
-    "GOOGLE_REDIRECT_URI"
-  ].filter((key) => !process.env[key] || !String(process.env[key]).trim());
+function getMissingGoogleOAuthConfig({
+  env = process.env,
+  secretRuntime = runtimeForEnvironment(env),
+} = {}) {
+  const missing = ["GOOGLE_CLIENT_ID", "GOOGLE_REDIRECT_URI"]
+    .filter((key) => !env[key] || !String(env[key]).trim());
+  try {
+    secretRuntime.getSecret("GOOGLE_CLIENT_SECRET");
+  } catch (error) {
+    missing.push("GOOGLE_CLIENT_SECRET");
+  }
+  return missing;
 }
 
-function assertGoogleOAuthConfigured() {
-  if (getMissingGoogleOAuthConfig().length > 0) {
+function assertGoogleOAuthConfigured(options = {}) {
+  if (getMissingGoogleOAuthConfig(options).length > 0) {
     throw buildGoogleOAuthConfigError();
   }
 
   return true;
 }
 
+function createGoogleOAuthClient({
+  env = process.env,
+  secretRuntime = runtimeForEnvironment(env),
+  googleApi = google,
+} = {}) {
+  assertGoogleOAuthConfigured({ env, secretRuntime });
+  return new googleApi.auth.OAuth2(
+    env.GOOGLE_CLIENT_ID,
+    secretRuntime.getSecret("GOOGLE_CLIENT_SECRET"),
+    env.GOOGLE_REDIRECT_URI
+  );
+}
+
 function saveTokens(tokens) {
   fs.writeFileSync(TOKENS_PATH, JSON.stringify(tokens, null, 2));
 }
 
-function loadTokens() {
+function loadTokens({ oauthClient = createGoogleOAuthClient() } = {}) {
   if (!fs.existsSync(TOKENS_PATH)) return null;
 
   const raw = fs.readFileSync(TOKENS_PATH, "utf8");
@@ -122,31 +139,32 @@ function loadTokens() {
   const tokens = JSON.parse(raw);
   if (!tokens || Object.keys(tokens).length === 0) return null;
 
-  oauth2Client.setCredentials(tokens);
+  oauthClient.setCredentials(tokens);
   return tokens;
 }
 
-function getAuthUrl() {
-  assertGoogleOAuthConfigured();
+function getAuthUrl(options = {}) {
+  const oauthClient = createGoogleOAuthClient(options);
 
-  return oauth2Client.generateAuthUrl({
+  return oauthClient.generateAuthUrl({
     access_type: "offline",
     prompt: "consent",
     scope: GOOGLE_OAUTH_SCOPES
   });
 }
 
-async function getTokens(code) {
-  assertGoogleOAuthConfigured();
+async function getTokens(code, options = {}) {
+  const oauthClient = createGoogleOAuthClient(options);
 
-  const { tokens } = await oauth2Client.getToken(code);
-  oauth2Client.setCredentials(tokens);
+  const { tokens } = await oauthClient.getToken(code);
+  oauthClient.setCredentials(tokens);
   saveTokens(tokens);
   return tokens;
 }
 
-function setCredentials(tokens) {
-  oauth2Client.setCredentials(tokens);
+function setCredentials(tokens, options = {}) {
+  const oauthClient = createGoogleOAuthClient(options);
+  oauthClient.setCredentials(tokens);
   saveTokens(tokens);
 }
 
@@ -155,28 +173,30 @@ function getGmailClient({
   tokensPath = TOKENS_PATH,
   fsModule = fs,
   now = Date.now(),
-  oauthClient = oauth2Client,
+  secretRuntime = runtimeForEnvironment(env),
+  oauthClient,
   googleApi = google,
 } = {}) {
-  const readiness = inspectGoogleOAuthReadiness({ env, tokensPath, fsModule, now });
+  const readiness = inspectGoogleOAuthReadiness({ env, secretRuntime, tokensPath, fsModule, now });
   if (!readiness.readyForDraftCreate) throw buildSafeOAuthError(readiness.code);
 
   const tokenFile = readTokenFile({ tokensPath, fsModule });
-  oauthClient.setCredentials(tokenFile.tokens);
+  const client = oauthClient || createGoogleOAuthClient({ env, secretRuntime, googleApi });
+  client.setCredentials(tokenFile.tokens);
 
   return googleApi.gmail({
     version: "v1",
-    auth: oauthClient
+    auth: client
   });
 }
 
 function getCalendarClient() {
-  assertGoogleOAuthConfigured();
-  loadTokens();
+  const oauthClient = createGoogleOAuthClient();
+  loadTokens({ oauthClient });
 
   return google.calendar({
     version: "v3",
-    auth: oauth2Client
+    auth: oauthClient
   });
 }
 
@@ -190,6 +210,7 @@ module.exports = {
   loadTokens,
   getMissingGoogleOAuthConfig,
   assertGoogleOAuthConfigured,
+  createGoogleOAuthClient,
   inspectGoogleOAuthReadiness,
   buildSafeOAuthError,
   GOOGLE_OAUTH_SCOPES
