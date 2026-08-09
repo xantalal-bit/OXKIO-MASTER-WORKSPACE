@@ -3,14 +3,13 @@
 ## Estado operativo vigente
 
 - Código de bloque: 5C.7
-- Última microfase cerrada: G0002.5B.2E — commit atómico Confirmation → Mission
-- Microfase abierta: G0002.5B.2F — Arquitectura productiva PostgreSQL para Cliente Cero
+- Última microfase cerrada: G0002.5B.2F — Arquitectura productiva PostgreSQL para Cliente Cero
 - Bloque actual: Runtime Permanente e Infraestructura
-- Fases 1.1, 1.2 y 1.3 de G0002.5B.2F: aprobadas y cerradas; 5C.7B.3 permanece cerrada
+- Fases 1.1, 1.2, 1.3 y 1.4 de G0002.5B.2F: aprobadas y cerradas; 5C.7B.3 permanece cerrada
 - Selección arquitectónica: Neon Launch; contingencia: Google Cloud SQL Enterprise.
-- Objetivo inmediato: preservar el sobre de carga, la selección y la arquitectura operativa aprobadas.
+- Objetivo inmediato: preservar el cierre arquitectónico de G0002.5B.2F.
 - Siguiente paso recomendado: mantener 5C.7B.3 cerrada hasta autorización expresa.
-- Último hito publicado: G0002.5B.2E, commit `e4c79ff`.
+- Último hito publicado: Fase 1.3 de G0002.5B.2F, commit `0b6bf2f`.
 - Documento canónico del sobre de carga:
   `XANTALAL/00_GOVERNANCE/G0002.5B.2F-ARQUITECTURA-PRODUCTIVA-POSTGRESQL-CLIENTE-CERO.md`.
 
@@ -22,7 +21,7 @@
 - Servicios: 92/92 pruebas aprobadas.
 - Total: 179/179 pruebas aprobadas.
 - Commit y publicación: completados en `e4c79ff`.
-- Continuidad: G0002.5B.2F permanece abierta; Fase 1.3 cerrada y 5C.7B.3 no abierta.
+- Continuidad: G0002.5B.2F cerrada arquitectónicamente; 5C.7B.3 no abierta.
 
 ## Evidencia de cierre 5C.6D.1
 

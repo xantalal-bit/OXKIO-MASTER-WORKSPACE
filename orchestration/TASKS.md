@@ -5,12 +5,13 @@
 - G0002.5B.2E está cerrada, versionada y publicada en `e4c79ff`.
 - El commit atómico Confirmation → Mission superó 179/179 pruebas:
   PostgreSQL Integration 22/22, contratos 65/65 y servicios 92/92.
-- G0002.5B.2F está abierta exclusivamente en arquitectura.
+- G0002.5B.2F está cerrada arquitectónicamente, sin contratación ni despliegue.
 - Fase 1.1 está aprobada y cerrada con el sobre de carga canónico en
   `XANTALAL/00_GOVERNANCE/G0002.5B.2F-ARQUITECTURA-PRODUCTIVA-POSTGRESQL-CLIENTE-CERO.md`.
 - Fase 1.2 está aprobada y cerrada: Neon Launch es la selección arquitectónica y
   Google Cloud SQL Enterprise la contingencia; Supabase queda tercero.
 - Fase 1.3 está aprobada y cerrada con la arquitectura operativa Neon para Cliente Cero.
+- Fase 1.4 está aprobada y cerrada; no quedan bloqueantes arquitectónicos.
 - 5C.7B.3 permanece cerrada.
 
 ## Pendientes transferidos — no abiertos
@@ -21,7 +22,7 @@
    LucusHost; el alojamiento compartido actual no admite PostgreSQL remoto.
 4. Mantener Firestore, JSON productivos, OAuth y stores reales intactos.
 
-Estos pendientes no quedan autorizados por los cierres de Fases 1.1, 1.2 y 1.3. No abrir
+Estos pendientes no quedan autorizados por los cierres de Fases 1.1, 1.2, 1.3 y 1.4. No abrir
 5C.7B.3, desplegar, migrar, contratar o activar servicios cloud.
 
 ## Historial sustituido — lista inicial del 22/06/2026
