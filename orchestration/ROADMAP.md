@@ -8,10 +8,13 @@
 - Bloque actual: Runtime Permanente e Infraestructura
 - Fases 1.1, 1.2, 1.3 y 1.4 de G0002.5B.2F: aprobadas y cerradas; 5C.7B.3 está abierta
 - Selección arquitectónica: Neon Launch; contingencia: Google Cloud SQL Enterprise.
-- Objetivo inmediato: ejecutar 5C.7B.3C únicamente en modo documental/controlado, sin infraestructura.
+- Objetivo inmediato: reconciliar los criterios restantes de 5C.7B.3C tras cerrar 3C.1 y 3C.2, sin abrir 5C.7B.3D.
 - 5C.7B.3A: contrato de secretos y matriz de custodia aprobado y cerrado.
 - 5C.7B.3B: runtime neutral de secretos sintéticos cerrado y publicado en `4a5076c`.
-- 5C.7B.3C: abierta documentalmente y de forma controlada; no autoriza infraestructura ni gasto.
+- 5C.7B.3C: abierta de forma controlada; 3C.1 y 3C.2 están cerradas, sin secretos operativos ni despliegue.
+- 3C.1: proyecto `oxkio-runtime-prod` creado, billing vinculado y Secret Manager API activa.
+- 3C.2: tres service accounts sin claves ni roles de proyecto; canario IAM superado y eliminado,
+  con cero bindings temporales, cero secretos operativos y coste atribuible USD 0.
 - 5C.7B.3D–F: cerradas / no abiertas.
 - Último hito publicado: 5C.7B.3B, commit `4a5076c`.
 - Documento canónico del sobre de carga:

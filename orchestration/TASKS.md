@@ -15,24 +15,28 @@
 - 5C.7B.3 está abierta; 5C.7B.3A está aprobada y cerrada en
   `XANTALAL/00_GOVERNANCE/5C.7B.3A-CONTRATO-SECRETOS-MATRIZ-CUSTODIA.md`.
 - 5C.7B.3B está cerrada y publicada en `4a5076c`.
-- 5C.7B.3C está abierta únicamente en modo documental/controlado, sin autorización
-  para crear proyecto, billing, APIs, service accounts, secretos o infraestructura.
+- 5C.7B.3C está abierta de forma controlada; 3C.1 y 3C.2 están cerradas.
+- 3C.1 creó el proyecto dedicado `oxkio-runtime-prod`, vinculó billing y activó
+  Secret Manager API.
+- 3C.2 creó las tres service accounts sin claves ni roles de proyecto y demostró
+  mínimo privilegio con canario sintético: runtime permitido; migration y backup
+  denegados; limpieza completa, cero secretos operativos, cero bindings temporales
+  y coste atribuible USD 0.
 - 5C.7B.3D–F permanecen cerradas.
 
 ## Pendientes transferidos — no abiertos
 
-1. Documentar 5C.7B.3C con proyecto GCP dedicado y separado de Firebase, Secret Manager
-   global automático, IAM mínimo por secreto y service accounts futuras separadas, sin claves.
-2. Exigir otra puerta humana antes de crear proyecto, vincular billing, activar APIs, crear
-   service accounts o secretos, contratar, desplegar o gastar.
+1. Reconciliar los criterios restantes de 5C.7B.3C antes de proponer su cierre.
+2. Exigir otra puerta humana antes de crear secretos operativos, contratar, desplegar,
+   gastar o abrir 5C.7B.3D.
 3. No cambiar PostgreSQL por MySQL ni contratar un VPS autogestionado para aprovechar
    LucusHost; el alojamiento compartido actual no admite PostgreSQL remoto.
 4. Mantener Firestore, JSON productivos, OAuth y stores reales intactos.
 5. Mantener el objetivo IAM/Secret Manager en USD 0–0,20/mes; una previsión igual o
    superior a USD 1/mes exige revisión humana y nunca autoriza ampliación automática.
 
-La apertura documental/controlada de 5C.7B.3C no autoriza crear recursos, desplegar,
-migrar, contratar o activar servicios cloud. PostgreSQL real espera a 3D y OAuth real a 3E.
+El cierre de 3C.1 y 3C.2 no autoriza crear secretos operativos, desplegar, migrar,
+contratar o gastar. PostgreSQL real espera a 3D y OAuth real a 3E.
 
 ## Historial sustituido — lista inicial del 22/06/2026
 
