@@ -8,10 +8,12 @@
 - Bloque actual: Runtime Permanente e Infraestructura
 - Fases 1.1, 1.2, 1.3 y 1.4 de G0002.5B.2F: aprobadas y cerradas; 5C.7B.3 está abierta
 - Selección arquitectónica: Neon Launch; contingencia: Google Cloud SQL Enterprise.
-- Objetivo inmediato: preservar el cierre arquitectónico de G0002.5B.2F.
+- Objetivo inmediato: ejecutar 5C.7B.3C únicamente en modo documental/controlado, sin infraestructura.
 - 5C.7B.3A: contrato de secretos y matriz de custodia aprobado y cerrado.
-- Siguiente paso recomendado: mantener 5C.7B.3B cerrada hasta autorización expresa.
-- Último hito publicado: Fase 1.3 de G0002.5B.2F, commit `0b6bf2f`.
+- 5C.7B.3B: runtime neutral de secretos sintéticos cerrado y publicado en `4a5076c`.
+- 5C.7B.3C: abierta documentalmente y de forma controlada; no autoriza infraestructura ni gasto.
+- 5C.7B.3D–F: cerradas / no abiertas.
+- Último hito publicado: 5C.7B.3B, commit `4a5076c`.
 - Documento canónico del sobre de carga:
   `XANTALAL/00_GOVERNANCE/G0002.5B.2F-ARQUITECTURA-PRODUCTIVA-POSTGRESQL-CLIENTE-CERO.md`.
 
@@ -23,7 +25,8 @@
 - Servicios: 92/92 pruebas aprobadas.
 - Total: 179/179 pruebas aprobadas.
 - Commit y publicación: completados en `e4c79ff`.
-- Continuidad: G0002.5B.2F cerrada; 5C.7B.3 abierta con 5C.7B.3A cerrada y 5C.7B.3B–F no abiertas.
+- Continuidad: G0002.5B.2F cerrada; 5C.7B.3 abierta con 3A–B cerradas, 3C abierta
+  documental/controlada y 3D–F no abiertas.
 
 ## Evidencia de cierre 5C.6D.1
 
@@ -99,7 +102,7 @@ Capacidades operativas verificadas:
 
 ## No abrir todavía
 
-- 5C.7B.3B–F.
+- 5C.7B.3D–F.
 - Envío de Gmail.
 - Calendar Execution.
 - Automatizaciones y activación de otros agentes.

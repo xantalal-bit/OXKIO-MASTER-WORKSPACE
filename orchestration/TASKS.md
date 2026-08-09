@@ -14,18 +14,25 @@
 - Fase 1.4 está aprobada y cerrada; no quedan bloqueantes arquitectónicos.
 - 5C.7B.3 está abierta; 5C.7B.3A está aprobada y cerrada en
   `XANTALAL/00_GOVERNANCE/5C.7B.3A-CONTRATO-SECRETOS-MATRIZ-CUSTODIA.md`.
-- 5C.7B.3B–F permanecen cerradas.
+- 5C.7B.3B está cerrada y publicada en `4a5076c`.
+- 5C.7B.3C está abierta únicamente en modo documental/controlado, sin autorización
+  para crear proyecto, billing, APIs, service accounts, secretos o infraestructura.
+- 5C.7B.3D–F permanecen cerradas.
 
 ## Pendientes transferidos — no abiertos
 
-1. Mantener cerrada 5C.7B.3B hasta autorización humana expresa.
-2. Exigir otra puerta humana antes de crear cuenta, seleccionar plan de pago o gastar.
+1. Documentar 5C.7B.3C con proyecto GCP dedicado y separado de Firebase, Secret Manager
+   global automático, IAM mínimo por secreto y service accounts futuras separadas, sin claves.
+2. Exigir otra puerta humana antes de crear proyecto, vincular billing, activar APIs, crear
+   service accounts o secretos, contratar, desplegar o gastar.
 3. No cambiar PostgreSQL por MySQL ni contratar un VPS autogestionado para aprovechar
    LucusHost; el alojamiento compartido actual no admite PostgreSQL remoto.
 4. Mantener Firestore, JSON productivos, OAuth y stores reales intactos.
+5. Mantener el objetivo IAM/Secret Manager en USD 0–0,20/mes; una previsión igual o
+   superior a USD 1/mes exige revisión humana y nunca autoriza ampliación automática.
 
-Estos pendientes no quedan autorizados por el cierre de 5C.7B.3A. No abrir 5C.7B.3B,
-desplegar, migrar, contratar o activar servicios cloud.
+La apertura documental/controlada de 5C.7B.3C no autoriza crear recursos, desplegar,
+migrar, contratar o activar servicios cloud. PostgreSQL real espera a 3D y OAuth real a 3E.
 
 ## Historial sustituido — lista inicial del 22/06/2026
 
