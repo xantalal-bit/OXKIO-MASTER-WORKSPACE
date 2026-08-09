@@ -6,8 +6,9 @@
 - Última microfase cerrada: G0002.5B.2E — commit atómico Confirmation → Mission
 - Microfase abierta: G0002.5B.2F — Arquitectura productiva PostgreSQL para Cliente Cero
 - Bloque actual: Runtime Permanente e Infraestructura
-- Fase 1.1 de G0002.5B.2F: aprobada y cerrada; 5C.7B.3 permanece cerrada
-- Objetivo inmediato: preservar el sobre de carga aprobado y esperar autorización expresa.
+- Fases 1.1 y 1.2 de G0002.5B.2F: aprobadas y cerradas; 5C.7B.3 permanece cerrada
+- Selección arquitectónica: Neon Launch; contingencia: Google Cloud SQL Enterprise.
+- Objetivo inmediato: preservar el sobre de carga y la selección; esperar autorización expresa.
 - Siguiente paso recomendado: no abrir Fase 1.3 sin autorización.
 - Último hito publicado: G0002.5B.2E, commit `e4c79ff`.
 - Documento canónico del sobre de carga:
@@ -123,7 +124,8 @@ Capacidades operativas verificadas:
 - Redis/BullMQ y Railway no se aceptan como decisiones obligatorias.
 - Persistencia principal: ratificada mediante
   `XANTALAL/00_GOVERNANCE/ADR-5C.7B.2-POSTGRESQL-PERSISTENCIA-PRINCIPAL.md`.
-- LucusHost: `unknown` hasta obtener datos verificables del plan.
+- LucusHost compartido: no apto para PostgreSQL productivo con runtime externo;
+  acceso remoto deshabilitado, sin PITR ni restauración PostgreSQL específica.
 - Estado: 5C.7B.1 CERRADA Y PUBLICADA; 5C.7B.2 CERRADA Y PUBLICADA,
   PERSISTENCIA PRINCIPAL RATIFICADA.
 - Segunda auditoría Antigravity: tras el piloto remoto y antes de probadores.
