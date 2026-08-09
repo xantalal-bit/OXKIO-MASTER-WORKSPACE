@@ -4,14 +4,14 @@
 
 - Código de bloque: 5C.7
 - Última microfase cerrada: G0002.5B.2E — commit atómico Confirmation → Mission
-- Microfase siguiente: no abierta; 5C.7B.3 permanece cerrada
+- Microfase abierta: G0002.5B.2F — Arquitectura productiva PostgreSQL para Cliente Cero
 - Bloque actual: Runtime Permanente e Infraestructura
-- Fase técnica abierta: ninguna
-- Objetivo inmediato: preservar la baseline publicada y esperar autorización expresa.
-- Siguiente paso recomendado: no definido por este cierre documental.
+- Fase 1.1 de G0002.5B.2F: aprobada y cerrada; 5C.7B.3 permanece cerrada
+- Objetivo inmediato: preservar el sobre de carga aprobado y esperar autorización expresa.
+- Siguiente paso recomendado: no abrir Fase 1.3 sin autorización.
 - Último hito publicado: G0002.5B.2E, commit `e4c79ff`.
-- Resumen de la sesión: el commit atómico Confirmation → Mission quedó implementado,
-  probado, versionado y publicado sin abrir la microfase siguiente.
+- Documento canónico del sobre de carga:
+  `XANTALAL/00_GOVERNANCE/G0002.5B.2F-ARQUITECTURA-PRODUCTIVA-POSTGRESQL-CLIENTE-CERO.md`.
 
 ## Evidencia publicada G0002.5B.2E
 
@@ -21,7 +21,7 @@
 - Servicios: 92/92 pruebas aprobadas.
 - Total: 179/179 pruebas aprobadas.
 - Commit y publicación: completados en `e4c79ff`.
-- Microfase siguiente: no abierta.
+- Continuidad: G0002.5B.2F abierta únicamente en arquitectura; Fase 1.3 no abierta.
 
 ## Evidencia de cierre 5C.6D.1
 
@@ -97,7 +97,7 @@ Capacidades operativas verificadas:
 
 ## No abrir todavía
 
-- La microfase siguiente a G0002.5B.2E.
+- Fase 1.3 de G0002.5B.2F.
 - 5C.7B.3.
 - Envío de Gmail.
 - Calendar Execution.
