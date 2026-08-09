@@ -10,17 +10,18 @@
   `XANTALAL/00_GOVERNANCE/G0002.5B.2F-ARQUITECTURA-PRODUCTIVA-POSTGRESQL-CLIENTE-CERO.md`.
 - Fase 1.2 está aprobada y cerrada: Neon Launch es la selección arquitectónica y
   Google Cloud SQL Enterprise la contingencia; Supabase queda tercero.
-- Fase 1.3 y 5C.7B.3 permanecen cerradas.
+- Fase 1.3 está aprobada y cerrada con la arquitectura operativa Neon para Cliente Cero.
+- 5C.7B.3 permanece cerrada.
 
 ## Pendientes transferidos — no abiertos
 
-1. Mantener cerrada Fase 1.3 hasta autorización humana expresa.
+1. Mantener cerrada 5C.7B.3 hasta autorización humana expresa.
 2. Exigir otra puerta humana antes de crear cuenta, seleccionar plan de pago o gastar.
 3. No cambiar PostgreSQL por MySQL ni contratar un VPS autogestionado para aprovechar
    LucusHost; el alojamiento compartido actual no admite PostgreSQL remoto.
 4. Mantener Firestore, JSON productivos, OAuth y stores reales intactos.
 
-Estos pendientes no quedan autorizados por los cierres de Fases 1.1 y 1.2. No abrir Fase 1.3 ni
+Estos pendientes no quedan autorizados por los cierres de Fases 1.1, 1.2 y 1.3. No abrir
 5C.7B.3, desplegar, migrar, contratar o activar servicios cloud.
 
 ## Historial sustituido — lista inicial del 22/06/2026
