@@ -24,12 +24,13 @@
   y coste atribuible USD 0.
 - Aclaración: las tres service accounts de 3C.2 (runtime, migración, backup) existen y
   se reutilizarán en 3D; lo eliminado fue exclusivamente el canario sintético.
-- 5C.7B.3D queda abierta en modo controlado de planificación; 3D.1 permanece en
-  curso (proyecto Neon Free XANTALAL/OXKIO creado en Frankfurt, PostgreSQL 18,
-  endpoints pooled/direct confirmados visualmente, sin tarjeta/gasto/plan de pago,
-  Neon Auth desactivado; evidencia fechada 11/08/2026, variable); pendiente
-  verificar el procedimiento de borrado/reversibilidad para cerrarla. 3D.2–3D.6
-  permanecen cerradas/no abiertas. 5C.7B.3E–F permanecen cerradas.
+- 5C.7B.3D queda abierta en modo controlado de planificación; 3D.1 está cerrada
+  (proyecto Neon Free XANTALAL/OXKIO creado en Frankfurt, PostgreSQL 18, endpoints
+  pooled/direct confirmados visualmente, sin tarjeta/gasto/plan de pago, Neon Auth
+  desactivado; reversibilidad del proyecto demostrada documentalmente sin borrado
+  real, según fuentes oficiales Neon fechadas 11/08/2026). 3D.2 queda como
+  siguiente subfase a proponer, sin apertura a ejecución; 3D.3–3D.6 permanecen
+  cerradas/no abiertas. 5C.7B.3E–F permanecen cerradas.
 
 ## Pendientes transferidos — no abiertos
 
@@ -39,8 +40,7 @@
    de APIs automáticas.
 4. Exigir otra puerta humana antes de crear secretos operativos, contratar cualquier
    plan o servicio de pago (incluido Launch), desplegar, gastar, aplicar
-   migraciones/roles reales o abrir 3D.2; 3D.1 en curso no autoriza ninguna de estas
-   acciones.
+   migraciones/roles reales o abrir 3D.2; El cierre de 3D.1 no autoriza ninguna de estas acciones ni abre automáticamente 3D.2.
 5. No cambiar PostgreSQL por MySQL ni contratar un VPS autogestionado para aprovechar
    LucusHost; el alojamiento compartido actual no admite PostgreSQL remoto.
 6. Mantener Firestore, JSON productivos, OAuth y stores reales intactos.
@@ -50,12 +50,11 @@
    `channel_binding`) exigida por Neon en el cliente Node; `sslmode=require` ya
    observado en el proyecto Free no cierra ese requisito. Mantener runtime pooled y
    administración/migración direct.
-9. Verificar el procedimiento de borrado/reversibilidad del proyecto Neon Free antes
-   de declarar 3D.1 cerrada.
 
 El cierre de 5C.7B.3C no autoriza crear secretos operativos, desplegar, migrar,
-contratar o gastar. 3D.1 en curso tampoco autoriza ninguna de estas acciones.
-PostgreSQL real espera a la ejecución de 3D.2 en adelante y OAuth real a 3E.
+contratar o gastar. El cierre de 3D.1 tampoco autoriza ninguna de estas acciones
+ni abre automáticamente 3D.2. PostgreSQL real espera a la ejecución de 3D.2 en
+adelante y OAuth real a 3E.
 
 ## Historial sustituido — lista inicial del 22/06/2026
 
