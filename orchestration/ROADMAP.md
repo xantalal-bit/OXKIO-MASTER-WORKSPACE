@@ -10,9 +10,11 @@
 - Selección arquitectónica: Neon Launch; contingencia: Google Cloud SQL Enterprise.
 - Objetivo inmediato: mantener 5C.7B.3D en modo controlado con 3D.1 cerrada
   (proyecto Neon Free XANTALAL/OXKIO en Frankfurt, reversibilidad demostrada
-  documentalmente sin borrado real); 3D.2 queda como siguiente subfase a
-  proponer, sin apertura a ejecución. 3D.3–3D.6 permanecen cerradas; 5C.7B.3E–F
-  permanecen cerradas.
+  documentalmente sin borrado real); 3D.2 queda abierta en modo controlado de
+  planificación/preparación (crear `oxkio_mission_owner`/`oxkio_mission_runtime`
+  vía SQL, no consola Neon; aplicar 001/002; verificación mínima de metadatos
+  sin escribir filas), sin apertura a ejecución SQL real. 3D.3–3D.6 permanecen
+  cerradas; 5C.7B.3E–F permanecen cerradas.
 - 5C.7B.3A: contrato de secretos y matriz de custodia aprobado y cerrado.
 - 5C.7B.3B: runtime neutral de secretos sintéticos cerrado y publicado en `4a5076c`.
 - 5C.7B.3C: cerrada; 3C.1 y 3C.2 están cerradas, sin secretos operativos ni despliegue.
@@ -35,8 +37,12 @@
 - Transferencias: PostgreSQL/TLS/RLS/roles/backups a 3D; OAuth y tokens a 3E; Cloud Run,
   RPO/RTO, Owner humano e higiene de APIs automáticas a fases posteriores.
 - 5C.7B.3D: abierta en modo controlado de planificación; 3D.1 cerrada; 3D.2
-  siguiente subfase a proponer, sin apertura a ejecución; 3D.3–3D.6 cerradas/no
-  abiertas; 5C.7B.3E–F: cerradas / no abiertas.
+  abierta en planificación/preparación, sin apertura a ejecución SQL real;
+  3D.3–3D.6 cerradas/no abiertas; 5C.7B.3E–F: cerradas / no abiertas.
+- Hallazgo de seguridad (11/08/2026): los roles creados por consola/CLI/API de
+  Neon reciben `neon_superuser` (CREATEDB/CREATEROLE/BYPASSRLS), incompatible
+  con el mínimo privilegio exigido; `oxkio_mission_owner`/`oxkio_mission_runtime`
+  se crearán solo por SQL controlado, nunca por la consola.
 - Último hito publicado: 5C.7B.3B, commit `4a5076c`.
 - Documento canónico del sobre de carga:
   `XANTALAL/00_GOVERNANCE/G0002.5B.2F-ARQUITECTURA-PRODUCTIVA-POSTGRESQL-CLIENTE-CERO.md`.

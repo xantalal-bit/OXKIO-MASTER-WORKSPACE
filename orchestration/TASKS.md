@@ -28,8 +28,11 @@
   (proyecto Neon Free XANTALAL/OXKIO creado en Frankfurt, PostgreSQL 18, endpoints
   pooled/direct confirmados visualmente, sin tarjeta/gasto/plan de pago, Neon Auth
   desactivado; reversibilidad del proyecto demostrada documentalmente sin borrado
-  real, según fuentes oficiales Neon fechadas 11/08/2026). 3D.2 queda como
-  siguiente subfase a proponer, sin apertura a ejecución; 3D.3–3D.6 permanecen
+  real, según fuentes oficiales Neon fechadas 11/08/2026). 3D.2 queda abierta en
+  modo controlado de planificación/preparación (crear `oxkio_mission_owner` y
+  `oxkio_mission_runtime` vía SQL controlado, no consola Neon; aplicar 001/002 y
+  verificar metadatos mínimos sin escribir filas, todo pendiente de autorización
+  separada), sin apertura a ejecución SQL real; 3D.3–3D.6 permanecen
   cerradas/no abiertas. 5C.7B.3E–F permanecen cerradas.
 
 ## Pendientes transferidos — no abiertos
@@ -39,8 +42,9 @@
 3. Mantener para fases posteriores Cloud Run, RPO/RTO, retirada del Owner humano e higiene
    de APIs automáticas.
 4. Exigir otra puerta humana antes de crear secretos operativos, contratar cualquier
-   plan o servicio de pago (incluido Launch), desplegar, gastar, aplicar
-   migraciones/roles reales o abrir 3D.2; El cierre de 3D.1 no autoriza ninguna de estas acciones ni abre automáticamente 3D.2.
+   plan o servicio de pago (incluido Launch), desplegar, gastar, o ejecutar
+   `CREATE ROLE`/migraciones reales contra Neon; la apertura de 3D.2 en modo
+   planificación no autoriza ninguna de estas acciones.
 5. No cambiar PostgreSQL por MySQL ni contratar un VPS autogestionado para aprovechar
    LucusHost; el alojamiento compartido actual no admite PostgreSQL remoto.
 6. Mantener Firestore, JSON productivos, OAuth y stores reales intactos.
@@ -50,6 +54,10 @@
    `channel_binding`) exigida por Neon en el cliente Node; `sslmode=require` ya
    observado en el proyecto Free no cierra ese requisito. Mantener runtime pooled y
    administración/migración direct.
+9. Crear `oxkio_mission_owner`/`oxkio_mission_runtime` exclusivamente por SQL
+   controlado, nunca mediante la consola Neon (hallazgo de seguridad 11/08/2026:
+   los roles creados por consola/CLI/API reciben `neon_superuser`, incompatible
+   con el mínimo privilegio exigido).
 
 El cierre de 5C.7B.3C no autoriza crear secretos operativos, desplegar, migrar,
 contratar o gastar. El cierre de 3D.1 tampoco autoriza ninguna de estas acciones
