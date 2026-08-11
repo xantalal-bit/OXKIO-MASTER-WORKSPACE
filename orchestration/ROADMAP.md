@@ -8,9 +8,10 @@
 - Bloque actual: Runtime Permanente e Infraestructura
 - Fases 1.1, 1.2, 1.3 y 1.4 de G0002.5B.2F: aprobadas y cerradas; 5C.7B.3 está abierta
 - Selección arquitectónica: Neon Launch; contingencia: Google Cloud SQL Enterprise.
-- Objetivo inmediato: documentar la apertura lógica y de planificación de 5C.7B.3D
-  (3D.1 siguiente subfase, sin apertura a ejecución; 3D.2–3D.6 cerradas), sin crear
-  infraestructura ni autorizar gasto; 5C.7B.3E–F permanecen cerradas.
+- Objetivo inmediato: mantener 5C.7B.3D en modo controlado con 3D.1 en curso
+  (proyecto Neon Free XANTALAL/OXKIO creado en Frankfurt, endpoints pooled/direct
+  confirmados, sin gasto); pendiente verificar borrado/reversibilidad antes de
+  cerrarla. 3D.2–3D.6 permanecen cerradas; 5C.7B.3E–F permanecen cerradas.
 - 5C.7B.3A: contrato de secretos y matriz de custodia aprobado y cerrado.
 - 5C.7B.3B: runtime neutral de secretos sintéticos cerrado y publicado en `4a5076c`.
 - 5C.7B.3C: cerrada; 3C.1 y 3C.2 están cerradas, sin secretos operativos ni despliegue.
@@ -18,14 +19,20 @@
 - 3C.2: tres service accounts sin claves ni roles de proyecto; canario IAM superado y eliminado,
   con cero bindings temporales, cero secretos operativos y coste atribuible USD 0.
 - Aclaración: las tres service accounts de 3C.2 (runtime, migración, backup) existen y
-  se reutilizarán en 3D; lo eliminado fue exclusivamente el canario sintético. El
-  coste/plan de Neon deberá reverificarse en fuente oficial/consola vigente antes de
-  contratar. Neon exige TLS/SSL; 3D definirá y probará la verificación estricta del
-  cliente Node. Se mantiene runtime pooled y administración/migración direct.
+  se reutilizarán en 3D; lo eliminado fue exclusivamente el canario sintético. Neon
+  exige TLS/SSL; 3D.3 definirá y probará la verificación estricta del cliente Node.
+  Se mantiene runtime pooled y administración/migración direct.
+- 3D.1 en curso: proyecto Neon Free `OXKIO` bajo organización `XANTALAL`, región
+  Frankfurt, PostgreSQL 18, endpoints pooled/direct confirmados visualmente, sin
+  tarjeta/gasto/plan de pago, Neon Auth desactivado. Evidencia fechada 11/08/2026,
+  variable, no constante arquitectónica. `sslmode=require` observado en la cadena
+  mostrada por Neon; no demuestra ni cierra el TLS/SSL estricto de OXKIO, que sigue
+  correspondiendo exclusivamente a 3D.3 (cerrada/no abierta). Falta además verificar
+  el procedimiento de borrado/reversibilidad para cerrar 3D.1.
 - Transferencias: PostgreSQL/TLS/RLS/roles/backups a 3D; OAuth y tokens a 3E; Cloud Run,
   RPO/RTO, Owner humano e higiene de APIs automáticas a fases posteriores.
-- 5C.7B.3D: abierta en modo controlado de planificación (3D.1 siguiente subfase,
-  sin ejecución; 3D.2–3D.6 cerradas/no abiertas); 5C.7B.3E–F: cerradas / no abiertas.
+- 5C.7B.3D: abierta en modo controlado de planificación; 3D.1 en curso; 3D.2–3D.6
+  cerradas/no abiertas; 5C.7B.3E–F: cerradas / no abiertas.
 - Último hito publicado: 5C.7B.3B, commit `4a5076c`.
 - Documento canónico del sobre de carga:
   `XANTALAL/00_GOVERNANCE/G0002.5B.2F-ARQUITECTURA-PRODUCTIVA-POSTGRESQL-CLIENTE-CERO.md`.
@@ -115,7 +122,7 @@ Capacidades operativas verificadas:
 
 ## No abrir todavía
 
-- 5C.7B.3D a ejecución real (solo planificación documental abierta); 5C.7B.3E–F.
+- 5C.7B.3D.2–3D.6 a ejecución real (migraciones, roles, secretos, TLS productivo); 5C.7B.3E–F.
 - Envío de Gmail.
 - Calendar Execution.
 - Automatizaciones y activación de otros agentes.
