@@ -8,16 +8,24 @@
 - Bloque actual: Runtime Permanente e Infraestructura
 - Fases 1.1, 1.2, 1.3 y 1.4 de G0002.5B.2F: aprobadas y cerradas; 5C.7B.3 está abierta
 - Selección arquitectónica: Neon Launch; contingencia: Google Cloud SQL Enterprise.
-- Objetivo inmediato: mantener 5C.7B.3D–F cerradas hasta una nueva autorización humana.
+- Objetivo inmediato: documentar la apertura lógica y de planificación de 5C.7B.3D
+  (3D.1 siguiente subfase, sin apertura a ejecución; 3D.2–3D.6 cerradas), sin crear
+  infraestructura ni autorizar gasto; 5C.7B.3E–F permanecen cerradas.
 - 5C.7B.3A: contrato de secretos y matriz de custodia aprobado y cerrado.
 - 5C.7B.3B: runtime neutral de secretos sintéticos cerrado y publicado en `4a5076c`.
 - 5C.7B.3C: cerrada; 3C.1 y 3C.2 están cerradas, sin secretos operativos ni despliegue.
 - 3C.1: proyecto `oxkio-runtime-prod` creado, billing vinculado y Secret Manager API activa.
 - 3C.2: tres service accounts sin claves ni roles de proyecto; canario IAM superado y eliminado,
   con cero bindings temporales, cero secretos operativos y coste atribuible USD 0.
+- Aclaración: las tres service accounts de 3C.2 (runtime, migración, backup) existen y
+  se reutilizarán en 3D; lo eliminado fue exclusivamente el canario sintético. El
+  coste/plan de Neon deberá reverificarse en fuente oficial/consola vigente antes de
+  contratar. Neon exige TLS/SSL; 3D definirá y probará la verificación estricta del
+  cliente Node. Se mantiene runtime pooled y administración/migración direct.
 - Transferencias: PostgreSQL/TLS/RLS/roles/backups a 3D; OAuth y tokens a 3E; Cloud Run,
   RPO/RTO, Owner humano e higiene de APIs automáticas a fases posteriores.
-- 5C.7B.3D–F: cerradas / no abiertas.
+- 5C.7B.3D: abierta en modo controlado de planificación (3D.1 siguiente subfase,
+  sin ejecución; 3D.2–3D.6 cerradas/no abiertas); 5C.7B.3E–F: cerradas / no abiertas.
 - Último hito publicado: 5C.7B.3B, commit `4a5076c`.
 - Documento canónico del sobre de carga:
   `XANTALAL/00_GOVERNANCE/G0002.5B.2F-ARQUITECTURA-PRODUCTIVA-POSTGRESQL-CLIENTE-CERO.md`.
@@ -107,7 +115,7 @@ Capacidades operativas verificadas:
 
 ## No abrir todavía
 
-- 5C.7B.3D–F.
+- 5C.7B.3D a ejecución real (solo planificación documental abierta); 5C.7B.3E–F.
 - Envío de Gmail.
 - Calendar Execution.
 - Automatizaciones y activación de otros agentes.

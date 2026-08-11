@@ -22,7 +22,11 @@
   mínimo privilegio con canario sintético: runtime permitido; migration y backup
   denegados; limpieza completa, cero secretos operativos, cero bindings temporales
   y coste atribuible USD 0.
-- 5C.7B.3D–F permanecen cerradas.
+- Aclaración: las tres service accounts de 3C.2 (runtime, migración, backup) existen y
+  se reutilizarán en 3D; lo eliminado fue exclusivamente el canario sintético.
+- 5C.7B.3D queda abierta en modo controlado de planificación; 3D.1 es la siguiente
+  subfase, sin apertura a ejecución; 3D.2–3D.6 permanecen cerradas/no abiertas.
+  5C.7B.3E–F permanecen cerradas.
 
 ## Pendientes transferidos — no abiertos
 
@@ -31,15 +35,22 @@
 3. Mantener para fases posteriores Cloud Run, RPO/RTO, retirada del Owner humano e higiene
    de APIs automáticas.
 4. Exigir otra puerta humana antes de crear secretos operativos, contratar, desplegar,
-   gastar o abrir 5C.7B.3D.
+   gastar, crear cuenta/proyecto Neon o abrir 3D.1 a ejecución; la apertura lógica de
+   5C.7B.3D no autoriza ninguna de estas acciones.
 5. No cambiar PostgreSQL por MySQL ni contratar un VPS autogestionado para aprovechar
    LucusHost; el alojamiento compartido actual no admite PostgreSQL remoto.
 6. Mantener Firestore, JSON productivos, OAuth y stores reales intactos.
 7. Mantener el objetivo IAM/Secret Manager en USD 0–0,20/mes; una previsión igual o
    superior a USD 1/mes exige revisión humana y nunca autoriza ampliación automática.
+8. Reverificar el coste/plan vigente de Neon en fuente oficial/consola antes de
+   contratar, sin asumir automáticamente referencias previas. Definir y demostrar en
+   3D.3 la verificación TLS/SSL estricta exigida por Neon en el cliente Node. Mantener
+   runtime pooled y administración/migración direct.
 
 El cierre de 5C.7B.3C no autoriza crear secretos operativos, desplegar, migrar,
-contratar o gastar. PostgreSQL real espera a 3D y OAuth real a 3E.
+contratar o gastar. La apertura lógica de 5C.7B.3D no autoriza ninguna de estas
+acciones tampoco. PostgreSQL real espera a la ejecución de 3D.1 en adelante y OAuth
+real a 3E.
 
 ## Historial sustituido — lista inicial del 22/06/2026
 
