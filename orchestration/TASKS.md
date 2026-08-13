@@ -38,11 +38,15 @@
 - Límite registrado: 3D.2 demuestra RLS **configurado** (`ENABLE` + `FORCE`,
   políticas y privilegios acotados), **no** aislamiento funcional entre dos scopes
   mediante escritura de filas. Esa validación pertenece a 3D.6.
-- 3D.3 queda **abierta únicamente en modo controlado de planificación/preparación**
-  (13/08/2026). Esta apertura **no autoriza** conexión real a Neon, credenciales ni
-  la ejecución de las pruebas T1–T5, que constan como plan futuro no ejecutado. La
-  ejecución TLS real exige una puerta humana nueva y explícita.
-- 3D.4–3D.6 permanecen cerradas/no abiertas. 5C.7B.3E–F permanecen cerradas.
+- 3D.3 está **cerrada** (13/08/2026). T1–T5 se ejecutaron bajo puertas humanas
+  separadas y **todas resultaron PASS**: TLS estricto con CA y hostname verificados
+  y fallo cerrado en ambos casos, `rejectUnauthorized=true`, certificado vigente,
+  **`SCRAM-SHA-256-PLUS` demostrado positivamente** y anti-downgrade validado
+  offline. Las credenciales temporales se eliminaron del entorno al terminar.
+- Límite registrado: lo anterior se demuestra **mediante sonda**, no en el runtime
+  productivo, que sigue sin política TLS cableada.
+- 3D.4 es la siguiente subfase canónica, **a proponer y sin apertura a ejecución**;
+  3D.5–3D.6 permanecen cerradas/no abiertas. 5C.7B.3E–F permanecen cerradas.
 
 ## Pendientes transferidos — no abiertos
 
@@ -60,17 +64,13 @@
 6. Mantener Firestore, JSON productivos, OAuth y stores reales intactos.
 7. Mantener el objetivo IAM/Secret Manager en USD 0–0,20/mes; una previsión igual o
    superior a USD 1/mes exige revisión humana y nunca autoriza ampliación automática.
-8. **PENDIENTE** — Definir y demostrar en 3D.3 la verificación TLS/SSL estricta
-   exigida por Neon en el cliente Node. La política, registrada en la arquitectura,
-   exige: TLS obligatorio; CA válida; hostname verificado; SNI correcto;
-   `rejectUnauthorized=true`; no depender de `sslmode=require`; no pasar la
-   `connectionString` completa a `pg` cuando pueda sobrescribir la política TLS;
-   `enableChannelBinding=true`; y **fallo cerrado si no se demuestra
-   `SCRAM-SHA-256-PLUS`**. `sslmode=require` observado en el proyecto Free no cierra
-   este requisito. `pg@8.22.0` soporta channel binding pero **no está activado** en
-   el runner de 3D.2, de modo que su uso **no está demostrado**. Tampoco existe
-   todavía política TLS en el código productivo. Mantener runtime pooled y
-   administración/migración direct.
+8. **Cumplido en 3D.3**: la verificación TLS/SSL estricta quedó definida y
+   demostrada con T1–T5, todas PASS — TLS obligatorio, CA válida, hostname
+   verificado, SNI correcto, `rejectUnauthorized=true`, sin depender de
+   `sslmode=require`, sin pasar la `connectionString` completa a `pg`,
+   `enableChannelBinding=true` y `SCRAM-SHA-256-PLUS` afirmado positivamente. La
+   política sigue vigente para todo cliente PostgreSQL futuro. Mantener runtime
+   pooled y administración/migración direct.
 9. **Cumplido en 3D.2**: `oxkio_mission_owner` y `oxkio_mission_runtime` se crearon
    exclusivamente por SQL controlado, nunca por consola Neon (hallazgo de seguridad
    11/08/2026: los roles creados por consola/CLI/API reciben `neon_superuser`,
@@ -83,14 +83,30 @@
     hasta el cierre de 3D.6: porta el SQL de rollback y reproduce la evidencia en
     solo lectura. Está fuera del repositorio, de OneDrive y de Temp, sin secretos
     embebidos, y **no debe versionarse en Git**.
+11. Conservar igualmente la sonda de 3D.3 en
+    `C:\Users\janta\AppData\Local\OXKIO\tools\oxkio-3d3-tls-probe.js` (sha256
+    `0185de026abff7f73e13e3fcbbca371e810f6a5d370c330aee15379e311f8bcc`, selftest
+    offline 20/20) al menos hasta el cierre de 3D.6: reproduce la evidencia TLS y
+    será necesaria para revalidarla tras cualquier subida de `pg`, en especial la que
+    invierta la semántica de `sslmode`. Mismas condiciones: fuera del repositorio, de
+    OneDrive y de Temp, sin secretos embebidos, y **no debe versionarse en Git**.
+12. **PENDIENTE TRANSVERSAL DE RUNTIME/COMPOSICIÓN** — Cablear la política TLS
+    demostrada en 3D.3 en la raíz de composición del runtime productivo. Hoy el
+    código productivo **no tiene ninguna configuración TLS** y los repositorios
+    reciben el pool inyectado. Es **obligatorio antes de cualquier conexión o
+    despliegue productivo**. Su propietario y su fase exacta se decidirán al preparar
+    3D.4 o en una puerta posterior: **no se asigna a 3D.4 en este cierre** y no
+    amplía su alcance canónico, que sigue siendo exclusivamente los secretos
+    PostgreSQL reales en Secret Manager.
 
 El cierre de 5C.7B.3C no autoriza crear secretos operativos, desplegar, migrar,
 contratar o gastar. El cierre de 3D.1 tampoco autoriza ninguna de estas acciones.
 El cierre de 3D.2 no autoriza TLS productivo, secretos reales en Secret Manager,
 rol de backup, pruebas con escritura, datos reales, contratación ni gasto, y **no
-abre automáticamente 3D.3**. La apertura de 3D.3 es **solo de planificación** y no
-autoriza conexión real a Neon, credenciales, ejecución de T1–T5, cambios de código
-productivo ni 3D.4–3D.6. OAuth real sigue esperando a 3E.
+abre automáticamente 3D.3**. El cierre de 3D.3 no autoriza Secret Manager, rol de
+backup, pruebas con escritura, datos reales, cambios de código productivo,
+`server.js`, despliegue ni 3D.4–3D.6, y **no abre automáticamente 3D.4**. OAuth real
+sigue esperando a 3E.
 
 ## Historial sustituido — lista inicial del 22/06/2026
 

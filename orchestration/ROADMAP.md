@@ -11,10 +11,10 @@
 - Objetivo inmediato: 5C.7B.3D sigue abierta como contenedor con 3D.1 y 3D.2
   cerradas. 3D.2 cerró con roles creados por SQL controlado (nunca consola Neon),
   migraciones 001/002 aplicadas y `verify` final 33/33 en transacción de solo
-  lectura, sin escribir ninguna fila. 3D.3 — TLS/SSL estricto — queda **abierta en
-  modo controlado de planificación/preparación**; su ejecución TLS real (conexión a
-  Neon, credenciales y pruebas T1–T4) **sigue sin abrir**. 3D.4–3D.6 permanecen
-  cerradas; 5C.7B.3E–F permanecen cerradas.
+  lectura, sin escribir ninguna fila. 3D.3 — TLS/SSL estricto — queda **cerrada**,
+  con T1–T5 ejecutadas y superadas. La siguiente subfase canónica es 3D.4 — Secret
+  Manager —, que queda **a proponer y sin apertura a ejecución**. 3D.5–3D.6
+  permanecen cerradas; 5C.7B.3E–F permanecen cerradas.
 - 5C.7B.3A: contrato de secretos y matriz de custodia aprobado y cerrado.
 - 5C.7B.3B: runtime neutral de secretos sintéticos cerrado y publicado en `4a5076c`.
 - 5C.7B.3C: cerrada; 3C.1 y 3C.2 están cerradas, sin secretos operativos ni despliegue.
@@ -29,24 +29,30 @@
   Frankfurt, PostgreSQL 18, endpoints pooled/direct confirmados visualmente, sin
   tarjeta/gasto/plan de pago, Neon Auth desactivado. Evidencia fechada 11/08/2026,
   variable, no constante arquitectónica. `sslmode=require` observado en la cadena
-  mostrada por Neon; no demuestra ni cierra el TLS/SSL estricto de OXKIO, que sigue
-  correspondiendo exclusivamente a 3D.3 (pendiente de cierre). Reversibilidad del
+  mostrada por Neon; no demostraba ni cerraba el TLS/SSL estricto de OXKIO, que
+  correspondía exclusivamente a 3D.3 y quedó demostrado al cerrarse esa subfase.
+  Reversibilidad del
   proyecto demostrada documentalmente (7 días de recuperación vía API/CLI, después
   permanente) según fuentes oficiales Neon, sin ejecutar borrado real; la
   organización y la cuenta quedan fuera del criterio de cierre.
 - Transferencias: PostgreSQL/TLS/RLS/roles/backups a 3D; OAuth y tokens a 3E; Cloud Run,
   RPO/RTO, Owner humano e higiene de APIs automáticas a fases posteriores.
-- 5C.7B.3D: abierta como contenedor; 3D.1 cerrada; 3D.2 cerrada; 3D.3 abierta en
-  modo controlado de planificación/preparación, sin apertura a ejecución TLS real;
-  3D.4–3D.6 cerradas/no abiertas; 5C.7B.3E–F: cerradas / no abiertas.
-- 3D.3 abierta en planificación (13/08/2026): define la política TLS/SSL estricta
-  para Node + `pg` + Neon (TLS obligatorio, CA válida, hostname verificado, SNI
-  correcto, `rejectUnauthorized=true`, sin depender de `sslmode=require`, sin pasar
-  la `connectionString` completa a `pg`, `enableChannelBinding=true` y fallo cerrado
-  si no se demuestra `SCRAM-SHA-256-PLUS`). `pg@8.22.0` soporta channel binding pero
-  **no está activado** en el runner de 3D.2: **no está demostrado** que OXKIO lo use.
-  Las pruebas T1–T5 constan como plan futuro **NO EJECUTADO**, y todavía **no existe
-  política TLS en el código productivo**.
+- 5C.7B.3D: abierta como contenedor; 3D.1, 3D.2 y 3D.3 cerradas; 3D.4 siguiente
+  subfase a proponer, sin apertura a ejecución; 3D.5–3D.6 cerradas/no abiertas;
+  5C.7B.3E–F: cerradas / no abiertas.
+- 3D.3 cerrada (13/08/2026): T1–T5 ejecutadas y **todas PASS**. TLS estricto
+  demostrado —CA y hostname verificados con fallo cerrado en ambos casos
+  (`ERR_TLS_CERT_ALTNAME_INVALID` y `UNABLE_TO_GET_ISSUER_CERT_LOCALLY`), SNI
+  correcto, `rejectUnauthorized=true`, certificado vigente— y **`SCRAM-SHA-256-PLUS`
+  demostrado positivamente** observando el mecanismo negociado, no solo activando la
+  opción. Anti-downgrade validado offline: la `connectionString` puede alterar la
+  política TLS y el patrón seguro de OXKIO la preserva.
+- Límite de 3D.3: todo lo anterior se demuestra **mediante sonda**. El **runtime
+  productivo sigue sin política TLS cableada**; queda como **pendiente transversal de
+  runtime/composición**, obligatorio antes de cualquier conexión o despliegue
+  productivo, **sin asignarse todavía a ninguna subfase** y sin ampliar el alcance de
+  3D.4. Constatación técnica registrada: `pg` sobrescribe `ssl.servername` con el
+  host, comportamiento verificado del cliente, no vulnerabilidad.
 - 3D.2 cerrada (13/08/2026): `oxkio_mission_owner` y `oxkio_mission_runtime`
   creados por SQL controlado, sin `neon_superuser`; esquema `oxkio` con
   `missions` y `mission_confirmations`; RLS `ENABLE` + `FORCE`; políticas por
@@ -153,7 +159,7 @@ Capacidades operativas verificadas:
 
 ## No abrir todavía
 
-- 5C.7B.3D.3–3D.6 a ejecución real (TLS productivo, secretos, rol de backup, pruebas con escritura); 5C.7B.3E–F.
+- 5C.7B.3D.4–3D.6 a ejecución real (secretos, rol de backup, pruebas con escritura); TLS productivo cableado en el runtime; 5C.7B.3E–F.
 - Envío de Gmail.
 - Calendar Execution.
 - Automatizaciones y activación de otros agentes.
