@@ -12,9 +12,10 @@
   cerradas. 3D.2 cerró con roles creados por SQL controlado (nunca consola Neon),
   migraciones 001/002 aplicadas y `verify` final 33/33 en transacción de solo
   lectura, sin escribir ninguna fila. 3D.3 — TLS/SSL estricto — queda **cerrada**,
-  con T1–T5 ejecutadas y superadas. La siguiente subfase canónica es 3D.4 — Secret
-  Manager —, que queda **a proponer y sin apertura a ejecución**. 3D.5–3D.6
-  permanecen cerradas; 5C.7B.3E–F permanecen cerradas.
+  con T1–T5 ejecutadas y superadas. 3D.4 — Secret Manager — queda **abierta en modo
+  controlado de planificación/preparación**; su ejecución real (Google Cloud,
+  secretos, versiones e IAM) **sigue sin abrir**. 3D.5–3D.6 permanecen cerradas;
+  5C.7B.3E–F permanecen cerradas.
 - 5C.7B.3A: contrato de secretos y matriz de custodia aprobado y cerrado.
 - 5C.7B.3B: runtime neutral de secretos sintéticos cerrado y publicado en `4a5076c`.
 - 5C.7B.3C: cerrada; 3C.1 y 3C.2 están cerradas, sin secretos operativos ni despliegue.
@@ -37,9 +38,21 @@
   organización y la cuenta quedan fuera del criterio de cierre.
 - Transferencias: PostgreSQL/TLS/RLS/roles/backups a 3D; OAuth y tokens a 3E; Cloud Run,
   RPO/RTO, Owner humano e higiene de APIs automáticas a fases posteriores.
-- 5C.7B.3D: abierta como contenedor; 3D.1, 3D.2 y 3D.3 cerradas; 3D.4 siguiente
-  subfase a proponer, sin apertura a ejecución; 3D.5–3D.6 cerradas/no abiertas;
-  5C.7B.3E–F: cerradas / no abiertas.
+- 5C.7B.3D: abierta como contenedor; 3D.1, 3D.2 y 3D.3 cerradas; 3D.4 abierta en
+  modo controlado de planificación/preparación, sin apertura a ejecución real de
+  Secret Manager; 3D.5–3D.6 cerradas/no abiertas; 5C.7B.3E–F: cerradas / no abiertas.
+- 3D.4 abierta en planificación (13/08/2026): alcance canónico sin cambios —secretos
+  PostgreSQL reales en Secret Manager, ligados a las tres service accounts de 3C.2,
+  en el proyecto ya existente `oxkio-runtime-prod`—. Primera tarea futura: inventariar
+  en **solo lectura** los IDs de esas tres identidades, que **no constan** en la
+  documentación. Secreto inicial: **solo PG-RUN** (`OXKIO_MISSION_PG_RUNTIME_URL`),
+  como URL **sin parámetros de consulta** y **sin `sslmode`**, prohibido pasarla a
+  `pg` como `connectionString`; TLS estricto y channel binding se imponen **por
+  código**. IAM previsto: `roles/secretmanager.secretAccessor` solo para la identidad
+  de runtime y solo sobre ese secreto, nunca a nivel de proyecto. **PG-MIG** queda
+  reservado a operaciones/migraciones controladas y **PG-BKP** pertenece a 3D.5;
+  ninguno se materializa. El pendiente transversal de TLS en runtime **no se
+  adjudica** a 3D.4.
 - 3D.3 cerrada (13/08/2026): T1–T5 ejecutadas y **todas PASS**. TLS estricto
   demostrado —CA y hostname verificados con fallo cerrado en ambos casos
   (`ERR_TLS_CERT_ALTNAME_INVALID` y `UNABLE_TO_GET_ISSUER_CERT_LOCALLY`), SNI
