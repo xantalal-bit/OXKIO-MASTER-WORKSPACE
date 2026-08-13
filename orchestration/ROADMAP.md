@@ -8,13 +8,12 @@
 - Bloque actual: Runtime Permanente e Infraestructura
 - Fases 1.1, 1.2, 1.3 y 1.4 de G0002.5B.2F: aprobadas y cerradas; 5C.7B.3 está abierta
 - Selección arquitectónica: Neon Launch; contingencia: Google Cloud SQL Enterprise.
-- Objetivo inmediato: mantener 5C.7B.3D en modo controlado con 3D.1 cerrada
-  (proyecto Neon Free XANTALAL/OXKIO en Frankfurt, reversibilidad demostrada
-  documentalmente sin borrado real); 3D.2 queda abierta en modo controlado de
-  planificación/preparación (crear `oxkio_mission_owner`/`oxkio_mission_runtime`
-  vía SQL, no consola Neon; aplicar 001/002; verificación mínima de metadatos
-  sin escribir filas), sin apertura a ejecución SQL real. 3D.3–3D.6 permanecen
-  cerradas; 5C.7B.3E–F permanecen cerradas.
+- Objetivo inmediato: 5C.7B.3D sigue abierta como contenedor con 3D.1 y 3D.2
+  cerradas. 3D.2 cerró con roles creados por SQL controlado (nunca consola Neon),
+  migraciones 001/002 aplicadas y `verify` final 33/33 en transacción de solo
+  lectura, sin escribir ninguna fila. La siguiente subfase canónica es 3D.3 —
+  TLS/SSL estricto —, que queda **a proponer y sin apertura a ejecución**.
+  3D.4–3D.6 permanecen cerradas; 5C.7B.3E–F permanecen cerradas.
 - 5C.7B.3A: contrato de secretos y matriz de custodia aprobado y cerrado.
 - 5C.7B.3B: runtime neutral de secretos sintéticos cerrado y publicado en `4a5076c`.
 - 5C.7B.3C: cerrada; 3C.1 y 3C.2 están cerradas, sin secretos operativos ni despliegue.
@@ -30,15 +29,28 @@
   tarjeta/gasto/plan de pago, Neon Auth desactivado. Evidencia fechada 11/08/2026,
   variable, no constante arquitectónica. `sslmode=require` observado en la cadena
   mostrada por Neon; no demuestra ni cierra el TLS/SSL estricto de OXKIO, que sigue
-  correspondiendo exclusivamente a 3D.3 (cerrada/no abierta). Reversibilidad del
+  correspondiendo exclusivamente a 3D.3 (a proponer, sin apertura). Reversibilidad del
   proyecto demostrada documentalmente (7 días de recuperación vía API/CLI, después
   permanente) según fuentes oficiales Neon, sin ejecutar borrado real; la
   organización y la cuenta quedan fuera del criterio de cierre.
 - Transferencias: PostgreSQL/TLS/RLS/roles/backups a 3D; OAuth y tokens a 3E; Cloud Run,
   RPO/RTO, Owner humano e higiene de APIs automáticas a fases posteriores.
-- 5C.7B.3D: abierta en modo controlado de planificación; 3D.1 cerrada; 3D.2
-  abierta en planificación/preparación, sin apertura a ejecución SQL real;
-  3D.3–3D.6 cerradas/no abiertas; 5C.7B.3E–F: cerradas / no abiertas.
+- 5C.7B.3D: abierta como contenedor; 3D.1 cerrada; 3D.2 cerrada; 3D.3 siguiente
+  subfase a proponer, sin apertura a ejecución; 3D.4–3D.6 cerradas/no abiertas;
+  5C.7B.3E–F: cerradas / no abiertas.
+- 3D.2 cerrada (13/08/2026): `oxkio_mission_owner` y `oxkio_mission_runtime`
+  creados por SQL controlado, sin `neon_superuser`; esquema `oxkio` con
+  `missions` y `mission_confirmations`; RLS `ENABLE` + `FORCE`; políticas por
+  `tenant_id` + `user_id` + `client_id`; 10 índices, 22 CHECK, 56 constraints;
+  privilegios mínimos verificados (`SELECT`+`INSERT`; `UPDATE` solo en 13 y 8
+  columnas exactas; `DELETE`/`TRUNCATE` denegados). Demuestra RLS **configurado**,
+  no aislamiento funcional entre scopes: eso pertenece a 3D.6.
+- Incidencias resueltas en 3D.2: Neon no admite verificador SCRAM precomputado
+  como `PASSWORD` (exige texto claro; su rechazo abortaba con `XX000` /
+  `SendDeltasToControlPlane`); y el primer `verify` dio 28/31 por falsos negativos
+  de `information_schema`, causados por el diseño `INHERIT FALSE`. Se corrigió solo
+  el verificador, pasando a ACL directa más `has_*_privilege`; ningún permiso real
+  se modificó.
 - Hallazgo de seguridad (11/08/2026): los roles creados por consola/CLI/API de
   Neon reciben `neon_superuser` (CREATEDB/CREATEROLE/BYPASSRLS), incompatible
   con el mínimo privilegio exigido; `oxkio_mission_owner`/`oxkio_mission_runtime`
@@ -132,7 +144,7 @@ Capacidades operativas verificadas:
 
 ## No abrir todavía
 
-- 5C.7B.3D.2–3D.6 a ejecución real (migraciones, roles, secretos, TLS productivo); 5C.7B.3E–F.
+- 5C.7B.3D.3–3D.6 a ejecución real (TLS productivo, secretos, rol de backup, pruebas con escritura); 5C.7B.3E–F.
 - Envío de Gmail.
 - Calendar Execution.
 - Automatizaciones y activación de otros agentes.
