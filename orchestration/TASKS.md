@@ -51,8 +51,9 @@
   `server.js`, código productivo, TLS productivo ni backup. La ejecución real exige
   una puerta humana nueva y explícita.
 - Alcance de 3D.4 **sin cambios**: secretos PostgreSQL reales en Secret Manager,
-  ligados a las tres service accounts de 3C.2. Planificado: inventario **read-only**
-  de esas identidades como primera tarea; **solo PG-RUN** como secreto inicial, con
+  ligados a las tres service accounts de 3C.2. El inventario **read-only** de esas
+  identidades, primera tarea de 3D.4, quedó **resuelto el 14/08/2026** (ver pendiente
+  12); **solo PG-RUN** como secreto inicial, con
   URL sin parámetros de consulta ni `sslmode` y prohibición de usarla como
   `connectionString`; `roles/secretmanager.secretAccessor` solo para la identidad de
   runtime y solo sobre ese secreto. **PG-MIG** reservado a operaciones/migraciones
@@ -101,10 +102,20 @@
     será necesaria para revalidarla tras cualquier subida de `pg`, en especial la que
     invierta la semántica de `sslmode`. Mismas condiciones: fuera del repositorio, de
     OneDrive y de Temp, sin secretos embebidos, y **no debe versionarse en Git**.
-12. **PENDIENTE de 3D.4** — Los **IDs exactos de las tres service accounts de 3C.2**
-    (runtime, migración y backup) **no constan en ningún documento canónico**: solo
-    consta el proyecto `oxkio-runtime-prod`. Sin ellos no puede vincularse IAM, así
-    que recuperarlos en **solo lectura** es la primera tarea de 3D.4.
+12. **RESUELTO el 14/08/2026 — inventario de service accounts de 3C.2.** Los IDs
+    exactos ya **constan** en la documentación canónica
+    (`XANTALAL/00_GOVERNANCE/5C.7B-ARQUITECTURA-EJECUTABLE-RUNTIME.md`, sección
+    «Inventario canónico de service accounts (3C.2)»), verificados en solo lectura
+    por el operador humano en Google Cloud Console dentro del proyecto
+    `oxkio-runtime-prod`:
+    - runtime — `oxkio-runtime-prod@oxkio-runtime-prod.iam.gserviceaccount.com`;
+    - migración — `oxkio-migration-prod@oxkio-runtime-prod.iam.gserviceaccount.com`;
+    - backup — `oxkio-backup-prod@oxkio-runtime-prod.iam.gserviceaccount.com`.
+
+    Las tres están habilitadas y **sin claves administradas por usuario**, sin
+    cuentas adicionales ni duplicadas. Resolver este pendiente **no abre** la
+    ejecución real de 3D.4 ni autoriza ningún binding IAM: son identificadores, no
+    credenciales.
 13. **PENDIENTE de contrato** — `OXKIO_MISSION_PG_RUNTIME_URL` sigue declarada
     **`optional`** en `backend/config/environment-contract.js`. Antes de cualquier
     runtime productivo deberá existir **fallo cerrado** si el secreto falta, es

@@ -43,9 +43,13 @@
   Secret Manager; 3D.5–3D.6 cerradas/no abiertas; 5C.7B.3E–F: cerradas / no abiertas.
 - 3D.4 abierta en planificación (13/08/2026): alcance canónico sin cambios —secretos
   PostgreSQL reales en Secret Manager, ligados a las tres service accounts de 3C.2,
-  en el proyecto ya existente `oxkio-runtime-prod`—. Primera tarea futura: inventariar
-  en **solo lectura** los IDs de esas tres identidades, que **no constan** en la
-  documentación. Secreto inicial: **solo PG-RUN** (`OXKIO_MISSION_PG_RUNTIME_URL`),
+  en el proyecto ya existente `oxkio-runtime-prod`—. Primera tarea **resuelta**
+  (14/08/2026): inventario en **solo lectura** de esas tres identidades, ya
+  registradas en la documentación canónica —runtime
+  `oxkio-runtime-prod@…`, migración `oxkio-migration-prod@…` y backup
+  `oxkio-backup-prod@…`, todas en `oxkio-runtime-prod.iam.gserviceaccount.com`,
+  habilitadas y sin claves de usuario—. Resolverlo **no abre** la ejecución real de
+  3D.4. Secreto inicial: **solo PG-RUN** (`OXKIO_MISSION_PG_RUNTIME_URL`),
   como URL **sin parámetros de consulta** y **sin `sslmode`**, prohibido pasarla a
   `pg` como `connectionString`; TLS estricto y channel binding se imponen **por
   código**. IAM previsto: `roles/secretmanager.secretAccessor` solo para la identidad
