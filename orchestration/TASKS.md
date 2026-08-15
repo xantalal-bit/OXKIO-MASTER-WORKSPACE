@@ -58,6 +58,15 @@
   `connectionString`; `roles/secretmanager.secretAccessor` solo para la identidad de
   runtime y solo sobre ese secreto. **PG-MIG** reservado a operaciones/migraciones
   controladas y **PG-BKP** en 3D.5: ninguno se materializa.
+- **PG-RUN = POOLED confirmado empíricamente (15/08/2026)**: una única TP1 con la
+  sonda endurecida `oxkio-3d4-pooler-cb-probe.js` dio **PASS** contra el endpoint
+  pooled real —`pg` 8.22.0, TLS autorizado con `rejectUnauthorized=true`,
+  `enableChannelBinding=true`, mecanismo negociado **`SCRAM-SHA-256-PLUS`**, conexión
+  completada y `SELECT 1` correcto, con la identidad `oxkio_mission_runtime` y cero
+  reintentos—. No se propone cambio a DIRECT; la documentación genérica de PgBouncer
+  queda subordinada a esta medición del proveedor real. La salida solo mostró
+  hostname enmascarado y las variables de credencial se retiraron del entorno.
+  Confirmar POOLED **no materializa** PG-RUN ni autoriza Secret Manager o IAM.
 - 3D.5–3D.6 permanecen cerradas/no abiertas. 5C.7B.3E–F permanecen cerradas.
 
 ## Pendientes transferidos — no abiertos
@@ -121,7 +130,22 @@
     runtime productivo deberá existir **fallo cerrado** si el secreto falta, es
     inválido o ha sido revocado, conforme al punto 8 del contrato 5C.7B.3A. Es código
     productivo: no se toca en la apertura de 3D.4.
-14. **PENDIENTE TRANSVERSAL DE RUNTIME/COMPOSICIÓN** — Cablear la política TLS
+14. **Conservar la sonda de 3D.4** en
+    `C:\Users\janta\AppData\Local\OXKIO\tools\oxkio-3d4-pooler-cb-probe.js` (sha256
+    `bef3f96ddd604d3781545b3a8dd18d25c68bdcd9c9b2a68b51b2e9f24224828b`, selftest
+    offline 47/47) al menos hasta el cierre de 3D.6: reproduce la evidencia POOLED /
+    channel binding. Mismas condiciones que el runner de 3D.2 y la sonda de 3D.3:
+    fuera del repositorio, de OneDrive y de Temp, sin secretos embebidos, y **no debe
+    versionarse en Git**.
+15. **LECCIÓN TÉCNICA VIGENTE — construcción de URIs PostgreSQL.** Una contraseña
+    válida de runtime puede contener caracteres reservados de URI. Usuario y
+    contraseña **deben percent-encodearse antes de incorporarlos al userinfo**; nunca
+    se codifican protocolo, host, puerto, path ni separadores estructurales. La regla
+    aplica a todo consumidor futuro de PG-RUN, PG-MIG y PG-BKP, y es compatible con la
+    prohibición de pasar la URL a `pg` como `connectionString`: el consumidor parsea y
+    **percent-decodifica** el userinfo antes de fijar los campos. No se registra
+    ninguna contraseña ni qué carácter concreto contiene.
+16. **PENDIENTE TRANSVERSAL DE RUNTIME/COMPOSICIÓN** — Cablear la política TLS
     demostrada en 3D.3 en la raíz de composición del runtime productivo. Hoy el
     código productivo **no tiene ninguna configuración TLS** y los repositorios
     reciben el pool inyectado. Es **obligatorio antes de cualquier conexión o

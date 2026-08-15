@@ -57,6 +57,16 @@
   reservado a operaciones/migraciones controladas y **PG-BKP** pertenece a 3D.5;
   ninguno se materializa. El pendiente transversal de TLS en runtime **no se
   adjudica** a 3D.4.
+- 3D.4 — evidencia empírica (15/08/2026): una única TP1 con la sonda endurecida
+  `oxkio-3d4-pooler-cb-probe.js` (selftest offline 47/47) dio **PASS** contra el
+  endpoint **pooled** real: `pg` 8.22.0, TLS autorizado, `rejectUnauthorized=true`,
+  `enableChannelBinding=true`, mecanismo negociado **`SCRAM-SHA-256-PLUS`**, conexión
+  completada y `SELECT 1` correcto, con identidad `oxkio_mission_runtime` y cero
+  reintentos. **PG-RUN = POOLED queda confirmado**; no se propone DIRECT. Solo se
+  mostró hostname enmascarado y las variables de credencial se retiraron del entorno.
+  Confirmarlo **no materializa** PG-RUN ni abre Secret Manager, versiones ni IAM.
+  Lección vigente: al construir una URI de PostgreSQL, usuario y contraseña deben
+  percent-encodearse antes de incorporarlos al userinfo.
 - 3D.3 cerrada (13/08/2026): T1–T5 ejecutadas y **todas PASS**. TLS estricto
   demostrado —CA y hostname verificados con fallo cerrado en ambos casos
   (`ERR_TLS_CERT_ALTNAME_INVALID` y `UNABLE_TO_GET_ISSUER_CERT_LOCALLY`), SNI
