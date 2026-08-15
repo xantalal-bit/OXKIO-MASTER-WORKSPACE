@@ -15,8 +15,9 @@
   con T1–T5 ejecutadas y superadas. 3D.4 — Secret Manager — queda **CERRADA**
   (15/08/2026): su puerta humana de ejecución se concedió, se usó para materializar
   PG-RUN (Puertas A y B) y quedó **consumida**. PG-RUN está materializado pero **sin
-  consumidor productivo**. 3D.5–3D.6 permanecen cerradas; 5C.7B.3E–F permanecen
-  cerradas. La subfase siguiente queda **a evaluar**, no abierta.
+  consumidor productivo**. **3D.6 — pruebas/rollback contra instancia real — queda
+  abierta solo en planificación documental**; su ejecución exige una segunda puerta
+  humana. 3D.5, 5C.7B.3E y 5C.7B.3F permanecen cerradas/no abiertas.
 - 5C.7B.3A: contrato de secretos y matriz de custodia aprobado y cerrado.
 - 5C.7B.3B: runtime neutral de secretos sintéticos cerrado y publicado en `4a5076c`.
 - 5C.7B.3C: cerrada; 3C.1 y 3C.2 están cerradas, sin secretos operativos ni despliegue.
@@ -41,8 +42,18 @@
   RPO/RTO, Owner humano e higiene de APIs automáticas a fases posteriores.
 - 5C.7B.3D: abierta como contenedor; 3D.1, 3D.2, 3D.3 y **3D.4 cerradas**; la puerta
   humana de ejecución de 3D.4 se concedió y quedó consumida el 15/08/2026 para
-  materializar PG-RUN; 3D.5–3D.6 cerradas/no abiertas; 5C.7B.3E–F: cerradas / no
-  abiertas.
+  materializar PG-RUN; **3D.6 abierta solo en planificación documental**; 3D.5
+  cerrada/no abierta; 5C.7B.3E–F: cerradas / no abiertas.
+- 3D.6 abierta en planificación (15/08/2026): documenta el contrato de las pruebas
+  contra la instancia real —aislamiento RLS entre scopes sintéticos, no lectura ni
+  escritura cruzadas, no escalada del rol de runtime, CAS sobre `version`, concurrencia,
+  rollback, timeout, limpieza verificable, portabilidad y validación integral— con datos
+  **exclusivamente sintéticos** y sonda efímera endurecida fuera del repositorio.
+  **Restore queda diferido** hasta que 3D.5 produzca un dump. Los tests de integración y
+  el POC runner, que usan `connectionString` sin TLS endurecido, **no pueden ejecutarse
+  contra Neon** en 3D.6. Nada se ha ejecutado: la apertura es documental y la ejecución
+  exige una segunda puerta humana. Anomalías registradas sin resolver: solapamiento
+  3D.5 / 5C.7B.6 y ausencia de contenido canónico para 5C.7B.3F.
 - 3D.4 abierta en planificación (13/08/2026): alcance canónico sin cambios —secretos
   PostgreSQL reales en Secret Manager, ligados a las tres service accounts de 3C.2,
   en el proyecto ya existente `oxkio-runtime-prod`—. Primera tarea **resuelta**

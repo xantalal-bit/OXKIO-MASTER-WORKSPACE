@@ -98,8 +98,31 @@
   consumo y lectura real desde Secret Manager a runtime/Cloud Run posterior; conexión
   runtime→Neon a 3D.6/pruebas reales; despliegue funcional y retirada del Owner humano a
   fases posteriores.
-- El cierre de 3D.4 **no abre** 3D.5, 3D.6 ni 5C.7B.3E–F, que permanecen cerradas/no
-  abiertas. La acción siguiente es **evaluar** qué subfase corresponde abrir, sin abrirla.
+- El cierre de 3D.4 no abrió por sí mismo ninguna subfase. Tras evaluar las candidatas,
+  **3D.6 queda abierta el 15/08/2026 exclusivamente en modo de planificación
+  documental**. Esa apertura **no autoriza** Neon, SQL, escritura o truncado de filas,
+  credenciales reales, lectura de PG-RUN, Secret Manager, IAM, `gcloud`, código
+  productivo, `server.js`, `environment-contract.js`, TLS de composición, despliegue,
+  PG-MIG, PG-BKP, `pg_dump` ni restore: la ejecución exige una **segunda puerta humana**
+  nueva y explícita, ya que la de 3D.4 quedó consumida. **3D.5, 5C.7B.3E y 5C.7B.3F
+  siguen cerradas/no abiertas.**
+- Motivo de priorizar 3D.6 sobre 3D.5: el riesgo abierto de mayor impacto no es la
+  pérdida de datos —la base tiene el esquema de 001/002 y **cero filas productivas**—
+  sino que el aislamiento por RLS está **configurado y no demostrado funcionalmente**,
+  límite que 3D.2 registró. Abrir antes 3D.5 exigiría identidad de backup, credencial y
+  destino para proteger una base sin datos, y produciría un backup sin restauración
+  demostrada, porque «restore» pertenece a 3D.6.
+- Alcance documentado de 3D.6: aislamiento RLS entre scopes sintéticos, imposibilidad de
+  lectura y escritura cruzadas, no escalada del rol de runtime, CAS sobre `version`,
+  concurrencia de Mission Queue, rollback, timeout, limpieza verificable de datos
+  sintéticos, portabilidad de migraciones y validación integral mínima. El componente
+  **restore queda BLOQUEADO/DIFERIDO** hasta que exista un dump producido bajo 3D.5; se
+  propone admitir cierre parcial formal de 3D.6 registrando ese límite.
+- Los tests de integración de `backend/services/mission-queue/` y el runner de
+  `backend/repositories/poc/` usan `new Pool({ connectionString })` sin `ssl` ni
+  `enableChannelBinding`: **no están autorizados a ejecutarse contra Neon real durante
+  3D.6**. No se modifican; su endurecimiento exigiría auditoría y puerta propias. Pueden
+  leerse como especificación, nunca ejecutarse.
 
 ## Pendientes transferidos — no abiertos
 
