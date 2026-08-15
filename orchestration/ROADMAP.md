@@ -46,14 +46,22 @@
   cerrada/no abierta; 5C.7B.3E–F: cerradas / no abiertas.
 - 3D.6 abierta en planificación (15/08/2026): documenta el contrato de las pruebas
   contra la instancia real —aislamiento RLS entre scopes sintéticos, no lectura ni
-  escritura cruzadas, no escalada del rol de runtime, CAS sobre `version`, concurrencia,
-  rollback, timeout, limpieza verificable, portabilidad y validación integral— con datos
-  **exclusivamente sintéticos** y sonda efímera endurecida fuera del repositorio.
-  **Restore queda diferido** hasta que 3D.5 produzca un dump. Los tests de integración y
-  el POC runner, que usan `connectionString` sin TLS endurecido, **no pueden ejecutarse
-  contra Neon** en 3D.6. Nada se ha ejecutado: la apertura es documental y la ejecución
-  exige una segunda puerta humana. Anomalías registradas sin resolver: solapamiento
-  3D.5 / 5C.7B.6 y ausencia de contenido canónico para 5C.7B.3F.
+  escritura cruzadas, no escalada del rol de runtime, CAS sobre `version`, rollback,
+  timeout, **reversión estructural con residuo cero**, portabilidad y validación
+  integral— con datos **exclusivamente sintéticos** y sonda efímera endurecida fuera del
+  repositorio. Quedan **diferidos** el **restore**, hasta que 3D.5 produzca un dump, y la
+  **concurrencia (E)**, que exigiría estado COMMITeado compartido y una identidad capaz
+  de revertirlo: **no se ampliarán privilegios ni se creará identidad de limpieza** para
+  facilitarla. La garantía H no es limpieza ni truncado, sino no persistencia verificada.
+  I/J **no repiten** el 33/33 de 3D.2: comprueban un subconjunto y lo contrastan, y toda
+  contradicción es FAIL CLOSED. Los tests de integración y el POC runner, que usan
+  `connectionString` sin TLS endurecido, **no pueden ejecutarse contra Neon** en 3D.6.
+  Nada se ha ejecutado: la apertura es documental y la ejecución exige una segunda puerta
+  humana. La sonda quedó preparada **offline** en
+  `AppData\Local\OXKIO\tools\oxkio-3d6-rls-cas-probe.js` (sha256 `a0637866…`, selftest
+  45/45) con `EXECUTION_AUTHORIZED = false`: `tp1` y `tp2` fallan cerrado antes de tocar
+  la red y **la segunda puerta humana sigue sin conceder**. Anomalías registradas sin
+  resolver: solapamiento 3D.5 / 5C.7B.6 y ausencia de contenido canónico para 5C.7B.3F.
 - 3D.4 abierta en planificación (13/08/2026): alcance canónico sin cambios —secretos
   PostgreSQL reales en Secret Manager, ligados a las tres service accounts de 3C.2,
   en el proyecto ya existente `oxkio-runtime-prod`—. Primera tarea **resuelta**

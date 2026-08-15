@@ -114,10 +114,20 @@
   demostrada, porque «restore» pertenece a 3D.6.
 - Alcance documentado de 3D.6: aislamiento RLS entre scopes sintéticos, imposibilidad de
   lectura y escritura cruzadas, no escalada del rol de runtime, CAS sobre `version`,
-  concurrencia de Mission Queue, rollback, timeout, limpieza verificable de datos
-  sintéticos, portabilidad de migraciones y validación integral mínima. El componente
-  **restore queda BLOQUEADO/DIFERIDO** hasta que exista un dump producido bajo 3D.5; se
-  propone admitir cierre parcial formal de 3D.6 registrando ese límite.
+  rollback, timeout, **reversión estructural con residuo sintético cero**, portabilidad
+  de migraciones y validación integral mínima. Dos componentes quedan
+  **BLOQUEADOS/DIFERIDOS**: **restore**, hasta que exista un dump producido bajo 3D.5, y
+  la **concurrencia (E)**, que exige estado COMMITeado compartido entre sesiones y por
+  tanto una identidad capaz de revertirlo. Se propone admitir cierre parcial formal de
+  3D.6 registrando ambos límites.
+- Precisión sobre H: `oxkio_mission_runtime` no tiene `DELETE` ni `TRUNCATE`, y **no se
+  ampliarán sus privilegios ni se creará una identidad de limpieza** para facilitar una
+  prueba. La garantía de Tier 1 es reversión estructural —todo dentro de una transacción
+  que siempre termina en `ROLLBACK`— más verificación posterior independiente con residuo
+  cero. Es más fuerte que un borrado y compatible con el mínimo privilegio.
+- Precisión sobre I/J: la sonda **no repite** el `verify` 33/33 de 3D.2; comprueba el
+  subconjunto de catálogo relevante para 3D.6 y lo **contrasta** con aquella evidencia.
+  Cualquier contradicción es FAIL CLOSED.
 - Los tests de integración de `backend/services/mission-queue/` y el runner de
   `backend/repositories/poc/` usan `new Pool({ connectionString })` sin `ssl` ni
   `enableChannelBinding`: **no están autorizados a ejecutarse contra Neon real durante
@@ -200,7 +210,17 @@
     prohibición de pasar la URL a `pg` como `connectionString`: el consumidor parsea y
     **percent-decodifica** el userinfo antes de fijar los campos. No se registra
     ninguna contraseña ni qué carácter concreto contiene.
-16. **PENDIENTE TRANSVERSAL DE RUNTIME/COMPOSICIÓN** — Cablear la política TLS
+16. **Conservar la sonda de 3D.6** en
+    `C:\Users\janta\AppData\Local\OXKIO\tools\oxkio-3d6-rls-cas-probe.js` (sha256
+    `a063786671807eaedd3377faa643c5202c5b0362f5ffd67f1734b3827fbd906f`, 52 944 bytes,
+    selftest offline 45/45) al menos hasta el cierre de 3D.6. Está aprobada **solo como
+    artefacto offline para auditoría**: `EXECUTION_AUTHORIZED = false` en su propio
+    código hace que `tp1` y `tp2` fallen cerrado antes de tocar la red, y **la segunda
+    puerta humana sigue sin conceder**. Modificar esa bandera invalida el hash y exige
+    selftest, auditoría y autorización nuevas. Mismas condiciones que el runner de 3D.2 y
+    las sondas de 3D.3 y 3D.4: fuera del repositorio, de OneDrive y de Temp, sin secretos
+    embebidos, y **no debe versionarse en Git**.
+17. **PENDIENTE TRANSVERSAL DE RUNTIME/COMPOSICIÓN** — Cablear la política TLS
     demostrada en 3D.3 en la raíz de composición del runtime productivo. Hoy el
     código productivo **no tiene ninguna configuración TLS** y los repositorios
     reciben el pool inyectado. Es **obligatorio antes de cualquier conexión o
