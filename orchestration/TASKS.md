@@ -125,6 +125,21 @@
   prueba. La garantía de Tier 1 es reversión estructural —todo dentro de una transacción
   que siempre termina en `ROLLBACK`— más verificación posterior independiente con residuo
   cero. Es más fuerte que un borrado y compatible con el mínimo privilegio.
+- **Corrección de H tras la auditoría independiente (15/08/2026)**: el conteo residual se
+  hace **después del `ROLLBACK`, en transacciones nuevas y fijando `app.tenant_id`,
+  `app.user_id` y `app.client_id`** en cada scope comprobado. Sin scope fijado, la propia
+  RLS oculta las filas y devuelve un **cero vacío**: la primera versión del artefacto
+  incurría en ese fallo y habría dado un PASS falso. Límite declarado: la identidad de
+  runtime solo verifica residuo **dentro de los scopes que puede escribir**, sin
+  inspección global y sin owner/admin; por eso **H solo puede ser PASS si C está
+  demostrada**, y en caso contrario es **INCONCLUSA, nunca PASS**.
+- **Precisión sobre G**: tiene veredicto propio. PASS si `statement_timeout` interrumpe la
+  sentencia lenta y la transacción sigue gobernada por su savepoint; **INCONCLUSA** si la
+  sentencia completa pese al límite. G no acredita aislamiento ni seguridad, solo control
+  de tiempo.
+- Volumen real de Tier 1: dataset de 6 filas, de las que **inserta 3** en el scope A, más
+  **1** intento cruzado que debe ser rechazado y revertido; máximo 4 simultáneos en la
+  transacción y **0 persistidas**.
 - Precisión sobre I/J: la sonda **no repite** el `verify` 33/33 de 3D.2; comprueba el
   subconjunto de catálogo relevante para 3D.6 y lo **contrasta** con aquella evidencia.
   Cualquier contradicción es FAIL CLOSED.
@@ -212,8 +227,10 @@
     ninguna contraseña ni qué carácter concreto contiene.
 16. **Conservar la sonda de 3D.6** en
     `C:\Users\janta\AppData\Local\OXKIO\tools\oxkio-3d6-rls-cas-probe.js` (sha256
-    `a063786671807eaedd3377faa643c5202c5b0362f5ffd67f1734b3827fbd906f`, 52 944 bytes,
-    selftest offline 45/45) al menos hasta el cierre de 3D.6. Está aprobada **solo como
+    `22ad1ff997fdf69c27c90d20f6a28026f05a74453ba846ec15288b43076540ef`, 57 802 bytes,
+    selftest offline 49/49) al menos hasta el cierre de 3D.6. Sustituye a la versión
+    inicial `a0637866…`, **invalidada** por la auditoría independiente. Está aprobada
+    **solo como
     artefacto offline para auditoría**: `EXECUTION_AUTHORIZED = false` en su propio
     código hace que `tp1` y `tp2` fallen cerrado antes de tocar la red, y **la segunda
     puerta humana sigue sin conceder**. Modificar esa bandera invalida el hash y exige

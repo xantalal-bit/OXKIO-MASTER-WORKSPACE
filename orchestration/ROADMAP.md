@@ -58,9 +58,15 @@
   `connectionString` sin TLS endurecido, **no pueden ejecutarse contra Neon** en 3D.6.
   Nada se ha ejecutado: la apertura es documental y la ejecución exige una segunda puerta
   humana. La sonda quedó preparada **offline** en
-  `AppData\Local\OXKIO\tools\oxkio-3d6-rls-cas-probe.js` (sha256 `a0637866…`, selftest
-  45/45) con `EXECUTION_AUTHORIZED = false`: `tp1` y `tp2` fallan cerrado antes de tocar
-  la red y **la segunda puerta humana sigue sin conceder**. Anomalías registradas sin
+  `AppData\Local\OXKIO\tools\oxkio-3d6-rls-cas-probe.js` (sha256 `22ad1ff9…`, 57 802
+  bytes, selftest 49/49) con `EXECUTION_AUTHORIZED = false`: `tp1` y `tp2` fallan cerrado
+  antes de tocar la red y **la segunda puerta humana sigue sin conceder**. Esta versión
+  sustituye a la inicial `a0637866…`, **invalidada** por la auditoría independiente: su
+  conteo residual no fijaba el scope y la propia RLS habría ocultado cualquier residuo,
+  produciendo un PASS falso en H. Corregido: el residuo se cuenta tras el `ROLLBACK`, en
+  transacciones nuevas y con `app.*` fijado por scope, y **H solo puede ser PASS si C está
+  demostrada**. G pasa a tener veredicto propio: INCONCLUSA si la sentencia lenta completa
+  pese al límite. Anomalías registradas sin
   resolver: solapamiento 3D.5 / 5C.7B.6 y ausencia de contenido canónico para 5C.7B.3F.
 - 3D.4 abierta en planificación (13/08/2026): alcance canónico sin cambios —secretos
   PostgreSQL reales en Secret Manager, ligados a las tres service accounts de 3C.2,
