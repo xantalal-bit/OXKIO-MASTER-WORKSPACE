@@ -12,10 +12,11 @@
   cerradas. 3D.2 cerró con roles creados por SQL controlado (nunca consola Neon),
   migraciones 001/002 aplicadas y `verify` final 33/33 en transacción de solo
   lectura, sin escribir ninguna fila. 3D.3 — TLS/SSL estricto — queda **cerrada**,
-  con T1–T5 ejecutadas y superadas. 3D.4 — Secret Manager — sigue **abierta**: su
-  puerta humana de ejecución se concedió el 15/08/2026, se usó para materializar
-  PG-RUN (Puertas A y B) y quedó **consumida**; resta la auditoría y el cierre formal.
-  3D.5–3D.6 permanecen cerradas; 5C.7B.3E–F permanecen cerradas.
+  con T1–T5 ejecutadas y superadas. 3D.4 — Secret Manager — queda **CERRADA**
+  (15/08/2026): su puerta humana de ejecución se concedió, se usó para materializar
+  PG-RUN (Puertas A y B) y quedó **consumida**. PG-RUN está materializado pero **sin
+  consumidor productivo**. 3D.5–3D.6 permanecen cerradas; 5C.7B.3E–F permanecen
+  cerradas. La subfase siguiente queda **a evaluar**, no abierta.
 - 5C.7B.3A: contrato de secretos y matriz de custodia aprobado y cerrado.
 - 5C.7B.3B: runtime neutral de secretos sintéticos cerrado y publicado en `4a5076c`.
 - 5C.7B.3C: cerrada; 3C.1 y 3C.2 están cerradas, sin secretos operativos ni despliegue.
@@ -38,10 +39,10 @@
   organización y la cuenta quedan fuera del criterio de cierre.
 - Transferencias: PostgreSQL/TLS/RLS/roles/backups a 3D; OAuth y tokens a 3E; Cloud Run,
   RPO/RTO, Owner humano e higiene de APIs automáticas a fases posteriores.
-- 5C.7B.3D: abierta como contenedor; 3D.1, 3D.2 y 3D.3 cerradas; 3D.4 **abierta**, con
-  su puerta humana de ejecución concedida y consumida el 15/08/2026 para materializar
-  PG-RUN, pendiente de auditoría y cierre formal; 3D.5–3D.6 cerradas/no abiertas;
-  5C.7B.3E–F: cerradas / no abiertas.
+- 5C.7B.3D: abierta como contenedor; 3D.1, 3D.2, 3D.3 y **3D.4 cerradas**; la puerta
+  humana de ejecución de 3D.4 se concedió y quedó consumida el 15/08/2026 para
+  materializar PG-RUN; 3D.5–3D.6 cerradas/no abiertas; 5C.7B.3E–F: cerradas / no
+  abiertas.
 - 3D.4 abierta en planificación (13/08/2026): alcance canónico sin cambios —secretos
   PostgreSQL reales en Secret Manager, ligados a las tres service accounts de 3C.2,
   en el proyecto ya existente `oxkio-runtime-prod`—. Primera tarea **resuelta**
@@ -79,7 +80,19 @@
   heredado** del proyecto, de modo que la identidad de runtime no es el único sujeto
   capaz de leer el secreto. Migración y backup no figuran en los permisos del secreto.
   Evidencia verificada por el operador en consola; OXKIO no usó `gcloud` ni accedió al
-  valor. **No cierra 3D.4** ni demuestra consumo productivo alguno.
+  valor. No demuestra consumo productivo alguno.
+- 3D.4 **CERRADA (15/08/2026)** tras auditoría formal: sus siete criterios quedaron
+  satisfechos —inventario de service accounts, PG-RUN como único secreto inicial, PG-MIG
+  y PG-BKP sin materializar, formato correcto de la URL, mínimo privilegio a nivel del
+  secreto y TLS productivo fuera de alcance—. Evidencia añadida: replicación «Replicado
+  automáticamente», cifrado «Administrada por Google», rotación «Sin programar»,
+  vencimiento «Nunca» y los eventos `CreateSecret` → `AddSecretVersion` → `SetIamPolicy`.
+  El cierre acredita **custodia y acceso, no consumo**: PG-RUN sigue **sin consumidor
+  productivo**. Pendientes transferidos sin ejecutar: percent-decode al consumidor;
+  `optional` y fallo cerrado al contrato/runtime; TLS y channel binding al pendiente
+  transversal de composición; consumo y lectura real a runtime/Cloud Run posterior;
+  conexión runtime→Neon a 3D.6/pruebas reales; despliegue y retirada del Owner humano a
+  fases posteriores. No abre ninguna subfase.
 - 3D.3 cerrada (13/08/2026): T1–T5 ejecutadas y **todas PASS**. TLS estricto
   demostrado —CA y hostname verificados con fallo cerrado en ambos casos
   (`ERR_TLS_CERT_ALTNAME_INVALID` y `UNABLE_TO_GET_ISSUER_CERT_LOCALLY`), SNI

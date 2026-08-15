@@ -45,13 +45,10 @@
   offline. Las credenciales temporales se eliminaron del entorno al terminar.
 - Límite registrado: lo anterior se demuestra **mediante sonda**, no en el runtime
   productivo, que sigue sin política TLS cableada.
-- 3D.4 se abrió el 13/08/2026 **solo en modo controlado de planificación/preparación**;
-  aquella apertura no autorizaba `gcloud`, Google Cloud, creación de secretos o
-  versiones, cambios de IAM, Secret Manager real, credenciales, Neon, SQL, `server.js`,
-  código productivo, TLS productivo ni backup, y exigía una puerta humana nueva y
-  explícita. Esa puerta **se concedió el 15/08/2026**, se usó para las Puertas A y B de
-  PG-RUN y quedó **consumida**: no habilita ninguna acción adicional. 3D.4 sigue
-  **abierta** hasta su auditoría y cierre formal.
+- 3D.4 está **CERRADA** (15/08/2026). Se abrió el 13/08/2026 solo en modo controlado de
+  planificación/preparación y exigía una puerta humana nueva y explícita para cualquier
+  ejecución real. Esa puerta **se concedió el 15/08/2026**, se usó para las Puertas A y B
+  de PG-RUN y quedó **consumida**: no habilita ninguna acción adicional.
 - Alcance de 3D.4 **sin cambios**: secretos PostgreSQL reales en Secret Manager,
   ligados a las tres service accounts de 3C.2. El inventario **read-only** de esas
   identidades, primera tarea de 3D.4, quedó **resuelto el 14/08/2026** (ver pendiente
@@ -85,9 +82,24 @@
   vista IAM del proyecto no mostró bindings de proyecto para las tres service accounts.
   Evidencia verificada por el operador en consola, no medición automatizada. OXKIO no
   usó `gcloud` ni accedió al valor del secreto.
-- Materializar PG-RUN **no cierra 3D.4** ni demuestra que ningún runtime lo consuma:
-  restan la auditoría formal de esta evidencia y el cierre documental.
-- 3D.5–3D.6 permanecen cerradas/no abiertas. 5C.7B.3E–F permanecen cerradas.
+- **Criterios de cierre de 3D.4, satisfechos uno a uno** tras auditoría formal:
+  inventario de las tres service accounts (14/08/2026); PG-RUN como único secreto
+  inicial; PG-MIG y PG-BKP sin materializar; formato de PG-RUN sin parámetros de
+  consulta ni `sslmode` y con la prohibición de usarla como `connectionString`; mínimo
+  privilegio a nivel del propio secreto; y TLS productivo expresamente fuera del alcance
+  de 3D.4. Evidencia adicional registrada: replicación **«Replicado automáticamente»**,
+  cifrado **«Administrada por Google»**, rotación «Sin programar», vencimiento «Nunca», y
+  los tres eventos de auditoría del secreto —`CreateSecret`, `AddSecretVersion` sobre la
+  versión 1 y `SetIamPolicy`— en ese orden. El payload nunca se recuperó ni se registró.
+- Cerrar 3D.4 acredita **custodia y acceso**, no consumo: no demuestra que ningún
+  runtime lea PG-RUN. Los pendientes A–I quedan **transferidos**, no ejecutados —
+  percent-decode al consumidor productivo; `optional` y fallo cerrado al contrato/runtime
+  productivo; TLS y channel binding al pendiente transversal de runtime/composición;
+  consumo y lectura real desde Secret Manager a runtime/Cloud Run posterior; conexión
+  runtime→Neon a 3D.6/pruebas reales; despliegue funcional y retirada del Owner humano a
+  fases posteriores.
+- El cierre de 3D.4 **no abre** 3D.5, 3D.6 ni 5C.7B.3E–F, que permanecen cerradas/no
+  abiertas. La acción siguiente es **evaluar** qué subfase corresponde abrir, sin abrirla.
 
 ## Pendientes transferidos — no abiertos
 
@@ -182,9 +194,10 @@ abre automáticamente 3D.3**. El cierre de 3D.3 no autoriza Secret Manager, rol 
 backup, pruebas con escritura, datos reales, cambios de código productivo,
 `server.js`, despliegue ni 3D.4–3D.6, y **no abre automáticamente 3D.4**. Dentro de
 3D.4, la puerta humana del 15/08/2026 autorizó exclusivamente las Puertas A y B de
-PG-RUN y quedó **consumida**: no autoriza nuevas versiones, cambios de IAM, PG-MIG,
-PG-BKP, TLS productivo, `environment-contract.js`, `server.js`, despliegue ni
-3D.5–3D.6. OAuth real sigue esperando a 3E.
+PG-RUN y quedó **consumida**. El cierre de 3D.4 tampoco autoriza nuevas versiones,
+cambios de IAM, PG-MIG, PG-BKP, TLS productivo, `environment-contract.js`, `server.js`,
+despliegue ni 3D.5–3D.6, y **no abre automáticamente ninguna subfase**. OAuth real sigue
+esperando a 3E.
 
 ## Historial sustituido — lista inicial del 22/06/2026
 
