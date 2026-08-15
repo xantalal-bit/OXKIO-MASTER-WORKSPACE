@@ -45,11 +45,13 @@
   offline. Las credenciales temporales se eliminaron del entorno al terminar.
 - Límite registrado: lo anterior se demuestra **mediante sonda**, no en el runtime
   productivo, que sigue sin política TLS cableada.
-- 3D.4 queda **abierta únicamente en modo controlado de planificación/preparación**
-  (13/08/2026). Esta apertura **no autoriza** `gcloud`, Google Cloud, creación de
-  secretos o versiones, cambios de IAM, Secret Manager real, credenciales, Neon, SQL,
-  `server.js`, código productivo, TLS productivo ni backup. La ejecución real exige
-  una puerta humana nueva y explícita.
+- 3D.4 se abrió el 13/08/2026 **solo en modo controlado de planificación/preparación**;
+  aquella apertura no autorizaba `gcloud`, Google Cloud, creación de secretos o
+  versiones, cambios de IAM, Secret Manager real, credenciales, Neon, SQL, `server.js`,
+  código productivo, TLS productivo ni backup, y exigía una puerta humana nueva y
+  explícita. Esa puerta **se concedió el 15/08/2026**, se usó para las Puertas A y B de
+  PG-RUN y quedó **consumida**: no habilita ninguna acción adicional. 3D.4 sigue
+  **abierta** hasta su auditoría y cierre formal.
 - Alcance de 3D.4 **sin cambios**: secretos PostgreSQL reales en Secret Manager,
   ligados a las tres service accounts de 3C.2. El inventario **read-only** de esas
   identidades, primera tarea de 3D.4, quedó **resuelto el 14/08/2026** (ver pendiente
@@ -57,7 +59,7 @@
   URL sin parámetros de consulta ni `sslmode` y prohibición de usarla como
   `connectionString`; `roles/secretmanager.secretAccessor` solo para la identidad de
   runtime y solo sobre ese secreto. **PG-MIG** reservado a operaciones/migraciones
-  controladas y **PG-BKP** en 3D.5: ninguno se materializa.
+  controladas y **PG-BKP** en 3D.5: **ninguno de los dos se ha materializado**.
 - **PG-RUN = POOLED confirmado empíricamente (15/08/2026)**: una única TP1 con la
   sonda endurecida `oxkio-3d4-pooler-cb-probe.js` dio **PASS** contra el endpoint
   pooled real —`pg` 8.22.0, TLS autorizado con `rejectUnauthorized=true`,
@@ -66,7 +68,25 @@
   reintentos—. No se propone cambio a DIRECT; la documentación genérica de PgBouncer
   queda subordinada a esta medición del proveedor real. La salida solo mostró
   hostname enmascarado y las variables de credencial se retiraron del entorno.
-  Confirmar POOLED **no materializa** PG-RUN ni autoriza Secret Manager o IAM.
+  Confirmar POOLED no materializaba por sí solo PG-RUN; esa autorización llegó después
+  como puerta humana separada.
+- **PG-RUN MATERIALIZADO (15/08/2026)**. Bajo puerta humana concedida y ya
+  **consumida**, el operador ejecutó manualmente en la consola web las Puertas A y B:
+  el secreto `OXKIO_MISSION_PG_RUNTIME_URL` existe en `oxkio-runtime-prod` con
+  **exactamente Version 1, habilitada** y cifrado administrado por Google; sobre el
+  propio secreto figura la service account de runtime
+  `oxkio-runtime-prod@oxkio-runtime-prod.iam.gserviceaccount.com` con el rol que la
+  consola muestra como «Usuario con acceso a secretos de Secret Manager», sin condición
+  IAM. El ID técnico `roles/secretmanager.secretAccessor` es la correspondencia
+  esperada de ese rol predefinido, **no** un dato leído literalmente de la pantalla.
+  Junto a ese binding explícito figura `xantalal@gmail.com` como **Propietario
+  heredado**, de modo que la identidad de runtime **no** es el único sujeto capaz de
+  leer el secreto. Migración y backup no aparecen en los permisos del secreto, y la
+  vista IAM del proyecto no mostró bindings de proyecto para las tres service accounts.
+  Evidencia verificada por el operador en consola, no medición automatizada. OXKIO no
+  usó `gcloud` ni accedió al valor del secreto.
+- Materializar PG-RUN **no cierra 3D.4** ni demuestra que ningún runtime lo consuma:
+  restan la auditoría formal de esta evidencia y el cierre documental.
 - 3D.5–3D.6 permanecen cerradas/no abiertas. 5C.7B.3E–F permanecen cerradas.
 
 ## Pendientes transferidos — no abiertos
@@ -160,9 +180,11 @@ El cierre de 3D.2 no autoriza TLS productivo, secretos reales en Secret Manager,
 rol de backup, pruebas con escritura, datos reales, contratación ni gasto, y **no
 abre automáticamente 3D.3**. El cierre de 3D.3 no autoriza Secret Manager, rol de
 backup, pruebas con escritura, datos reales, cambios de código productivo,
-`server.js`, despliegue ni 3D.4–3D.6, y **no abre automáticamente 3D.4**. La apertura
-de 3D.4 es **solo de planificación** y no autoriza `gcloud`, Google Cloud, secretos,
-versiones, IAM, credenciales ni 3D.5–3D.6. OAuth real sigue esperando a 3E.
+`server.js`, despliegue ni 3D.4–3D.6, y **no abre automáticamente 3D.4**. Dentro de
+3D.4, la puerta humana del 15/08/2026 autorizó exclusivamente las Puertas A y B de
+PG-RUN y quedó **consumida**: no autoriza nuevas versiones, cambios de IAM, PG-MIG,
+PG-BKP, TLS productivo, `environment-contract.js`, `server.js`, despliegue ni
+3D.5–3D.6. OAuth real sigue esperando a 3E.
 
 ## Historial sustituido — lista inicial del 22/06/2026
 

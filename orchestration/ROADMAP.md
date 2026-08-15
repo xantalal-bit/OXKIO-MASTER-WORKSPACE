@@ -12,10 +12,10 @@
   cerradas. 3D.2 cerró con roles creados por SQL controlado (nunca consola Neon),
   migraciones 001/002 aplicadas y `verify` final 33/33 en transacción de solo
   lectura, sin escribir ninguna fila. 3D.3 — TLS/SSL estricto — queda **cerrada**,
-  con T1–T5 ejecutadas y superadas. 3D.4 — Secret Manager — queda **abierta en modo
-  controlado de planificación/preparación**; su ejecución real (Google Cloud,
-  secretos, versiones e IAM) **sigue sin abrir**. 3D.5–3D.6 permanecen cerradas;
-  5C.7B.3E–F permanecen cerradas.
+  con T1–T5 ejecutadas y superadas. 3D.4 — Secret Manager — sigue **abierta**: su
+  puerta humana de ejecución se concedió el 15/08/2026, se usó para materializar
+  PG-RUN (Puertas A y B) y quedó **consumida**; resta la auditoría y el cierre formal.
+  3D.5–3D.6 permanecen cerradas; 5C.7B.3E–F permanecen cerradas.
 - 5C.7B.3A: contrato de secretos y matriz de custodia aprobado y cerrado.
 - 5C.7B.3B: runtime neutral de secretos sintéticos cerrado y publicado en `4a5076c`.
 - 5C.7B.3C: cerrada; 3C.1 y 3C.2 están cerradas, sin secretos operativos ni despliegue.
@@ -38,9 +38,10 @@
   organización y la cuenta quedan fuera del criterio de cierre.
 - Transferencias: PostgreSQL/TLS/RLS/roles/backups a 3D; OAuth y tokens a 3E; Cloud Run,
   RPO/RTO, Owner humano e higiene de APIs automáticas a fases posteriores.
-- 5C.7B.3D: abierta como contenedor; 3D.1, 3D.2 y 3D.3 cerradas; 3D.4 abierta en
-  modo controlado de planificación/preparación, sin apertura a ejecución real de
-  Secret Manager; 3D.5–3D.6 cerradas/no abiertas; 5C.7B.3E–F: cerradas / no abiertas.
+- 5C.7B.3D: abierta como contenedor; 3D.1, 3D.2 y 3D.3 cerradas; 3D.4 **abierta**, con
+  su puerta humana de ejecución concedida y consumida el 15/08/2026 para materializar
+  PG-RUN, pendiente de auditoría y cierre formal; 3D.5–3D.6 cerradas/no abiertas;
+  5C.7B.3E–F: cerradas / no abiertas.
 - 3D.4 abierta en planificación (13/08/2026): alcance canónico sin cambios —secretos
   PostgreSQL reales en Secret Manager, ligados a las tres service accounts de 3C.2,
   en el proyecto ya existente `oxkio-runtime-prod`—. Primera tarea **resuelta**
@@ -64,9 +65,21 @@
   completada y `SELECT 1` correcto, con identidad `oxkio_mission_runtime` y cero
   reintentos. **PG-RUN = POOLED queda confirmado**; no se propone DIRECT. Solo se
   mostró hostname enmascarado y las variables de credencial se retiraron del entorno.
-  Confirmarlo **no materializa** PG-RUN ni abre Secret Manager, versiones ni IAM.
-  Lección vigente: al construir una URI de PostgreSQL, usuario y contraseña deben
-  percent-encodearse antes de incorporarlos al userinfo.
+  Confirmarlo no materializaba por sí solo PG-RUN. Lección vigente: al construir una
+  URI de PostgreSQL, usuario y contraseña deben percent-encodearse antes de
+  incorporarlos al userinfo.
+- 3D.4 — **PG-RUN MATERIALIZADO (15/08/2026)**: bajo puerta humana concedida y ya
+  **consumida**, el operador ejecutó manualmente en la consola web las Puertas A y B.
+  `OXKIO_MISSION_PG_RUNTIME_URL` existe en `oxkio-runtime-prod` con **exactamente
+  Version 1, habilitada** y cifrado administrado por Google; sobre el propio secreto
+  figura la service account de runtime con el rol que la consola muestra como «Usuario
+  con acceso a secretos de Secret Manager», sin condición IAM —
+  `roles/secretmanager.secretAccessor` es su correspondencia esperada, no un ID leído
+  literalmente de la pantalla—. Junto a ese binding explícito aparece el **Propietario
+  heredado** del proyecto, de modo que la identidad de runtime no es el único sujeto
+  capaz de leer el secreto. Migración y backup no figuran en los permisos del secreto.
+  Evidencia verificada por el operador en consola; OXKIO no usó `gcloud` ni accedió al
+  valor. **No cierra 3D.4** ni demuestra consumo productivo alguno.
 - 3D.3 cerrada (13/08/2026): T1–T5 ejecutadas y **todas PASS**. TLS estricto
   demostrado —CA y hostname verificados con fallo cerrado en ambos casos
   (`ERR_TLS_CERT_ALTNAME_INVALID` y `UNABLE_TO_GET_ISSUER_CERT_LOCALLY`), SNI
