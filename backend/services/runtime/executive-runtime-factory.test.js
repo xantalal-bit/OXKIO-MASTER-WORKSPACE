@@ -124,7 +124,14 @@ test('sandbox keeps email, meeting and task approvals temporary and correlated',
 
   try {
     const cases = [
-      ['Prepara un borrador de respuesta', 'email_draft'],
+      // Un borrador de email exige una señal de destinatario real (nunca se
+      // inventa uno): dirección de correo + "asunto: X y cuerpo: Y" en la
+      // propia consulta, el mecanismo que emailPreparationFromQuery ya
+      // soporta. Una consulta sin esa señal (ni contexto Gmail) deja
+      // deliberadamente executionPayload.to en null y approval en null en
+      // ProposalEngine/enqueueApprovalSafely/addPreparedEmailDraft — no es
+      // un fallo, es el contrato de "nunca fabricar destinatario".
+      ['Prepara un borrador para piloto@example.com asunto: Seguimiento y cuerpo: Confirmo que avanzamos con la propuesta.', 'email_draft'],
       ['Programa una reunion', 'meeting_proposal'],
       ['Crea una tarea', 'task_proposal'],
     ];
