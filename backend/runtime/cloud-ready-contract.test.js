@@ -25,6 +25,72 @@ test('runtime configuration uses dynamic PORT, portable host and fail-closed inv
   assert.throws(() => readRuntimeConfig({ NODE_ENV: 'unknown' }), /NODE_ENV/);
 });
 
+test('development and test modes stay exactly as permissive as before', () => {
+  assert.equal(readRuntimeConfig({ NODE_ENV: 'development' }).port, 3000);
+  assert.equal(readRuntimeConfig({ NODE_ENV: 'test' }).port, 3000);
+  assert.equal(readRuntimeConfig({}).port, 3000);
+});
+
+test('production fails closed without the firebase and authorization scopes', () => {
+  assert.throws(
+    () => readRuntimeConfig({ NODE_ENV: 'production' }),
+    /FIREBASE_PROJECT_ID/,
+  );
+  assert.throws(
+    () => readRuntimeConfig({
+      NODE_ENV: 'production',
+      FIREBASE_PROJECT_ID: 'oxkio-synthetic-project',
+    }),
+    /OXKIO_ADMIN_FIREBASE_UIDS/,
+  );
+  assert.throws(
+    () => readRuntimeConfig({
+      NODE_ENV: 'production',
+      OXKIO_ADMIN_FIREBASE_UIDS: 'synthetic-uid',
+    }),
+    /FIREBASE_PROJECT_ID/,
+  );
+});
+
+test('production passes once firebase and authorization are satisfied, without requiring postgres, google_oauth or filesystem mode yet', () => {
+  const config = readRuntimeConfig({
+    NODE_ENV: 'production',
+    FIREBASE_PROJECT_ID: 'oxkio-synthetic-project',
+    OXKIO_ADMIN_FIREBASE_UIDS: 'synthetic-uid',
+    // OXKIO_MISSION_PG_RUNTIME_URL, GOOGLE_CLIENT_ID/SECRET/REDIRECT_URI and
+    // OXKIO_FILESYSTEM_MODE deliberately absent: none of them belong to the
+    // scopes required today.
+  });
+  assert.equal(config.port, 3000);
+});
+
+test('production failures never leak secret-classified values in the error message', () => {
+  const secret = 'sintetico-no-real-firebase-private-key';
+  assert.throws(
+    () => readRuntimeConfig({
+      NODE_ENV: 'production',
+      FIREBASE_PROJECT_ID: 'oxkio-synthetic-project',
+      FIREBASE_PRIVATE_KEY: secret,
+    }),
+    (error) => {
+      assert.match(error.message, /OXKIO_ADMIN_FIREBASE_UIDS/);
+      assert.doesNotMatch(error.message, new RegExp(secret));
+      return true;
+    },
+  );
+});
+
+test('an explicit requiredScopes argument always overrides the NODE_ENV default', () => {
+  assert.throws(
+    () => readRuntimeConfig({}, { requiredScopes: ['authorization'] }),
+    /OXKIO_ADMIN_FIREBASE_UIDS/,
+  );
+  assert.equal(
+    readRuntimeConfig({ NODE_ENV: 'production' }, { requiredScopes: [] }).port,
+    3000,
+  );
+});
+
 test('health is live while readiness follows runtime lifecycle', () => {
   const readiness = createRuntimeReadiness();
   const config = readRuntimeConfig({});

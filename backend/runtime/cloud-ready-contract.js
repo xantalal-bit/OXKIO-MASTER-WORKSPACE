@@ -5,6 +5,7 @@ const { assertEnvironment } = require('../config/environment-contract');
 const DEFAULT_PORT = 3000;
 const DEFAULT_HOST = '0.0.0.0';
 const SHUTDOWN_TIMEOUT_MS = 10_000;
+const PRODUCTION_REQUIRED_SCOPES = Object.freeze(['firebase', 'authorization']);
 
 function parsePort(value) {
   if (value === undefined || value === null || value === '') return DEFAULT_PORT;
@@ -15,8 +16,9 @@ function parsePort(value) {
   return port;
 }
 
-function readRuntimeConfig(env = process.env) {
-  assertEnvironment(env);
+function readRuntimeConfig(env = process.env, { requiredScopes } = {}) {
+  const scopes = requiredScopes ?? (env.NODE_ENV === 'production' ? PRODUCTION_REQUIRED_SCOPES : []);
+  assertEnvironment(env, { requiredScopes: scopes });
   return Object.freeze({
     port: parsePort(env.PORT),
     host: DEFAULT_HOST,
@@ -105,6 +107,7 @@ function createShutdownController({
 module.exports = {
   DEFAULT_HOST,
   DEFAULT_PORT,
+  PRODUCTION_REQUIRED_SCOPES,
   SHUTDOWN_TIMEOUT_MS,
   createRuntimeReadiness,
   createShutdownController,
