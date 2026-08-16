@@ -227,16 +227,23 @@
     ninguna contraseña ni qué carácter concreto contiene.
 16. **Conservar la sonda de 3D.6** en
     `C:\Users\janta\AppData\Local\OXKIO\tools\oxkio-3d6-rls-cas-probe.js` (sha256
-    `22ad1ff997fdf69c27c90d20f6a28026f05a74453ba846ec15288b43076540ef`, 57 802 bytes,
-    selftest offline 49/49) al menos hasta el cierre de 3D.6. Sustituye a la versión
-    inicial `a0637866…`, **invalidada** por la auditoría independiente. Está aprobada
-    **solo como
-    artefacto offline para auditoría**: `EXECUTION_AUTHORIZED = false` en su propio
-    código hace que `tp1` y `tp2` fallen cerrado antes de tocar la red, y **la segunda
-    puerta humana sigue sin conceder**. Modificar esa bandera invalida el hash y exige
-    selftest, auditoría y autorización nuevas. Mismas condiciones que el runner de 3D.2 y
-    las sondas de 3D.3 y 3D.4: fuera del repositorio, de OneDrive y de Temp, sin secretos
-    embebidos, y **no debe versionarse en Git**.
+    `3e953e9371fe7e916fdd5cb6756439a318aae2ad3aadf4a96955ffb07d40b4d8`, 59 154 bytes,
+    selftest offline 49/49, `node --check` OK) al menos hasta el cierre de 3D.6. Sustituye
+    a la versión inicial `a0637866…`, **invalidada** por la auditoría independiente, y a la
+    versión preparada del 15/08/2026 —sha256 `22ad1ff9…76540ef`, 57 802 bytes,
+    `EXECUTION_AUTHORIZED = false`—, ahora **SUPERADA** por la preparación controlada del
+    16/08/2026. El único cambio funcional de la versión vigente es
+    `EXECUTION_AUTHORIZED = true` (primer cerrojo levantado) más la corrección de la
+    única aserción del selftest que presuponía ese cerrojo en `false`; ninguna otra
+    lógica cambió. `EXECUTION_AUTHORIZED = true` **no habilita ejecución real**: la
+    sonda exige además la segunda puerta humana `OXKIO_3D6_GATE`, que **sigue sin
+    conceder**, sin frase fijada. `tp1` sin ella falla cerrado antes de tocar la red
+    (verificado offline con `OXKIO_3D6_PG_URL` y `OXKIO_REPO_ROOT` ficticios); `tp2`
+    sigue **BLOQUEADA/DEFERIDA** de forma incondicional. Modificar cualquier bandera
+    invalida el hash y exige selftest, auditoría y autorización nuevas. Mismas
+    condiciones que el runner de 3D.2 y las sondas de 3D.3 y 3D.4: fuera del
+    repositorio, de OneDrive y de Temp, sin secretos embebidos, y **no debe
+    versionarse en Git**.
 17. **PENDIENTE TRANSVERSAL DE RUNTIME/COMPOSICIÓN** — Cablear la política TLS
     demostrada en 3D.3 en la raíz de composición del runtime productivo. Hoy el
     código productivo **no tiene ninguna configuración TLS** y los repositorios

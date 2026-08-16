@@ -68,6 +68,18 @@
   demostrada**. G pasa a tener veredicto propio: INCONCLUSA si la sentencia lenta completa
   pese al límite. Anomalías registradas sin
   resolver: solapamiento 3D.5 / 5C.7B.6 y ausencia de contenido canónico para 5C.7B.3F.
+  Preparación Tier 1 (16/08/2026): la versión `22ad1ff9…`, 57 802 bytes,
+  `EXECUTION_AUTHORIZED = false`, queda **SUPERADA**. Vigente: sha256
+  `3e953e9371fe7e916fdd5cb6756439a318aae2ad3aadf4a96955ffb07d40b4d8`, 59 154 bytes,
+  selftest offline **PASS 49/49**, `node --check` OK. Único cambio funcional:
+  `EXECUTION_AUTHORIZED = true` (primer cerrojo levantado) más la corrección de la
+  aserción del selftest que presuponía ese cerrojo en `false`, sin debilitar ninguna
+  comprobación. Esto **no habilita ejecución real**: la segunda puerta humana
+  `OXKIO_3D6_GATE` **sigue sin conceder**, sin frase fijada. Verificado offline: `tp1`
+  sin ella falla cerrado antes de tocar `pg`/DNS/red, incluso con `OXKIO_3D6_PG_URL` y
+  `OXKIO_REPO_ROOT` ficticios; `tp2` sigue **BLOQUEADA/DEFERIDA** incondicionalmente.
+  Cero credenciales reales, cero conexión a Neon, cero SQL ejecutado. A–K, restore
+  diferido y 3D.5/3E/3F cerradas/no abiertas quedan intactos.
 - 3D.4 abierta en planificación (13/08/2026): alcance canónico sin cambios —secretos
   PostgreSQL reales en Secret Manager, ligados a las tres service accounts de 3C.2,
   en el proyecto ya existente `oxkio-runtime-prod`—. Primera tarea **resuelta**
