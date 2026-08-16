@@ -18,8 +18,10 @@
   consumidor productivo**. **3D.6 — Tier 1 (A–K) contra instancia real — queda
   CERRADA (16/08/2026)** con una única ejecución real y veredicto **PASS**; la
   segunda puerta humana fue efímera para esa ejecución y no permanece abierta;
-  Tier 2/E sigue **BLOQUEADA/DEFERIDA** y restore **DIFERIDO**. 3D.5, 5C.7B.3E y
-  5C.7B.3F permanecen cerradas/no abiertas.
+  Tier 2/E sigue **BLOQUEADA/DEFERIDA** y restore **DIFERIDO**. 3D.5 y 5C.7B.3E
+  permanecen cerradas/no abiertas. **5C.7B.3F queda DEFINIDA (16/08/2026)** —
+  persistencia definitiva de ApprovalQueue/ApprovalRepository, prerrequisito de
+  Runtime 24/7 y 5C.7B.7 — pero técnicamente no iniciada.
 - 5C.7B.3A: contrato de secretos y matriz de custodia aprobado y cerrado.
 - 5C.7B.3B: runtime neutral de secretos sintéticos cerrado y publicado en `4a5076c`.
 - 5C.7B.3C: cerrada; 3C.1 y 3C.2 están cerradas, sin secretos operativos ni despliegue.
@@ -46,7 +48,9 @@
   humana de ejecución de 3D.4 se concedió y quedó consumida el 15/08/2026 para
   materializar PG-RUN; **3D.6 Tier 1 CERRADA (16/08/2026) con PASS real**, segunda
   puerta efímera consumida, Tier 2/E diferida y restore diferido; 3D.5
-  cerrada/no abierta; 5C.7B.3E–F: cerradas / no abiertas.
+  cerrada/no abierta; 5C.7B.3E: cerrada/no abierta; **5C.7B.3F: DEFINIDA
+  (16/08/2026), técnicamente no iniciada** (persistencia definitiva de
+  ApprovalQueue/ApprovalRepository).
 - 3D.6 abierta en planificación (15/08/2026): documenta el contrato de las pruebas
   contra la instancia real —aislamiento RLS entre scopes sintéticos, no lectura ni
   escritura cruzadas, no escalada del rol de runtime, CAS sobre `version`, rollback,
@@ -70,8 +74,9 @@
   produciendo un PASS falso en H. Corregido: el residuo se cuenta tras el `ROLLBACK`, en
   transacciones nuevas y con `app.*` fijado por scope, y **H solo puede ser PASS si C está
   demostrada**. G pasa a tener veredicto propio: INCONCLUSA si la sentencia lenta completa
-  pese al límite. Anomalías registradas sin
-  resolver: solapamiento 3D.5 / 5C.7B.6 y ausencia de contenido canónico para 5C.7B.3F.
+  pese al límite. Anomalía sin resolver: solapamiento 3D.5 / 5C.7B.6. La ausencia de
+  contenido canónico para 5C.7B.3F quedó **resuelta el 16/08/2026** (ver governance
+  doc, "Definición formal de 5C.7B.3F").
   Preparación Tier 1 (16/08/2026): la versión `22ad1ff9…`, 57 802 bytes,
   `EXECUTION_AUTHORIZED = false`, queda **SUPERADA**. Vigente: sha256
   `3e953e9371fe7e916fdd5cb6756439a318aae2ad3aadf4a96955ffb07d40b4d8`, 59 154 bytes,
@@ -273,7 +278,7 @@ Capacidades operativas verificadas:
 
 ## No abrir todavía
 
-- 5C.7B.3D.6 Tier 2/E y restore (siguen BLOQUEADA/DEFERIDA y DIFERIDO tras el cierre real de Tier 1 el 16/08/2026); 3D.5 y su rol de backup; TLS productivo cableado en el runtime; 5C.7B.3E–F. (3D.4 y 3D.6 Tier 1 ya tuvieron su ejecución real autorizada y cerrada; no reabrir sin puerta humana nueva.)
+- 5C.7B.3D.6 Tier 2/E y restore (siguen BLOQUEADA/DEFERIDA y DIFERIDO tras el cierre real de Tier 1 el 16/08/2026); 3D.5 y su rol de backup; TLS productivo cableado en el runtime; 5C.7B.3E; 5C.7B.3F técnica (definida el 16/08/2026 — persistencia definitiva de ApprovalQueue/ApprovalRepository — pero sin PostgresApprovalRepository, sin SQL y sin conexión Neon; su primera microfase técnica sigue sin autorizar). (3D.4 y 3D.6 Tier 1 ya tuvieron su ejecución real autorizada y cerrada; no reabrir sin puerta humana nueva.)
 - Envío de Gmail.
 - Calendar Execution.
 - Automatizaciones y activación de otros agentes.
