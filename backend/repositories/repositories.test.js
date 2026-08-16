@@ -18,13 +18,14 @@ const {
   createIdempotencyRecord,
 } = require('./idempotency-contract');
 
-test('declares five provider-neutral repository contracts', () => {
+test('declares six provider-neutral repository contracts', () => {
   assert.deepEqual(Object.keys(CONTRACTS), [
     'ApprovalRepository',
     'MemoryRepository',
     'OperationRepository',
     'AuditRepository',
     'OAuthTokenRepository',
+    'ApprovalRepositoryV2',
   ]);
   Object.entries(CONTRACTS).forEach(([name, methods]) => {
     const repository = Object.fromEntries(methods.map((method) => [method, () => {}]));
