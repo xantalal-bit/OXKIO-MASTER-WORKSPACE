@@ -174,7 +174,7 @@ test('K negations create no proposal, approval, execution, or private context', 
       const response = await requestChat(query, dependencies);
       const payload = response.getJson();
       assert.equal(payload.proposal, null); assert.equal(payload.approval, null);
-      assert.equal(runtime.approvalQueue.listPending().length, 0);
+      assert.equal((await runtime.approvalQueue.listPending()).length, 0);
       assert.equal(payload.privateContextUsed, false);
     });
   }
@@ -244,7 +244,7 @@ test('adds an optional supervised recommendation without executing or accepting 
   assert.deepEqual(payload.operationPlan, { steps: ['business-analysis-readonly'], requiresConfirmation: true });
   assert.equal(payload.capabilityComposition.primaryCapability, 'business-analysis-readonly');
   assert.equal(payload.decisionRecommendation.requiresConfirmation, true);
-  assert.equal(runtime.approvalQueue.listPending().length, 0);
+  assert.equal((await runtime.approvalQueue.listPending()).length, 0);
   assert.equal(JSON.stringify(payload).includes('evil'), false);
 });
 

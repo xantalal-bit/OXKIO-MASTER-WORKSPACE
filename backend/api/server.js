@@ -461,7 +461,7 @@ if (pathname === "/api/gmail/analyze" && req.method === "GET") {
   requiresApproval: true
 };
 
-    const approvalItem = approvalQueue.add(
+    const approvalItem = await approvalQueue.add(
       proposal,
       {
         source: "gmail",
@@ -1130,7 +1130,7 @@ const analysis = brainResult.analysis;
 const proposal = proposalEngine.generate(brainResult);
 
 
-const approvalItem = approvalQueue.add(
+const approvalItem = await approvalQueue.add(
   proposal,
   {
     message,
@@ -1273,8 +1273,8 @@ if (pathname === "/api/pending-approvals" && req.method === "GET") {
   res.end(JSON.stringify({
     ok: true,
     module: "approval-queue",
-    pending: approvalQueue.listPending(),
-    status: approvalQueue.getStatus()
+    pending: await approvalQueue.listPending(),
+    status: await approvalQueue.getStatus()
   }, null, 2));
 
   return;
@@ -1310,8 +1310,8 @@ if (pathname === "/api/approval-history" && req.method === "GET") {
   res.end(JSON.stringify({
     ok: true,
     module: "approval-queue",
-    history: approvalQueue.getHistory(),
-    status: approvalQueue.getStatus()
+    history: await approvalQueue.getHistory(),
+    status: await approvalQueue.getStatus()
   }, null, 2));
 
   return;
@@ -1446,7 +1446,7 @@ const proposal = proposalEngine.generate({
   }
 });
 
-      approvalQueue.add({
+      await approvalQueue.add({
         type: "execution",
         proposal
       });
@@ -1461,7 +1461,7 @@ const proposal = proposalEngine.generate({
         message: "Propuesta generada correctamente",
         intent,
         proposal,
-        approvalQueue: approvalQueue.getHistory()
+        approvalQueue: await approvalQueue.getHistory()
       });
 
     } catch (error) {

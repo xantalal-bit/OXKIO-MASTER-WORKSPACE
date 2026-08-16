@@ -20,10 +20,9 @@ const PRIVATE_VALUES = [
   'Content-Type:',
 ];
 
-function withTemporaryQueue(run, initialData = null) {
+function withTemporaryQueue(run) {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'oxkio-execution-service-'));
-  const dataFile = path.join(directory, 'approvalQueue.json');
-  if (initialData) fs.writeFileSync(dataFile, JSON.stringify(initialData, null, 2));
+  const dataFile = path.join(directory, 'approvalQueue.v2.json');
 
   const queue = new ApprovalQueue({ dataFile });
   return Promise.resolve()
@@ -31,8 +30,8 @@ function withTemporaryQueue(run, initialData = null) {
     .finally(() => fs.rmSync(directory, { recursive: true, force: true }));
 }
 
-function addApproval(queue, type = 'email_draft', interactionId = `interaction-${type}`) {
-  return queue.add({
+async function addApproval(queue, type = 'email_draft', interactionId = `interaction-${type}`) {
+  const added = await queue.add({
     type,
     summary: 'Safe public proposal',
     requiresApproval: true,
@@ -42,7 +41,17 @@ function addApproval(queue, type = 'email_draft', interactionId = `interaction-$
     body: 'Internal body',
     replyMessageId: null,
     threadId: null,
-  }).id;
+  });
+  return added.id;
+}
+
+// FASE A2: corrompe el payload persistido de un item V2 directamente en
+// disco, sustituyendo la antigua mutación de `queue.history.find(...)`.
+function tamperExecutionPayloadOnDisk(dataFile, approvalId, patch) {
+  const state = JSON.parse(fs.readFileSync(dataFile, 'utf8'));
+  const record = state.records.find((item) => item.id === approvalId);
+  Object.assign(record.record.executionPayload, patch);
+  fs.writeFileSync(dataFile, JSON.stringify(state, null, 2));
 }
 
 function buildFakeGmail(behavior = 'success') {
@@ -90,19 +99,19 @@ function assertSafe(value) {
 }
 
 test('executes one approved email through fake Gmail and persists correlated safe IDs', async () => {
-  await withTemporaryQueue(async (queue, dataFile) => {
-    const id = addApproval(queue, 'email_draft', 'interaction-success');
-    queue.approve(id);
+  await withTemporaryQueue(async (queue) => {
+    const id = await addApproval(queue, 'email_draft', 'interaction-success');
+    await queue.approve(id);
     const originalBegin = queue.beginExecution.bind(queue);
     let beginResult;
-    queue.beginExecution = (approvalId) => {
-      beginResult = originalBegin(approvalId);
+    queue.beginExecution = async (approvalId) => {
+      beginResult = await originalBegin(approvalId);
       return beginResult;
     };
     const { service, calls } = buildSystem(queue);
 
     const result = await service.executeApproved(id);
-    const stored = JSON.parse(fs.readFileSync(dataFile, 'utf8')).history.find((item) => item.id === id);
+    const stored = await queue.getInternalById(id);
 
     assert.equal(calls.length, 1);
     assert.deepEqual(result, {
@@ -125,7 +134,7 @@ test('executes one approved email through fake Gmail and persists correlated saf
     assert.equal(stored.result.externalId, result.result.externalId);
     assert.equal(stored.result.secondaryExternalId, result.result.secondaryExternalId);
     assertSafe(result);
-    assertSafe(queue.getHistory().find((item) => item.id === id));
+    assertSafe((await queue.getHistory()).find((item) => item.id === id));
   });
 });
 
@@ -189,12 +198,12 @@ for (const providerCase of [
 ]) {
   test(`persists safe ${providerCase.behavior} Gmail failure classification`, async () => {
     await withTemporaryQueue(async (queue) => {
-      const id = addApproval(queue);
-      queue.approve(id);
+      const id = await addApproval(queue);
+      await queue.approve(id);
       const { service, calls } = buildSystem(queue, providerCase.behavior);
 
       const result = await service.executeApproved(id);
-      const stored = queue.getHistory().find((item) => item.id === id);
+      const stored = (await queue.getHistory()).find((item) => item.id === id);
 
       assert.equal(calls.length, 1);
       assert.equal(result.status, 'execution_failed');
@@ -211,8 +220,8 @@ for (const providerCase of [
 
 test('converts an unexpected adapter exception to a non-sensitive persisted failure', async () => {
   await withTemporaryQueue(async (queue) => {
-    const id = addApproval(queue);
-    queue.approve(id);
+    const id = await addApproval(queue);
+    await queue.approve(id);
     const executionAdapter = {
       async execute() {
         throw new Error('sensitive stack and provider message');
@@ -223,7 +232,7 @@ test('converts an unexpected adapter exception to a non-sensitive persisted fail
     const result = await service.executeApproved(id);
 
     assert.deepEqual(result.error, { code: 'execution_provider_error', retryable: false });
-    assert.equal(queue.getHistory().find((item) => item.id === id).status, 'execution_failed');
+    assert.equal((await queue.getHistory()).find((item) => item.id === id).status, 'execution_failed');
     assert.equal(JSON.stringify(result).includes('sensitive'), false);
     assert.equal(JSON.stringify(result).includes('stack'), false);
   });
@@ -231,11 +240,11 @@ test('converts an unexpected adapter exception to a non-sensitive persisted fail
 
 test('pending, rejected, and already executed approvals never invoke Gmail again', async () => {
   await withTemporaryQueue(async (queue) => {
-    const pendingId = addApproval(queue, 'email_draft', 'pending');
-    const rejectedId = addApproval(queue, 'email_draft', 'rejected');
-    const executedId = addApproval(queue, 'email_draft', 'executed');
-    queue.reject(rejectedId);
-    queue.approve(executedId);
+    const pendingId = await addApproval(queue, 'email_draft', 'pending');
+    const rejectedId = await addApproval(queue, 'email_draft', 'rejected');
+    const executedId = await addApproval(queue, 'email_draft', 'executed');
+    await queue.reject(rejectedId);
+    await queue.approve(executedId);
     const { service, calls } = buildSystem(queue);
     const firstExecution = await service.executeApproved(executedId);
     assert.equal(firstExecution.ok, true);
@@ -251,11 +260,11 @@ test('pending, rejected, and already executed approvals never invoke Gmail again
   });
 });
 
-test('tampered payload and legacy record without payload are rejected before Gmail', async () => {
-  await withTemporaryQueue(async (queue) => {
-    const id = addApproval(queue);
-    queue.approve(id);
-    queue.history.find((item) => item.id === id).executionPayload.body = 'tampered';
+test('tampered payload and an approval without payload are rejected before Gmail', async () => {
+  await withTemporaryQueue(async (queue, dataFile) => {
+    const id = await addApproval(queue);
+    await queue.approve(id);
+    tamperExecutionPayloadOnDisk(dataFile, id, { body: 'tampered' });
     const { service, calls } = buildSystem(queue);
     const result = await service.executeApproved(id);
 
@@ -264,29 +273,24 @@ test('tampered payload and legacy record without payload are rejected before Gma
     assertSafe(result);
   });
 
+  // FASE A2: sustituye el fichero V1 legado por el flujo real add() sin
+  // executionPayload — mismo desenlace (execution_payload_unavailable).
   await withTemporaryQueue(async (queue) => {
+    const added = await queue.add({ type: 'email_draft', summary: 'Legacy', requiresApproval: true }, { interactionId: 'legacy-interaction' });
+    await queue.approve(added.id);
     const { service, calls } = buildSystem(queue);
-    const result = await service.executeApproved('legacy-approved');
+    const result = await service.executeApproved(added.id);
 
     assert.equal(result.error.code, 'execution_payload_unavailable');
     assert.equal(calls.length, 0);
     assertSafe(result);
-  }, {
-    pending: [],
-    history: [{
-      id: 'legacy-approved',
-      status: 'approved',
-      interactionId: 'legacy-interaction',
-      proposal: { type: 'email_draft', summary: 'Legacy' },
-      context: {},
-    }],
   });
 });
 
 test('two sequential executeApproved calls cause at most one fake Gmail call', async () => {
   await withTemporaryQueue(async (queue) => {
-    const id = addApproval(queue);
-    queue.approve(id);
+    const id = await addApproval(queue);
+    await queue.approve(id);
     const { service, calls } = buildSystem(queue);
 
     const first = await service.executeApproved(id);
@@ -300,8 +304,8 @@ test('two sequential executeApproved calls cause at most one fake Gmail call', a
 
 test('one safe retry after pre-Gmail OAuth failure creates one draft and then blocks duplicates', async () => {
   await withTemporaryQueue(async (queue) => {
-    const id = addApproval(queue);
-    queue.approve(id);
+    const id = await addApproval(queue);
+    await queue.approve(id);
     let calls = 0;
     const executionAdapter = {
       async execute() {
@@ -322,7 +326,7 @@ test('one safe retry after pre-Gmail OAuth failure creates one draft and then bl
     const failed = await service.executeApproved(id);
     const retried = await service.executeApproved(id);
     const duplicate = await service.executeApproved(id);
-    const stored = queue.getInternalById(id);
+    const stored = await queue.getInternalById(id);
 
     assert.equal(failed.status, 'execution_failed');
     assert.deepEqual(failed.error, { code: 'oauth_unavailable', retryable: true });
@@ -338,8 +342,8 @@ test('one safe retry after pre-Gmail OAuth failure creates one draft and then bl
 
 test('uncertain provider failure requires review and is never retried automatically', async () => {
   await withTemporaryQueue(async (queue) => {
-    const id = addApproval(queue);
-    queue.approve(id);
+    const id = await addApproval(queue);
+    await queue.approve(id);
     let calls = 0;
     const executionAdapter = {
       async execute() {
@@ -357,23 +361,23 @@ test('uncertain provider failure requires review and is never retried automatica
     assert.equal(blocked.status, 'execution_rejected');
     assert.equal(blocked.error.code, 'execution_not_retryable');
     assert.equal(calls, 1);
-    assert.equal(queue.getInternalById(id).status, 'execution_failed');
-    assert.equal(queue.getInternalById(id).result, undefined);
+    assert.equal((await queue.getInternalById(id)).status, 'execution_failed');
+    assert.equal((await queue.getInternalById(id)).result, null);
   });
 });
 
 test('meeting and task become disconnected failures without touching fake Gmail', async () => {
   for (const type of ['meeting_proposal', 'task_proposal']) {
     await withTemporaryQueue(async (queue) => {
-      const id = addApproval(queue, type);
-      queue.approve(id);
+      const id = await addApproval(queue, type);
+      await queue.approve(id);
       const { service, calls } = buildSystem(queue);
 
       const result = await service.executeApproved(id);
 
       assert.equal(result.status, 'execution_failed');
       assert.deepEqual(result.error, { code: 'execution_not_connected', retryable: false });
-      assert.equal(queue.getHistory().find((item) => item.id === id).status, 'execution_failed');
+      assert.equal((await queue.getHistory()).find((item) => item.id === id).status, 'execution_failed');
       assert.equal(calls.length, 0);
       assertSafe(result);
     });

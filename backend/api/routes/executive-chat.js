@@ -318,7 +318,7 @@ async function handleExecutiveChatRequest(req, res, options) {
       skipCalendar: isSupervisedCalendarReview,
       selectedContext,
     });
-    const payload = sanitizeExecutivePayload(orchestrator(query, orchestratorOptions));
+    const payload = sanitizeExecutivePayload(await orchestrator(query, orchestratorOptions));
     const planner = dependencies.planOperations || planOperations;
     const recommendation = emailActionRequest
       ? null

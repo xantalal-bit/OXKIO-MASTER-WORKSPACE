@@ -113,7 +113,7 @@ test('sandbox informational queries write only temporary memory', async () => {
     }
 
     assert.equal(runtime.memory.getRecentMemory().length, 3);
-    assert.equal(runtime.approvalQueue.listPending().length, 0);
+    assert.equal((await runtime.approvalQueue.listPending()).length, 0);
   } finally {
     runtime.cleanup();
   }
@@ -131,7 +131,7 @@ test('sandbox keeps email, meeting and task approvals temporary and correlated',
 
     for (const [query, type] of cases) {
       const result = await executeQuery(runtime, query);
-      const pending = runtime.approvalQueue.listPending().at(-1);
+      const pending = (await runtime.approvalQueue.listPending()).at(-1);
       const memoryEntry = runtime.memory.getRecentMemory().at(-1).data;
 
       assert.equal(result.proposal.type, type);

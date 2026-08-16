@@ -52,23 +52,23 @@ class UniversalKnowledgeSupervisor {
       rejections: [],
     };
 
-    candidates.forEach((candidate) => {
+    for (const candidate of candidates) {
       const quality = this.qualityEvaluator(candidate, this.sourceConfig);
 
       if (!quality.approved) {
         result.rejected += 1;
         result.rejections.push({ externalId: candidate.externalId, quality });
-        return;
+        continue;
       }
 
       const change = this.changeDetector.detect(candidate);
 
       if (!change.changed) {
         result.unchanged += 1;
-        return;
+        continue;
       }
 
-      const approval = this.approvalQueue.add({
+      const approval = await this.approvalQueue.add({
         type: 'knowledge_ingestion',
         action: 'ingest_github_release',
         title: `Incorporar release ${candidate.tagName || candidate.externalId} a la Biblioteca OXKIO`,
@@ -96,41 +96,58 @@ class UniversalKnowledgeSupervisor {
         title: candidate.title,
         changeType: change.changeType,
       });
-    });
+    }
 
     return result;
   }
 
-  approve(approvalId) {
-    const pending = this.approvalQueue.listPending().find((item) => item.id === approvalId);
+  // FASE A2: ya no muta `approval.item.execution` ni llama a
+  // `approvalQueue.save()` directamente (ese bypass saltaba CAS/version/
+  // status por completo). La ingesta de conocimiento se trata ahora como
+  // cualquier otra ejecución: claim -> trabajo real -> complete/fail, con el
+  // mismo begin/completeExecution/failExecution que usa execution-service.js
+  // para Gmail. El item queda en estado `executed`, visible como tal en
+  // listHistory/getHistory, en vez de quedarse indefinidamente en `approved`
+  // con una anotación invisible fuera de la serialización JSON.
+  async approve(approvalId) {
+    const pending = (await this.approvalQueue.listPending()).find((item) => item.id === approvalId);
 
     if (!pending) return { ok: false, error: 'Knowledge approval not found.' };
     if (!pending.proposal || pending.proposal.action !== 'ingest_github_release') {
       return { ok: false, error: 'Approval is not a GitHub Release knowledge proposal.' };
     }
 
-    const approval = this.approvalQueue.approve(approvalId);
-
+    const approval = await this.approvalQueue.approve(approvalId);
     if (!approval.ok) return approval;
 
     const candidate = approval.item.context.candidate;
-    const pipeline = this.processDocument(candidateToDocument(candidate), {
-      persist: true,
-      allowUpdate: true,
-    });
 
-    if (!pipeline.supported || !pipeline.persistence) {
-      throw new Error('Approved GitHub Release could not enter the Knowledge Engine.');
+    const claim = await this.approvalQueue.beginExecution(approvalId);
+    if (!claim.ok) {
+      return { ok: false, error: 'Approved GitHub Release could not begin ingestion.', code: claim.code };
     }
 
-    const execution = {
-      ingested: true,
-      knowledgeObjectId: pipeline.persistence.id,
-      persistence: pipeline.persistence,
-      completedAt: new Date().toISOString(),
-    };
-    approval.item.execution = execution;
-    this.approvalQueue.save();
+    let pipeline;
+    try {
+      pipeline = this.processDocument(candidateToDocument(candidate), {
+        persist: true,
+        allowUpdate: true,
+      });
+      if (!pipeline.supported || !pipeline.persistence) {
+        throw new Error('Approved GitHub Release could not enter the Knowledge Engine.');
+      }
+    } catch (error) {
+      await this.approvalQueue.failExecution(approvalId, {
+        executionId: claim.executionId,
+        error: { code: 'knowledge_ingestion_failed', retryable: false },
+      });
+      throw error;
+    }
+
+    const completion = await this.approvalQueue.completeExecution(approvalId, {
+      executionId: claim.executionId,
+      result: { type: 'knowledge_ingestion', externalId: pipeline.persistence.id },
+    });
     this.changeDetector.record(candidate, 'ingested', {
       approvalId,
       knowledgeObjectId: pipeline.persistence.id,
@@ -139,7 +156,7 @@ class UniversalKnowledgeSupervisor {
     return {
       ok: true,
       action: 'approved-and-ingested',
-      approval: approval.item,
+      approval: completion.ok ? completion : approval.item,
       knowledgeObject: pipeline.knowledgeObject,
       persistence: pipeline.persistence,
     };

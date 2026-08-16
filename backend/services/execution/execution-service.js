@@ -26,11 +26,11 @@ class ExecutionService {
 
     const storedApproval = this.approvalQueue
       && typeof this.approvalQueue.getInternalById === 'function'
-      ? this.approvalQueue.getInternalById(approvalId)
+      ? await this.approvalQueue.getInternalById(approvalId)
       : null;
     const beginResult = storedApproval && storedApproval.status === 'execution_failed'
-      ? this.approvalQueue.retryExecution(approvalId)
-      : this.approvalQueue.beginExecution(approvalId);
+      ? await this.approvalQueue.retryExecution(approvalId)
+      : await this.approvalQueue.beginExecution(approvalId);
     if (!beginResult || beginResult.ok !== true) {
       return {
         ok: false,
@@ -61,7 +61,7 @@ class ExecutionService {
         code: 'execution_provider_error',
         retryable: false,
       };
-      this.approvalQueue.failExecution(approvalId, {
+      await this.approvalQueue.failExecution(approvalId, {
         executionId: beginResult.executionId,
         error: safeError,
       });
@@ -73,7 +73,7 @@ class ExecutionService {
         code: safeCode(result && result.code, 'execution_failed'),
         retryable: Boolean(result && result.retryable),
       };
-      this.approvalQueue.failExecution(approvalId, {
+      await this.approvalQueue.failExecution(approvalId, {
         executionId: beginResult.executionId,
         error: safeError,
       });
@@ -83,7 +83,7 @@ class ExecutionService {
     const type = beginResult.actionType === 'propose_email'
       ? 'email_draft'
       : beginResult.actionType;
-    const completion = this.approvalQueue.completeExecution(approvalId, {
+    const completion = await this.approvalQueue.completeExecution(approvalId, {
       executionId: beginResult.executionId,
       result: {
         type,

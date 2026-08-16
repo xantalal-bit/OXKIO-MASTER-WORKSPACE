@@ -665,7 +665,7 @@ function buildSafeApprovalMetadata(approvalItem) {
   };
 }
 
-function enqueueApprovalSafely(
+async function enqueueApprovalSafely(
   approvalQueue,
   proposalBundle,
   query,
@@ -702,7 +702,7 @@ function enqueueApprovalSafely(
       && typeof approvalQueue.addPreparedEmailDraft === 'function';
     if (usesPreparedDraft && !proposalBundle.executionPayload) return null;
     const approvalItem = usesPreparedDraft
-      ? approvalQueue.addPreparedEmailDraft({
+      ? await approvalQueue.addPreparedEmailDraft({
         recipient: proposalBundle.executionPayload.to,
         subject: proposalBundle.executionPayload.subject,
         body: proposalBundle.executionPayload.body,
@@ -710,7 +710,7 @@ function enqueueApprovalSafely(
         threadId: proposalBundle.executionPayload.threadId,
         risk: analysis && analysis.priority === 'high' ? 'medium' : 'low',
       }, context)
-      : approvalQueue.add(
+      : await approvalQueue.add(
         proposalBundle.publicProposal,
         context,
         proposalBundle.executionPayload,
@@ -768,7 +768,7 @@ function writeMemorySafely(memory, entry, diagnostics) {
   }
 }
 
-function orchestrateExecutiveQuery(query, options) {
+async function orchestrateExecutiveQuery(query, options) {
   const interactionId = randomUUID();
   const dependencies = options && options.dependencies ? options.dependencies : {};
   const diagnostics = options && options.diagnostics && typeof options.diagnostics === 'object'
@@ -848,7 +848,7 @@ function orchestrateExecutiveQuery(query, options) {
   );
   const proposal = proposalBundle ? proposalBundle.publicProposal : null;
   const privateContextUsed = authorizedPrivateContexts.length > 0 || Boolean(contextualDataSummary);
-  const approval = enqueueApprovalSafely(
+  const approval = await enqueueApprovalSafely(
     approvalQueue,
     proposalBundle,
     query,

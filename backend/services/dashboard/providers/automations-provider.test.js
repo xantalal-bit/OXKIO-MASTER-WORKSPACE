@@ -31,8 +31,8 @@ function record(id, status, date, proposal = {}) {
   };
 }
 
-test('counts every public Approval Queue state and maps execution_failed to failed', () => {
-  const result = getAutomations('ignored', queueWith(
+test('counts every public Approval Queue state and maps execution_failed to failed', async () => {
+  const result = await getAutomations('ignored', queueWith(
     [record('1', 'pending', '2026-01-01T00:00:00.000Z')],
     [
       record('2', 'approved', '2026-01-02T00:00:00.000Z'),
@@ -60,18 +60,18 @@ test('counts every public Approval Queue state and maps execution_failed to fail
   assert.equal(result.available, true);
 });
 
-test('limits and sorts recent public records from newest to oldest', () => {
+test('limits and sorts recent public records from newest to oldest', async () => {
   const records = Array.from({ length: 8 }, (_, index) => (
     record(String(index), 'executed', `2026-01-0${index + 1}T00:00:00.000Z`)
   ));
-  const result = getAutomations(null, queueWith([], records));
+  const result = await getAutomations(null, queueWith([], records));
 
   assert.equal(result.recent.length, MAX_RECENT);
   assert.deepEqual(result.recent.map((item) => item.id), ['7', '6', '5', '4', '3']);
 });
 
-test('normalizes legacy records and applies safe fallbacks', () => {
-  const result = getAutomations(null, queueWith([], [{
+test('normalizes legacy records and applies safe fallbacks', async () => {
+  const result = await getAutomations(null, queueWith([], [{
     id: 'legacy-1',
     status: 'approved',
     createdAt: 'invalid-date',
@@ -91,7 +91,7 @@ test('normalizes legacy records and applies safe fallbacks', () => {
   assert.equal(unknown.summary, 'Compromiso ejecutivo');
 });
 
-test('fails closed when either public Approval Queue view is unavailable', () => {
+test('fails closed when either public Approval Queue view is unavailable', async () => {
   const failures = [
     null,
     { listPending() { throw new Error('private failure'); }, getHistory() { return []; } },
@@ -99,8 +99,8 @@ test('fails closed when either public Approval Queue view is unavailable', () =>
     { listPending() { return {}; }, getHistory() { return []; } },
   ];
 
-  failures.forEach((approvalQueue) => {
-    const result = getAutomations(null, approvalQueue);
+  for (const approvalQueue of failures) {
+    const result = await getAutomations(null, approvalQueue);
     assert.deepEqual(result, {
       title: 'Compromisos ejecutivos',
       pending: 0,
@@ -113,11 +113,11 @@ test('fails closed when either public Approval Queue view is unavailable', () =>
       source: 'unavailable',
       available: false,
     });
-  });
+  }
 });
 
-test('returns only whitelisted public metadata and never exposes executable fields', () => {
-  const result = getAutomations(null, queueWith(
+test('returns only whitelisted public metadata and never exposes executable fields', async () => {
+  const result = await getAutomations(null, queueWith(
     [record('safe', 'pending', '2026-01-01T00:00:00.000Z')],
     [],
   ));

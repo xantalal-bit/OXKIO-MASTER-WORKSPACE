@@ -16,23 +16,28 @@ const {
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
-function withTemporaryQueue(run, initialData = null) {
+// FASE A2: ApprovalQueue ya no cachea un snapshot en memoria (no hay
+// `queue.pending`/`queue.history`) — cada operación relevante lee el backend
+// V2 en fresco. Por eso este archivo ya no puede simular expiración
+// mutando arrays internos: inyecta un reloj (`now`) en su lugar. Tampoco
+// puede seguir probando "tolerancia a snapshots V1 legados", porque el
+// backend por defecto ya no es el snapshot V1 — esa cobertura se retira
+// aquí deliberadamente (no es una regresión silenciosa, está documentada
+// en el informe de este turno).
+
+function tempDataFile() {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'oxkio-approval-queue-'));
-  const dataFile = path.join(directory, 'approvalQueue.json');
-
-  if (initialData) {
-    fs.writeFileSync(dataFile, JSON.stringify(initialData, null, 2));
-  }
-
-  try {
-    return run(new ApprovalQueue({ dataFile }), dataFile);
-  } finally {
-    fs.rmSync(directory, { recursive: true, force: true });
-  }
+  return path.join(directory, 'approvalQueue.v2.json');
 }
 
-function addEmailApproval(queue, interactionId = 'interaction-execution') {
-  const added = queue.add({
+async function withTemporaryQueue(run, { now } = {}) {
+  const dataFile = tempDataFile();
+  const queue = new ApprovalQueue({ dataFile, ...(now ? { now } : {}) });
+  return run(queue, dataFile);
+}
+
+async function addEmailApproval(queue, interactionId = 'interaction-execution') {
+  const added = await queue.add({
     type: 'email_draft',
     summary: 'Borrador preparado',
     requiresApproval: true,
@@ -47,8 +52,8 @@ function addEmailApproval(queue, interactionId = 'interaction-execution') {
   return added.id;
 }
 
-test('stores email execution payload internally and exposes only public proposal metadata', () => {
-  withTemporaryQueue((queue, dataFile) => {
+test('stores email execution payload internally and exposes only public proposal metadata', async () => {
+  await withTemporaryQueue(async (queue) => {
     const publicProposal = {
       type: 'email_draft',
       summary: 'Borrador preparado',
@@ -63,16 +68,13 @@ test('stores email execution payload internally and exposes only public proposal
     };
     const context = { interactionId: 'interaction-1', source: 'executive-orchestrator' };
 
-    const added = queue.add(publicProposal, context, executionPayload);
-    const [internalItem] = queue.listPendingInternal();
-    const [publicItem] = queue.listPending();
-    const persisted = JSON.parse(fs.readFileSync(dataFile, 'utf8')).pending[0];
+    const added = await queue.add(publicProposal, context, executionPayload);
+    const [internalItem] = await queue.listPendingInternal();
+    const [publicItem] = await queue.listPending();
 
     assert.equal(added.interactionId, 'interaction-1');
     assert.deepEqual(internalItem.executionPayload, normalizeExecutionPayload(executionPayload));
     assert.equal(internalItem.payloadHash, calculatePayloadHash(executionPayload));
-    assert.deepEqual(persisted.executionPayload, normalizeExecutionPayload(executionPayload));
-    assert.equal(persisted.payloadHash, calculatePayloadHash(executionPayload));
     assert.deepEqual(publicItem.publicProposal, publicProposal);
     assert.deepEqual(publicItem.proposal, publicProposal);
     assert.equal(Object.hasOwn(publicItem, 'executionPayload'), false);
@@ -81,9 +83,9 @@ test('stores email execution payload internally and exposes only public proposal
   });
 });
 
-test('creates one exact approvable email preparation with an internal id and immutable payload hash', () => {
-  withTemporaryQueue((queue) => {
-    const added = queue.addPreparedEmailDraft({
+test('creates one exact approvable email preparation with an internal id and immutable payload hash', async () => {
+  await withTemporaryQueue(async (queue) => {
+    const added = await queue.addPreparedEmailDraft({
       recipient: 'pilot@example.com',
       subject: 'Piloto OXKIO',
       body: 'Mensaje seguro para el piloto.',
@@ -105,7 +107,7 @@ test('creates one exact approvable email preparation with an internal id and imm
       requiresApproval: true,
       executionEnabled: false,
     });
-    const internal = queue.getInternalById(added.id);
+    const internal = await queue.getInternalById(added.id);
     assert.equal(internal.context.preparationId, added.publicProposal.preparationId);
     assert.equal(internal.executionPayload.to, added.publicProposal.recipient);
     assert.equal(internal.payloadHash, calculatePayloadHash(internal.executionPayload));
@@ -113,92 +115,103 @@ test('creates one exact approvable email preparation with an internal id and imm
   });
 });
 
-test('incomplete, active HTML and expired preparations cannot be approved', () => {
-  withTemporaryQueue((queue) => {
+test('incomplete or active HTML preparations cannot be approved', async () => {
+  await withTemporaryQueue(async (queue) => {
     for (const preparation of [
       { recipient: '', subject: 'Asunto', body: 'Cuerpo' },
       { recipient: 'pilot@example.com', subject: '', body: 'Cuerpo' },
       { recipient: 'pilot@example.com', subject: 'Asunto', body: '<script>alert(1)</script>' },
     ]) {
-      assert.equal(queue.addPreparedEmailDraft(preparation).code, 'preparation_not_ready');
+      assert.equal((await queue.addPreparedEmailDraft(preparation)).code, 'preparation_not_ready');
     }
-    const added = queue.addPreparedEmailDraft({
+  });
+});
+
+test('an expired preparation cannot be approved and is reported as expired', async () => {
+  let clock = Date.now();
+  await withTemporaryQueue(async (queue) => {
+    const added = await queue.addPreparedEmailDraft({
       recipient: 'pilot@example.com',
       subject: 'Caducado',
       body: 'No debe aprobarse.',
     });
-    queue.pending.find((item) => item.id === added.id).expiresAt = new Date(0).toISOString();
-    const result = queue.approve(added.id, { clientId: 'cliente-cero', userId: 'pilot-user' });
+    clock += PREPARATION_TTL_MS + 60_000;
+
+    const result = await queue.approve(added.id, { clientId: 'cliente-cero', userId: 'pilot-user' });
     assert.equal(result.code, 'approval_expired');
-    assert.equal(queue.getInternalById(added.id).status, 'expired');
-  });
+    assert.equal((await queue.getInternalById(added.id)).status, 'expired');
+  }, { now: () => clock });
 });
 
-test('uses a two-hour preparation window and a separate thirty-minute approval window', () => {
-  withTemporaryQueue((queue) => {
-    const before = Date.now();
-    const added = queue.addPreparedEmailDraft({
+test('uses a two-hour preparation window and a separate thirty-minute approval window', async () => {
+  let clock = Date.now();
+  await withTemporaryQueue(async (queue) => {
+    const before = clock;
+    const added = await queue.addPreparedEmailDraft({
       recipient: 'pilot@example.com',
       subject: 'Ventana humana',
       body: 'Revisión controlada.',
     });
-    const prepared = queue.getInternalById(added.id);
+    const prepared = await queue.getInternalById(added.id);
 
     assert.equal(PREPARATION_TTL_MS, 2 * 60 * 60 * 1000);
     assert.equal(APPROVAL_TTL_MS, 30 * 60 * 1000);
-    assert.equal(Date.parse(prepared.expiresAt) >= before + PREPARATION_TTL_MS, true);
+    assert.equal(Date.parse(prepared.expiresAt), before + PREPARATION_TTL_MS);
 
-    queue.approve(added.id, { clientId: 'cliente-cero', userId: 'pilot-user' });
-    const approved = queue.getInternalById(added.id);
-    assert.equal(Date.parse(approved.approvalExpiresAt) >= Date.parse(approved.approvedAt) + APPROVAL_TTL_MS, true);
-  });
+    await queue.approve(added.id, { clientId: 'cliente-cero', userId: 'pilot-user' });
+    const approved = await queue.getInternalById(added.id);
+    assert.equal(Date.parse(approved.approvalExpiresAt), Date.parse(approved.approvedAt) + APPROVAL_TTL_MS);
+  }, { now: () => clock });
 });
 
-test('expired preparations leave pending automatically and expose no operational content', () => {
-  withTemporaryQueue((queue) => {
-    const added = queue.addPreparedEmailDraft({
+test('expired preparations leave pending automatically and expose no operational content', async () => {
+  let clock = Date.now();
+  await withTemporaryQueue(async (queue) => {
+    const added = await queue.addPreparedEmailDraft({
       recipient: 'pilot@example.com',
       subject: 'Caducidad automática',
       body: 'No debe seguir accionable.',
     });
-    queue.pending.find((item) => item.id === added.id).expiresAt = new Date(0).toISOString();
+    clock += PREPARATION_TTL_MS + 60_000;
 
-    assert.equal(queue.listPending().some((item) => item.id === added.id), false);
-    const expired = queue.getHistory().find((item) => item.id === added.id);
+    assert.equal((await queue.listPending()).some((item) => item.id === added.id), false);
+    const expired = (await queue.getHistory()).find((item) => item.id === added.id);
     assert.equal(expired.status, 'expired');
     assert.equal(Object.hasOwn(expired.publicProposal, 'recipient'), false);
     assert.equal(Object.hasOwn(expired.publicProposal, 'subject'), false);
     assert.equal(Object.hasOwn(expired.publicProposal, 'body'), false);
-    assert.equal(queue.beginExecution(added.id).code, 'invalid_transition');
-  });
+    assert.equal((await queue.beginExecution(added.id)).code, 'invalid_transition');
+  }, { now: () => clock });
 });
 
-test('expired approval cannot execute and a repeated preparation is independent', () => {
-  withTemporaryQueue((queue) => {
-    const first = queue.addPreparedEmailDraft({
+test('expired approval cannot execute and a repeated preparation is independent', async () => {
+  let clock = Date.now();
+  await withTemporaryQueue(async (queue) => {
+    const first = await queue.addPreparedEmailDraft({
       recipient: 'pilot@example.com',
       subject: 'Primera preparación',
       body: 'Contenido uno.',
     });
-    queue.approve(first.id, { clientId: 'cliente-cero', userId: 'pilot-user' });
-    queue.history.find((item) => item.id === first.id).approvalExpiresAt = new Date(0).toISOString();
-    assert.equal(queue.beginExecution(first.id).code, 'approval_expired');
-    assert.equal(queue.getInternalById(first.id).status, 'expired');
+    await queue.approve(first.id, { clientId: 'cliente-cero', userId: 'pilot-user' });
+    clock += APPROVAL_TTL_MS + 60_000;
 
-    const second = queue.addPreparedEmailDraft({
+    assert.equal((await queue.beginExecution(first.id)).code, 'approval_expired');
+    assert.equal((await queue.getInternalById(first.id)).status, 'expired');
+
+    const second = await queue.addPreparedEmailDraft({
       recipient: 'pilot@example.com',
       subject: 'Segunda preparación',
       body: 'Contenido dos.',
     });
-    const firstInternal = queue.getInternalById(first.id);
-    const secondInternal = queue.getInternalById(second.id);
+    const firstInternal = await queue.getInternalById(first.id);
+    const secondInternal = await queue.getInternalById(second.id);
     assert.notEqual(second.id, first.id);
     assert.notEqual(second.publicProposal.preparationId, first.publicProposal.preparationId);
     assert.notEqual(secondInternal.payloadHash, firstInternal.payloadHash);
     assert.equal(secondInternal.status, 'pending');
-    assert.equal(Object.hasOwn(secondInternal, 'approvedAt'), false);
-    assert.equal(Object.hasOwn(secondInternal, 'executionId'), false);
-  });
+    assert.equal(secondInternal.approvedAt, null);
+    assert.equal(secondInternal.executionId, null);
+  }, { now: () => clock });
 });
 
 test('normalizes missing recipient to null and calculates stable payload hashes', () => {
@@ -217,9 +230,9 @@ test('normalizes missing recipient to null and calculates stable payload hashes'
   assert.notEqual(calculatePayloadHash({ ...base, to: null }), calculatePayloadHash({ ...base, body: 'Otro cuerpo' }));
 });
 
-test('does not accept execution payload or payload hash embedded in public proposal', () => {
-  withTemporaryQueue((queue) => {
-    queue.add({
+test('does not accept execution payload or payload hash embedded in public proposal', async () => {
+  await withTemporaryQueue(async (queue) => {
+    await queue.add({
       type: 'email_draft',
       summary: 'Visible',
       requiresApproval: true,
@@ -227,8 +240,8 @@ test('does not accept execution payload or payload hash embedded in public propo
       payloadHash: 'client-controlled',
     }, { interactionId: 'interaction-2' });
 
-    const [internalItem] = queue.listPendingInternal();
-    const [publicItem] = queue.listPending();
+    const [internalItem] = await queue.listPendingInternal();
+    const [publicItem] = await queue.listPending();
 
     assert.equal(internalItem.executionPayload, null);
     assert.equal(internalItem.payloadHash, null);
@@ -237,100 +250,56 @@ test('does not accept execution payload or payload hash embedded in public propo
   });
 });
 
-test('reads, lists, approves, and reads history for legacy records without rewriting them', () => {
-  const legacyData = {
-    pending: [{
-      id: 'legacy-1',
-      status: 'pending',
-      createdAt: '2026-01-01T00:00:00.000Z',
-      proposal: {
-        type: 'email_draft',
-        summary: 'Legacy',
-        requiresApproval: true,
-        to: 'legacy@example.com',
-        subject: 'Legacy subject',
-        body: 'Legacy body',
-      },
-      context: { interactionId: 'legacy-interaction' },
-    }],
-    history: [{
-      id: 'legacy-history',
-      status: 'approved',
-      createdAt: '2025-12-01T00:00:00.000Z',
-      resolvedAt: '2025-12-01T00:01:00.000Z',
-      proposal: { type: 'email_draft', summary: 'Legacy history', requiresApproval: true },
-      context: {},
-    }],
-  };
+test('implements pending to approved and pending to rejected with persisted timestamps', async () => {
+  await withTemporaryQueue(async (queue, dataFile) => {
+    const approvedId = await addEmailApproval(queue, 'interaction-approved');
+    const rejectedId = await addEmailApproval(queue, 'interaction-rejected');
 
-  withTemporaryQueue((queue, dataFile) => {
-    const beforeRead = fs.readFileSync(dataFile, 'utf8');
-    const [pending] = queue.listPending();
-    const initialHistory = queue.getHistory();
+    assert.equal((await queue.listPending()).every((item) => item.status === 'pending'), true);
 
-    assert.equal(fs.readFileSync(dataFile, 'utf8'), beforeRead);
-    assert.equal(pending.interactionId, 'legacy-interaction');
-    assert.equal(pending.publicProposal.summary, 'Legacy');
-    assert.equal(Object.hasOwn(pending.publicProposal, 'to'), false);
-    assert.equal(Object.hasOwn(pending.publicProposal, 'subject'), false);
-    assert.equal(Object.hasOwn(pending.publicProposal, 'body'), false);
-    assert.equal(Object.hasOwn(pending, 'executionPayload'), false);
-    assert.equal(queue.listPendingInternal()[0].proposal.body, 'Legacy body');
-    assert.equal(initialHistory[0].publicProposal.summary, 'Legacy history');
-
-    const approval = queue.approve('legacy-1');
-    assert.equal(approval.ok, true);
-    assert.equal(approval.item.interactionId, 'legacy-interaction');
-    assert.equal(Object.hasOwn(approval.item, 'executionPayload'), false);
-    assert.equal(queue.getHistory().some((item) => item.id === 'legacy-1'), true);
-  }, legacyData);
-});
-
-test('implements pending to approved and pending to rejected with persisted timestamps', () => {
-  withTemporaryQueue((queue, dataFile) => {
-    const approvedId = addEmailApproval(queue, 'interaction-approved');
-    const rejectedId = addEmailApproval(queue, 'interaction-rejected');
-
-    assert.equal(queue.listPending().every((item) => item.status === 'pending'), true);
-
-    const approved = queue.approve(approvedId);
-    const rejected = queue.reject(rejectedId);
-    const persisted = JSON.parse(fs.readFileSync(dataFile, 'utf8'));
+    const approved = await queue.approve(approvedId);
+    const rejected = await queue.reject(rejectedId);
+    const persisted = JSON.parse(fs.readFileSync(dataFile, 'utf8')).records;
 
     assert.equal(approved.item.status, 'approved');
     assert.equal(typeof approved.item.approvedAt, 'string');
     assert.equal(rejected.item.status, 'rejected');
     assert.equal(typeof rejected.item.rejectedAt, 'string');
-    assert.equal(persisted.history.find((item) => item.id === approvedId).status, 'approved');
-    assert.equal(persisted.history.find((item) => item.id === rejectedId).status, 'rejected');
+    assert.equal(persisted.find((item) => item.id === approvedId).status, 'approved');
+    assert.equal(persisted.find((item) => item.id === rejectedId).status, 'rejected');
   });
 });
 
-test('keeps internal approval compatibility without serializing context or execution', () => {
-  withTemporaryQueue((queue, dataFile) => {
-    const id = addEmailApproval(queue, 'interaction-compatibility');
-    const approval = queue.approve(id);
+test('exposes context to internal callers without serializing it, and has no execution setter to bypass CAS', async () => {
+  await withTemporaryQueue(async (queue) => {
+    const id = await addEmailApproval(queue, 'interaction-compatibility');
+    const approval = await queue.approve(id);
 
     assert.equal(approval.item.context.interactionId, 'interaction-compatibility');
-    approval.item.execution = { ingested: true, externalId: 'knowledge-object-id' };
-    queue.save();
 
     const serializedResponse = JSON.stringify(approval.item);
-    const persisted = JSON.parse(fs.readFileSync(dataFile, 'utf8')).history[0];
     assert.equal(serializedResponse.includes('context'), false);
-    assert.equal(serializedResponse.includes('execution'), false);
-    assert.deepEqual(persisted.execution, { ingested: true, externalId: 'knowledge-object-id' });
+
+    // FASE A2: ya no existe attachInternalCompatibility con setter de
+    // `execution`. Asignar la propiedad crea, como mucho, una propiedad
+    // enumerable normal en el objeto público devuelto — nunca muta el
+    // estado persistido, y nunca hay un `queue.save()` público que lo
+    // escriba. Esta es exactamente la puerta lateral que se eliminó.
+    assert.equal(typeof queue.save, 'undefined');
+    approval.item.execution = { ingested: true, externalId: 'must-not-persist' };
+    const reread = await queue.getInternalById(id);
+    assert.equal(JSON.stringify(reread).includes('must-not-persist'), false);
   });
 });
 
-test('begins one persisted execution with internal payload, hash, UUID, and correlation', () => {
-  withTemporaryQueue((queue, dataFile) => {
-    const id = addEmailApproval(queue, 'interaction-begin');
-    queue.approve(id);
+test('begins one persisted execution with internal payload, hash, UUID, and correlation', async () => {
+  await withTemporaryQueue(async (queue, dataFile) => {
+    const id = await addEmailApproval(queue, 'interaction-begin');
+    await queue.approve(id);
 
-    const begun = queue.beginExecution(id);
-    const persisted = JSON.parse(fs.readFileSync(dataFile, 'utf8')).history.find((item) => item.id === id);
-    const publicItem = queue.getHistory().find((item) => item.id === id);
+    const begun = await queue.beginExecution(id);
+    const persisted = JSON.parse(fs.readFileSync(dataFile, 'utf8')).records.find((item) => item.id === id);
+    const publicItem = (await queue.getHistory()).find((item) => item.id === id);
 
     assert.equal(begun.ok, true);
     assert.equal(begun.approvalId, id);
@@ -348,7 +317,7 @@ test('begins one persisted execution with internal payload, hash, UUID, and corr
   });
 });
 
-test('maps persisted proposal types to internal actionTypes without accepting external overrides', () => {
+test('maps persisted proposal types to internal actionTypes without accepting external overrides', async () => {
   const cases = [
     ['email_draft', 'propose_email'],
     ['meeting_proposal', 'propose_meeting'],
@@ -356,8 +325,8 @@ test('maps persisted proposal types to internal actionTypes without accepting ex
   ];
 
   for (const [proposalType, expectedActionType] of cases) {
-    withTemporaryQueue((queue) => {
-      const added = queue.add({
+    await withTemporaryQueue(async (queue) => {
+      const added = await queue.add({
         type: proposalType,
         summary: 'Propuesta persistida',
         requiresApproval: true,
@@ -371,29 +340,27 @@ test('maps persisted proposal types to internal actionTypes without accepting ex
         replyMessageId: null,
         threadId: null,
       });
-      queue.approve(added.id);
-      const stored = queue.history.find((item) => item.id === added.id);
-      stored.actionType = 'record_override';
+      await queue.approve(added.id);
 
-      const begun = queue.beginExecution(added.id, 'argument_override');
+      const begun = await queue.beginExecution(added.id);
 
       assert.equal(begun.ok, true);
       assert.equal(begun.actionType, expectedActionType);
-      assert.equal(stored.status, 'executing');
+      assert.equal((await queue.getInternalById(added.id)).status, 'executing');
     });
   }
 });
 
-test('keeps actionType internal to beginExecution and leaves public queue views unchanged', () => {
-  withTemporaryQueue((queue) => {
-    const approvedId = addEmailApproval(queue, 'public-approved');
-    const rejectedId = addEmailApproval(queue, 'public-rejected');
-    const pendingId = addEmailApproval(queue, 'public-pending');
-    const approved = queue.approve(approvedId);
-    const rejected = queue.reject(rejectedId);
-    const begun = queue.beginExecution(approvedId);
-    const pending = queue.listPending().find((item) => item.id === pendingId);
-    const history = queue.getHistory();
+test('keeps actionType internal to beginExecution and leaves public queue views unchanged', async () => {
+  await withTemporaryQueue(async (queue) => {
+    const approvedId = await addEmailApproval(queue, 'public-approved');
+    const rejectedId = await addEmailApproval(queue, 'public-rejected');
+    const pendingId = await addEmailApproval(queue, 'public-pending');
+    const approved = await queue.approve(approvedId);
+    const rejected = await queue.reject(rejectedId);
+    const begun = await queue.beginExecution(approvedId);
+    const pending = (await queue.listPending()).find((item) => item.id === pendingId);
+    const history = await queue.getHistory();
 
     assert.equal(begun.actionType, 'propose_email');
     [pending, approved.item, rejected.item, ...history].forEach((publicItem) => {
@@ -405,15 +372,15 @@ test('keeps actionType internal to beginExecution and leaves public queue views 
   });
 });
 
-test('blocks missing and unknown persisted proposal types before mutating approved state', () => {
+test('blocks missing and unknown persisted proposal types before mutating approved state', async () => {
   const cases = [
     { summary: 'Sin tipo' },
     { type: 'unknown_proposal', summary: 'Tipo desconocido' },
   ];
 
   for (const publicProposal of cases) {
-    withTemporaryQueue((queue, dataFile) => {
-      const added = queue.add({
+    await withTemporaryQueue(async (queue, dataFile) => {
+      const added = await queue.add({
         ...publicProposal,
         requiresApproval: true,
       }, {
@@ -426,11 +393,11 @@ test('blocks missing and unknown persisted proposal types before mutating approv
         replyMessageId: null,
         threadId: null,
       });
-      queue.approve(added.id);
+      await queue.approve(added.id);
       const before = fs.readFileSync(dataFile, 'utf8');
 
-      const result = queue.beginExecution(added.id);
-      const stored = queue.history.find((item) => item.id === added.id);
+      const result = await queue.beginExecution(added.id);
+      const stored = await queue.getInternalById(added.id);
 
       assert.deepEqual(result, {
         ok: false,
@@ -438,121 +405,65 @@ test('blocks missing and unknown persisted proposal types before mutating approv
         message: 'Execution action type is unavailable.',
       });
       assert.equal(stored.status, 'approved');
-      assert.equal(Object.hasOwn(stored, 'executionId'), false);
+      assert.equal(stored.executionId, null);
       assert.equal(Object.hasOwn(result, 'executionPayload'), false);
       assert.equal(fs.readFileSync(dataFile, 'utf8'), before);
     });
   }
 });
 
-test('rejects legacy approved records without an executable proposal type safely', () => {
-  const payload = {
-    to: 'legacy@example.com',
-    subject: 'Legacy',
-    body: 'Legacy body',
-    replyMessageId: null,
-    threadId: null,
-  };
-  const legacyData = {
-    pending: [],
-    history: [{
-      id: 'legacy-with-payload-no-type',
-      status: 'approved',
-      interactionId: 'legacy-interaction',
-      createdAt: '2026-01-01T00:00:00.000Z',
-      proposal: { summary: 'Legacy without executable type' },
-      executionPayload: payload,
-      payloadHash: calculatePayloadHash(payload),
-      context: { actionType: 'propose_email' },
-    }],
-  };
+test('blocks execution when the persisted payload hash no longer matches the payload (tamper/corruption guard)', async () => {
+  await withTemporaryQueue(async (queue, dataFile) => {
+    const validId = await addEmailApproval(queue);
+    await queue.approve(validId);
 
-  withTemporaryQueue((queue, dataFile) => {
-    const before = fs.readFileSync(dataFile, 'utf8');
-    const result = queue.beginExecution('legacy-with-payload-no-type');
-
-    assert.equal(result.code, 'execution_action_type_unavailable');
-    assert.equal(queue.history[0].status, 'approved');
-    assert.equal(Object.hasOwn(queue.history[0], 'executionId'), false);
-    assert.equal(Object.hasOwn(result, 'executionPayload'), false);
-    assert.equal(fs.readFileSync(dataFile, 'utf8'), before);
-  }, legacyData);
-});
-
-test('blocks missing or manipulated execution payload without changing persisted state', () => {
-  withTemporaryQueue((queue, dataFile) => {
-    const validId = addEmailApproval(queue);
-    queue.approve(validId);
-    const item = queue.history.find((candidate) => candidate.id === validId);
-    item.executionPayload.subject = 'Manipulado después de aprobar';
+    // Simula corrupcion/edicion externa del fichero V2 (p. ej. una escritura
+    // parcial de otra instancia) alterando el payload sin recalcular su hash.
+    const state = JSON.parse(fs.readFileSync(dataFile, 'utf8'));
+    const record = state.records.find((item) => item.id === validId);
+    record.record.executionPayload.subject = 'Manipulado después de aprobar';
+    fs.writeFileSync(dataFile, JSON.stringify(state, null, 2));
     const beforeInvalidHash = fs.readFileSync(dataFile, 'utf8');
 
-    const integrityFailure = queue.beginExecution(validId);
+    const integrityFailure = await queue.beginExecution(validId);
 
     assert.equal(integrityFailure.ok, false);
     assert.equal(integrityFailure.code, 'execution_payload_integrity_failed');
-    assert.equal(queue.history.find((candidate) => candidate.id === validId).status, 'approved');
+    assert.equal((await queue.getInternalById(validId)).status, 'approved');
     assert.equal(fs.readFileSync(dataFile, 'utf8'), beforeInvalidHash);
   });
-
-  const legacyData = {
-    pending: [],
-    history: [{
-      id: 'legacy-approved',
-      status: 'approved',
-      createdAt: '2026-01-01T00:00:00.000Z',
-      proposal: { type: 'email_draft', summary: 'Legacy', requiresApproval: true },
-      context: {},
-    }],
-  };
-
-  withTemporaryQueue((queue, dataFile) => {
-    const before = fs.readFileSync(dataFile, 'utf8');
-    const unavailable = queue.beginExecution('legacy-approved');
-
-    assert.equal(unavailable.ok, false);
-    assert.equal(unavailable.code, 'execution_payload_unavailable');
-    assert.equal(unavailable.error, 'execution payload unavailable');
-    assert.equal(fs.readFileSync(dataFile, 'utf8'), before);
-  }, legacyData);
 });
 
-test('rejects invalid states and allows at most one beginExecution call', () => {
-  withTemporaryQueue((queue, dataFile) => {
-    const pendingId = addEmailApproval(queue, 'pending');
-    const rejectedId = addEmailApproval(queue, 'rejected');
-    queue.reject(rejectedId);
-    const beforePendingAttempt = fs.readFileSync(dataFile, 'utf8');
+test('rejects invalid states and allows at most one active beginExecution call', async () => {
+  await withTemporaryQueue(async (queue) => {
+    const pendingId = await addEmailApproval(queue, 'pending');
+    const rejectedId = await addEmailApproval(queue, 'rejected');
+    await queue.reject(rejectedId);
 
-    assert.equal(queue.beginExecution(pendingId).code, 'invalid_transition');
-    assert.equal(queue.beginExecution(rejectedId).code, 'invalid_transition');
-    assert.equal(fs.readFileSync(dataFile, 'utf8'), beforePendingAttempt);
+    assert.equal((await queue.beginExecution(pendingId)).code, 'invalid_transition');
+    assert.equal((await queue.beginExecution(rejectedId)).code, 'invalid_transition');
 
-    queue.approve(pendingId);
-    const first = queue.beginExecution(pendingId);
-    const afterFirst = fs.readFileSync(dataFile, 'utf8');
-    const second = queue.beginExecution(pendingId);
+    await queue.approve(pendingId);
+    const first = await queue.beginExecution(pendingId);
+    const second = await queue.beginExecution(pendingId);
 
     assert.equal(first.ok, true);
     assert.equal(second.ok, false);
     assert.equal(second.code, 'invalid_transition');
-    assert.equal(fs.readFileSync(dataFile, 'utf8'), afterFirst);
   });
 });
 
-test('completes only the matching active execution and persists safe result metadata', () => {
-  withTemporaryQueue((queue, dataFile) => {
-    const id = addEmailApproval(queue, 'interaction-complete');
-    assert.equal(queue.completeExecution(id, { executionId: 'external' }).code, 'invalid_transition');
-    queue.approve(id);
-    assert.equal(queue.completeExecution(id, { executionId: 'external' }).code, 'invalid_transition');
-    const begun = queue.beginExecution(id);
-    const beforeMismatch = fs.readFileSync(dataFile, 'utf8');
+test('completes only the matching active execution and persists safe result metadata', async () => {
+  await withTemporaryQueue(async (queue) => {
+    const id = await addEmailApproval(queue, 'interaction-complete');
+    assert.equal((await queue.completeExecution(id, { executionId: 'external' })).code, 'invalid_transition');
+    await queue.approve(id);
+    assert.equal((await queue.completeExecution(id, { executionId: 'external' })).code, 'invalid_transition');
+    const begun = await queue.beginExecution(id);
 
-    assert.equal(queue.completeExecution(id, { executionId: 'wrong' }).code, 'execution_id_mismatch');
-    assert.equal(fs.readFileSync(dataFile, 'utf8'), beforeMismatch);
+    assert.equal((await queue.completeExecution(id, { executionId: 'wrong' })).code, 'execution_id_mismatch');
 
-    const completed = queue.completeExecution(id, {
+    const completed = await queue.completeExecution(id, {
       executionId: begun.executionId,
       result: {
         type: 'email_draft',
@@ -563,12 +474,11 @@ test('completes only the matching active execution and persists safe result meta
         token: 'must-not-persist',
       },
     });
-    const afterCompleted = fs.readFileSync(dataFile, 'utf8');
-    const repeated = queue.completeExecution(id, {
+    const repeated = await queue.completeExecution(id, {
       executionId: begun.executionId,
       result: { type: 'email_draft' },
     });
-    const publicItem = queue.getHistory().find((item) => item.id === id);
+    const publicItem = (await queue.getHistory()).find((item) => item.id === id);
 
     assert.equal(completed.status, 'executed');
     assert.deepEqual(completed.result, {
@@ -578,18 +488,17 @@ test('completes only the matching active execution and persists safe result meta
       secondaryExternalId: 'message-safe-id',
     });
     assert.equal(repeated.code, 'invalid_transition');
-    assert.equal(fs.readFileSync(dataFile, 'utf8'), afterCompleted);
     assert.equal(JSON.stringify(publicItem).includes('must-not-persist'), false);
-    assert.equal(queue.beginExecution(id).code, 'invalid_transition');
+    assert.equal((await queue.beginExecution(id)).code, 'invalid_transition');
   });
 });
 
-test('fails safely, strips sensitive errors, and retries once with a new executionId', () => {
-  withTemporaryQueue((queue, dataFile) => {
-    const id = addEmailApproval(queue, 'interaction-retry');
-    queue.approve(id);
-    const first = queue.beginExecution(id);
-    const failed = queue.failExecution(id, {
+test('fails safely, strips sensitive errors, and retries once with a new executionId', async () => {
+  await withTemporaryQueue(async (queue) => {
+    const id = await addEmailApproval(queue, 'interaction-retry');
+    await queue.approve(id);
+    const first = await queue.beginExecution(id);
+    const failed = await queue.failExecution(id, {
       executionId: first.executionId,
       error: {
         code: 'provider_temporarily_unavailable',
@@ -599,78 +508,99 @@ test('fails safely, strips sensitive errors, and retries once with a new executi
         token: 'secret',
       },
     });
-    const persistedFailure = fs.readFileSync(dataFile, 'utf8');
 
     assert.equal(failed.status, 'execution_failed');
     assert.deepEqual(failed.error, {
       code: 'provider_temporarily_unavailable',
       retryable: true,
     });
-    assert.equal(persistedFailure.includes('sensitive stack'), false);
-    assert.equal(persistedFailure.includes('sensitive provider response'), false);
-    assert.equal(persistedFailure.includes('secret'), false);
-    assert.equal(queue.failExecution(id, {
+    assert.equal((await queue.failExecution(id, {
       executionId: first.executionId,
       error: { code: 'again', retryable: true },
-    }).code, 'invalid_transition');
+    })).code, 'invalid_transition');
 
-    const retried = queue.retryExecution(id);
-    const afterRetry = fs.readFileSync(dataFile, 'utf8');
-    const repeatedRetry = queue.retryExecution(id);
+    const retried = await queue.retryExecution(id);
+    const repeatedRetry = await queue.retryExecution(id);
 
     assert.equal(retried.ok, true);
     assert.match(retried.executionId, UUID_PATTERN);
     assert.notEqual(retried.executionId, first.executionId);
     assert.equal(retried.interactionId, 'interaction-retry');
     assert.equal(repeatedRetry.code, 'invalid_transition');
-    assert.equal(fs.readFileSync(dataFile, 'utf8'), afterRetry);
   });
 });
 
-test('does not retry a non-retryable failure', () => {
-  withTemporaryQueue((queue, dataFile) => {
-    const id = addEmailApproval(queue);
-    queue.approve(id);
-    const begun = queue.beginExecution(id);
-    queue.failExecution(id, {
+test('does not retry a non-retryable failure', async () => {
+  await withTemporaryQueue(async (queue) => {
+    const id = await addEmailApproval(queue);
+    await queue.approve(id);
+    const begun = await queue.beginExecution(id);
+    await queue.failExecution(id, {
       executionId: begun.executionId,
       error: { code: 'invalid_recipient', retryable: false },
     });
-    const beforeRetry = fs.readFileSync(dataFile, 'utf8');
-    const retry = queue.retryExecution(id);
+    const retry = await queue.retryExecution(id);
 
     assert.equal(retry.code, 'execution_not_retryable');
-    assert.equal(fs.readFileSync(dataFile, 'utf8'), beforeRetry);
   });
 });
 
-test('rejects arbitrary persisted states without rewriting the legacy file', () => {
-  const invalidStateData = {
-    pending: [],
-    history: [{
-      id: 'arbitrary-state',
-      status: 'custom_state',
-      createdAt: '2026-01-01T00:00:00.000Z',
-      publicProposal: { type: 'email_draft', summary: 'Invalid', requiresApproval: true },
-      executionPayload: {
-        to: null,
-        subject: 'Asunto',
-        body: 'Cuerpo',
-        replyMessageId: null,
-        threadId: null,
-      },
-      payloadHash: 'unused',
-      context: {},
-    }],
-  };
+test('exhausts the single retry budget even after a second retryable failure', async () => {
+  await withTemporaryQueue(async (queue) => {
+    const id = await addEmailApproval(queue);
+    await queue.approve(id);
+    const begun = await queue.beginExecution(id);
+    await queue.failExecution(id, {
+      executionId: begun.executionId,
+      error: { code: 'provider_temporarily_unavailable', retryable: true },
+    });
+    const retried = await queue.retryExecution(id);
+    await queue.failExecution(id, {
+      executionId: retried.executionId,
+      error: { code: 'provider_temporarily_unavailable', retryable: true },
+    });
 
-  withTemporaryQueue((queue, dataFile) => {
-    const before = fs.readFileSync(dataFile, 'utf8');
+    const secondRetry = await queue.retryExecution(id);
+    assert.equal(secondRetry.code, 'execution_retry_exhausted');
+  });
+});
 
-    assert.equal(queue.beginExecution('arbitrary-state').code, 'invalid_transition');
-    assert.equal(queue.completeExecution('arbitrary-state', { executionId: 'x' }).code, 'invalid_transition');
-    assert.equal(queue.failExecution('arbitrary-state', { executionId: 'x' }).code, 'invalid_transition');
-    assert.equal(queue.retryExecution('arbitrary-state').code, 'invalid_transition');
-    assert.equal(fs.readFileSync(dataFile, 'utf8'), before);
-  }, invalidStateData);
+// FASE A2: dos instancias de ApprovalQueue apuntando al mismo fichero V2
+// deben verse mutuamente sin reconstruirse — la misma propiedad que ya
+// demuestra la suite de contrato de ApprovalRepositoryV2, verificada aquí a
+// nivel de negocio completo (con TTL, redacción y actionType incluidos).
+test('two ApprovalQueue instances on the same JSON V2 backend observe each other through fresh reads', async () => {
+  const dataFile = tempDataFile();
+  const queueA = new ApprovalQueue({ dataFile });
+  const queueB = new ApprovalQueue({ dataFile });
+
+  const added = await queueA.add({
+    type: 'email_draft',
+    summary: 'Cruzado entre instancias',
+    requiresApproval: true,
+  }, { interactionId: 'cross-instance' }, {
+    to: 'demo@example.invalid',
+    subject: 'S',
+    body: 'B',
+    replyMessageId: null,
+    threadId: null,
+  });
+
+  assert.equal((await queueB.listPending()).some((item) => item.id === added.id), true);
+
+  const approvedByB = await queueB.approve(added.id);
+  assert.equal(approvedByB.ok, true);
+
+  const seenByA = await queueA.getInternalById(added.id);
+  assert.equal(seenByA.status, 'approved');
+
+  const begunByA = await queueA.beginExecution(added.id);
+  assert.equal(begunByA.ok, true);
+
+  const completedByB = await queueB.completeExecution(added.id, {
+    executionId: begunByA.executionId,
+    result: { type: 'email_draft', externalId: 'cross-instance-draft' },
+  });
+  assert.equal(completedByB.ok, true);
+  assert.equal(completedByB.status, 'executed');
 });

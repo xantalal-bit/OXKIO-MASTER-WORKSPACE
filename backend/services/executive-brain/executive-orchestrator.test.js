@@ -61,7 +61,7 @@ function assertPrivateContextIdentityMismatch(fn) {
   );
 }
 
-test('orchestrates analyzer, knowledge query service, and simulation for project queries', () => {
+test('orchestrates analyzer, knowledge query service, and simulation for project queries', async () => {
   const calls = {
     analyzer: 0,
     knowledgeSearch: 0,
@@ -69,7 +69,7 @@ test('orchestrates analyzer, knowledge query service, and simulation for project
     builder: 0,
   };
 
-  const result = orchestrateExecutiveQuery('Resumen del roadmap de Oxkio', {
+  const result = await orchestrateExecutiveQuery('Resumen del roadmap de Oxkio', {
     dependencies: {
       analyzeExecutiveQuery(query) {
         calls.analyzer += 1;
@@ -153,10 +153,10 @@ test('orchestrates analyzer, knowledge query service, and simulation for project
   assert.deepEqual(result.limitations, ['Simulation only.']);
 });
 
-test('does not call Knowledge Query Service when analyzer finds no project', () => {
+test('does not call Knowledge Query Service when analyzer finds no project', async () => {
   let knowledgeSearchCalled = false;
 
-  const result = orchestrateExecutiveQuery('Que decisiones tenemos aprobadas?', {
+  const result = await orchestrateExecutiveQuery('Que decisiones tenemos aprobadas?', {
     dependencies: {
       analyzeExecutiveQuery() {
         return {
@@ -209,8 +209,8 @@ test('does not call Knowledge Query Service when analyzer finds no project', () 
   assert.ok(result.limitations[0].includes('No sufficient evidence'));
 });
 
-test('returns the required orchestrator response shape with default components', () => {
-  const result = orchestrateExecutiveQuery('documentacion tecnica sin proyecto concreto', {
+test('returns the required orchestrator response shape with default components', async () => {
+  const result = await orchestrateExecutiveQuery('documentacion tecnica sin proyecto concreto', {
     dependencies: {
       searchKnowledge() {
         throw new Error('Knowledge Query Service should not be called without project.');
@@ -248,7 +248,7 @@ test('returns the required orchestrator response shape with default components',
   assert.equal(result.privateContextUsed, false);
 });
 
-test('reads shared memory without invoking proposal or approval dependencies or changing the response contract', () => {
+test('reads shared memory without invoking proposal or approval dependencies or changing the response contract', async () => {
   const calls = [];
   const diagnostics = {};
   const runtimeDependencies = {
@@ -308,10 +308,10 @@ test('reads shared memory without invoking proposal or approval dependencies or 
       };
     },
   };
-  const withoutRuntimeDependencies = orchestrateExecutiveQuery('Consulta estable', {
+  const withoutRuntimeDependencies = await orchestrateExecutiveQuery('Consulta estable', {
     dependencies: componentDependencies,
   });
-  const withRuntimeDependencies = orchestrateExecutiveQuery('Consulta estable', {
+  const withRuntimeDependencies = await orchestrateExecutiveQuery('Consulta estable', {
     diagnostics,
     dependencies: {
       ...componentDependencies,
@@ -357,9 +357,9 @@ test('reads shared memory without invoking proposal or approval dependencies or 
   ]);
 });
 
-test('continues normally when memory search fails', () => {
+test('continues normally when memory search fails', async () => {
   const diagnostics = {};
-  const result = orchestrateExecutiveQuery('Consulta con memoria no disponible', {
+  const result = await orchestrateExecutiveQuery('Consulta con memoria no disponible', {
     diagnostics,
     dependencies: {
       memory: {
@@ -409,7 +409,7 @@ test('continues normally when memory search fails', () => {
   });
 });
 
-test('normalizes empty and oversized memory results without exposing them', () => {
+test('normalizes empty and oversized memory results without exposing them', async () => {
   const emptyDiagnostics = {};
   const oversizedDiagnostics = {};
   const sensitiveEntries = Array.from({ length: 8 }, (_, index) => ({
@@ -427,14 +427,14 @@ test('normalizes empty and oversized memory results without exposing them', () =
       };
     },
   };
-  const emptyResult = orchestrateExecutiveQuery('Consulta vacia', {
+  const emptyResult = await orchestrateExecutiveQuery('Consulta vacia', {
     diagnostics: emptyDiagnostics,
     dependencies: {
       ...commonDependencies,
       memory: { searchMemory: () => [] },
     },
   });
-  const oversizedResult = orchestrateExecutiveQuery('Consulta limitada', {
+  const oversizedResult = await orchestrateExecutiveQuery('Consulta limitada', {
     diagnostics: oversizedDiagnostics,
     dependencies: {
       ...commonDependencies,
@@ -460,9 +460,9 @@ test('normalizes empty and oversized memory results without exposing them', () =
   assert.equal(JSON.stringify(oversizedResult).includes('private-memory'), false);
 });
 
-test('reports no memory attempt internally when the dependency is absent', () => {
+test('reports no memory attempt internally when the dependency is absent', async () => {
   const diagnostics = {};
-  const result = orchestrateExecutiveQuery('Consulta sin memoria', {
+  const result = await orchestrateExecutiveQuery('Consulta sin memoria', {
     diagnostics,
     dependencies: {
       simulateExecutiveBrainQuery(query) {
@@ -496,7 +496,7 @@ test('reports no memory attempt internally when the dependency is absent', () =>
   assert.equal(Object.hasOwn(result, 'memoryResultCount'), false);
 });
 
-test('does not generate proposals for informational email, calendar, briefing, or inventory queries', () => {
+test('does not generate proposals for informational email, calendar, briefing, or inventory queries', async () => {
   const informationalQueries = [
     'Que correos tengo',
     'Lee mi correo',
@@ -506,8 +506,8 @@ test('does not generate proposals for informational email, calendar, briefing, o
   ];
   let proposalCalls = 0;
 
-  informationalQueries.forEach((query) => {
-    const result = orchestrateExecutiveQuery(query, {
+  for (const query of informationalQueries) {
+    const result = await orchestrateExecutiveQuery(query, {
       dependencies: {
         memory: {
           searchMemory: () => [],
@@ -541,12 +541,12 @@ test('does not generate proposals for informational email, calendar, briefing, o
 
     assert.equal(result.proposal, null);
     assert.equal(result.approval, null);
-  });
+  }
 
   assert.equal(proposalCalls, 0);
 });
 
-test('generates safe proposals for explicit email, meeting, and task actions', () => {
+test('generates safe proposals for explicit email, meeting, and task actions', async () => {
   const cases = [
     {
       query: 'Prepara un borrador',
@@ -568,14 +568,14 @@ test('generates safe proposals for explicit email, meeting, and task actions', (
     },
   ];
 
-  cases.forEach((testCase) => {
+  for (const testCase of cases) {
     let proposalInput = null;
     let queuedProposal = null;
     let queuedExecutionPayload = null;
     let queuedContext = null;
     let memoryReads = 0;
     const diagnostics = {};
-    const result = orchestrateExecutiveQuery(testCase.query, {
+    const result = await orchestrateExecutiveQuery(testCase.query, {
       diagnostics,
       dependencies: {
         memory: {
@@ -697,10 +697,10 @@ test('generates safe proposals for explicit email, meeting, and task actions', (
     assert.equal(diagnostics.proposalType, testCase.proposalType);
     assert.equal(diagnostics.approvalAttempted, true);
     assert.equal(diagnostics.approvalSucceeded, true);
-  });
+  }
 });
 
-test('Proposal Engine creates an internal email payload without inventing a recipient', () => {
+test('Proposal Engine creates an internal email payload without inventing a recipient', async () => {
   const proposal = new ProposalEngine().generate({
     analysis: { intent: 'email' },
     decision: { recommendation: 'Preparar borrador', requiresApproval: true },
@@ -721,9 +721,9 @@ test('Proposal Engine creates an internal email payload without inventing a reci
   });
 });
 
-test('prepares explicit recipient, subject, and body without routing to readonly review', () => {
+test('prepares explicit recipient, subject, and body without routing to readonly review', async () => {
   let prepared = null;
-  const result = orchestrateExecutiveQuery(
+  const result = await orchestrateExecutiveQuery(
     'Prepara un correo para pilot@example.com con asunto: Prueba OXKIO 5C.6D.1 '
       + 'y cuerpo: Este correo es un borrador de prueba. No debe enviarse.',
     {
@@ -758,7 +758,7 @@ test('prepares explicit recipient, subject, and body without routing to readonly
   assert.equal(result.approval.id, 'approval-email-explicit');
 });
 
-test('keeps the executive response when Proposal Engine is absent or fails', () => {
+test('keeps the executive response when Proposal Engine is absent or fails', async () => {
   const baseDependencies = {
     simulateExecutiveBrainQuery(query) {
       return {
@@ -771,11 +771,11 @@ test('keeps the executive response when Proposal Engine is absent or fails', () 
       };
     },
   };
-  const withoutEngine = orchestrateExecutiveQuery('Crea una tarea', {
+  const withoutEngine = await orchestrateExecutiveQuery('Crea una tarea', {
     dependencies: baseDependencies,
   });
   const diagnostics = {};
-  const withFailure = orchestrateExecutiveQuery('Crea una tarea', {
+  const withFailure = await orchestrateExecutiveQuery('Crea una tarea', {
     diagnostics,
     dependencies: {
       ...baseDependencies,
@@ -812,7 +812,7 @@ test('keeps the executive response when Proposal Engine is absent or fails', () 
   });
 });
 
-test('keeps proposal when Approval Queue is absent or fails', () => {
+test('keeps proposal when Approval Queue is absent or fails', async () => {
   const proposalEngine = {
     generate() {
       return {
@@ -830,11 +830,11 @@ test('keeps proposal when Approval Queue is absent or fails', () => {
     reasoningSummary: {},
     limitations: [],
   });
-  const withoutQueue = orchestrateExecutiveQuery('Crea una tarea', {
+  const withoutQueue = await orchestrateExecutiveQuery('Crea una tarea', {
     dependencies: { proposalEngine, simulateExecutiveBrainQuery },
   });
   const diagnostics = {};
-  const withQueueFailure = orchestrateExecutiveQuery('Crea una tarea', {
+  const withQueueFailure = await orchestrateExecutiveQuery('Crea una tarea', {
     diagnostics,
     dependencies: {
       proposalEngine,
@@ -857,9 +857,9 @@ test('keeps proposal when Approval Queue is absent or fails', () => {
   assert.equal(diagnostics.approvalSucceeded, false);
 });
 
-test('does not enqueue a proposal that does not require approval', () => {
+test('does not enqueue a proposal that does not require approval', async () => {
   let approvalCalls = 0;
-  const result = orchestrateExecutiveQuery('Crea una tarea', {
+  const result = await orchestrateExecutiveQuery('Crea una tarea', {
     dependencies: {
       proposalEngine: {
         generate() {
@@ -892,12 +892,12 @@ test('does not enqueue a proposal that does not require approval', () => {
   assert.equal(approvalCalls, 0);
 });
 
-test('writes only safe completed metadata after response, proposal, and approval are built', () => {
+test('writes only safe completed metadata after response, proposal, and approval are built', async () => {
   const calls = [];
   let savedEntry = null;
   let approvalContext = null;
   const sensitiveQuery = 'Prepara un borrador de respuesta para asunto privado 123';
-  const result = orchestrateExecutiveQuery(sensitiveQuery, {
+  const result = await orchestrateExecutiveQuery(sensitiveQuery, {
     dependencies: {
       memory: {
         searchMemory(query) {
@@ -1022,7 +1022,7 @@ test('writes only safe completed metadata after response, proposal, and approval
   assert.notEqual(result.approval, null);
 });
 
-test('writes correct safe metadata for informational, meeting, and task interactions', () => {
+test('writes correct safe metadata for informational, meeting, and task interactions', async () => {
   const cases = [
     {
       query: 'Que correos tengo',
@@ -1050,9 +1050,9 @@ test('writes correct safe metadata for informational, meeting, and task interact
     },
   ];
 
-  cases.forEach((testCase) => {
+  for (const testCase of cases) {
     let savedEntry = null;
-    const result = orchestrateExecutiveQuery(testCase.query, {
+    const result = await orchestrateExecutiveQuery(testCase.query, {
       dependencies: {
         memory: {
           searchMemory: () => [],
@@ -1096,15 +1096,15 @@ test('writes correct safe metadata for informational, meeting, and task interact
     assert.equal(savedEntry.interactionId, result.interactionId);
     assert.equal(result.proposal !== null, testCase.proposalCreated);
     assert.equal(result.approval !== null, testCase.approvalCreated);
-  });
+  }
 });
 
-test('private context writes the same safe metadata without private content', () => {
+test('private context writes the same safe metadata without private content', async () => {
   const privatePayload = {
     messages: [{ subject: 'private-subject-write', snippet: 'private-snippet-write' }],
   };
   let savedEntry = null;
-  const result = orchestrateExecutiveQuery('Prepara un borrador de respuesta privada', {
+  const result = await orchestrateExecutiveQuery('Prepara un borrador de respuesta privada', {
     privateContextMetadata: buildPrivateContext({
       sourceType: 'gmail',
       sourceId: 'private-source-write',
@@ -1163,7 +1163,7 @@ test('private context writes the same safe metadata without private content', ()
   });
 });
 
-test('memory write failure or missing saveShortTerm does not change the executive result', () => {
+test('memory write failure or missing saveShortTerm does not change the executive result', async () => {
   const diagnostics = {};
   const commonDependencies = {
     proposalEngine: {
@@ -1191,13 +1191,13 @@ test('memory write failure or missing saveShortTerm does not change the executiv
       };
     },
   };
-  const withoutWriter = orchestrateExecutiveQuery('Crea una tarea', {
+  const withoutWriter = await orchestrateExecutiveQuery('Crea una tarea', {
     dependencies: {
       ...commonDependencies,
       memory: { searchMemory: () => [] },
     },
   });
-  const withWriteFailure = orchestrateExecutiveQuery('Crea una tarea', {
+  const withWriteFailure = await orchestrateExecutiveQuery('Crea una tarea', {
     diagnostics,
     dependencies: {
       ...commonDependencies,
@@ -1220,7 +1220,7 @@ test('memory write failure or missing saveShortTerm does not change the executiv
   assert.equal(diagnostics.memoryWriteSucceeded, false);
 });
 
-test('generates one unique non-sensitive UUID interactionId per operation', () => {
+test('generates one unique non-sensitive UUID interactionId per operation', async () => {
   const firstSavedEntries = [];
   const secondSavedEntries = [];
   const buildDependencies = (savedEntries) => ({
@@ -1241,10 +1241,10 @@ test('generates one unique non-sensitive UUID interactionId per operation', () =
       };
     },
   });
-  const first = orchestrateExecutiveQuery('Consulta sensible alpha@example.com', {
+  const first = await orchestrateExecutiveQuery('Consulta sensible alpha@example.com', {
     dependencies: buildDependencies(firstSavedEntries),
   });
-  const second = orchestrateExecutiveQuery('Consulta sensible alpha@example.com', {
+  const second = await orchestrateExecutiveQuery('Consulta sensible alpha@example.com', {
     dependencies: buildDependencies(secondSavedEntries),
   });
   assert.match(first.interactionId, UUID_PATTERN);
@@ -1258,14 +1258,14 @@ test('generates one unique non-sensitive UUID interactionId per operation', () =
   assert.equal(JSON.stringify(firstSavedEntries[0]).includes('alpha@example.com'), false);
 });
 
-test('does not expose private context through safe proposal metadata', () => {
+test('does not expose private context through safe proposal metadata', async () => {
   const privatePayload = {
     messages: [{ subject: 'private-subject', snippet: 'private-snippet' }],
   };
   let queuedProposal = null;
   let queuedExecutionPayload = null;
   let queuedContext = null;
-  const result = orchestrateExecutiveQuery('Prepara un borrador de respuesta', {
+  const result = await orchestrateExecutiveQuery('Prepara un borrador de respuesta', {
     privateContextMetadata: buildPrivateContext({
       sourceType: 'gmail',
       sourceId: 'gmail-private-source',
@@ -1322,7 +1322,7 @@ test('does not expose private context through safe proposal metadata', () => {
   assert.equal(JSON.stringify(result.approval).includes('private-snippet'), false);
 });
 
-test('uses authorized private context without adding it to global sources', () => {
+test('uses authorized private context without adding it to global sources', async () => {
   const privatePayload = {
     events: [
       { title: 'Reunion ficticia critica', date: '2026-07-04' },
@@ -1333,7 +1333,7 @@ test('uses authorized private context without adding it to global sources', () =
   let builderInput = null;
   let knowledgeSearchCalled = false;
 
-  const result = orchestrateExecutiveQuery('Prepara mi briefing de hoy', {
+  const result = await orchestrateExecutiveQuery('Prepara mi briefing de hoy', {
     privateContextMetadata: buildPrivateContext(),
     expectedClientId: 'client-alpha',
     privatePayload,
@@ -1407,7 +1407,7 @@ test('uses authorized private context without adding it to global sources', () =
   assert.ok(builderInput.answer.includes('Contexto privado autorizado'));
 });
 
-test('adapts a collection of private contexts individually without mixing payloads', () => {
+test('adapts a collection of private contexts individually without mixing payloads', async () => {
   const adapterInputs = [];
   const calendarPayload = {
     source: 'calendar',
@@ -1460,7 +1460,7 @@ test('adapts a collection of private contexts individually without mixing payloa
   assert.equal(Object.hasOwn(adapterInputs[1].payload, 'events'), false);
 });
 
-test('allows Calendar and Gmail private context collection with the same identity', () => {
+test('allows Calendar and Gmail private context collection with the same identity', async () => {
   let adapterCalls = 0;
   const authorizedContexts = prepareAuthorizedPrivateContexts({
     privateContexts: buildPrivateContextCollection(),
@@ -1486,7 +1486,7 @@ test('allows Calendar and Gmail private context collection with the same identit
   assert.equal(authorizedContexts[1].userId, 'user-alpha');
 });
 
-test('rejects private context collection with mismatched clientId', () => {
+test('rejects private context collection with mismatched clientId', async () => {
   assertPrivateContextIdentityMismatch(() => prepareAuthorizedPrivateContexts({
     privateContexts: buildPrivateContextCollection({
       gmail: {
@@ -1499,7 +1499,7 @@ test('rejects private context collection with mismatched clientId', () => {
   }));
 });
 
-test('rejects private context collection with mismatched userId', () => {
+test('rejects private context collection with mismatched userId', async () => {
   assertPrivateContextIdentityMismatch(() => prepareAuthorizedPrivateContexts({
     privateContexts: buildPrivateContextCollection({
       gmail: { metadata: { userId: 'user-beta' } },
@@ -1509,7 +1509,7 @@ test('rejects private context collection with mismatched userId', () => {
   }));
 });
 
-test('rejects private context collection with mismatched expectedClientId', () => {
+test('rejects private context collection with mismatched expectedClientId', async () => {
   assertPrivateContextIdentityMismatch(() => prepareAuthorizedPrivateContexts({
     privateContexts: buildPrivateContextCollection({
       gmail: { expectedClientId: 'client-beta' },
@@ -1519,7 +1519,7 @@ test('rejects private context collection with mismatched expectedClientId', () =
   }));
 });
 
-test('rejects private context collection with mismatched purpose safely', () => {
+test('rejects private context collection with mismatched purpose safely', async () => {
   assertPrivateContextIdentityMismatch(() => prepareAuthorizedPrivateContexts({
     privateContexts: buildPrivateContextCollection({
       gmail: { metadata: { purpose: 'email-sync' } },
@@ -1529,7 +1529,7 @@ test('rejects private context collection with mismatched purpose safely', () => 
   }));
 });
 
-test('rejects private context collection with mismatched promotionPolicy safely', () => {
+test('rejects private context collection with mismatched promotionPolicy safely', async () => {
   assertPrivateContextIdentityMismatch(() => prepareAuthorizedPrivateContexts({
     privateContexts: buildPrivateContextCollection({
       gmail: { metadata: { promotionPolicy: 'PROMOTE_ALLOWED' } },
@@ -1539,9 +1539,9 @@ test('rejects private context collection with mismatched promotionPolicy safely'
   }));
 });
 
-test('builds a combined Calendar and Gmail answer for mixed private queries', () => {
+test('builds a combined Calendar and Gmail answer for mixed private queries', async () => {
   const adapterInputs = [];
-  const result = orchestrateExecutiveQuery('Que tengo hoy y que correos tengo?', {
+  const result = await orchestrateExecutiveQuery('Que tengo hoy y que correos tengo?', {
     privateContextRequiredPurpose: 'executive-briefing',
     privateContexts: [
       {
@@ -1705,8 +1705,8 @@ test('builds a combined Calendar and Gmail answer for mixed private queries', ()
   assert.equal(JSON.stringify(result).includes('Snippet privado'), false);
 });
 
-test('uses authorized Calendar context to answer daily agenda queries', () => {
-  const result = orchestrateExecutiveQuery('Que tengo hoy?', {
+test('uses authorized Calendar context to answer daily agenda queries', async () => {
+  const result = await orchestrateExecutiveQuery('Que tengo hoy?', {
     privateContextMetadata: buildPrivateContext({
       sourceType: 'calendar',
       sourceId: 'calendar-source-alpha',
@@ -1776,9 +1776,9 @@ test('uses authorized Calendar context to answer daily agenda queries', () => {
   assert.equal(JSON.stringify(result).includes('event-1'), false);
 });
 
-test('prioritizes authorized Calendar agenda over noisy Knowledge Store response', () => {
+test('prioritizes authorized Calendar agenda over noisy Knowledge Store response', async () => {
   let builderInput = null;
-  const result = orchestrateExecutiveQuery('Que tengo hoy?', {
+  const result = await orchestrateExecutiveQuery('Que tengo hoy?', {
     privateContextMetadata: buildPrivateContext({
       sourceType: 'calendar',
       sourceId: 'calendar-source-alpha',
@@ -1860,9 +1860,9 @@ test('prioritizes authorized Calendar agenda over noisy Knowledge Store response
   assert.equal(JSON.stringify(result).includes('event-1'), false);
 });
 
-test('prioritizes authorized Gmail over noisy Knowledge Store response without exposing message ids', () => {
+test('prioritizes authorized Gmail over noisy Knowledge Store response without exposing message ids', async () => {
   let builderInput = null;
-  const result = orchestrateExecutiveQuery('Que correos tengo', {
+  const result = await orchestrateExecutiveQuery('Que correos tengo', {
     privateContextMetadata: buildPrivateContext({
       sourceType: 'gmail',
       sourceId: 'gmail-primary',
@@ -1981,8 +1981,8 @@ test('prioritizes authorized Gmail over noisy Knowledge Store response without e
   assert.equal(JSON.stringify(result).includes('Snippet privado'), false);
 });
 
-test('formats multiple Calendar events for executive agenda without adding sources', () => {
-  const result = orchestrateExecutiveQuery('Que tengo hoy?', {
+test('formats multiple Calendar events for executive agenda without adding sources', async () => {
+  const result = await orchestrateExecutiveQuery('Que tengo hoy?', {
     privateContextMetadata: buildPrivateContext({
       sourceType: 'calendar',
       sourceId: 'calendar-source-alpha',
@@ -2060,8 +2060,8 @@ test('formats multiple Calendar events for executive agenda without adding sourc
   assert.equal(JSON.stringify(result).includes('event-1'), false);
 });
 
-test('does not expose private payload counts for critical sensitivity', () => {
-  const result = orchestrateExecutiveQuery('Prepara briefing critico', {
+test('does not expose private payload counts for critical sensitivity', async () => {
+  const result = await orchestrateExecutiveQuery('Prepara briefing critico', {
     privateContextMetadata: buildPrivateContext({ sensitivity: 'critical' }),
     expectedClientId: 'client-alpha',
     privatePayload: {
@@ -2111,8 +2111,8 @@ test('does not expose private payload counts for critical sensitivity', () => {
   assert.doesNotMatch(result.response, /dato sensible ficticio/);
 });
 
-test('rejects private context without authorization', () => {
-  assert.throws(
+test('rejects private context without authorization', async () => {
+  await assert.rejects(
     () => orchestrateExecutiveQuery('Consulta privada', {
       privateContextMetadata: buildPrivateContext({ authorization: { status: 'pending' } }),
       expectedClientId: 'client-alpha',
@@ -2122,8 +2122,8 @@ test('rejects private context without authorization', () => {
   );
 });
 
-test('rejects incompatible private clientId and prevents client crossing', () => {
-  assert.throws(
+test('rejects incompatible private clientId and prevents client crossing', async () => {
+  await assert.rejects(
     () => orchestrateExecutiveQuery('Consulta privada', {
       privateContextMetadata: buildPrivateContext({ clientId: 'client-alpha' }),
       expectedClientId: 'client-beta',
@@ -2133,8 +2133,8 @@ test('rejects incompatible private clientId and prevents client crossing', () =>
   );
 });
 
-test('requires expectedClientId for private scopes', () => {
-  assert.throws(
+test('requires expectedClientId for private scopes', async () => {
+  await assert.rejects(
     () => orchestrateExecutiveQuery('Consulta privada', {
       privateContextMetadata: buildPrivateContext(),
       privatePayload: { items: [] },
@@ -2143,8 +2143,8 @@ test('requires expectedClientId for private scopes', () => {
   );
 });
 
-test('rejects an invalid context inside a private context collection safely', () => {
-  assert.throws(
+test('rejects an invalid context inside a private context collection safely', async () => {
+  await assert.rejects(
     () => orchestrateExecutiveQuery('Consulta privada combinada', {
       privateContextRequiredPurpose: 'executive-briefing',
       privateContexts: [
@@ -2176,8 +2176,8 @@ test('rejects an invalid context inside a private context collection safely', ()
   );
 });
 
-test('does not invoke the private context adapter for non-private queries', () => {
-  const result = orchestrateExecutiveQuery('Resumen sin contexto privado', {
+test('does not invoke the private context adapter for non-private queries', async () => {
+  const result = await orchestrateExecutiveQuery('Resumen sin contexto privado', {
     dependencies: {
       preparePrivateContextAdapter() {
         throw new Error('Private context adapter should not be called.');

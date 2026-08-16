@@ -30,7 +30,7 @@ async function withTemporaryQueue(run) {
   }
 }
 
-function addEmailApproval(queue, interactionId = 'interaction-api') {
+async function addEmailApproval(queue, interactionId = 'interaction-api') {
   return queue.add({
     type: 'email_draft',
     summary: 'Borrador preparado',
@@ -44,7 +44,7 @@ function addEmailApproval(queue, interactionId = 'interaction-api') {
   });
 }
 
-function addExecutableEmailApproval(queue, interactionId = 'interaction-api-execution') {
+async function addExecutableEmailApproval(queue, interactionId = 'interaction-api-execution') {
   return queue.add({
     type: 'email_draft',
     summary: 'Borrador ejecutable',
@@ -56,6 +56,17 @@ function addExecutableEmailApproval(queue, interactionId = 'interaction-api-exec
     replyMessageId: null,
     threadId: null,
   });
+}
+
+// Corrompe el payload persistido de un item V2 directamente en disco (misma
+// tecnica que approvalQueue.test.js), simulando una escritura externa o de
+// otra instancia — sustituye a la antigua mutacion directa de
+// `queue.history.find(...).executionPayload`, que ya no existe en FASE A2.
+function tamperExecutionPayloadOnDisk(dataFile, approvalId, patch) {
+  const state = JSON.parse(fs.readFileSync(dataFile, 'utf8'));
+  const record = state.records.find((item) => item.id === approvalId);
+  Object.assign(record.record.executionPayload, patch);
+  fs.writeFileSync(dataFile, JSON.stringify(state, null, 2));
 }
 
 function request(handler, queue, {
@@ -206,7 +217,7 @@ test('mutable routes fail closed on identity and CSRF before queue access', asyn
 
 test('expired CSRF is rejected without changing approval state', async () => {
   await withTemporaryQueue(async (queue, dataFile) => {
-    const added = addEmailApproval(queue);
+    const added = await addEmailApproval(queue);
     const before = fs.readFileSync(dataFile, 'utf8');
     let clock = 1_000;
     const csrf = createExecutiveCsrf({ now: () => clock, ttlMs: 10 });
@@ -221,7 +232,7 @@ test('expired CSRF is rejected without changing approval state', async () => {
 
     assert.equal(response.statusCode, 403);
     assert.equal(response.json.code, 'csrf_token_expired');
-    assert.equal(queue.getInternalById(added.id).status, 'pending');
+    assert.equal((await queue.getInternalById(added.id)).status, 'pending');
     assert.equal(fs.readFileSync(dataFile, 'utf8'), before);
   });
 });
@@ -272,7 +283,7 @@ function assertSafeExecutionResponse(response) {
 
 test('POST /api/approve approves pending item and ignores client-controlled fields', async () => {
   await withTemporaryQueue(async (queue) => {
-    const added = addEmailApproval(queue, 'server-interaction');
+    const added = await addEmailApproval(queue, 'server-interaction');
     const response = await request(handleApproveRequest, queue, {
       body: {
         approvalId: added.id,
@@ -291,7 +302,7 @@ test('POST /api/approve approves pending item and ignores client-controlled fiel
     assert.equal(response.json.result.item.interactionId, 'server-interaction');
     assert.equal(Object.hasOwn(response.json.result.item, 'executionPayload'), false);
     assert.equal(Object.hasOwn(response.json.result.item, 'payloadHash'), false);
-    const internal = queue.getInternalById(added.id);
+    const internal = await queue.getInternalById(added.id);
     assert.equal(internal.executionPayload.to, null);
     assert.notEqual(internal.payloadHash, 'attacker-hash');
     assert.equal(internal.approvedBy.clientId, 'cliente-cero');
@@ -300,20 +311,20 @@ test('POST /api/approve approves pending item and ignores client-controlled fiel
 
 test('POST /api/approve rejects only when the closed decision requests rejection', async () => {
   await withTemporaryQueue(async (queue) => {
-    const added = addEmailApproval(queue, 'interaction-reject');
+    const added = await addEmailApproval(queue, 'interaction-reject');
     const response = await request(handleApproveRequest, queue, {
       body: { approvalId: added.id, decision: 'reject' },
     });
 
     assert.equal(response.statusCode, 200);
     assert.equal(response.json.result.action, 'rejected');
-    assert.equal(queue.getInternalById(added.id).status, 'rejected');
+    assert.equal((await queue.getInternalById(added.id)).status, 'rejected');
   });
 });
 
 test('POST /api/approve validates body, content type, existence, and state', async () => {
   await withTemporaryQueue(async (queue) => {
-    const added = addEmailApproval(queue);
+    const added = await addEmailApproval(queue);
 
     assert.equal((await request(handleApproveRequest, queue, { body: {} })).statusCode, 400);
     assert.equal((await request(handleApproveRequest, queue, { body: { approvalId: '   ' } })).statusCode, 400);
@@ -338,22 +349,22 @@ test('POST /api/approve validates body, content type, existence, and state', asy
 
 test('legacy GET approval route returns 405 and does not change state', async () => {
   await withTemporaryQueue(async (queue, dataFile) => {
-    const added = addEmailApproval(queue);
+    const added = await addEmailApproval(queue);
     const before = fs.readFileSync(dataFile, 'utf8');
     const response = await request(handleApproveRequest, queue, { method: 'GET', contentType: null });
 
     assert.equal(response.statusCode, 405);
     assert.equal(response.headers.Allow, 'POST');
     assert.equal(response.json.code, 'method_not_allowed');
-    assert.equal(queue.getInternalById(added.id).status, 'pending');
+    assert.equal((await queue.getInternalById(added.id)).status, 'pending');
     assert.equal(fs.readFileSync(dataFile, 'utf8'), before);
   });
 });
 
 test('POST /api/execute-approved validates but remains disabled without state change', async () => {
   await withTemporaryQueue(async (queue, dataFile) => {
-    const added = addEmailApproval(queue, 'interaction-disabled');
-    queue.approve(added.id);
+    const added = await addEmailApproval(queue, 'interaction-disabled');
+    await queue.approve(added.id);
     const before = fs.readFileSync(dataFile, 'utf8');
     let serviceCalls = 0;
     const response = await request(handleExecuteApprovedRequest, queue, {
@@ -375,8 +386,12 @@ test('POST /api/execute-approved validates but remains disabled without state ch
       code: 'execution_disabled',
       message: 'Execution is not enabled.',
     });
-    assert.equal(queue.getInternalById(added.id).status, 'approved');
-    assert.equal(Object.hasOwn(queue.getInternalById(added.id), 'executionId'), false);
+    assert.equal((await queue.getInternalById(added.id)).status, 'approved');
+    // FASE A2: los items internos V2 siempre traen executionId (null hasta
+    // que se reclama una ejecución) en lugar de omitir la clave por completo
+    // como hacía V1 — el contrato PÚBLICO (toPublicItem) sigue omitiéndola
+    // cuando es null, verificado más abajo con assertSafeExecutionResponse.
+    assert.equal((await queue.getInternalById(added.id)).executionId, null);
     assert.equal(serviceCalls, 0);
     assert.equal(fs.readFileSync(dataFile, 'utf8'), before);
   });
@@ -384,8 +399,8 @@ test('POST /api/execute-approved validates but remains disabled without state ch
 
 test('internally enabled POST executes approved email once with correlated safe response', async () => {
   await withTemporaryQueue(async (queue, dataFile) => {
-    const added = addExecutableEmailApproval(queue, 'interaction-api-enabled');
-    queue.approve(added.id);
+    const added = await addExecutableEmailApproval(queue, 'interaction-api-enabled');
+    await queue.approve(added.id);
     const fake = buildFakeExecution(queue);
     const response = await request(handleExecuteApprovedRequest, queue, {
       body: {
@@ -401,7 +416,7 @@ test('internally enabled POST executes approved email once with correlated safe 
       },
       dependencies: fake.dependencies,
     });
-    const stored = JSON.parse(fs.readFileSync(dataFile, 'utf8')).history.find((item) => item.id === added.id);
+    const stored = await queue.getInternalById(added.id);
 
     assert.equal(response.statusCode, 200);
     assert.equal(response.headers['Cache-Control'], 'no-store');
@@ -426,8 +441,8 @@ for (const failureCase of [
 ]) {
   test(`maps fake Gmail ${failureCase.behavior} to safe HTTP failure`, async () => {
     await withTemporaryQueue(async (queue) => {
-      const added = addExecutableEmailApproval(queue);
-      queue.approve(added.id);
+      const added = await addExecutableEmailApproval(queue);
+      await queue.approve(added.id);
       const fake = buildFakeExecution(queue, failureCase.behavior);
       const response = await request(handleExecuteApprovedRequest, queue, {
         body: { approvalId: added.id },
@@ -441,30 +456,30 @@ for (const failureCase of [
         code: failureCase.code,
         retryable: failureCase.retryable,
       });
-      assert.equal(queue.getInternalById(added.id).status, 'execution_failed');
+      assert.equal((await queue.getInternalById(added.id)).status, 'execution_failed');
       assertSafeExecutionResponse(response);
     });
   });
 }
 
 test('invalid execution states and tampered payload never call fake Gmail', async () => {
-  await withTemporaryQueue(async (queue) => {
-    const pending = addEmailApproval(queue, 'pending');
-    const rejected = addEmailApproval(queue, 'rejected');
-    const executing = addEmailApproval(queue, 'executing');
-    const executed = addEmailApproval(queue, 'executed');
-    const tampered = addEmailApproval(queue, 'tampered');
-    queue.reject(rejected.id);
-    queue.approve(executing.id);
-    queue.beginExecution(executing.id);
-    queue.approve(executed.id);
-    const begun = queue.beginExecution(executed.id);
-    queue.completeExecution(executed.id, {
+  await withTemporaryQueue(async (queue, dataFile) => {
+    const pending = await addEmailApproval(queue, 'pending');
+    const rejected = await addEmailApproval(queue, 'rejected');
+    const executing = await addEmailApproval(queue, 'executing');
+    const executed = await addEmailApproval(queue, 'executed');
+    const tampered = await addEmailApproval(queue, 'tampered');
+    await queue.reject(rejected.id);
+    await queue.approve(executing.id);
+    await queue.beginExecution(executing.id);
+    await queue.approve(executed.id);
+    const begun = await queue.beginExecution(executed.id);
+    await queue.completeExecution(executed.id, {
       executionId: begun.executionId,
       result: { type: 'email_draft', mode: 'SAFE_DRAFT_ONLY' },
     });
-    queue.approve(tampered.id);
-    queue.history.find((item) => item.id === tampered.id).executionPayload.body = 'tampered';
+    await queue.approve(tampered.id);
+    tamperExecutionPayloadOnDisk(dataFile, tampered.id, { body: 'tampered' });
     const fake = buildFakeExecution(queue);
 
     for (const id of [pending.id, rejected.id, executing.id, executed.id, tampered.id, 'missing']) {
@@ -478,36 +493,28 @@ test('invalid execution states and tampered payload never call fake Gmail', asyn
     assert.equal(fake.calls.length, 0);
   });
 
-  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'oxkio-api-old-record-'));
-  const dataFile = path.join(directory, 'approvalQueue.json');
-  fs.writeFileSync(dataFile, JSON.stringify({
-    pending: [],
-    history: [{
-      id: 'old-approved',
-      status: 'approved',
-      proposal: { type: 'email_draft' },
-      context: {},
-    }],
-  }));
-  try {
-    const queue = new ApprovalQueue({ dataFile });
+  // FASE A2: ApprovalQueue ya no lee el snapshot V1 {pending,history} — el
+  // caso "payload no disponible" (aprobación sin executionPayload) se prueba
+  // ahora con el flujo real add() sin executionPayload, en vez de inyectar un
+  // fichero V1 legado que el backend V2 ya no entiende.
+  await withTemporaryQueue(async (queue) => {
+    const added = await queue.add({ type: 'email_draft', summary: 'Sin payload', requiresApproval: true });
+    await queue.approve(added.id);
     const fake = buildFakeExecution(queue);
     const response = await request(handleExecuteApprovedRequest, queue, {
-      body: { approvalId: 'old-approved' },
+      body: { approvalId: added.id },
       dependencies: fake.dependencies,
     });
     assert.equal(response.statusCode, 409);
     assert.equal(response.json.error.code, 'execution_payload_unavailable');
     assert.equal(fake.calls.length, 0);
-  } finally {
-    fs.rmSync(directory, { recursive: true, force: true });
-  }
+  });
 });
 
 test('two enabled POST calls invoke fake Gmail at most once', async () => {
   await withTemporaryQueue(async (queue) => {
-    const added = addExecutableEmailApproval(queue);
-    queue.approve(added.id);
+    const added = await addExecutableEmailApproval(queue);
+    await queue.approve(added.id);
     const fake = buildFakeExecution(queue);
     const options = { body: { approvalId: added.id }, dependencies: fake.dependencies };
 
@@ -543,9 +550,9 @@ test('execute route validates method, JSON, and approvalId before dependencies',
   });
 });
 
-test('execution validation rejects invalid state and unavailable legacy payload safely', async () => {
+test('execution validation rejects invalid state and unavailable payload safely', async () => {
   await withTemporaryQueue(async (queue) => {
-    const pending = addEmailApproval(queue);
+    const pending = await addEmailApproval(queue);
     const pendingResponse = await request(handleExecuteApprovedRequest, queue, {
       body: { approvalId: pending.id },
     });
@@ -553,50 +560,40 @@ test('execution validation rejects invalid state and unavailable legacy payload 
     assert.equal(pendingResponse.json.code, 'invalid_transition');
   });
 
-  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'oxkio-approval-api-legacy-'));
-  const dataFile = path.join(directory, 'approvalQueue.json');
-  fs.writeFileSync(dataFile, JSON.stringify({
-    pending: [],
-    history: [{
-      id: 'legacy-approved',
-      status: 'approved',
-      createdAt: '2026-01-01T00:00:00.000Z',
-      proposal: { type: 'email_draft', summary: 'Legacy', requiresApproval: true },
-      context: {},
-    }],
-  }));
-  try {
-    const queue = new ApprovalQueue({ dataFile });
+  // FASE A2: sustituye el fichero V1 legado por el flujo real add() sin
+  // executionPayload — mismo desenlace (execution_payload_unavailable), sin
+  // depender de un formato de fichero que ApprovalQueue ya no lee.
+  await withTemporaryQueue(async (queue) => {
+    const added = await queue.add({ type: 'email_draft', summary: 'Legacy', requiresApproval: true });
+    await queue.approve(added.id);
     const response = await request(handleExecuteApprovedRequest, queue, {
-      body: { approvalId: 'legacy-approved' },
+      body: { approvalId: added.id },
     });
     assert.equal(response.statusCode, 409);
     assert.equal(response.json.code, 'execution_payload_unavailable');
-  } finally {
-    fs.rmSync(directory, { recursive: true, force: true });
-  }
+  });
 });
 
 test('legacy GET execution route returns 405 and never changes approval state', async () => {
   await withTemporaryQueue(async (queue, dataFile) => {
-    const added = addEmailApproval(queue);
-    queue.approve(added.id);
+    const added = await addEmailApproval(queue);
+    await queue.approve(added.id);
     const before = fs.readFileSync(dataFile, 'utf8');
     const response = await request(handleExecuteApprovedRequest, queue, { method: 'GET', contentType: null });
 
     assert.equal(response.statusCode, 405);
     assert.equal(response.headers.Allow, 'POST');
-    assert.equal(queue.getInternalById(added.id).status, 'approved');
+    assert.equal((await queue.getInternalById(added.id)).status, 'approved');
     assert.equal(fs.readFileSync(dataFile, 'utf8'), before);
   });
 });
 
 test('public pending and history views never expose executable fields', async () => {
   await withTemporaryQueue(async (queue) => {
-    const added = addEmailApproval(queue);
-    const pendingJson = JSON.stringify(queue.listPending());
-    queue.approve(added.id);
-    const historyJson = JSON.stringify(queue.getHistory());
+    const added = await addEmailApproval(queue);
+    const pendingJson = JSON.stringify(await queue.listPending());
+    await queue.approve(added.id);
+    const historyJson = JSON.stringify(await queue.getHistory());
 
     ['executionPayload', 'payloadHash', 'Asunto interno', 'Cuerpo interno'].forEach((value) => {
       assert.equal(pendingJson.includes(value), false);

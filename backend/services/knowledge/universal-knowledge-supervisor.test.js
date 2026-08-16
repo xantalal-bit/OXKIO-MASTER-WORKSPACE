@@ -41,22 +41,52 @@ class FakeApprovalQueue {
     this.sequence = 0;
   }
 
-  add(proposal, context) {
+  async add(proposal, context) {
     this.sequence += 1;
     const item = { id: `approval-${this.sequence}`, status: 'pending', proposal, context };
     this.pending.push(item);
     return item;
   }
 
-  listPending() { return this.pending; }
+  async listPending() { return this.pending; }
 
-  approve(id) {
+  async approve(id) {
     const index = this.pending.findIndex((item) => item.id === id);
     if (index < 0) return { ok: false, error: 'not found' };
     const item = this.pending.splice(index, 1)[0];
     item.status = 'approved';
     this.history.push(item);
     return { ok: true, action: 'approved', item };
+  }
+
+  // FASE A2: la ingesta de conocimiento ya no muta el item directamente ni
+  // llama a save() — pasa por begin/complete/failExecution como cualquier
+  // otro consumidor de ApprovalQueue, así que el doble de test debe
+  // ofrecerlos también.
+  async beginExecution(id) {
+    const item = this.history.find((candidate) => candidate.id === id);
+    if (!item || item.status !== 'approved') return { ok: false, code: 'invalid_transition' };
+    item.status = 'executing';
+    item.executionId = `execution-${id}`;
+    return { ok: true, approvalId: id, executionId: item.executionId };
+  }
+
+  async completeExecution(id, { executionId, result } = {}) {
+    const item = this.history.find((candidate) => candidate.id === id);
+    if (!item || item.status !== 'executing' || item.executionId !== executionId) {
+      return { ok: false, code: 'invalid_transition' };
+    }
+    item.status = 'executed';
+    item.result = result;
+    return { ok: true, approvalId: id, executionId, status: 'executed', item };
+  }
+
+  async failExecution(id, { executionId, error } = {}) {
+    const item = this.history.find((candidate) => candidate.id === id);
+    if (!item) return { ok: false, code: 'invalid_transition' };
+    item.status = 'execution_failed';
+    item.error = error;
+    return { ok: true, approvalId: id, executionId, status: 'execution_failed' };
   }
 
   save() {}
@@ -130,10 +160,10 @@ test('supervisor queues first and enters Knowledge Engine only after approval', 
 
     const discovery = await supervisor.discover();
     assert.equal(discovery.proposed, 1);
-    assert.equal(queue.listPending().length, 1);
+    assert.equal((await queue.listPending()).length, 1);
     assert.equal(fs.existsSync(storedObjectPath), false);
 
-    const approval = supervisor.approve(discovery.proposals[0].approvalId);
+    const approval = await supervisor.approve(discovery.proposals[0].approvalId);
     assert.equal(approval.ok, true);
     assert.equal(approval.action, 'approved-and-ingested');
     assert.equal(approval.knowledgeObject.identity.version, '2.0');

@@ -170,6 +170,7 @@ class JsonApprovalRepositoryV2 {
       rejectedAt: null,
       resolvedAt: null,
       executionId: null,
+      executionAttemptCount: 0,
       executionStartedAt: null,
       executionLeaseExpiresAt: null,
       executionCompletedAt: null,
@@ -233,11 +234,12 @@ class JsonApprovalRepositoryV2 {
     return this._transition(id, {
       expectedVersion,
       expectedStatus,
-      mutate: () => {
+      mutate: (current) => {
         const now = Date.now();
         return {
           status: 'executing',
           executionId,
+          executionAttemptCount: (current.executionAttemptCount || 0) + 1,
           executionStartedAt: new Date(now).toISOString(),
           executionLeaseExpiresAt: new Date(now + leaseTtlMs).toISOString(),
           executionCompletedAt: null,

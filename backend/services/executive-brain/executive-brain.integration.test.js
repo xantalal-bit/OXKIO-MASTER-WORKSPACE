@@ -122,11 +122,11 @@ function buildPrivateContext(overrides = {}) {
   };
 }
 
-test('executes the full Executive Brain flow with ranking and response building', () => {
+test('executes the full Executive Brain flow with ranking and response building', async () => {
   const fixture = createIntegrationFixture();
 
   try {
-    const learningHeroes = orchestrateExecutiveQuery('¿Qué aprendimos en Learning Heroes?', {
+    const learningHeroes = await orchestrateExecutiveQuery('¿Qué aprendimos en Learning Heroes?', {
       knowledgeQueryOptions: {
         root: fixture.root,
       },
@@ -135,7 +135,7 @@ test('executes the full Executive Brain flow with ranking and response building'
       },
     });
 
-    const businessHunter = orchestrateExecutiveQuery('¿Qué decisiones existen sobre Business Hunter?', {
+    const businessHunter = await orchestrateExecutiveQuery('¿Qué decisiones existen sobre Business Hunter?', {
       knowledgeQueryOptions: {
         root: fixture.root,
       },
@@ -144,7 +144,7 @@ test('executes the full Executive Brain flow with ranking and response building'
       },
     });
 
-    const xantalal = orchestrateExecutiveQuery('¿Qué reglas de governance tiene XANTALAL?', {
+    const xantalal = await orchestrateExecutiveQuery('¿Qué reglas de governance tiene XANTALAL?', {
       knowledgeQueryOptions: {
         root: fixture.root,
       },
@@ -153,7 +153,7 @@ test('executes the full Executive Brain flow with ranking and response building'
       },
     });
 
-    const oxkio = orchestrateExecutiveQuery('Muéstrame el roadmap de Oxkio', {
+    const oxkio = await orchestrateExecutiveQuery('Muéstrame el roadmap de Oxkio', {
       knowledgeQueryOptions: {
         root: fixture.root,
       },
@@ -190,7 +190,7 @@ test('executes the full Executive Brain flow with ranking and response building'
   }
 });
 
-test('executes Executive Brain flow with authorized private context without store writes', () => {
+test('executes Executive Brain flow with authorized private context without store writes', async () => {
   const emptyStore = fs.mkdtempSync(path.join(os.tmpdir(), 'executive-brain-private-store-'));
   const privatePayload = {
     events: [
@@ -201,7 +201,7 @@ test('executes Executive Brain flow with authorized private context without stor
 
   try {
     const beforeFiles = fs.readdirSync(emptyStore);
-    const result = orchestrateExecutiveQuery('Prepara mi briefing privado de hoy', {
+    const result = await orchestrateExecutiveQuery('Prepara mi briefing privado de hoy', {
       privateContextMetadata: buildPrivateContext(),
       expectedClientId: 'client-alpha',
       privatePayload,

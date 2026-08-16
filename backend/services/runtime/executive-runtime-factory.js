@@ -51,9 +51,10 @@ function createExecutiveRuntime({
       shortTermMemory: [],
       longTermMemory: [],
     }, null, 2));
+    // FASE A2: ApprovalQueue ahora usa ApprovalRepositoryV2 (forma
+    // {records:[...]}), no el snapshot V1 {pending,history}.
     fs.writeFileSync(approvalQueuePath, JSON.stringify({
-      pending: [],
-      history: [],
+      records: [],
     }, null, 2));
 
     return {

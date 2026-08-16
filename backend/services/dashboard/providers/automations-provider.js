@@ -81,7 +81,7 @@ function timestampValue(value) {
   return Number.isFinite(timestamp) ? timestamp : 0;
 }
 
-function getAutomations(timestamp, approvalQueue) {
+async function getAutomations(timestamp, approvalQueue) {
   try {
     if (
       !approvalQueue
@@ -91,8 +91,8 @@ function getAutomations(timestamp, approvalQueue) {
       throw new Error('approval_queue_unavailable');
     }
 
-    const pendingRecords = approvalQueue.listPending();
-    const historyRecords = approvalQueue.getHistory();
+    const pendingRecords = await approvalQueue.listPending();
+    const historyRecords = await approvalQueue.getHistory();
     if (!Array.isArray(pendingRecords) || !Array.isArray(historyRecords)) {
       throw new Error('approval_queue_invalid_response');
     }
