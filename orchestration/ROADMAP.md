@@ -15,9 +15,11 @@
   con T1–T5 ejecutadas y superadas. 3D.4 — Secret Manager — queda **CERRADA**
   (15/08/2026): su puerta humana de ejecución se concedió, se usó para materializar
   PG-RUN (Puertas A y B) y quedó **consumida**. PG-RUN está materializado pero **sin
-  consumidor productivo**. **3D.6 — pruebas/rollback contra instancia real — queda
-  abierta solo en planificación documental**; su ejecución exige una segunda puerta
-  humana. 3D.5, 5C.7B.3E y 5C.7B.3F permanecen cerradas/no abiertas.
+  consumidor productivo**. **3D.6 — Tier 1 (A–K) contra instancia real — queda
+  CERRADA (16/08/2026)** con una única ejecución real y veredicto **PASS**; la
+  segunda puerta humana fue efímera para esa ejecución y no permanece abierta;
+  Tier 2/E sigue **BLOQUEADA/DEFERIDA** y restore **DIFERIDO**. 3D.5, 5C.7B.3E y
+  5C.7B.3F permanecen cerradas/no abiertas.
 - 5C.7B.3A: contrato de secretos y matriz de custodia aprobado y cerrado.
 - 5C.7B.3B: runtime neutral de secretos sintéticos cerrado y publicado en `4a5076c`.
 - 5C.7B.3C: cerrada; 3C.1 y 3C.2 están cerradas, sin secretos operativos ni despliegue.
@@ -42,7 +44,8 @@
   RPO/RTO, Owner humano e higiene de APIs automáticas a fases posteriores.
 - 5C.7B.3D: abierta como contenedor; 3D.1, 3D.2, 3D.3 y **3D.4 cerradas**; la puerta
   humana de ejecución de 3D.4 se concedió y quedó consumida el 15/08/2026 para
-  materializar PG-RUN; **3D.6 abierta solo en planificación documental**; 3D.5
+  materializar PG-RUN; **3D.6 Tier 1 CERRADA (16/08/2026) con PASS real**, segunda
+  puerta efímera consumida, Tier 2/E diferida y restore diferido; 3D.5
   cerrada/no abierta; 5C.7B.3E–F: cerradas / no abiertas.
 - 3D.6 abierta en planificación (15/08/2026): documenta el contrato de las pruebas
   contra la instancia real —aislamiento RLS entre scopes sintéticos, no lectura ni
@@ -56,7 +59,8 @@
   I/J **no repiten** el 33/33 de 3D.2: comprueban un subconjunto y lo contrastan, y toda
   contradicción es FAIL CLOSED. Los tests de integración y el POC runner, que usan
   `connectionString` sin TLS endurecido, **no pueden ejecutarse contra Neon** en 3D.6.
-  Nada se ha ejecutado: la apertura es documental y la ejecución exige una segunda puerta
+  **ESTADO HISTÓRICO SUPERADO tras el 16/08/2026** (ver cierre real más abajo): nada se
+  había ejecutado, la apertura era documental y la ejecución exigía una segunda puerta
   humana. La sonda quedó preparada **offline** en
   `AppData\Local\OXKIO\tools\oxkio-3d6-rls-cas-probe.js` (sha256 `22ad1ff9…`, 57 802
   bytes, selftest 49/49) con `EXECUTION_AUTHORIZED = false`: `tp1` y `tp2` fallan cerrado
@@ -79,7 +83,27 @@
   sin ella falla cerrado antes de tocar `pg`/DNS/red, incluso con `OXKIO_3D6_PG_URL` y
   `OXKIO_REPO_ROOT` ficticios; `tp2` sigue **BLOQUEADA/DEFERIDA** incondicionalmente.
   Cero credenciales reales, cero conexión a Neon, cero SQL ejecutado. A–K, restore
-  diferido y 3D.5/3E/3F cerradas/no abiertas quedan intactos.
+  diferido y 3D.5/3E/3F cerradas/no abiertas quedan intactos. **Todo este párrafo
+  describe el ESTADO HISTÓRICO de preparación, superado por el cierre real siguiente.**
+  Cierre real de Tier 1 (16/08/2026): la segunda puerta `OXKIO_3D6_GATE` fue concedida
+  por José Antonio de forma efímera y exclusiva para una única ejecución (frase nunca
+  solicitada, mostrada ni registrada; no permanece abierta). Con PG-RUN cargado
+  localmente desde Secret Manager sin exponerlo, se ejecutó una única vez `tp1` contra
+  el endpoint pooled real de Neon: `current_user` verificado `oxkio_mission_runtime`;
+  RLS `enabled=true`/`forced=true` en ambas tablas; residuo tras `ROLLBACK` con
+  `app.*` fijado = **0 misiones, 0 confirmaciones** en A y B; escritura cruzada,
+  `row_security=off` y `SET ROLE` propietario rechazados (SQLSTATE `42501`); timeout
+  activado (SQLSTATE `57014`); 0 reintentos. Veredictos: **A/B/C PASS, K PASS, D/CAS
+  PASS, G/timeout PASS, F/H PASS — veredicto global PASS**. El resumen de privilegios
+  observado (`INSERT, SELECT`, sin `UPDATE`) es el mismo falso negativo ya documentado
+  de `information_schema.table_privileges` para roles `INHERIT FALSE` (hallazgo 3 de
+  3D.2); el PASS de D/CAS confirma funcionalmente que `UPDATE` a nivel de columna
+  existe y opera. Un intento previo sin `OXKIO_REPO_ROOT` falló cerrado en fase local
+  antes de tocar la red y no cuenta como conexión a Neon. Tras la ejecución,
+  `OXKIO_3D6_PG_URL`, `OXKIO_3D6_GATE` y `OXKIO_REPO_ROOT` se eliminaron de la sesión
+  y se comprobó `False` para las tres. **Con esto, 3D.6 Tier 1 (A–K) queda CERRADA.**
+  No habilita Tier 2/E (**BLOQUEADA/DEFERIDA**), restore (**DIFERIDO**) ni 3D.5/3E/3F
+  (cerradas/no abiertas).
 - 3D.4 abierta en planificación (13/08/2026): alcance canónico sin cambios —secretos
   PostgreSQL reales en Secret Manager, ligados a las tres service accounts de 3C.2,
   en el proyecto ya existente `oxkio-runtime-prod`—. Primera tarea **resuelta**
@@ -249,7 +273,7 @@ Capacidades operativas verificadas:
 
 ## No abrir todavía
 
-- 5C.7B.3D.4–3D.6 a ejecución real (secretos, rol de backup, pruebas con escritura); TLS productivo cableado en el runtime; 5C.7B.3E–F.
+- 5C.7B.3D.6 Tier 2/E y restore (siguen BLOQUEADA/DEFERIDA y DIFERIDO tras el cierre real de Tier 1 el 16/08/2026); 3D.5 y su rol de backup; TLS productivo cableado en el runtime; 5C.7B.3E–F. (3D.4 y 3D.6 Tier 1 ya tuvieron su ejecución real autorizada y cerrada; no reabrir sin puerta humana nueva.)
 - Envío de Gmail.
 - Calendar Execution.
 - Automatizaciones y activación de otros agentes.

@@ -105,7 +105,10 @@
   productivo, `server.js`, `environment-contract.js`, TLS de composición, despliegue,
   PG-MIG, PG-BKP, `pg_dump` ni restore: la ejecución exige una **segunda puerta humana**
   nueva y explícita, ya que la de 3D.4 quedó consumida. **3D.5, 5C.7B.3E y 5C.7B.3F
-  siguen cerradas/no abiertas.**
+  siguen cerradas/no abiertas.** **ESTADO HISTÓRICO SUPERADO** en cuanto a Neon/SQL:
+  el 16/08/2026 esa segunda puerta se concedió de forma efímera para una única
+  ejecución real de Tier 1, con veredicto PASS — ver detalle en el punto 16. 3D.5,
+  3E y 3F siguen cerradas/no abiertas también tras esa ejecución.
 - Motivo de priorizar 3D.6 sobre 3D.5: el riesgo abierto de mayor impacto no es la
   pérdida de datos —la base tiene el esquema de 001/002 y **cero filas productivas**—
   sino que el aislamiento por RLS está **configurado y no demostrado funcionalmente**,
@@ -228,22 +231,42 @@
 16. **Conservar la sonda de 3D.6** en
     `C:\Users\janta\AppData\Local\OXKIO\tools\oxkio-3d6-rls-cas-probe.js` (sha256
     `3e953e9371fe7e916fdd5cb6756439a318aae2ad3aadf4a96955ffb07d40b4d8`, 59 154 bytes,
-    selftest offline 49/49, `node --check` OK) al menos hasta el cierre de 3D.6. Sustituye
-    a la versión inicial `a0637866…`, **invalidada** por la auditoría independiente, y a la
-    versión preparada del 15/08/2026 —sha256 `22ad1ff9…76540ef`, 57 802 bytes,
-    `EXECUTION_AUTHORIZED = false`—, ahora **SUPERADA** por la preparación controlada del
-    16/08/2026. El único cambio funcional de la versión vigente es
+    selftest offline 49/49, `node --check` OK, **hash sin cambios tras la ejecución
+    real**) al menos hasta el cierre de 3D.6. Sustituye a la versión inicial
+    `a0637866…`, **invalidada** por la auditoría independiente, y a la versión
+    preparada del 15/08/2026 —sha256 `22ad1ff9…76540ef`, 57 802 bytes,
+    `EXECUTION_AUTHORIZED = false`—, ahora **SUPERADA** por la preparación controlada
+    del 16/08/2026. El único cambio funcional de esta versión de la sonda es
     `EXECUTION_AUTHORIZED = true` (primer cerrojo levantado) más la corrección de la
     única aserción del selftest que presuponía ese cerrojo en `false`; ninguna otra
-    lógica cambió. `EXECUTION_AUTHORIZED = true` **no habilita ejecución real**: la
-    sonda exige además la segunda puerta humana `OXKIO_3D6_GATE`, que **sigue sin
-    conceder**, sin frase fijada. `tp1` sin ella falla cerrado antes de tocar la red
-    (verificado offline con `OXKIO_3D6_PG_URL` y `OXKIO_REPO_ROOT` ficticios); `tp2`
-    sigue **BLOQUEADA/DEFERIDA** de forma incondicional. Modificar cualquier bandera
-    invalida el hash y exige selftest, auditoría y autorización nuevas. Mismas
-    condiciones que el runner de 3D.2 y las sondas de 3D.3 y 3D.4: fuera del
-    repositorio, de OneDrive y de Temp, sin secretos embebidos, y **no debe
-    versionarse en Git**.
+    lógica cambió. **ESTADO HISTÓRICO SUPERADO** (válido solo antes de la ejecución
+    real): `EXECUTION_AUTHORIZED = true` no habilitaba por sí sola ejecución real
+    mientras la segunda puerta `OXKIO_3D6_GATE` seguía sin concederse; `tp1` sin ella
+    fallaba cerrado antes de tocar la red (verificado offline con `OXKIO_3D6_PG_URL`
+    y `OXKIO_REPO_ROOT` ficticios).
+    **ESTADO VIGENTE — Tier 1 real (16/08/2026).** La segunda puerta fue concedida por
+    José Antonio de forma efímera y exclusiva para una única ejecución (su frase nunca
+    se solicitó, mostró ni registró; no permanece abierta). Con PG-RUN cargado
+    localmente desde Secret Manager sin exponerlo, se ejecutó una única vez `tp1`
+    contra el endpoint pooled real de Neon: `current_user` verificado
+    `oxkio_mission_runtime`; RLS `enabled=true`/`forced=true` en ambas tablas; residuo
+    tras `ROLLBACK` con `app.*` fijado = **0 misiones, 0 confirmaciones** en A y B;
+    escritura cruzada, `row_security=off` y `SET ROLE` propietario rechazados
+    (SQLSTATE `42501`); timeout activado (SQLSTATE `57014`); 0 reintentos. Veredictos:
+    **A/B/C PASS, K PASS, D/CAS PASS, G/timeout PASS, F/H PASS — veredicto global
+    PASS**. El resumen de privilegios observado (`INSERT, SELECT`, sin `UPDATE`) es un
+    falso negativo ya documentado de `information_schema.table_privileges` para roles
+    `INHERIT FALSE` (hallazgo 3 de 3D.2); el PASS de D/CAS es evidencia funcional
+    directa de que `UPDATE` a nivel de columna existe y opera. Un intento previo, sin
+    `OXKIO_REPO_ROOT`, falló cerrado en fase local antes de tocar la red y no cuenta
+    como conexión a Neon. Tras la ejecución, `OXKIO_3D6_PG_URL`, `OXKIO_3D6_GATE` y
+    `OXKIO_REPO_ROOT` se eliminaron de la sesión y se comprobó `False` para las tres.
+    **Con esto, 3D.6 Tier 1 (A–K) queda CERRADA.** No habilita Tier 2/E (sigue
+    **BLOQUEADA/DEFERIDA**), restore (sigue **DIFERIDO**) ni 3D.5/3E/3F (cerradas/no
+    abiertas). Modificar cualquier bandera de la sonda invalida el hash y exige
+    selftest, auditoría y autorización nuevas. Mismas condiciones que el runner de
+    3D.2 y las sondas de 3D.3 y 3D.4: fuera del repositorio, de OneDrive y de Temp,
+    sin secretos embebidos, y **no debe versionarse en Git**.
 17. **PENDIENTE TRANSVERSAL DE RUNTIME/COMPOSICIÓN** — Cablear la política TLS
     demostrada en 3D.3 en la raíz de composición del runtime productivo. Hoy el
     código productivo **no tiene ninguna configuración TLS** y los repositorios
