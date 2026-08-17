@@ -21,7 +21,12 @@
   Tier 2/E sigue **BLOQUEADA/DEFERIDA** y restore **DIFERIDO**. 3D.5 y 5C.7B.3E
   permanecen cerradas/no abiertas. **5C.7B.3F queda DEFINIDA (16/08/2026)** —
   persistencia definitiva de ApprovalQueue/ApprovalRepository, prerrequisito de
-  Runtime 24/7 y 5C.7B.7 — pero técnicamente no iniciada.
+  Runtime 24/7 y 5C.7B.7. **B1 CERRADA/PUBLICADA** (`a721285`, 16/08/2026 —
+  `PostgresApprovalRepository` offline). **B2 CERRADA** (17/08/2026 —
+  decisiones productivas: identidad `oxkio_approval_runtime`, secreto
+  `OXKIO_APPROVAL_PG_RUNTIME_URL`, esquema conceptual, RLS, grants y política
+  TLS; ninguna implementada todavía). B3–B6 no abiertas (ver governance doc,
+  «Regularización 17/08/2026»).
 - 5C.7B.3A: contrato de secretos y matriz de custodia aprobado y cerrado.
 - 5C.7B.3B: runtime neutral de secretos sintéticos cerrado y publicado en `4a5076c`.
 - 5C.7B.3C: cerrada; 3C.1 y 3C.2 están cerradas, sin secretos operativos ni despliegue.
@@ -49,8 +54,9 @@
   materializar PG-RUN; **3D.6 Tier 1 CERRADA (16/08/2026) con PASS real**, segunda
   puerta efímera consumida, Tier 2/E diferida y restore diferido; 3D.5
   cerrada/no abierta; 5C.7B.3E: cerrada/no abierta; **5C.7B.3F: DEFINIDA
-  (16/08/2026), técnicamente no iniciada** (persistencia definitiva de
-  ApprovalQueue/ApprovalRepository).
+  (16/08/2026)** (persistencia definitiva de ApprovalQueue/ApprovalRepository);
+  **B1 CERRADA/PUBLICADA** (`a721285`) y **B2 CERRADA** (17/08/2026,
+  documental); B3–B6 no abiertas.
 - 3D.6 abierta en planificación (15/08/2026): documenta el contrato de las pruebas
   contra la instancia real —aislamiento RLS entre scopes sintéticos, no lectura ni
   escritura cruzadas, no escalada del rol de runtime, CAS sobre `version`, rollback,
@@ -278,7 +284,7 @@ Capacidades operativas verificadas:
 
 ## No abrir todavía
 
-- 5C.7B.3D.6 Tier 2/E y restore (siguen BLOQUEADA/DEFERIDA y DIFERIDO tras el cierre real de Tier 1 el 16/08/2026); 3D.5 y su rol de backup; TLS productivo cableado en el runtime; 5C.7B.3E; 5C.7B.3F técnica (definida el 16/08/2026 — persistencia definitiva de ApprovalQueue/ApprovalRepository — pero sin PostgresApprovalRepository, sin SQL y sin conexión Neon; su primera microfase técnica sigue sin autorizar). (3D.4 y 3D.6 Tier 1 ya tuvieron su ejecución real autorizada y cerrada; no reabrir sin puerta humana nueva.)
+- 5C.7B.3D.6 Tier 2/E y restore (siguen BLOQUEADA/DEFERIDA y DIFERIDO tras el cierre real de Tier 1 el 16/08/2026); 3D.5 y su rol de backup; TLS productivo cableado en el runtime; 5C.7B.3E; 5C.7B.3F desde B3 en adelante (B1 —`PostgresApprovalRepository` offline— y B2 —decisiones productivas de identidad/secreto/esquema/RLS/grants/TLS— ya CERRADAS, `a721285` y 17/08/2026 respectivamente, ambas sin SQL real, sin rol/secreto creados y sin conexión Neon; B3 —migración SQL offline— es el siguiente paso y sigue sin autorizar). (3D.4 y 3D.6 Tier 1 ya tuvieron su ejecución real autorizada y cerrada; no reabrir sin puerta humana nueva.)
 - Envío de Gmail.
 - Calendar Execution.
 - Automatizaciones y activación de otros agentes.

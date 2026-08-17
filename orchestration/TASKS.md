@@ -110,8 +110,10 @@
   ejecución real de Tier 1, con veredicto PASS — ver detalle en el punto 16. 3D.5 y
   3E siguen cerradas/no abiertas también tras esa ejecución. **3F queda DEFINIDA el
   16/08/2026** (persistencia definitiva de ApprovalQueue/ApprovalRepository,
-  prerrequisito de Runtime 24/7 y 5C.7B.7 — ver governance doc), pero técnicamente
-  no iniciada.
+  prerrequisito de Runtime 24/7 y 5C.7B.7 — ver governance doc). **Superado
+  17/08/2026:** B1 (`PostgresApprovalRepository` offline) CERRADA/PUBLICADA en
+  `a721285`; B2 (decisiones productivas de identidad/secreto/esquema/RLS/
+  grants/TLS) CERRADA documental; B3–B6 no abiertas.
 - Motivo de priorizar 3D.6 sobre 3D.5: el riesgo abierto de mayor impacto no es la
   pérdida de datos —la base tiene el esquema de 001/002 y **cero filas productivas**—
   sino que el aislamiento por RLS está **configurado y no demostrado funcionalmente**,
@@ -267,7 +269,12 @@
     **Con esto, 3D.6 Tier 1 (A–K) queda CERRADA.** No habilita Tier 2/E (sigue
     **BLOQUEADA/DEFERIDA**), restore (sigue **DIFERIDO**) ni 3D.5/3E (cerradas/no
     abiertas). **3F queda DEFINIDA el 16/08/2026** (persistencia definitiva de
-    ApprovalQueue/ApprovalRepository), técnicamente sin iniciar — ver governance doc.
+    ApprovalQueue/ApprovalRepository). **Superado 17/08/2026:** B1
+    (`PostgresApprovalRepository` offline) CERRADA/PUBLICADA en `a721285`; B2
+    (decisiones productivas: identidad `oxkio_approval_runtime`, secreto
+    `OXKIO_APPROVAL_PG_RUNTIME_URL`, esquema conceptual, RLS, grants, TLS)
+    CERRADA documental; B3–B6 no abiertas — ver governance doc, «Regularización
+    17/08/2026».
     Modificar cualquier bandera de la sonda invalida el hash y exige
     selftest, auditoría y autorización nuevas. Mismas condiciones que el runner de
     3D.2 y las sondas de 3D.3 y 3D.4: fuera del repositorio, de OneDrive y de Temp,
