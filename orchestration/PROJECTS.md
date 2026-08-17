@@ -46,6 +46,11 @@ Gobernanza aplicable: [G0001 Rev. A](../XANTALAL/00_GOVERNANCE/G0001-REV-A-CONST
 
 ## Nomenclatura
 
-- Xose: denominación vigente.
-- `PROFESOR-IA`: referencia física/histórica únicamente.
-- ecoSoft: denominación legacy/prohibida; no es un proyecto vigente.
+- Xose: denominación vigente. Úsese para todo trabajo nuevo.
+- `PROFESOR-IA`: referencia física/histórica únicamente; no usar para
+  nuevas capacidades. Se conserva como alias legacy en código
+  (`backend/projects/projectManagerService.js`) exclusivamente para
+  resolver la ruta física existente y mantener compatibilidad con
+  texto histórico.
+- ecoSoft: denominación legacy/prohibida; no es un proyecto vigente;
+  no usar para nuevas capacidades.

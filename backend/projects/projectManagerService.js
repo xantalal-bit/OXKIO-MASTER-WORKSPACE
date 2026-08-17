@@ -5,15 +5,19 @@ const PROJECT_ORDER = [
   "OXKIO",
   "BUSINESS-HUNTER",
   "GIU",
-  "PROFESOR-IA",
+  "XOSE",
   "LEARNING-HEROES-AGENT"
 ];
 
+// "XOSE" es la denominación vigente (ver orchestration/PROJECTS.md,
+// sección "Nomenclatura"). "PROFESOR-IA" se conserva como alias legacy
+// porque sigue siendo la ruta física real y aparece en documentación
+// histórica; no crea un proyecto paralelo.
 const PROJECT_ALIASES = {
   OXKIO: ["oxkio", "centro de mando", "ecosystem observer"],
   "BUSINESS-HUNTER": ["business hunter"],
   GIU: ["giu"],
-  "PROFESOR-IA": ["profesor ia"],
+  XOSE: ["xose", "profesor ia", "profesor-ia"],
   "LEARNING-HEROES-AGENT": ["learning heroes", "knowledge hub"]
 };
 

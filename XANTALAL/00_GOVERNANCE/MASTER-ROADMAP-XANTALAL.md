@@ -68,9 +68,13 @@ Tareas:
 - Hechos reales
 - Tareas diarias
 
-## Fase 4 — Business Hunter + ecoSoft
+## Fase 4 — Business Hunter
 
 Estado: PENDIENTE
+
+Nota (2026-08-17): "ecoSoft" retirado del título de esta fase por ser
+denominación legacy/prohibida (ver `orchestration/PROJECTS.md`, sección
+"Nomenclatura"). No se reinterpreta el alcance ni las tareas de la fase.
 
 Tareas:
 - Leer oportunidades
