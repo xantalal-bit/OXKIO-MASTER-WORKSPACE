@@ -154,6 +154,25 @@ test('the RLS policy isolates exclusively by client_id via current_setting', () 
   assert.equal(withCheck, "client_id = current_setting('app.client_id', true)");
 });
 
+test('B3.1: the table is created under oxkio_approval_owner, never oxkio_mission_owner', () => {
+  const executable = stripSqlComments(migrationSql);
+  assert.match(executable, /SET LOCAL ROLE oxkio_approval_owner;/);
+  assert.doesNotMatch(executable, /SET LOCAL ROLE oxkio_mission_owner/);
+  assert.doesNotMatch(executable, /\boxkio_mission_owner\b/);
+});
+
+test('B3.1: the shared oxkio schema ownership is never touched by this migration', () => {
+  const executable = stripSqlComments(migrationSql);
+  assert.doesNotMatch(executable, /CREATE SCHEMA/i);
+  assert.doesNotMatch(executable, /ALTER SCHEMA/i);
+  assert.doesNotMatch(executable, /AUTHORIZATION/i);
+});
+
+test('B3.1: oxkio_mission_runtime receives no grant on approval_items', () => {
+  const executable = stripSqlComments(migrationSql);
+  assert.doesNotMatch(executable, /\boxkio_mission_runtime\b/);
+});
+
 test('no tenant_id or user_id column, index, or policy predicate is introduced', () => {
   // Comments deliberately explain the client_id-only decision using these
   // words; only the executable SQL (comments stripped) must never use them.

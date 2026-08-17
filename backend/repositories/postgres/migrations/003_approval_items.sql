@@ -3,16 +3,33 @@
 BEGIN;
 
 -- Esquema oxkio ya existe y ya es propiedad de oxkio_mission_owner (001).
--- B2 (ba6b7c8) decidio una identidad RUNTIME propia para Approval
--- (oxkio_approval_runtime) para no compartir privilegios de ejecucion con
--- Mission Queue, pero no decidio un owner de esquema separado. Siguiendo
--- exactamente el precedente de 001/002 (el owner ejecuta el DDL sobre el
--- esquema compartido; los GRANTS de ejecucion son lo que se aisla por
--- dominio), esta migracion reutiliza SET LOCAL ROLE oxkio_mission_owner
--- solo para crear la tabla en el esquema ya existente. No crea ningun rol,
--- no toca Secret Manager/IAM y no se ejecuta contra ninguna instancia real
--- desde este repositorio.
-SET LOCAL ROLE oxkio_mission_owner;
+-- Esta migracion NO cambia esa propiedad y NO la toca: el esquema sigue
+-- siendo de oxkio_mission_owner, exactamente como en 001/002.
+--
+-- B3.1 (correctiva, ratificada por Direccion tras B2/ba6b7c8): Approval
+-- mantiene identidad administrativa propia y separada de Mission Queue, no
+-- solo en runtime sino tambien en ownership:
+--   owner:   oxkio_approval_owner    (esta migracion)
+--   runtime: oxkio_approval_runtime  (decidido en B2)
+-- oxkio_mission_owner NO se usa en ningun punto de esta migracion y no
+-- conserva ningun poder permanente sobre oxkio.approval_items: la tabla se
+-- crea directamente bajo oxkio_approval_owner, no bajo mission_owner con
+-- una transferencia posterior.
+--
+-- PRECONDICION (fuera de esta migracion, no incluida aqui): oxkio_approval_owner
+-- debe existir y debe tener CREATE en el schema oxkio (p.ej.
+-- "GRANT CREATE ON SCHEMA oxkio TO oxkio_approval_owner;", otorgado por el
+-- propietario del schema o por una identidad con privilegio suficiente)
+-- antes de poder ejecutar esta migracion. Ni esa concesion ni el propio rol
+-- se crean aqui, ni en ninguna otra migracion de este repositorio; son
+-- responsabilidad de una futura preparacion de infraestructura anterior a
+-- B4, con su propia puerta humana. Sin esa precondicion satisfecha, esta
+-- migracion fallara cerrada (permission denied) al intentar
+-- SET LOCAL ROLE, nunca se ejecutara con un owner incorrecto.
+--
+-- Esta migracion no crea ningun rol, no toca Secret Manager/IAM y no se
+-- ejecuta contra ninguna instancia real desde este repositorio.
+SET LOCAL ROLE oxkio_approval_owner;
 
 -- oxkio.approval_items — persistencia definitiva de ApprovalQueue/
 -- ApprovalRepository (5C.7B.3F / B3). Columnas derivadas exclusivamente de
