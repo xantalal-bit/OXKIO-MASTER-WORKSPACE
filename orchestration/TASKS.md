@@ -113,7 +113,13 @@
   prerrequisito de Runtime 24/7 y 5C.7B.7 — ver governance doc). **Superado
   17/08/2026:** B1 (`PostgresApprovalRepository` offline) CERRADA/PUBLICADA en
   `a721285`; B2 (decisiones productivas de identidad/secreto/esquema/RLS/
-  grants/TLS) CERRADA documental; B3–B6 no abiertas.
+  grants/TLS) CERRADA documental; B3 (migración SQL offline
+  `003_approval_items.sql`) CERRADA/PUBLICADA en `e94e6f1` (17/08/2026); B3.1
+  (corrección de ownership — `oxkio_approval_owner` propio, separado de
+  `oxkio_mission_owner`) CERRADA/PUBLICADA en `b8117e4` (17/08/2026); B4–B6 no
+  abiertas. **Regularización documental 18/08/2026:** este estado de B3/B3.1
+  no había quedado reflejado en `ROADMAP.md`/`TASKS.md` hasta hoy — ver
+  governance doc, «Regularización 18/08/2026».
 - Motivo de priorizar 3D.6 sobre 3D.5: el riesgo abierto de mayor impacto no es la
   pérdida de datos —la base tiene el esquema de 001/002 y **cero filas productivas**—
   sino que el aislamiento por RLS está **configurado y no demostrado funcionalmente**,
@@ -273,8 +279,10 @@
     (`PostgresApprovalRepository` offline) CERRADA/PUBLICADA en `a721285`; B2
     (decisiones productivas: identidad `oxkio_approval_runtime`, secreto
     `OXKIO_APPROVAL_PG_RUNTIME_URL`, esquema conceptual, RLS, grants, TLS)
-    CERRADA documental; B3–B6 no abiertas — ver governance doc, «Regularización
-    17/08/2026».
+    CERRADA documental; B3 (migración SQL offline) CERRADA/PUBLICADA en
+    `e94e6f1`; B3.1 (ownership separado de Mission Queue) CERRADA/PUBLICADA en
+    `b8117e4`; B4–B6 no abiertas — ver governance doc, «Regularización
+    17/08/2026» y «Regularización 18/08/2026».
     Modificar cualquier bandera de la sonda invalida el hash y exige
     selftest, auditoría y autorización nuevas. Mismas condiciones que el runner de
     3D.2 y las sondas de 3D.3 y 3D.4: fuera del repositorio, de OneDrive y de Temp,

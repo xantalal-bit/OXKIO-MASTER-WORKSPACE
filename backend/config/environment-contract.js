@@ -30,6 +30,10 @@ const ENVIRONMENT_VARIABLES = Object.freeze({
   OPENAI_API_KEY: Object.freeze({ kind: 'secret', classifications: ['optional', 'local_only', 'secret'], scope: 'simulator' }),
   OXKIO_MISSION_PG_RUNTIME_URL: Object.freeze({ kind: 'secret', classifications: ['optional', 'secret'], scope: 'postgres' }),
   OXKIO_MISSION_PG_ADMIN_URL: Object.freeze({ kind: 'secret', classifications: ['optional', 'secret'], scope: 'postgres' }),
+  // Approval (5C.7B.3F): variable propia, distinta de OXKIO_MISSION_PG_RUNTIME_URL
+  // (decisión B2, 17/08/2026). Declarada aqui como parte de la regularizacion
+  // PRE-B4 (18/08/2026); el secreto real NO se crea en este cambio.
+  OXKIO_APPROVAL_PG_RUNTIME_URL: Object.freeze({ kind: 'secret', classifications: ['optional', 'secret'], scope: 'postgres' }),
 });
 
 function isPresent(env, name) {

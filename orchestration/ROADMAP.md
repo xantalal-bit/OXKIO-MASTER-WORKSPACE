@@ -25,8 +25,11 @@
   `PostgresApprovalRepository` offline). **B2 CERRADA** (17/08/2026 —
   decisiones productivas: identidad `oxkio_approval_runtime`, secreto
   `OXKIO_APPROVAL_PG_RUNTIME_URL`, esquema conceptual, RLS, grants y política
-  TLS; ninguna implementada todavía). B3–B6 no abiertas (ver governance doc,
-  «Regularización 17/08/2026»).
+  TLS; ninguna implementada todavía). **B3 CERRADA/PUBLICADA** (`e94e6f1`,
+  17/08/2026 — migración SQL offline `003_approval_items.sql`). **B3.1
+  CERRADA/PUBLICADA** (`b8117e4`, 17/08/2026 — ownership `oxkio_approval_owner`
+  separado de `oxkio_mission_owner`). B4–B6 no abiertas (ver governance doc,
+  «Regularización 17/08/2026» y «Regularización 18/08/2026»).
 - 5C.7B.3A: contrato de secretos y matriz de custodia aprobado y cerrado.
 - 5C.7B.3B: runtime neutral de secretos sintéticos cerrado y publicado en `4a5076c`.
 - 5C.7B.3C: cerrada; 3C.1 y 3C.2 están cerradas, sin secretos operativos ni despliegue.
@@ -56,7 +59,8 @@
   cerrada/no abierta; 5C.7B.3E: cerrada/no abierta; **5C.7B.3F: DEFINIDA
   (16/08/2026)** (persistencia definitiva de ApprovalQueue/ApprovalRepository);
   **B1 CERRADA/PUBLICADA** (`a721285`) y **B2 CERRADA** (17/08/2026,
-  documental); B3–B6 no abiertas.
+  documental); **B3 CERRADA/PUBLICADA** (`e94e6f1`) y **B3.1
+  CERRADA/PUBLICADA** (`b8117e4`), ambas 17/08/2026; B4–B6 no abiertas.
 - 3D.6 abierta en planificación (15/08/2026): documenta el contrato de las pruebas
   contra la instancia real —aislamiento RLS entre scopes sintéticos, no lectura ni
   escritura cruzadas, no escalada del rol de runtime, CAS sobre `version`, rollback,
