@@ -116,10 +116,14 @@
   grants/TLS) CERRADA documental; B3 (migración SQL offline
   `003_approval_items.sql`) CERRADA/PUBLICADA en `e94e6f1` (17/08/2026); B3.1
   (corrección de ownership — `oxkio_approval_owner` propio, separado de
-  `oxkio_mission_owner`) CERRADA/PUBLICADA en `b8117e4` (17/08/2026); B4–B6 no
-  abiertas. **Regularización documental 18/08/2026:** este estado de B3/B3.1
-  no había quedado reflejado en `ROADMAP.md`/`TASKS.md` hasta hoy — ver
-  governance doc, «Regularización 18/08/2026».
+  `oxkio_mission_owner`) CERRADA/PUBLICADA en `b8117e4` (17/08/2026); **B4.A**
+  (identidades PostgreSQL `oxkio_approval_owner`/`oxkio_approval_runtime`)
+  CERRADA documental el 19/08/2026, PASS CON OBSERVACIONES; B4
+  (contenedor)/B4.B–B6 no abiertas. **Regularización documental 18/08/2026:**
+  este estado de B3/B3.1 no había quedado reflejado en
+  `ROADMAP.md`/`TASKS.md` hasta hoy — ver governance doc, «Regularización
+  18/08/2026». **Regularización documental 19/08/2026:** cierre de B4.A — ver
+  governance doc, «Regularización 19/08/2026».
 - Motivo de priorizar 3D.6 sobre 3D.5: el riesgo abierto de mayor impacto no es la
   pérdida de datos —la base tiene el esquema de 001/002 y **cero filas productivas**—
   sino que el aislamiento por RLS está **configurado y no demostrado funcionalmente**,
@@ -281,8 +285,10 @@
     `OXKIO_APPROVAL_PG_RUNTIME_URL`, esquema conceptual, RLS, grants, TLS)
     CERRADA documental; B3 (migración SQL offline) CERRADA/PUBLICADA en
     `e94e6f1`; B3.1 (ownership separado de Mission Queue) CERRADA/PUBLICADA en
-    `b8117e4`; B4–B6 no abiertas — ver governance doc, «Regularización
-    17/08/2026» y «Regularización 18/08/2026».
+    `b8117e4`; B4.A (identidades PostgreSQL Approval) CERRADA documental el
+    19/08/2026, PASS CON OBSERVACIONES; B4 (contenedor)/B4.B–B6 no abiertas —
+    ver governance doc, «Regularización 17/08/2026», «Regularización
+    18/08/2026» y «Regularización 19/08/2026».
     Modificar cualquier bandera de la sonda invalida el hash y exige
     selftest, auditoría y autorización nuevas. Mismas condiciones que el runner de
     3D.2 y las sondas de 3D.3 y 3D.4: fuera del repositorio, de OneDrive y de Temp,
