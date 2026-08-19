@@ -121,11 +121,15 @@
   CERRADA documental el 19/08/2026, PASS CON OBSERVACIONES; **B4.B** (puente
   de privilegios — `CREATE ON SCHEMA oxkio` a `oxkio_approval_owner` + fila
   temporal `set_option=true` independiente de la basal `cloud_admin`) CERRADA
-  el 19/08/2026, PASS REAL; B4 (contenedor)/B4.C–B6 no abiertas.
+  el 19/08/2026, PASS REAL; **B4.C ABIERTA/PARCIAL** — Puerta A (secreto
+  `OXKIO_APPROVAL_PG_RUNTIME_URL` materializado en Secret Manager, Version 1
+  habilitada, sin IAM) CERRADA el 19/08/2026, PASS REAL; Puerta B (IAM) NO
+  ABIERTA; B4 (contenedor)/B4.D–B6 no abiertas.
   **Regularización documental 18/08/2026:** este estado de B3/B3.1 no había
   quedado reflejado en `ROADMAP.md`/`TASKS.md` hasta hoy — ver governance
   doc, «Regularización 18/08/2026». **Regularización documental 19/08/2026:**
-  cierre de B4.A y B4.B — ver governance doc, «Regularización 19/08/2026».
+  cierre de B4.A, B4.B y B4.C/Puerta A — ver governance doc, «Regularización
+  19/08/2026».
 - Motivo de priorizar 3D.6 sobre 3D.5: el riesgo abierto de mayor impacto no es la
   pérdida de datos —la base tiene el esquema de 001/002 y **cero filas productivas**—
   sino que el aislamiento por RLS está **configurado y no demostrado funcionalmente**,
@@ -289,7 +293,9 @@
     `e94e6f1`; B3.1 (ownership separado de Mission Queue) CERRADA/PUBLICADA en
     `b8117e4`; B4.A (identidades PostgreSQL Approval) CERRADA documental el
     19/08/2026, PASS CON OBSERVACIONES; B4.B (puente de privilegios) CERRADA
-    el 19/08/2026, PASS REAL; B4 (contenedor)/B4.C–B6 no abiertas —
+    el 19/08/2026, PASS REAL; B4.C ABIERTA/PARCIAL (Puerta A — secreto
+    materializado sin IAM — CERRADA 19/08/2026, PASS REAL; Puerta B no
+    abierta); B4 (contenedor)/B4.D–B6 no abiertas —
     ver governance doc, «Regularización 17/08/2026», «Regularización
     18/08/2026» y «Regularización 19/08/2026».
     Modificar cualquier bandera de la sonda invalida el hash y exige
