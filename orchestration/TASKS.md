@@ -121,15 +121,19 @@
   CERRADA documental el 19/08/2026, PASS CON OBSERVACIONES; **B4.B** (puente
   de privilegios — `CREATE ON SCHEMA oxkio` a `oxkio_approval_owner` + fila
   temporal `set_option=true` independiente de la basal `cloud_admin`) CERRADA
-  el 19/08/2026, PASS REAL; **B4.C ABIERTA/PARCIAL** — Puerta A (secreto
-  `OXKIO_APPROVAL_PG_RUNTIME_URL` materializado en Secret Manager, Version 1
-  habilitada, sin IAM) CERRADA el 19/08/2026, PASS REAL; Puerta B (IAM) NO
-  ABIERTA; B4 (contenedor)/B4.D–B6 no abiertas.
+  el 19/08/2026, PASS REAL; **B4.C CERRADA (20/08/2026) — PASS REAL** — Puerta
+  A (secreto `OXKIO_APPROVAL_PG_RUNTIME_URL` materializado en Secret Manager,
+  Version 1 habilitada) CERRADA el 19/08/2026, PASS REAL; Puerta B (IAM
+  `roles/secretmanager.secretAccessor` concedido a
+  `oxkio-runtime-prod@oxkio-runtime-prod.iam.gserviceaccount.com`
+  exclusivamente sobre ese recurso) CERRADA el 20/08/2026, PASS REAL; B4
+  (contenedor)/B4.D–B6 no abiertas.
   **Regularización documental 18/08/2026:** este estado de B3/B3.1 no había
   quedado reflejado en `ROADMAP.md`/`TASKS.md` hasta hoy — ver governance
   doc, «Regularización 18/08/2026». **Regularización documental 19/08/2026:**
   cierre de B4.A, B4.B y B4.C/Puerta A — ver governance doc, «Regularización
-  19/08/2026».
+  19/08/2026». **Regularización documental 20/08/2026:** cierre de B4.C/Puerta
+  B y de B4.C completa — ver governance doc, «Regularización 20/08/2026».
 - Motivo de priorizar 3D.6 sobre 3D.5: el riesgo abierto de mayor impacto no es la
   pérdida de datos —la base tiene el esquema de 001/002 y **cero filas productivas**—
   sino que el aislamiento por RLS está **configurado y no demostrado funcionalmente**,
@@ -293,11 +297,12 @@
     `e94e6f1`; B3.1 (ownership separado de Mission Queue) CERRADA/PUBLICADA en
     `b8117e4`; B4.A (identidades PostgreSQL Approval) CERRADA documental el
     19/08/2026, PASS CON OBSERVACIONES; B4.B (puente de privilegios) CERRADA
-    el 19/08/2026, PASS REAL; B4.C ABIERTA/PARCIAL (Puerta A — secreto
-    materializado sin IAM — CERRADA 19/08/2026, PASS REAL; Puerta B no
-    abierta); B4 (contenedor)/B4.D–B6 no abiertas —
+    el 19/08/2026, PASS REAL; B4.C CERRADA (20/08/2026) — PASS REAL (Puerta A
+    — secreto materializado — CERRADA 19/08/2026, PASS REAL; Puerta B — IAM
+    concedido exclusivamente sobre ese recurso — CERRADA 20/08/2026, PASS
+    REAL); B4 (contenedor)/B4.D–B6 no abiertas —
     ver governance doc, «Regularización 17/08/2026», «Regularización
-    18/08/2026» y «Regularización 19/08/2026».
+    18/08/2026», «Regularización 19/08/2026» y «Regularización 20/08/2026».
     Modificar cualquier bandera de la sonda invalida el hash y exige
     selftest, auditoría y autorización nuevas. Mismas condiciones que el runner de
     3D.2 y las sondas de 3D.3 y 3D.4: fuera del repositorio, de OneDrive y de Temp,
