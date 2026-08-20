@@ -121,7 +121,10 @@
   CERRADA documental el 19/08/2026, PASS CON OBSERVACIONES; **B4.B** (puente
   de privilegios — `CREATE ON SCHEMA oxkio` a `oxkio_approval_owner` + fila
   temporal `set_option=true` independiente de la basal `cloud_admin`) CERRADA
-  el 19/08/2026, PASS REAL; **B4.C CERRADA (20/08/2026) — PASS REAL** — Puerta
+  el 19/08/2026, PASS REAL; **B4.B.2** (`USAGE ON SCHEMA oxkio` concedido a
+  `oxkio_approval_owner` y `oxkio_approval_runtime`, resolviendo la
+  observación abierta de B4.B) CERRADA el 20/08/2026, PASS REAL; **B4.C
+  CERRADA (20/08/2026) — PASS REAL** — Puerta
   A (secreto `OXKIO_APPROVAL_PG_RUNTIME_URL` materializado en Secret Manager,
   Version 1 habilitada) CERRADA el 19/08/2026, PASS REAL; Puerta B (IAM
   `roles/secretmanager.secretAccessor` concedido a
@@ -132,8 +135,10 @@
   quedado reflejado en `ROADMAP.md`/`TASKS.md` hasta hoy — ver governance
   doc, «Regularización 18/08/2026». **Regularización documental 19/08/2026:**
   cierre de B4.A, B4.B y B4.C/Puerta A — ver governance doc, «Regularización
-  19/08/2026». **Regularización documental 20/08/2026:** cierre de B4.C/Puerta
-  B y de B4.C completa — ver governance doc, «Regularización 20/08/2026».
+  19/08/2026». **Regularización documental 20/08/2026:** cierre de B4.B.2
+  (USAGE estructural Approval), de B4.C/Puerta B y de B4.C completa — ver
+  governance doc, «Regularización 20/08/2026 — B4.B.2 / USAGE estructural
+  Approval» y «Regularización 20/08/2026 — Cierre de B4.C / Puerta B».
 - Motivo de priorizar 3D.6 sobre 3D.5: el riesgo abierto de mayor impacto no es la
   pérdida de datos —la base tiene el esquema de 001/002 y **cero filas productivas**—
   sino que el aislamiento por RLS está **configurado y no demostrado funcionalmente**,
@@ -297,7 +302,9 @@
     `e94e6f1`; B3.1 (ownership separado de Mission Queue) CERRADA/PUBLICADA en
     `b8117e4`; B4.A (identidades PostgreSQL Approval) CERRADA documental el
     19/08/2026, PASS CON OBSERVACIONES; B4.B (puente de privilegios) CERRADA
-    el 19/08/2026, PASS REAL; B4.C CERRADA (20/08/2026) — PASS REAL (Puerta A
+    el 19/08/2026, PASS REAL; B4.B.2 (USAGE ON SCHEMA oxkio para owner+
+    runtime Approval) CERRADA el 20/08/2026, PASS REAL; B4.C CERRADA
+    (20/08/2026) — PASS REAL (Puerta A
     — secreto materializado — CERRADA 19/08/2026, PASS REAL; Puerta B — IAM
     concedido exclusivamente sobre ese recurso — CERRADA 20/08/2026, PASS
     REAL); B4 (contenedor)/B4.D–B6 no abiertas —

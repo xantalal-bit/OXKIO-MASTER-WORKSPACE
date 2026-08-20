@@ -32,15 +32,18 @@
   identidades PostgreSQL `oxkio_approval_owner`/`oxkio_approval_runtime`, PASS
   CON OBSERVACIONES). **B4.B CERRADA** (19/08/2026 — puente de privilegios:
   `CREATE ON SCHEMA oxkio` concedido a `oxkio_approval_owner` y fila temporal
-  `set_option=true` independiente de la basal `cloud_admin`, PASS REAL; `USAGE`
-  queda observación abierta para B4.D). **B4.C CERRADA (20/08/2026) — PASS
+  `set_option=true` independiente de la basal `cloud_admin`, PASS REAL).
+  **B4.B.2 CERRADA (20/08/2026) — PASS REAL**: `USAGE ON SCHEMA oxkio`
+  concedido a `oxkio_approval_owner` y `oxkio_approval_runtime`, resolviendo
+  la observación abierta de B4.B. **B4.C CERRADA (20/08/2026) — PASS
   REAL**: Puerta A CERRADA (19/08/2026, PASS REAL — secreto
   `OXKIO_APPROVAL_PG_RUNTIME_URL` materializado en Secret Manager) y Puerta B
   CERRADA (20/08/2026, PASS REAL — IAM `roles/secretmanager.secretAccessor`
   concedido a `oxkio-runtime-prod@oxkio-runtime-prod.iam.gserviceaccount.com`
   exclusivamente sobre ese recurso). B4 (contenedor)/B4.D–B6 no abiertas (ver
   governance doc, «Regularización 17/08/2026», «Regularización 18/08/2026»,
-  «Regularización 19/08/2026» y «Regularización 20/08/2026»).
+  «Regularización 19/08/2026» y «Regularización 20/08/2026 — B4.B.2» y
+  «Regularización 20/08/2026 — Cierre de B4.C / Puerta B»).
 - 5C.7B.3A: contrato de secretos y matriz de custodia aprobado y cerrado.
 - 5C.7B.3B: runtime neutral de secretos sintéticos cerrado y publicado en `4a5076c`.
 - 5C.7B.3C: cerrada; 3C.1 y 3C.2 están cerradas, sin secretos operativos ni despliegue.
@@ -73,11 +76,12 @@
   documental); **B3 CERRADA/PUBLICADA** (`e94e6f1`) y **B3.1
   CERRADA/PUBLICADA** (`b8117e4`), ambas 17/08/2026; **B4.A CERRADA**
   (19/08/2026, identidades PostgreSQL Approval, PASS CON OBSERVACIONES) y
-  **B4.B CERRADA** (19/08/2026, puente de privilegios, PASS REAL); **B4.C
-  CERRADA (20/08/2026) — PASS REAL** (Puerta A CERRADA 19/08/2026, PASS REAL
-  — secreto materializado; Puerta B CERRADA 20/08/2026, PASS REAL — IAM
-  concedido exclusivamente sobre ese recurso); B4 (contenedor)/B4.D–B6 no
-  abiertas.
+  **B4.B CERRADA** (19/08/2026, puente de privilegios, PASS REAL); **B4.B.2
+  CERRADA** (20/08/2026, USAGE ON SCHEMA oxkio para owner+runtime Approval,
+  PASS REAL); **B4.C CERRADA (20/08/2026) — PASS REAL** (Puerta A CERRADA
+  19/08/2026, PASS REAL — secreto materializado; Puerta B CERRADA 20/08/2026,
+  PASS REAL — IAM concedido exclusivamente sobre ese recurso); B4
+  (contenedor)/B4.D–B6 no abiertas.
 - 3D.6 abierta en planificación (15/08/2026): documenta el contrato de las pruebas
   contra la instancia real —aislamiento RLS entre scopes sintéticos, no lectura ni
   escritura cruzadas, no escalada del rol de runtime, CAS sobre `version`, rollback,
