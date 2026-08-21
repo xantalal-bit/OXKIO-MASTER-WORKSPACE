@@ -129,8 +129,13 @@
   Version 1 habilitada) CERRADA el 19/08/2026, PASS REAL; Puerta B (IAM
   `roles/secretmanager.secretAccessor` concedido a
   `oxkio-runtime-prod@oxkio-runtime-prod.iam.gserviceaccount.com`
-  exclusivamente sobre ese recurso) CERRADA el 20/08/2026, PASS REAL; B4
-  (contenedor)/B4.D–B6 no abiertas.
+  exclusivamente sobre ese recurso) CERRADA el 20/08/2026, PASS REAL; **B4.D
+  CERRADA (21/08/2026) — PASS REAL ESTRUCTURAL**: `oxkio.approval_items`
+  materializada vía `003_approval_items.sql` (sha256
+  `45e1b076947fdf9bea2bd8e54d959b105fdf1b24bfb7487a9cd9cb16678b32c2`), verify
+  catalog-only 32/32 PASS; no demuestra aislamiento funcional multi-cliente,
+  CAS/concurrencia real ni pooling productivo. B4 (contenedor)/B4.D.1–B6 no
+  abiertas.
   **Regularización documental 18/08/2026:** este estado de B3/B3.1 no había
   quedado reflejado en `ROADMAP.md`/`TASKS.md` hasta hoy — ver governance
   doc, «Regularización 18/08/2026». **Regularización documental 19/08/2026:**
@@ -139,6 +144,9 @@
   (USAGE estructural Approval), de B4.C/Puerta B y de B4.C completa — ver
   governance doc, «Regularización 20/08/2026 — B4.B.2 / USAGE estructural
   Approval» y «Regularización 20/08/2026 — Cierre de B4.C / Puerta B».
+  **Regularización documental 21/08/2026:** cierre de B4.D (materialización
+  estructural de `oxkio.approval_items`) — ver governance doc,
+  «Regularización 21/08/2026 — Cierre de B4.D».
 - Motivo de priorizar 3D.6 sobre 3D.5: el riesgo abierto de mayor impacto no es la
   pérdida de datos —la base tiene el esquema de 001/002 y **cero filas productivas**—
   sino que el aislamiento por RLS está **configurado y no demostrado funcionalmente**,
@@ -307,9 +315,13 @@
     (20/08/2026) — PASS REAL (Puerta A
     — secreto materializado — CERRADA 19/08/2026, PASS REAL; Puerta B — IAM
     concedido exclusivamente sobre ese recurso — CERRADA 20/08/2026, PASS
-    REAL); B4 (contenedor)/B4.D–B6 no abiertas —
+    REAL); B4.D CERRADA (21/08/2026) — PASS REAL ESTRUCTURAL
+    (`oxkio.approval_items` materializada, verify catalog-only 32/32 PASS,
+    aislamiento funcional/CAS pendientes de microfase posterior no abierta);
+    B4 (contenedor)/B4.D.1–B6 no abiertas —
     ver governance doc, «Regularización 17/08/2026», «Regularización
-    18/08/2026», «Regularización 19/08/2026» y «Regularización 20/08/2026».
+    18/08/2026», «Regularización 19/08/2026», «Regularización 20/08/2026» y
+    «Regularización 21/08/2026 — Cierre de B4.D».
     Modificar cualquier bandera de la sonda invalida el hash y exige
     selftest, auditoría y autorización nuevas. Mismas condiciones que el runner de
     3D.2 y las sondas de 3D.3 y 3D.4: fuera del repositorio, de OneDrive y de Temp,

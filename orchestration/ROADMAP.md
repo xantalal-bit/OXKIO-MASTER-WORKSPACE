@@ -40,10 +40,16 @@
   `OXKIO_APPROVAL_PG_RUNTIME_URL` materializado en Secret Manager) y Puerta B
   CERRADA (20/08/2026, PASS REAL — IAM `roles/secretmanager.secretAccessor`
   concedido a `oxkio-runtime-prod@oxkio-runtime-prod.iam.gserviceaccount.com`
-  exclusivamente sobre ese recurso). B4 (contenedor)/B4.D–B6 no abiertas (ver
-  governance doc, «Regularización 17/08/2026», «Regularización 18/08/2026»,
-  «Regularización 19/08/2026» y «Regularización 20/08/2026 — B4.B.2» y
-  «Regularización 20/08/2026 — Cierre de B4.C / Puerta B»).
+  exclusivamente sobre ese recurso). **B4.D CERRADA (21/08/2026) — PASS REAL
+  ESTRUCTURAL**: `oxkio.approval_items` materializada vía
+  `003_approval_items.sql` (sha256
+  `45e1b076947fdf9bea2bd8e54d959b105fdf1b24bfb7487a9cd9cb16678b32c2`), verify
+  catalog-only 32/32 PASS; no demuestra aislamiento funcional ni CAS/
+  concurrencia real. B4 (contenedor)/B4.D.1–B6 no abiertas (ver governance
+  doc, «Regularización 17/08/2026», «Regularización 18/08/2026»,
+  «Regularización 19/08/2026», «Regularización 20/08/2026 — B4.B.2»,
+  «Regularización 20/08/2026 — Cierre de B4.C / Puerta B» y «Regularización
+  21/08/2026 — Cierre de B4.D»).
 - 5C.7B.3A: contrato de secretos y matriz de custodia aprobado y cerrado.
 - 5C.7B.3B: runtime neutral de secretos sintéticos cerrado y publicado en `4a5076c`.
 - 5C.7B.3C: cerrada; 3C.1 y 3C.2 están cerradas, sin secretos operativos ni despliegue.
@@ -80,8 +86,11 @@
   CERRADA** (20/08/2026, USAGE ON SCHEMA oxkio para owner+runtime Approval,
   PASS REAL); **B4.C CERRADA (20/08/2026) — PASS REAL** (Puerta A CERRADA
   19/08/2026, PASS REAL — secreto materializado; Puerta B CERRADA 20/08/2026,
-  PASS REAL — IAM concedido exclusivamente sobre ese recurso); B4
-  (contenedor)/B4.D–B6 no abiertas.
+  PASS REAL — IAM concedido exclusivamente sobre ese recurso); **B4.D
+  CERRADA (21/08/2026) — PASS REAL ESTRUCTURAL** (`oxkio.approval_items`
+  materializada, verify catalog-only 32/32 PASS, aislamiento funcional/CAS
+  pendientes de microfase posterior no abierta); B4 (contenedor)/B4.D.1–B6 no
+  abiertas.
 - 3D.6 abierta en planificación (15/08/2026): documenta el contrato de las pruebas
   contra la instancia real —aislamiento RLS entre scopes sintéticos, no lectura ni
   escritura cruzadas, no escalada del rol de runtime, CAS sobre `version`, rollback,
