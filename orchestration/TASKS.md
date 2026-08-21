@@ -133,9 +133,15 @@
   CERRADA (21/08/2026) — PASS REAL ESTRUCTURAL**: `oxkio.approval_items`
   materializada vía `003_approval_items.sql` (sha256
   `45e1b076947fdf9bea2bd8e54d959b105fdf1b24bfb7487a9cd9cb16678b32c2`), verify
-  catalog-only 32/32 PASS; no demuestra aislamiento funcional multi-cliente,
-  CAS/concurrencia real ni pooling productivo. B4 (contenedor)/B4.D.1–B6 no
-  abiertas.
+  catalog-only 32/32 PASS. **B4.D.1 CERRADA (21/08/2026) — PASS REAL
+  FUNCIONAL**: hallazgo real del GUC `app.client_id` vacío (tras `SET
+  LOCAL`/`set_config` puede quedar en `''`, no `NULL`, en una conexión
+  reutilizada) corregido por `004_approval_items_client_id_guard.sql` (sha256
+  `3af18fbc708569e60a7a72161366743f85ca999b78bb0429d5ab43d7805351cf`, verify
+  14/14 PASS, `003` intacto); precheck real 13/13 PASS y probe funcional real
+  15/15 PASS contra Neon (runtime real pooled, TLS/SCRAM-SHA-256-PLUS, RLS
+  A/B, fail-closed sin scope, CAS básico, cero residuo); no demuestra CAS
+  concurrente ni wiring productivo. B4 (contenedor)/B4.D.2–B6 no abiertas.
   **Regularización documental 18/08/2026:** este estado de B3/B3.1 no había
   quedado reflejado en `ROADMAP.md`/`TASKS.md` hasta hoy — ver governance
   doc, «Regularización 18/08/2026». **Regularización documental 19/08/2026:**
@@ -145,8 +151,9 @@
   governance doc, «Regularización 20/08/2026 — B4.B.2 / USAGE estructural
   Approval» y «Regularización 20/08/2026 — Cierre de B4.C / Puerta B».
   **Regularización documental 21/08/2026:** cierre de B4.D (materialización
-  estructural de `oxkio.approval_items`) — ver governance doc,
-  «Regularización 21/08/2026 — Cierre de B4.D».
+  estructural de `oxkio.approval_items`) y de B4.D.1 (migración 004 y prueba
+  funcional real) — ver governance doc, «Regularización 21/08/2026 — Cierre
+  de B4.D» y «Regularización 21/08/2026 — Migración 004 y cierre de B4.D.1».
 - Motivo de priorizar 3D.6 sobre 3D.5: el riesgo abierto de mayor impacto no es la
   pérdida de datos —la base tiene el esquema de 001/002 y **cero filas productivas**—
   sino que el aislamiento por RLS está **configurado y no demostrado funcionalmente**,
@@ -316,12 +323,16 @@
     — secreto materializado — CERRADA 19/08/2026, PASS REAL; Puerta B — IAM
     concedido exclusivamente sobre ese recurso — CERRADA 20/08/2026, PASS
     REAL); B4.D CERRADA (21/08/2026) — PASS REAL ESTRUCTURAL
-    (`oxkio.approval_items` materializada, verify catalog-only 32/32 PASS,
-    aislamiento funcional/CAS pendientes de microfase posterior no abierta);
-    B4 (contenedor)/B4.D.1–B6 no abiertas —
+    (`oxkio.approval_items` materializada, verify catalog-only 32/32 PASS);
+    B4.D.1 CERRADA (21/08/2026) — PASS REAL FUNCIONAL (gap del GUC
+    `app.client_id` vacío corregido por `004_approval_items_client_id_guard.sql`,
+    verify 14/14 PASS, `003` intacto; precheck real 13/13 y probe funcional
+    real 15/15 PASS; CAS concurrente y wiring productivo pendientes de
+    microfase posterior no abierta); B4 (contenedor)/B4.D.2–B6 no abiertas —
     ver governance doc, «Regularización 17/08/2026», «Regularización
-    18/08/2026», «Regularización 19/08/2026», «Regularización 20/08/2026» y
-    «Regularización 21/08/2026 — Cierre de B4.D».
+    18/08/2026», «Regularización 19/08/2026», «Regularización 20/08/2026»,
+    «Regularización 21/08/2026 — Cierre de B4.D» y «Regularización
+    21/08/2026 — Migración 004 y cierre de B4.D.1».
     Modificar cualquier bandera de la sonda invalida el hash y exige
     selftest, auditoría y autorización nuevas. Mismas condiciones que el runner de
     3D.2 y las sondas de 3D.3 y 3D.4: fuera del repositorio, de OneDrive y de Temp,
