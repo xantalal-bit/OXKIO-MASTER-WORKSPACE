@@ -141,7 +141,22 @@
   14/14 PASS, `003` intacto); precheck real 13/13 PASS y probe funcional real
   15/15 PASS contra Neon (runtime real pooled, TLS/SCRAM-SHA-256-PLUS, RLS
   A/B, fail-closed sin scope, CAS básico, cero residuo); no demuestra CAS
-  concurrente ni wiring productivo. B4 (contenedor)/B4.D.2–B6 no abiertas.
+  concurrente ni wiring productivo. **B4.D.2 CERRADA (24/08/2026) — PASS
+  REAL CONCURRENTE**: probe real 14/14 PASS con dos conexiones físicas
+  distintas y ambas transacciones simultáneamente activas contra Neon
+  (backends `pg_backend_pid()` distintos verificado con ambas TX vivas);
+  carrera CAS real (`UPDATE ... WHERE version = $2`, mismo SQL productivo de
+  `approve()`, sin inventar semántica nueva) con exactamente un ganador
+  (XOR real; ganador de la ejecución de cierre: B); estado final
+  `version=2` y `approved_by` correspondiente al ganador; cleanup
+  administrativo verificado (`deleted=1`); residuo sintético cero por id y
+  por tag; sin errores asíncronos de conexión en A/B/admin. Las 4 FALLO
+  observadas en una ejecución de auditoría previa fueron defectos del
+  *runner de prueba* (comparación de `version` bigint devuelta como string
+  por `pg` contra un número, y pérdida del scope RLS de sesión tras el
+  `COMMIT` de la conexión ganadora), corregidas sin tocar `CAS_APPROVE_SQL`,
+  las migraciones `003`/`004`, RLS, roles ni permisos. B4 (contenedor)/
+  B4.E–B6 no abiertas. Mission Queue no tocada.
   **Regularización documental 18/08/2026:** este estado de B3/B3.1 no había
   quedado reflejado en `ROADMAP.md`/`TASKS.md` hasta hoy — ver governance
   doc, «Regularización 18/08/2026». **Regularización documental 19/08/2026:**
@@ -154,6 +169,9 @@
   estructural de `oxkio.approval_items`) y de B4.D.1 (migración 004 y prueba
   funcional real) — ver governance doc, «Regularización 21/08/2026 — Cierre
   de B4.D» y «Regularización 21/08/2026 — Migración 004 y cierre de B4.D.1».
+  **Regularización documental 24/08/2026:** cierre de B4.D.2 (CAS
+  concurrente real de Approval, probe 14/14 PASS) — ver governance doc,
+  «Regularización 24/08/2026 — Cierre de B4.D.2».
 - Motivo de priorizar 3D.6 sobre 3D.5: el riesgo abierto de mayor impacto no es la
   pérdida de datos —la base tiene el esquema de 001/002 y **cero filas productivas**—
   sino que el aislamiento por RLS está **configurado y no demostrado funcionalmente**,
@@ -328,11 +346,16 @@
     `app.client_id` vacío corregido por `004_approval_items_client_id_guard.sql`,
     verify 14/14 PASS, `003` intacto; precheck real 13/13 y probe funcional
     real 15/15 PASS; CAS concurrente y wiring productivo pendientes de
-    microfase posterior no abierta); B4 (contenedor)/B4.D.2–B6 no abiertas —
+    microfase posterior no abierta); B4.D.2 CERRADA (24/08/2026) — PASS REAL
+    CONCURRENTE (probe real 14/14 PASS: dos conexiones con transacciones
+    simultáneamente activas, CAS XOR con exactamente un ganador, version
+    final=2, cleanup verificado, residuo cero; sin cambios a CAS productivo,
+    003/004, RLS, roles ni permisos); B4 (contenedor)/B4.E–B6 no abiertas —
     ver governance doc, «Regularización 17/08/2026», «Regularización
     18/08/2026», «Regularización 19/08/2026», «Regularización 20/08/2026»,
-    «Regularización 21/08/2026 — Cierre de B4.D» y «Regularización
-    21/08/2026 — Migración 004 y cierre de B4.D.1».
+    «Regularización 21/08/2026 — Cierre de B4.D», «Regularización
+    21/08/2026 — Migración 004 y cierre de B4.D.1» y «Regularización
+    24/08/2026 — Cierre de B4.D.2».
     Modificar cualquier bandera de la sonda invalida el hash y exige
     selftest, auditoría y autorización nuevas. Mismas condiciones que el runner de
     3D.2 y las sondas de 3D.3 y 3D.4: fuera del repositorio, de OneDrive y de Temp,

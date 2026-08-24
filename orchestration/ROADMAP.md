@@ -50,12 +50,19 @@
   `3af18fbc708569e60a7a72161366743f85ca999b78bb0429d5ab43d7805351cf`, verify
   14/14 PASS; 003 intacto); precheck real 13/13 PASS y probe funcional real
   15/15 PASS contra Neon (RLS A/B, fail-closed, CAS básico, cero residuo); no
-  demuestra CAS concurrente ni wiring productivo. B4 (contenedor)/B4.D.2–B6
-  no abiertas (ver governance doc, «Regularización 17/08/2026»,
-  «Regularización 18/08/2026», «Regularización 19/08/2026», «Regularización
+  demuestra CAS concurrente ni wiring productivo. **B4.D.2 CERRADA
+  (24/08/2026) — PASS REAL CONCURRENTE**: probe real 14/14 PASS, dos
+  conexiones físicas con transacciones simultáneamente activas contra Neon,
+  CAS real (`UPDATE ... WHERE version = $2`, mismo SQL productivo) con
+  exactamente un ganador, estado final `version=2`, cleanup administrativo
+  verificado y residuo sintético cero; sin cambios a `CAS_APPROVE_SQL`,
+  003/004, RLS, roles ni permisos. B4 (contenedor)/B4.E–B6 no abiertas (ver
+  governance doc, «Regularización 17/08/2026», «Regularización
+  18/08/2026», «Regularización 19/08/2026», «Regularización
   20/08/2026 — B4.B.2», «Regularización 20/08/2026 — Cierre de B4.C / Puerta
-  B», «Regularización 21/08/2026 — Cierre de B4.D» y «Regularización
-  21/08/2026 — Migración 004 y cierre de B4.D.1»).
+  B», «Regularización 21/08/2026 — Cierre de B4.D», «Regularización
+  21/08/2026 — Migración 004 y cierre de B4.D.1» y «Regularización
+  24/08/2026 — Cierre de B4.D.2»).
 - 5C.7B.3A: contrato de secretos y matriz de custodia aprobado y cerrado.
 - 5C.7B.3B: runtime neutral de secretos sintéticos cerrado y publicado en `4a5076c`.
 - 5C.7B.3C: cerrada; 3C.1 y 3C.2 están cerradas, sin secretos operativos ni despliegue.
@@ -99,7 +106,10 @@
   corregido por `004_approval_items_client_id_guard.sql`, verify 14/14 PASS,
   003 intacto; precheck real 13/13 y probe funcional real 15/15 PASS; CAS
   concurrente y wiring productivo pendientes de microfase posterior no
-  abierta); B4 (contenedor)/B4.D.2–B6 no abiertas.
+  abierta); **B4.D.2 CERRADA (24/08/2026) — PASS REAL CONCURRENTE** (probe
+  real 14/14 PASS: dos conexiones con transacciones simultáneamente activas,
+  CAS XOR con exactamente un ganador, version final=2, cleanup verificado,
+  residuo cero); B4 (contenedor)/B4.E–B6 no abiertas.
 - 3D.6 abierta en planificación (15/08/2026): documenta el contrato de las pruebas
   contra la instancia real —aislamiento RLS entre scopes sintéticos, no lectura ni
   escritura cruzadas, no escalada del rol de runtime, CAS sobre `version`, rollback,
