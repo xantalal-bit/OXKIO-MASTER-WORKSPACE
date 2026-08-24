@@ -56,19 +56,28 @@
   CAS real (`UPDATE ... WHERE version = $2`, mismo SQL productivo) con
   exactamente un ganador, estado final `version=2`, cleanup administrativo
   verificado y residuo sintético cero; sin cambios a `CAS_APPROVE_SQL`,
-  003/004, RLS, roles ni permisos. **B4.E DEFINIDA (24/08/2026) — EN
-  PLANIFICACIÓN DOCUMENTAL, no ejecutada, no abierta**: "Validación
-  funcional real del ciclo de vida restante de Approval sobre PostgreSQL
-  gestionado" — `reject`/`claimExecution`/`completeExecution`/
+  003/004, RLS, roles ni permisos. **B4.E CERRADA (24/08/2026) — PASS REAL
+  FUNCIONAL DEL CICLO DE VIDA RESTANTE DE APPROVAL**: probe real
+  definitivo 19/19 PASS — `reject`/`claimExecution`/`completeExecution`/
   `failExecution`/`expire`/`reclaimExpiredExecutions` y el conflicto
-  `execution_id_mismatch`, contra Neon real vía sonda sintética, sin wiring
-  productivo. B4 (contenedor)/B4.F–B6 no abiertas (ver governance doc,
+  `execution_id_mismatch` demostrados contra Neon real vía sonda
+  sintética; los 7 estados de `approval_items_status_ck` ejercitados
+  realmente; cleanup 9/9 filas eliminadas por UUID exacto, residuo cero
+  por id y por tag. Incidencia previa (`23514`,
+  `approval_items_timestamps_ck`) fue defecto de runner —retrodataba
+  `execution_started_at`/`updated_at`, algo que el código productivo
+  jamás hace— corregida exclusivamente en el runner (timestamps siempre
+  reales; lease vencido demostrado desplazando solo el `now` de
+  `reclaimExpiredExecutions()`), sin schema gap. No demuestra wiring
+  productivo, runtime 24/7 ni concurrencia adicional más allá de la ya
+  demostrada en B4.D.2 (solo `approve()`). B4 (contenedor)/B4.F–B6 no
+  abiertas; Mission Queue no tocada (ver governance doc,
   «Regularización 17/08/2026», «Regularización
   18/08/2026», «Regularización 19/08/2026», «Regularización
   20/08/2026 — B4.B.2», «Regularización 20/08/2026 — Cierre de B4.C / Puerta
   B», «Regularización 21/08/2026 — Cierre de B4.D», «Regularización
   21/08/2026 — Migración 004 y cierre de B4.D.1», «Regularización
-  24/08/2026 — Cierre de B4.D.2» y «Definición documental 24/08/2026 —
+  24/08/2026 — Cierre de B4.D.2» y «Regularización 24/08/2026 — Cierre de
   B4.E»).
 - 5C.7B.3A: contrato de secretos y matriz de custodia aprobado y cerrado.
 - 5C.7B.3B: runtime neutral de secretos sintéticos cerrado y publicado en `4a5076c`.
@@ -116,11 +125,15 @@
   abierta); **B4.D.2 CERRADA (24/08/2026) — PASS REAL CONCURRENTE** (probe
   real 14/14 PASS: dos conexiones con transacciones simultáneamente activas,
   CAS XOR con exactamente un ganador, version final=2, cleanup verificado,
-  residuo cero); **B4.E DEFINIDA (24/08/2026) — EN PLANIFICACIÓN
-  DOCUMENTAL**, no ejecutada, no abierta (reject/claimExecution/
-  completeExecution/failExecution/expire/reclaimExpiredExecutions y
-  execution_id_mismatch, contra Neon real, sin wiring productivo); B4
-  (contenedor)/B4.F–B6 no abiertas.
+  residuo cero); **B4.E CERRADA (24/08/2026) — PASS REAL FUNCIONAL DEL
+  CICLO DE VIDA RESTANTE DE APPROVAL** (probe real definitivo 19/19 PASS:
+  reject/claimExecution/completeExecution/failExecution/expire/
+  reclaimExpiredExecutions y execution_id_mismatch contra Neon real, 7
+  estados ejercitados realmente, cleanup 9/9 filas por UUID exacto y
+  residuo cero; incidencia previa 23514 fue defecto de runner —no schema
+  gap—, corregida sin tocar SQL productivo/003/004/RLS/roles/permisos; no
+  demuestra wiring productivo ni concurrencia adicional más allá de
+  B4.D.2); B4 (contenedor)/B4.F–B6 no abiertas.
 - 3D.6 abierta en planificación (15/08/2026): documenta el contrato de las pruebas
   contra la instancia real —aislamiento RLS entre scopes sintéticos, no lectura ni
   escritura cruzadas, no escalada del rol de runtime, CAS sobre `version`, rollback,

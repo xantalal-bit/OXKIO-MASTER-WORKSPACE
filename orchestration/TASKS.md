@@ -155,16 +155,38 @@
   *runner de prueba* (comparación de `version` bigint devuelta como string
   por `pg` contra un número, y pérdida del scope RLS de sesión tras el
   `COMMIT` de la conexión ganadora), corregidas sin tocar `CAS_APPROVE_SQL`,
-  las migraciones `003`/`004`, RLS, roles ni permisos. **B4.E queda DEFINIDA
-  (24/08/2026) — EN PLANIFICACIÓN DOCUMENTAL, NO ejecutada, NO abierta**:
-  "Validación funcional real del ciclo de vida restante de Approval sobre
-  PostgreSQL gestionado" — demostrar contra Neon real, vía sonda sintética
-  externa al repo y sin wiring productivo, `reject`/`claimExecution`/
-  `completeExecution`/`failExecution`/`expire`/`reclaimExpiredExecutions` y
-  el conflicto `execution_id_mismatch`, ninguno demostrado todavía contra
-  PostgreSQL real (detalle completo, alcance, fuera de alcance y criterio de
-  cierre: governance doc, «Definición documental 24/08/2026 — B4.E»). B4
-  (contenedor)/B4.F–B6 siguen NO ABIERTAS. Mission Queue no tocada.
+  las migraciones `003`/`004`, RLS, roles ni permisos. **B4.E CERRADA
+  (24/08/2026) — PASS REAL FUNCIONAL DEL CICLO DE VIDA RESTANTE DE
+  APPROVAL**: probe real definitivo 19/19 PASS contra Neon real —
+  `reject` (pending→rejected, version=2) y su reintento con version stale
+  (rowCount=0, stale_version); `claimExecution` (transición correcta,
+  attemptCount=1, execution_id fijado) y un intento con status incorrecto
+  (rowCount=0, status_conflict); `completeExecution` correcto
+  (status=executed, version=4) y con execution_id incorrecto (rowCount=0,
+  execution_id_mismatch); `failExecution` correcto (status=execution_failed,
+  version=4) y con execution_id incorrecto (rowCount=0,
+  execution_id_mismatch); `expire` (status=expired, version=2);
+  `reclaimExpiredExecutions` devolviendo exclusivamente la fila con lease
+  vencido, nunca la fila control con lease vigente, ambas sin mutar
+  (status=executing). Los 7 estados de `approval_items_status_ck`
+  ejercitados realmente (pending/approved/rejected/executing/executed/
+  execution_failed/expired). Cleanup: 9 filas sintéticas creadas, 9
+  eliminadas por UUID exacto, residuo final cero por id y por tag; sin
+  errores asíncronos en runtime/admin. **Incidencia previa (defecto de
+  runner, no schema gap):** el primer probe real falló con `23514`
+  (`approval_items_timestamps_ck`) porque el runner retrodataba
+  `execution_started_at`/`updated_at` para simular un lease vencido —
+  el código productivo real nunca retrodata esas columnas. Corregido
+  exclusivamente en el runner: timestamps siempre reales, lease vencido
+  demostrado desplazando únicamente el parámetro `now` de
+  `reclaimExpiredExecutions()`, y reporting de cleanup ahora visible
+  incluso ante una excepción real. Sin cambios a `CAS_APPROVE_SQL`,
+  `003`/`004`, RLS, roles ni permisos en ningún momento. **Límites
+  explícitos**: no demuestra wiring productivo, no demuestra runtime
+  24/7, no adelanta B4.F/B5/B6, no toca Mission Queue, no afirma
+  concurrencia adicional más allá de la ya demostrada en B4.D.2 (solo
+  `approve()`). B4 (contenedor)/B4.F–B6 siguen NO ABIERTAS. Mission Queue
+  no tocada.
   **Regularización documental 18/08/2026:** este estado de B3/B3.1 no había
   quedado reflejado en `ROADMAP.md`/`TASKS.md` hasta hoy — ver governance
   doc, «Regularización 18/08/2026». **Regularización documental 19/08/2026:**
@@ -179,9 +201,10 @@
   de B4.D» y «Regularización 21/08/2026 — Migración 004 y cierre de B4.D.1».
   **Regularización documental 24/08/2026:** cierre de B4.D.2 (CAS
   concurrente real de Approval, probe 14/14 PASS) — ver governance doc,
-  «Regularización 24/08/2026 — Cierre de B4.D.2». **Definición documental
-  24/08/2026:** B4.E queda definida y en planificación documental (no
-  ejecutada) — ver governance doc, «Definición documental 24/08/2026 —
+  «Regularización 24/08/2026 — Cierre de B4.D.2». **Regularización
+  documental 24/08/2026 (cierre B4.E):** cierre de B4.E (validación
+  funcional real del ciclo de vida restante de Approval, probe 19/19
+  PASS) — ver governance doc, «Regularización 24/08/2026 — Cierre de
   B4.E».
 - Motivo de priorizar 3D.6 sobre 3D.5: el riesgo abierto de mayor impacto no es la
   pérdida de datos —la base tiene el esquema de 001/002 y **cero filas productivas**—
@@ -361,17 +384,22 @@
     CONCURRENTE (probe real 14/14 PASS: dos conexiones con transacciones
     simultáneamente activas, CAS XOR con exactamente un ganador, version
     final=2, cleanup verificado, residuo cero; sin cambios a CAS productivo,
-    003/004, RLS, roles ni permisos); B4.E DEFINIDA (24/08/2026) — EN
-    PLANIFICACIÓN DOCUMENTAL, no ejecutada, no abierta (validación funcional
-    real de reject/claimExecution/completeExecution/failExecution/expire/
-    reclaimExpiredExecutions y execution_id_mismatch contra Neon real, sin
-    wiring productivo); B4 (contenedor)/B4.F–B6 no abiertas —
+    003/004, RLS, roles ni permisos); B4.E CERRADA (24/08/2026) — PASS REAL
+    FUNCIONAL DEL CICLO DE VIDA RESTANTE DE APPROVAL (probe real definitivo
+    19/19 PASS: reject/claimExecution/completeExecution/failExecution/
+    expire/reclaimExpiredExecutions y execution_id_mismatch demostrados
+    contra Neon real, los 7 estados ejercitados realmente, cleanup 9/9
+    filas eliminadas por UUID exacto y residuo cero; incidencia previa
+    23514 fue defecto de runner — timestamps retrodatados — corregida sin
+    tocar SQL productivo, 003/004, RLS, roles ni permisos; no demuestra
+    wiring productivo ni concurrencia adicional más allá de B4.D.2); B4
+    (contenedor)/B4.F–B6 no abiertas —
     ver governance doc, «Regularización 17/08/2026», «Regularización
     18/08/2026», «Regularización 19/08/2026», «Regularización 20/08/2026»,
     «Regularización 21/08/2026 — Cierre de B4.D», «Regularización
     21/08/2026 — Migración 004 y cierre de B4.D.1», «Regularización
-    24/08/2026 — Cierre de B4.D.2» y «Definición documental 24/08/2026 —
-    B4.E».
+    24/08/2026 — Cierre de B4.D.2» y «Regularización 24/08/2026 — Cierre
+    de B4.E».
     Modificar cualquier bandera de la sonda invalida el hash y exige
     selftest, auditoría y autorización nuevas. Mismas condiciones que el runner de
     3D.2 y las sondas de 3D.3 y 3D.4: fuera del repositorio, de OneDrive y de Temp,
