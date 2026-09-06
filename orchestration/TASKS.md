@@ -183,9 +183,9 @@
   incluso ante una excepción real. Sin cambios a `CAS_APPROVE_SQL`,
   `003`/`004`, RLS, roles ni permisos en ningún momento. **Límites
   explícitos**: no demuestra wiring productivo, no demuestra runtime
-  24/7, no adelanta B5/B6; B4.F fue ejecutada y cerrada posteriormente el 06/09/2026, no toca Mission Queue, no afirma
+  24/7, no adelantaba B5/B6 en ese momento; B4.F fue ejecutada y cerrada posteriormente el 06/09/2026, y B5 fue abierta después con B5.1 limitada a composición offline, no toca Mission Queue, no afirma
   concurrencia adicional más allá de la ya demostrada en B4.D.2 (solo
-  `approve()`). B4.F queda CERRADA posteriormente el 06/09/2026 — PASS REAL; B5 y B6 siguen NO ABIERTAS. Mission Queue
+  `approve()`). B4.F queda CERRADA posteriormente el 06/09/2026 — PASS REAL. B5 fue ABIERTA después el 06/09/2026; B5.1 queda CERRADA OFFLINE y B5.2/B6 siguen NO ABIERTAS. Mission Queue
   no tocada.
   **Regularización documental 18/08/2026:** este estado de B3/B3.1 no había
   quedado reflejado en `ROADMAP.md`/`TASKS.md` hasta hoy — ver governance
@@ -392,7 +392,7 @@
     filas eliminadas por UUID exacto y residuo cero; incidencia previa
     23514 fue defecto de runner — timestamps retrodatados — corregida sin
     tocar SQL productivo, 003/004, RLS, roles ni permisos; no demuestra
-    wiring productivo ni concurrencia adicional más allá de B4.D.2); B4.F CERRADA posteriormente el 06/09/2026 — PASS REAL; B5 y B6 no abiertas —
+    wiring productivo ni concurrencia adicional más allá de B4.D.2); B4.F CERRADA posteriormente el 06/09/2026 — PASS REAL; B5 ABIERTA posteriormente el 06/09/2026, con B5.1 CERRADA OFFLINE; B5.2 y B6 no abiertas —
     ver governance doc, «Regularización 17/08/2026», «Regularización
     18/08/2026», «Regularización 19/08/2026», «Regularización 20/08/2026»,
     «Regularización 21/08/2026 — Cierre de B4.D», «Regularización
