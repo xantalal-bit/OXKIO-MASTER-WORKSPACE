@@ -17,12 +17,21 @@ test('runtime configuration uses dynamic PORT, portable host and fail-closed inv
     filesystem: 'ephemeral',
     executionEnabled: false,
     safeDraftOnly: true,
+    approvalRepositoryBackend: 'json',
   });
   assert.equal(readRuntimeConfig({}).port, 3000);
   assert.throws(() => readRuntimeConfig({ PORT: 'invalid' }), /PORT/);
   assert.throws(() => readRuntimeConfig({ PORT: '70000' }), /PORT/);
   assert.throws(() => readRuntimeConfig({ OXKIO_FILESYSTEM_MODE: 'persistent' }), /OXKIO_FILESYSTEM_MODE/);
   assert.throws(() => readRuntimeConfig({ NODE_ENV: 'unknown' }), /NODE_ENV/);
+  assert.equal(
+    readRuntimeConfig({ OXKIO_APPROVAL_REPOSITORY_BACKEND: 'postgres' }).approvalRepositoryBackend,
+    'postgres'
+  );
+  assert.throws(
+    () => readRuntimeConfig({ OXKIO_APPROVAL_REPOSITORY_BACKEND: 'memory' }),
+    /OXKIO_APPROVAL_REPOSITORY_BACKEND/
+  );
 });
 
 test('development and test modes stay exactly as permissive as before', () => {

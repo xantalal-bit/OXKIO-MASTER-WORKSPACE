@@ -4,7 +4,7 @@ const http = require("http");
 const EmailWorkflow = require("../workflows/emailWorkflow");
 const EmailAgent = require("../agents/emailAgent");
 const ProposalEngine = require("../core/proposalEngine");
-const ApprovalQueue = require("../core/approvalQueue");
+const { createApprovalRuntimeComposition } = require("../services/runtime/approval-runtime-composition");
 const { ExecutionAdapter } = require("../services/execution/execution-adapter");
 const { ExecutionService } = require("../services/execution/execution-service");
 const { createAuthorizedGmailDraftProvider } = require("../services/execution/gmail-draft-provider-factory");
@@ -83,8 +83,14 @@ const intentAnalyzer = getIntentAnalyzer();
 const ruleEngine = getRuleEngine();
 const executiveBrain = getExecutiveBrain();
 const proposalEngine = new ProposalEngine();
-const approvalQueue = new ApprovalQueue();
 const cloudRuntimeConfig = readRuntimeConfig();
+const approvalPersistence = createApprovalRuntimeComposition({
+  backend: cloudRuntimeConfig.approvalRepositoryBackend,
+  runtimeUrl: cloudRuntimeConfig.approvalRepositoryBackend === "postgres"
+    ? process.env.OXKIO_APPROVAL_PG_RUNTIME_URL
+    : undefined
+});
+const approvalQueue = approvalPersistence.approvalQueue;
 const runtimeConfig = Object.freeze({ runtimeMode: "production" });
 const executiveRuntime = createExecutiveRuntime({
   mode: runtimeConfig.runtimeMode,
@@ -1488,7 +1494,10 @@ const proposal = proposalEngine.generate({
 const shutdownController = createShutdownController({
   server,
   readiness: runtimeReadiness,
-  cleanup: () => executiveRuntime.cleanup()
+  cleanup: async () => {
+    await executiveRuntime.cleanup();
+    await approvalPersistence.cleanup();
+  }
 });
 shutdownController.install();
 

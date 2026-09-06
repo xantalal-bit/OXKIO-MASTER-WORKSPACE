@@ -70,7 +70,7 @@
   reales; lease vencido demostrado desplazando solo el `now` de
   `reclaimExpiredExecutions()`), sin schema gap. No demuestra wiring
   productivo, runtime 24/7 ni concurrencia adicional más allá de la ya
-  demostrada en B4.D.2 (solo `approve()`). B4.F CERRADA (06/09/2026 — PASS REAL DE SANEAMIENTO DE PUENTES TEMPORALES); B5 ABIERTA (06/09/2026); B5.1 CERRADA OFFLINE — composición segura Approval PostgreSQL preparada y auditada; B5.2 y B6 no abiertas; Mission Queue no tocada (ver governance doc,
+  demostrada en B4.D.2 (solo `approve()`). B4.F CERRADA (06/09/2026 — PASS REAL DE SANEAMIENTO DE PUENTES TEMPORALES); B5 ABIERTA (06/09/2026); B5.1 CERRADA OFFLINE — composición segura Approval PostgreSQL preparada y auditada; B5.2 CERRADA OFFLINE — wiring productivo Approval preparado y auditado, pero no activado; B5.3 y B6 no abiertas; Mission Queue no tocada (ver governance doc,
   «Regularización 17/08/2026», «Regularización
   18/08/2026», «Regularización 19/08/2026», «Regularización
   20/08/2026 — B4.B.2», «Regularización 20/08/2026 — Cierre de B4.C / Puerta
@@ -132,7 +132,7 @@
   residuo cero; incidencia previa 23514 fue defecto de runner —no schema
   gap—, corregida sin tocar SQL productivo/003/004/RLS/roles/permisos; no
   demuestra wiring productivo ni concurrencia adicional más allá de
-  B4.D.2); B4.F CERRADA (06/09/2026 — PASS REAL: retirados exclusivamente los dos puentes temporales de B4.B, con verify final); B5 ABIERTA (06/09/2026); B5.1 CERRADA OFFLINE — factory/composición segura PostgreSQL validada sin conexión real; B5.2 y B6 no abiertas.
+  B4.D.2); B4.F CERRADA (06/09/2026 — PASS REAL: retirados exclusivamente los dos puentes temporales de B4.B, con verify final); B5 ABIERTA (06/09/2026); B5.1 CERRADA OFFLINE — factory/composición segura PostgreSQL validada sin conexión real; B5.2 CERRADA OFFLINE — wiring productivo preparado con JSON como default y PostgreSQL solo por selección explícita, sin conexión real; B5.3 y B6 no abiertas.
 - 3D.6 abierta en planificación (15/08/2026): documenta el contrato de las pruebas
   contra la instancia real —aislamiento RLS entre scopes sintéticos, no lectura ni
   escritura cruzadas, no escalada del rol de runtime, CAS sobre `version`, rollback,

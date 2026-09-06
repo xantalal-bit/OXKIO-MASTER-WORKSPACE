@@ -10,6 +10,7 @@ const ENVIRONMENT_KINDS = Object.freeze([
 const ENVIRONMENT_VARIABLES = Object.freeze({
   PORT: Object.freeze({ kind: 'config', classifications: ['optional'], scope: 'runtime' }),
   NODE_ENV: Object.freeze({ kind: 'config', classifications: ['optional'], scope: 'runtime' }),
+  OXKIO_APPROVAL_REPOSITORY_BACKEND: Object.freeze({ kind: 'config', classifications: ['optional'], scope: 'runtime' }),
   OXKIO_FILESYSTEM_MODE: Object.freeze({ kind: 'governance', classifications: ['invariant'], scope: 'runtime' }),
   XANTALAL_ROOT: Object.freeze({ kind: 'sensitive_config', classifications: ['optional', 'local_only'], scope: 'local_connectors' }),
   KNOWLEDGE_DISCOVERY_ROOT: Object.freeze({ kind: 'sensitive_config', classifications: ['optional', 'local_only'], scope: 'local_connectors' }),
@@ -58,6 +59,12 @@ function validateEnvironment(env = process.env, { requiredScopes = [] } = {}) {
   }
   if (isPresent(env, 'OXKIO_FILESYSTEM_MODE') && env.OXKIO_FILESYSTEM_MODE !== 'ephemeral') {
     invalid.push('OXKIO_FILESYSTEM_MODE');
+  }
+  if (
+    isPresent(env, 'OXKIO_APPROVAL_REPOSITORY_BACKEND')
+    && !['json', 'postgres'].includes(env.OXKIO_APPROVAL_REPOSITORY_BACKEND)
+  ) {
+    invalid.push('OXKIO_APPROVAL_REPOSITORY_BACKEND');
   }
 
   return Object.freeze({

@@ -25,6 +25,7 @@ function readRuntimeConfig(env = process.env, { requiredScopes } = {}) {
     filesystem: 'ephemeral',
     executionEnabled: false,
     safeDraftOnly: true,
+    approvalRepositoryBackend: env.OXKIO_APPROVAL_REPOSITORY_BACKEND || 'json',
   });
 }
 

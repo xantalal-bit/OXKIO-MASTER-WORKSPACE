@@ -35,6 +35,7 @@ test('distinguishes secrets, sensitive configuration, configuration, and governa
   assert.equal(ENVIRONMENT_VARIABLES.GOOGLE_CLIENT_ID.kind, 'sensitive_config');
   assert.equal(ENVIRONMENT_VARIABLES.GOOGLE_APPLICATION_CREDENTIALS.kind, 'sensitive_config');
   assert.equal(ENVIRONMENT_VARIABLES.PORT.kind, 'config');
+  assert.equal(ENVIRONMENT_VARIABLES.OXKIO_APPROVAL_REPOSITORY_BACKEND.kind, 'config');
   assert.equal(ENVIRONMENT_VARIABLES.OXKIO_FILESYSTEM_MODE.kind, 'governance');
 });
 
@@ -47,4 +48,15 @@ test('validates required capabilities only when explicitly activated', () => {
   assert.equal(validateEnvironment({
     OXKIO_ADMIN_FIREBASE_UIDS: 'test-uid',
   }, { requiredScopes: ['authorization'] }).ok, true);
+  assert.equal(validateEnvironment({
+    OXKIO_APPROVAL_REPOSITORY_BACKEND: 'json',
+  }).ok, true);
+  assert.equal(validateEnvironment({
+    OXKIO_APPROVAL_REPOSITORY_BACKEND: 'postgres',
+  }).ok, true);
+  const invalidBackend = validateEnvironment({
+    OXKIO_APPROVAL_REPOSITORY_BACKEND: 'memory',
+  });
+  assert.equal(invalidBackend.ok, false);
+  assert.deepEqual(invalidBackend.invalid, ['OXKIO_APPROVAL_REPOSITORY_BACKEND']);
 });
