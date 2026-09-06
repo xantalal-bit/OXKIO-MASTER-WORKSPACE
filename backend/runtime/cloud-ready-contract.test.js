@@ -25,12 +25,36 @@ test('runtime configuration uses dynamic PORT, portable host and fail-closed inv
   assert.throws(() => readRuntimeConfig({ OXKIO_FILESYSTEM_MODE: 'persistent' }), /OXKIO_FILESYSTEM_MODE/);
   assert.throws(() => readRuntimeConfig({ NODE_ENV: 'unknown' }), /NODE_ENV/);
   assert.equal(
-    readRuntimeConfig({ OXKIO_APPROVAL_REPOSITORY_BACKEND: 'postgres' }).approvalRepositoryBackend,
+    readRuntimeConfig({
+      OXKIO_APPROVAL_REPOSITORY_BACKEND: 'postgres',
+      OXKIO_APPROVAL_PG_RUNTIME_URL:
+        'postgresql://synthetic:synthetic@example.invalid/neondb',
+    }).approvalRepositoryBackend,
     'postgres'
   );
   assert.throws(
     () => readRuntimeConfig({ OXKIO_APPROVAL_REPOSITORY_BACKEND: 'memory' }),
     /OXKIO_APPROVAL_REPOSITORY_BACKEND/
+  );
+
+  assert.throws(
+    () => readRuntimeConfig(
+      { OXKIO_APPROVAL_REPOSITORY_BACKEND: 'postgres' },
+      { requiredScopes: [] }
+    ),
+    /OXKIO_APPROVAL_PG_RUNTIME_URL/
+  );
+
+  assert.equal(
+    readRuntimeConfig(
+      {
+        OXKIO_APPROVAL_REPOSITORY_BACKEND: 'postgres',
+        OXKIO_APPROVAL_PG_RUNTIME_URL:
+          'postgresql://synthetic:synthetic@example.invalid/neondb',
+      },
+      { requiredScopes: [] }
+    ).approvalRepositoryBackend,
+    'postgres'
   );
 });
 

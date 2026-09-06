@@ -53,6 +53,13 @@ function validateEnvironment(env = process.env, { requiredScopes = [] } = {}) {
     }
   }
 
+  if (
+    env.OXKIO_APPROVAL_REPOSITORY_BACKEND === 'postgres'
+    && !isPresent(env, 'OXKIO_APPROVAL_PG_RUNTIME_URL')
+  ) {
+    missing.push('OXKIO_APPROVAL_PG_RUNTIME_URL');
+  }
+
   const invalid = [];
   if (isPresent(env, 'NODE_ENV') && !['development', 'test', 'production'].includes(env.NODE_ENV)) {
     invalid.push('NODE_ENV');

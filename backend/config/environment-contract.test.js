@@ -53,10 +53,33 @@ test('validates required capabilities only when explicitly activated', () => {
   }).ok, true);
   assert.equal(validateEnvironment({
     OXKIO_APPROVAL_REPOSITORY_BACKEND: 'postgres',
+    OXKIO_APPROVAL_PG_RUNTIME_URL:
+      'postgresql://synthetic:synthetic@example.invalid/neondb',
   }).ok, true);
   const invalidBackend = validateEnvironment({
     OXKIO_APPROVAL_REPOSITORY_BACKEND: 'memory',
   });
   assert.equal(invalidBackend.ok, false);
   assert.deepEqual(invalidBackend.invalid, ['OXKIO_APPROVAL_REPOSITORY_BACKEND']);
+
+  const postgresWithoutApprovalSecret = validateEnvironment({
+    OXKIO_APPROVAL_REPOSITORY_BACKEND: 'postgres',
+  });
+  assert.equal(postgresWithoutApprovalSecret.ok, false);
+  assert.deepEqual(
+    postgresWithoutApprovalSecret.missing,
+    ['OXKIO_APPROVAL_PG_RUNTIME_URL']
+  );
+
+  const postgresWithApprovalSecret = validateEnvironment({
+    OXKIO_APPROVAL_REPOSITORY_BACKEND: 'postgres',
+    OXKIO_APPROVAL_PG_RUNTIME_URL:
+      'postgresql://synthetic:synthetic@example.invalid/neondb',
+  });
+  assert.equal(postgresWithApprovalSecret.ok, true);
+
+  const jsonWithoutApprovalSecret = validateEnvironment({
+    OXKIO_APPROVAL_REPOSITORY_BACKEND: 'json',
+  });
+  assert.equal(jsonWithoutApprovalSecret.ok, true);
 });
