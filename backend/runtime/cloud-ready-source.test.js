@@ -57,3 +57,19 @@ test('container excludes secrets and runtime stores and runs as non-root', () =>
   ].forEach((entry) => assert.match(dockerignore, new RegExp(entry.replace(/\./g, '\\.'))));
   assert.doesNotMatch(dockerfile, /GOOGLE_CLIENT_SECRET|refresh_token|private_key/i);
 });
+
+test('container grants owner write on backend directories before dropping to node', () => {
+  const dockerfile = read('Dockerfile');
+  const copyIndex = dockerfile.indexOf('COPY --chown=node:node backend ./backend');
+  const chmodIndex = dockerfile.indexOf('chmod u+w');
+  const userIndex = dockerfile.indexOf('USER node');
+  assert.ok(copyIndex >= 0, 'Dockerfile must copy backend with node ownership');
+  assert.match(dockerfile, /RUN find \/app\/backend -type d -exec chmod u\+w \{\} \+/);
+  assert.ok(
+    copyIndex < chmodIndex && chmodIndex < userIndex,
+    'chmod u+w on backend directories must run after the backend COPY and before USER node'
+  );
+  assert.doesNotMatch(dockerfile, /chmod\s+(-R\s+)?777/);
+  assert.doesNotMatch(dockerfile, /chmod\s+-R\s+[ugo]?\+?rwx/);
+  assert.doesNotMatch(dockerfile, /chown\s+-R.*\/app\b(?!\/backend)/);
+});

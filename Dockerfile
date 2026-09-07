@@ -8,6 +8,7 @@ ENV NODE_ENV=production
 WORKDIR /app
 COPY --from=dependencies /app/node_modules ./node_modules
 COPY --chown=node:node backend ./backend
+RUN find /app/backend -type d -exec chmod u+w {} +
 COPY --chown=node:node app ./app
 COPY --chown=node:node package.json ./
 USER node
