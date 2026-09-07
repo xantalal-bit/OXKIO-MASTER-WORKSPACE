@@ -1,0 +1,80 @@
+# OXKIO — 5C.7B.4C
+# Manifiesto declarativo Cloud Run (Knative Service) para el primer staging.
+#
+# ESTE ARCHIVO NO HA SIDO APLICADO. Prepara la configuracion; no crea, modifica
+# ni despliega ningun recurso real en Google Cloud. Ver README.md de este
+# directorio para los pasos futuros NO ejecutados (IAM invoker, imagen real,
+# version fijada del secreto) y para las decisiones que este YAML
+# deliberadamente no fija.
+#
+# PROJECT = oxkio-runtime-prod (GCP, infraestructura Cloud Run)
+# FIREBASE PROJECT = oxkio-9af40 (identidad Firebase Authentication; distinto
+#   del proyecto GCP de infraestructura — ver ADR-5C.7B.2, linea 148)
+#
+# La etiqueta cloud.googleapis.com/location de mas abajo es la forma real en
+# que Cloud Run representa la region dentro de este YAML (visible en
+# `gcloud run services describe --format export`). No sustituye el flag
+# --region en el comando de aplicacion: la API de Cloud Run es regional y
+# ese flag decide el endpoint que recibe la peticion; la etiqueta es
+# metadato descriptivo. Ver README.md.
+apiVersion: serving.knative.dev/v1
+kind: Service
+metadata:
+  name: oxkio-api-staging
+  labels:
+    cloud.googleapis.com/location: europe-west3
+  annotations:
+    # Cloud Run publico a nivel de plataforma (ingress). Esto NO equivale a
+    # invocacion no autenticada: ver README.md seccion "IAM invoker" para el
+    # paso separado, no ejecutado, que decide quien puede invocar el servicio.
+    run.googleapis.com/ingress: all
+spec:
+  template:
+    metadata:
+      annotations:
+        autoscaling.knative.dev/minScale: "0"
+        autoscaling.knative.dev/maxScale: "1"
+    spec:
+      serviceAccountName: oxkio-runtime-prod@oxkio-runtime-prod.iam.gserviceaccount.com
+      containerConcurrency: 1
+      containers:
+        - image: PLACEHOLDER_IMAGE_REFERENCE_NOT_YET_PUBLISHED
+          # ^ Ningun registro de imagenes ha sido decidido ni creado en esta
+          # fase. Este valor es deliberadamente no funcional: impide que este
+          # manifiesto pueda aplicarse por accidente sin sustitucion humana.
+          resources:
+            limits:
+              cpu: "1"
+              memory: "512Mi"
+          env:
+            - name: FIREBASE_PROJECT_ID
+              value: "oxkio-9af40"
+            - name: GOOGLE_CLOUD_PROJECT
+              value: "oxkio-runtime-prod"
+            - name: OXKIO_APPROVAL_REPOSITORY_BACKEND
+              value: "postgres"
+            - name: OXKIO_ADMIN_FIREBASE_UIDS
+              value: "REPLACE_WITH_ADMIN_FIREBASE_UID"
+              # ^ Placeholder deliberado. Debe sustituirse por un humano por
+              # el/los UID(s) reales de administrador antes de cualquier
+              # despliegue real. Nunca commitear el valor real en texto claro
+              # sin decision explicita de Direccion sobre su tratamiento.
+            - name: OXKIO_APPROVAL_PG_RUNTIME_URL
+              valueFrom:
+                secretKeyRef:
+                  name: OXKIO_APPROVAL_PG_RUNTIME_URL
+                  # ^ Nombre directo del secreto (mecanismo same-project):
+                  # el secreto vive en el MISMO proyecto GCP que este
+                  # servicio (oxkio-runtime-prod), asi que secretKeyRef.name
+                  # referencia el secreto directamente, sin anotacion
+                  # adicional de alias. Ver README.md, seccion "Secret Manager".
+                  key: latest
+                  # ^ "latest" sin fijar version numerica. 5C.7B.3A registra
+                  # que la Version 1 esta habilitada, pero fijar o no una
+                  # version concreta es una decision de politica de rotacion
+                  # todavia no tomada por Direccion — no se fija aqui sin esa
+                  # decision explicita. Ver README.md.
+              # ^ Referencia nativa a Secret Manager. El secreto YA esta
+              # materializado (Puerta A, 19/08/2026) y el IAM de lectura YA
+              # esta concedido a esta service account (Puerta B, 20/08/2026)
+              # segun 5C.7B.3A. Esta fase no crea, lee ni modifica el secreto.
