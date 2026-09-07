@@ -143,17 +143,176 @@ if ($allowlist.Count -lt 1) {
 }
 Write-CheckOk 'Allowlist Firebase contiene al menos una identidad.'
 
+[Environment]::SetEnvironmentVariable('OXKIO_APPROVAL_REPOSITORY_BACKEND', 'postgres', 'Process')
+Write-CheckOk 'Selector Approval fijado en Process (postgres).'
+
+function Resolve-OxkioGcloudCommand {
+    $gcloudCommand = Get-Command -Name 'gcloud.cmd' -CommandType Application -ErrorAction SilentlyContinue
+    if (-not $gcloudCommand) {
+        Stop-Validation 'gcloud.cmd no disponible.' 'Instale Google Cloud SDK y abra una consola nueva.'
+    }
+    return $gcloudCommand.Source
+}
+
+function Get-OxkioApprovalPostgresRuntimeUrl {
+    param([Parameter(Mandatory = $true)][string]$GcloudPath)
+
+    $secretArguments = @(
+        'secrets', 'versions', 'access', 'latest',
+        '--secret=OXKIO_APPROVAL_PG_RUNTIME_URL',
+        '--project=oxkio-runtime-prod'
+    )
+    $secretOutput = & $GcloudPath @secretArguments 2>$null
+    $secretExitCode = $LASTEXITCODE
+
+    if ($secretExitCode -ne 0) {
+        Stop-Validation 'No se pudo obtener OXKIO_APPROVAL_PG_RUNTIME_URL desde Secret Manager.' $null
+    }
+
+    $secretValue = ($secretOutput | Out-String).Trim()
+    if ([string]::IsNullOrWhiteSpace($secretValue)) {
+        Stop-Validation 'OXKIO_APPROVAL_PG_RUNTIME_URL vacio en Secret Manager.' $null
+    }
+
+    return $secretValue
+}
+
+$gcloudPath = Resolve-OxkioGcloudCommand
+Write-CheckOk 'gcloud.cmd localizado.'
+
+$approvalPgRuntimeUrl = Get-OxkioApprovalPostgresRuntimeUrl -GcloudPath $gcloudPath
+[Environment]::SetEnvironmentVariable('OXKIO_APPROVAL_PG_RUNTIME_URL', $approvalPgRuntimeUrl, 'Process')
+$approvalPgRuntimeUrl = $null
+Write-CheckOk 'Credencial PostgreSQL Approval cargada de forma segura en Process.'
+
 if ($ValidateOnly) {
-    Write-Host '[OK] Configuracion Firebase Admin validada. El servidor no se ha iniciado.'
+    Write-Host '[OK] Configuracion Firebase Admin y selector Approval PostgreSQL validados. El servidor no se ha iniciado.'
     exit 0
 }
 
+$oxkioJobObjectNativeSource = @'
+using System;
+using System.Runtime.InteropServices;
+
+public static class OxkioNodeJobObjectNative {
+    [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    public static extern IntPtr CreateJobObject(IntPtr lpJobAttributes, string lpName);
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    public static extern bool SetInformationJobObject(IntPtr hJob, int JobObjectInfoClass, IntPtr lpJobObjectInfo, uint cbJobObjectInfoLength);
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    public static extern bool AssignProcessToJobObject(IntPtr hJob, IntPtr hProcess);
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    public static extern bool CloseHandle(IntPtr hObject);
+
+    [StructLayout(LayoutKind.Sequential)]
+    public struct JOBOBJECT_BASIC_LIMIT_INFORMATION {
+        public long PerProcessUserTimeLimit;
+        public long PerJobUserTimeLimit;
+        public uint LimitFlags;
+        public UIntPtr MinimumWorkingSetSize;
+        public UIntPtr MaximumWorkingSetSize;
+        public uint ActiveProcessLimit;
+        public UIntPtr Affinity;
+        public uint PriorityClass;
+        public uint SchedulingClass;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    public struct IO_COUNTERS {
+        public ulong ReadOperationCount;
+        public ulong WriteOperationCount;
+        public ulong OtherOperationCount;
+        public ulong ReadTransferCount;
+        public ulong WriteTransferCount;
+        public ulong OtherTransferCount;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    public struct JOBOBJECT_EXTENDED_LIMIT_INFORMATION {
+        public JOBOBJECT_BASIC_LIMIT_INFORMATION BasicLimitInformation;
+        public IO_COUNTERS IoInfo;
+        public UIntPtr ProcessMemoryLimit;
+        public UIntPtr JobMemoryLimit;
+        public UIntPtr PeakProcessMemoryUsed;
+        public UIntPtr PeakJobMemoryUsed;
+    }
+}
+'@
+
+function New-OxkioNodeContainmentJob {
+    if (-not ('OxkioNodeJobObjectNative' -as [type])) {
+        Add-Type -TypeDefinition $oxkioJobObjectNativeSource -Language CSharp
+    }
+
+    $jobHandle = [OxkioNodeJobObjectNative]::CreateJobObject([IntPtr]::Zero, $null)
+    if ($jobHandle -eq [IntPtr]::Zero) {
+        Stop-Validation 'No se pudo crear el Job Object de contencion del proceso Node.' $null
+    }
+
+    $JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE = 0x2000
+    $JobObjectExtendedLimitInformation = 9
+
+    $basicLimitInformation = New-Object OxkioNodeJobObjectNative+JOBOBJECT_BASIC_LIMIT_INFORMATION
+    $basicLimitInformation.LimitFlags = $JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE
+
+    $extendedLimitInformation = New-Object OxkioNodeJobObjectNative+JOBOBJECT_EXTENDED_LIMIT_INFORMATION
+    $extendedLimitInformation.BasicLimitInformation = $basicLimitInformation
+
+    $informationLength = [System.Runtime.InteropServices.Marshal]::SizeOf($extendedLimitInformation)
+    $informationPointer = [System.Runtime.InteropServices.Marshal]::AllocHGlobal($informationLength)
+    try {
+        [System.Runtime.InteropServices.Marshal]::StructureToPtr($extendedLimitInformation, $informationPointer, $false)
+        $configured = [OxkioNodeJobObjectNative]::SetInformationJobObject(
+            $jobHandle, $JobObjectExtendedLimitInformation, $informationPointer, $informationLength
+        )
+    } finally {
+        [System.Runtime.InteropServices.Marshal]::FreeHGlobal($informationPointer)
+    }
+
+    if (-not $configured) {
+        [OxkioNodeJobObjectNative]::CloseHandle($jobHandle) | Out-Null
+        Stop-Validation 'No se pudo configurar JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE en el Job Object.' $null
+    }
+
+    return $jobHandle
+}
+
 $previousLocation = Get-Location
+$nodeProcess = $null
+$nodeJobHandle = [IntPtr]::Zero
 try {
     Set-Location -LiteralPath $repositoryRoot
-    & $nodeCommand.Source $serverPath
-    $nodeExitCode = $LASTEXITCODE
+
+    $nodeJobHandle = New-OxkioNodeContainmentJob
+    Write-CheckOk 'Job Object de contencion creado (kill-on-close configurado).'
+
+    $nodeProcess = Start-Process -FilePath $nodeCommand.Source -ArgumentList @($serverPath) -NoNewWindow -PassThru
+    $null = $nodeProcess.Handle
+    Write-CheckOk "Proceso Node iniciado (PID $($nodeProcess.Id))."
+
+    $assigned = [OxkioNodeJobObjectNative]::AssignProcessToJobObject($nodeJobHandle, $nodeProcess.Handle)
+    if (-not $assigned) {
+        if (-not $nodeProcess.HasExited) {
+            Stop-Process -Id $nodeProcess.Id -Force -ErrorAction SilentlyContinue
+        }
+        [OxkioNodeJobObjectNative]::CloseHandle($nodeJobHandle) | Out-Null
+        $nodeJobHandle = [IntPtr]::Zero
+        Stop-Validation 'No se pudo asignar el proceso Node al Job Object de contencion.' $null
+    }
+    Write-CheckOk 'Proceso Node contenido en el Job Object (no sobrevive a la terminacion del launcher).'
+
+    $nodeProcess.WaitForExit()
+    $nodeExitCode = $nodeProcess.ExitCode
 } finally {
+    if ($nodeProcess -and -not $nodeProcess.HasExited) {
+        Stop-Process -Id $nodeProcess.Id -Force -ErrorAction SilentlyContinue
+    }
+    if ($nodeJobHandle -ne [IntPtr]::Zero) {
+        [OxkioNodeJobObjectNative]::CloseHandle($nodeJobHandle) | Out-Null
+    }
     Set-Location -LiteralPath $previousLocation
 }
 
