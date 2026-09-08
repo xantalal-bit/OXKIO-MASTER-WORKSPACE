@@ -35,14 +35,49 @@
   cifras inventadas, puede cerrar «PARCIAL DEMOSTRADO») – 6E (evidencia y
   cierre documental, no abre 5C.7B.7 automáticamente). Esta definición no
   concede ninguna puerta humana, no abre 6A–6E, no ejecuta backup,
-  restore, SQL, GCP, Neon, código ni manifiestos. **5C.7B.7 = NO
-  ABIERTA**; no se abre ninguna fase posterior.
+  restore, SQL, GCP, Neon, código ni manifiestos.
+  **6A = CERRADA / PASS_WITH_LIMITATIONS READ-ONLY** (08/09/2026):
+  inventario consolidado — Approval PostgreSQL/Neon (autoridad durable,
+  crítica, sin backup/restore, prioridad 1); Approval JSON V2 (legacy/dev,
+  no autoritativo donde `backend=postgres`, nunca rollback de PostgreSQL);
+  GitHub/código (durable/reconstruible, drill de restauración nunca
+  ejercitado); Artifact Registry (artefacto reconstruible, no backup de
+  facto); Cloud Run (configuración reconstruible con intervención humana,
+  manifest no es snapshot exacto); Secret Manager (credencial crítica, sin
+  backup en claro, recreación/rotación bajo IAM); Memory, Project
+  Registry, Executive Agenda y Strategic Memory (autoridad local, alta,
+  sin cobertura); Operations/execution log (autoridad local, alta, con
+  cobertura incidental parcial vía Git); Security Inventory (autoridad
+  local, crítica, sin cobertura); Knowledge (local, parcialmente
+  reconstruible); OAuth Gmail/Calendar (credencial, recuperación por
+  reautorización/revocación/rotación, no backup); Firebase Auth
+  (dependencia durable externa, DR del proveedor UNKNOWN);
+  `OXKIO_ADMIN_FIREBASE_UIDS` clasificado como CONFIGURACIÓN SENSIBLE, no
+  credencial fuerte.
+  Limitaciones registradas (razón del WITH_LIMITATIONS): (1)
+  `backend/core/executionLog.json` trackeado en Git — cobertura
+  incidental/reconstruible parcial, no gobernada, no destrackeado en esta
+  tarea; (2) `backend/executive/executiveAgendaStore.json` trackeado en
+  Git, contradiciendo la intención del `.gitignore` para stores —
+  anomalía/higiene pendiente separada, no destrackeada ni corregido el
+  `.gitignore` aquí; (3) bloque histórico de Approval JSON V2 en el canon
+  marcado **SUPERSEDED** por B6 CERRADA/PASS REAL, sin borrar la
+  historia. UNKNOWN de Neon (plan, PITR, retención, restore nativo,
+  branching/time travel, necesidad de `pg_dump`) transferido íntegro al
+  PRE-6B, sin bloquear el cierre de 6A. Prioridades fijadas para fases
+  futuras: 1) Approval PostgreSQL/Neon, 2) Security Inventory, 3)
+  procedimiento de recuperación de Secret Manager, 4) Memory/Project
+  Registry/Executive Agenda/Strategic Memory, 5) Operations/execution
+  log. **No se declara DR completo de OXKIO.** **5C.7B.6 sigue ABIERTA**,
+  sin abrir PRE-6B ni 6B. **6B–6E = NO ABIERTAS. 5C.7B.7 = NO ABIERTA**;
+  no se abre ninguna fase posterior.
   Evidencia y límites: documento canónico
   `XANTALAL/00_GOVERNANCE/5C.7B-ARQUITECTURA-EJECUTABLE-RUNTIME.md`, secciones
   «Reconciliación documental 4F y propuesta de cierre 5C.7B.4 — 08/09/2026»,
   «Cierre canónico 5C.7B.5 — Logs, métricas, alertas y presupuesto —
-  08/09/2026» y «Definición canónica 5C.7B.6 — Backup, export, restore y
-  DR — 08/09/2026».
+  08/09/2026», «Definición canónica 5C.7B.6 — Backup, export, restore y
+  DR — 08/09/2026» y «Cierre documental 6A — Inventario, autoridad y
+  criticidad — 08/09/2026».
   Las entradas históricas fechadas y sus avisos SUPERSEDED se conservan.
 
 - G0002.5B.2E está cerrada, versionada y publicada en `e4c79ff`.
