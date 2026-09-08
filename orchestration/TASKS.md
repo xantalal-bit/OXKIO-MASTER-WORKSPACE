@@ -104,7 +104,57 @@
   la consulta documental del PRE-6B (no registrada en 6A), queda como
   **riesgo tecnológico separado**, pendiente de reverificación
   específica, fuera del cierre DR.
-  **5C.7B.6 sigue ABIERTA**, sin abrir 6B. **6B–6E = NO ABIERTAS.
+  **6B = DEFINIDA / NO ABIERTA** (08/09/2026): activo inicial Approval
+  PostgreSQL/Neon. Artefacto: `pg_dump` formato custom (`-Fc`), un único
+  artefacto principal por ejecución, nombre determinista
+  (proyecto/activo + timestamp UTC + id de ejecución), sin fijar nombre
+  exacto definitivo. Conexión: endpoint unpooled, credencial efímera o
+  recuperada en runtime, nunca impresa ni persistida fuera del mecanismo
+  autorizado. Dos identidades distintas, no confundibles: (B.1) identidad
+  ejecutora del proceso —
+  `oxkio-backup-prod@oxkio-runtime-prod.iam.gserviceaccount.com` existe,
+  inventariada como candidata para ejecutar/orquestar el backup; no se
+  afirma que autentique directamente contra PostgreSQL; sin permisos IAM
+  concedidos ni afirmados aquí — y (B.2) identidad/rol PostgreSQL de
+  backup (PG-BKP), prevista/reservada en 3D.5 pero no materializada, sin
+  credencial operativa ni privilegios demostrados, no creada en esta
+  tarea; pendiente resolver rol exacto, privilegios mínimos, mecanismo de
+  autenticación, custodia de su credencial y relación con B.1. PG-APR
+  humana persistente, PG-RUN con privilegios excesivos y credenciales
+  administrativas generales quedan excluidas como solución permanente;
+  se aplica mínimo privilegio.
+  Destino: requisito (fuera de Neon, preferiblemente fuera del dominio
+  administrativo de `oxkio-runtime-prod`), sin proveedor definitivo —
+  **PENDIENTE DE DECISIÓN PRE-EJECUCIÓN**; sin contratación, bucket ni
+  subida. Cifrado en tránsito y en reposo obligatorios; clave aplicativa,
+  si existe, nunca junto al backup. Integridad: tamaño, SHA-256,
+  timestamp, origen, versión PostgreSQL, resultado `pg_dump`,
+  resultado de validación, id de ejecución. Verificación: PASS futuro
+  exige exit code 0, artefacto no vacío, checksum calculado, inspección
+  sin mutación cuando sea posible, destino/retención gobernados, cero
+  secretos expuestos — nunca válido solo por existir el archivo (eso es
+  6C para restore). Retención: mínimo más de una generación, protección
+  frente a sobrescritura, superar la ventana PITR de 6h; cifra numérica
+  = PENDIENTE, cualquier propuesta futura se marca PROPUESTA, no
+  decisión. Privacidad: dump tratado como activo sensible, sin email,
+  chat, Git, carpeta pública, logs con contenido ni terceros. Recovery
+  metadata: manifiesto no secreto (asset, environment, source_provider,
+  id de BD no secreto, versión PostgreSQL, formato, `created_at` UTC,
+  checksum, tamaño, versión de herramienta, resultado, clase de
+  retención, `restore_tested=false`), nunca password/connection
+  string/token/secreto. Fail-closed ante credencial no disponible,
+  versión `pg_dump` incompatible, TLS inseguro, destino no gobernado,
+  checksum fallido, artefacto vacío, path inesperado o secreto en
+  output. Puerta humana separada obligatoria para la ejecución real,
+  autorizando origen, identidad/credencial, destino, retención, cifrado
+  y ejecución de `pg_dump`. 6B nunca restaura, cambia autoridad,
+  sustituye PostgreSQL ni usa JSON — eso pertenece a 6C. 8 pendientes
+  pre-ejecución registrados (destino, retención numérica, cifrado
+  aplicativo, identidad ejecutora exacta [B.1, sin permisos IAM
+  resueltos], rol/credencial PostgreSQL de backup PG-BKP [B.2, distinto
+  de B.1], versión `pg_dump`, custodia, política de acceso) que no
+  impiden definir 6B pero sí impiden ejecutarla.
+  **5C.7B.6 sigue ABIERTA**, sin abrir 6B. **6C–6E = NO ABIERTAS.
   5C.7B.7 = NO ABIERTA**; no se abre ninguna fase posterior.
   Evidencia y límites: documento canónico
   `XANTALAL/00_GOVERNANCE/5C.7B-ARQUITECTURA-EJECUTABLE-RUNTIME.md`, secciones
@@ -112,8 +162,9 @@
   «Cierre canónico 5C.7B.5 — Logs, métricas, alertas y presupuesto —
   08/09/2026», «Definición canónica 5C.7B.6 — Backup, export, restore y
   DR — 08/09/2026», «Cierre documental 6A — Inventario, autoridad y
-  criticidad — 08/09/2026» y «Cierre documental PRE-6B — Verificación
-  real Neon — 08/09/2026».
+  criticidad — 08/09/2026», «Cierre documental PRE-6B — Verificación
+  real Neon — 08/09/2026» y «Definición canónica 6B — Backup/export
+  verificable — 08/09/2026».
   Las entradas históricas fechadas y sus avisos SUPERSEDED se conservan.
 
 - G0002.5B.2E está cerrada, versionada y publicada en `e4c79ff`.
