@@ -388,7 +388,7 @@ Capacidades operativas verificadas:
 - LucusHost compartido: no apto para PostgreSQL productivo con runtime externo;
   acceso remoto deshabilitado, sin PITR ni restauración PostgreSQL específica.
 - Estado: 5C.7B.1 CERRADA Y PUBLICADA; 5C.7B.2 CERRADA Y PUBLICADA,
-  PERSISTENCIA PRINCIPAL RATIFICADA. B6 / 5C.7B.3F CERRADA — PASS REAL (07/09/2026). **4F = CERRADA / PASS**; **5C.7B.4 = CERRADA / PASS REAL / PUBLICADA** (POST-CLOSE, 08/09/2026). Rollback Cloud Run definido y **NO ejecutado**; las limitaciones técnicas pendientes siguen vigentes. **5C.7B.5 = NO ABIERTA**; no se abre ninguna fase posterior.
+  PERSISTENCIA PRINCIPAL RATIFICADA. B6 / 5C.7B.3F CERRADA — PASS REAL (07/09/2026). **4F = CERRADA / PASS**; **5C.7B.4 = CERRADA / PASS REAL / PUBLICADA** (POST-CLOSE, 08/09/2026). Rollback Cloud Run definido y **NO ejecutado**; las limitaciones técnicas pendientes siguen vigentes. **5C.7B.5 = CERRADA / PASS** (08/09/2026 — 5C.7B.5A CERRADA/PASS READ-ONLY, 5C.7B.5B CERRADA/PASS READ-ONLY, 5C.7B.5C CERRADA/PASS DOCUMENTAL; sin creación real de alertas, uptime checks, dashboards, métricas custom, sinks, budgets ni APIs adicionales; ver documento canónico, sección «Cierre canónico 5C.7B.5 — Logs, métricas, alertas y presupuesto — 08/09/2026»). **5C.7B.6 = NO ABIERTA**; no se abre ninguna fase posterior.
 - Segunda auditoría Antigravity: tras el piloto remoto y antes de probadores.
 - En esta reconciliación POST-CLOSE solo se edita documentación: sin contratación, migración, dual-write, despliegue ni rollback real. Las ejecuciones anteriores de 4D/4E no conceden nuevas autorizaciones.
 - Documento canónico: `XANTALAL/00_GOVERNANCE/5C.7B-ARQUITECTURA-EJECUTABLE-RUNTIME.md`.

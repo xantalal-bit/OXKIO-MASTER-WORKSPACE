@@ -11,10 +11,19 @@
   `3c5aa7e441e95eae3dc0adfce36f1f98ed9f257a`; `HEAD = origin/main` y árbol
   limpio verificados tras publicación, antes de esta edición POST-CLOSE.
   Las limitaciones técnicas pendientes siguen vigentes.
-  **5C.7B.5 = NO ABIERTA**; no se abre ninguna fase posterior.
+  **5C.7B.5 = CERRADA / PASS** (08/09/2026): 5C.7B.5A (logs, Cloud Logging)
+  CERRADA/PASS READ-ONLY, 5C.7B.5B (métricas y coste, Cloud
+  Monitoring/Billing) CERRADA/PASS READ-ONLY y 5C.7B.5C (alertas/SLO/
+  presupuesto) CERRADA/PASS DOCUMENTAL, sin crear ninguna alerta, uptime
+  check, dashboard, métrica custom, sink, budget ni API adicional; sin
+  habilitar `billingbudgets.googleapis.com` ni `cloudbilling.googleapis.com`
+  para uso activo. **5C.7B.6 = NO ABIERTA**; no se abre ninguna fase
+  posterior.
   Evidencia y límites: documento canónico
-  `XANTALAL/00_GOVERNANCE/5C.7B-ARQUITECTURA-EJECUTABLE-RUNTIME.md`, sección
-  «Reconciliación documental 4F y propuesta de cierre 5C.7B.4 — 08/09/2026».
+  `XANTALAL/00_GOVERNANCE/5C.7B-ARQUITECTURA-EJECUTABLE-RUNTIME.md`, secciones
+  «Reconciliación documental 4F y propuesta de cierre 5C.7B.4 — 08/09/2026» y
+  «Cierre canónico 5C.7B.5 — Logs, métricas, alertas y presupuesto —
+  08/09/2026».
   Las entradas históricas fechadas y sus avisos SUPERSEDED se conservan.
 
 - G0002.5B.2E está cerrada, versionada y publicada en `e4c79ff`.
