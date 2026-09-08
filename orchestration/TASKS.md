@@ -2,6 +2,18 @@
 
 ## Estado operativo vigente
 
+- **Reconciliación 4F — 08/09/2026:** B6 / 5C.7B.3F CERRADA — PASS REAL
+  (07/09/2026); 5C.7B.4 validada hasta 4E — PASS REAL en staging Cloud Run
+  privado, con IAM + Firebase, Approval `postgres` y `BUSINESS_WRITES=0`.
+  Rollback de Cloud Run definido y revisado documentalmente, no ejecutado.
+  4F queda preparada para auditoría del diff; cierre formal de 5C.7B.4
+  pendiente de auditoría/publicación y árbol limpio posterior. Sin commit/push
+  en esta reconciliación. **5C.7B.5 = NO ABIERTA**.
+  Evidencia y límites: documento canónico
+  `XANTALAL/00_GOVERNANCE/5C.7B-ARQUITECTURA-EJECUTABLE-RUNTIME.md`, sección
+  «Reconciliación documental 4F y propuesta de cierre 5C.7B.4 — 08/09/2026».
+  Las entradas históricas fechadas y sus avisos SUPERSEDED se conservan.
+
 - G0002.5B.2E está cerrada, versionada y publicada en `e4c79ff`.
 - El commit atómico Confirmation → Mission superó 179/179 pruebas:
   PostgreSQL Integration 22/22, contratos 65/65 y servicios 92/92.

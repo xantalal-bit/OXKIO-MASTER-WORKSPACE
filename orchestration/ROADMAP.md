@@ -367,30 +367,30 @@ Capacidades operativas verificadas:
 
 ## Advertencias evidenciadas
 
-- El árbol de trabajo contiene cambios históricos y runtime ajenos a 5C.7B que deben permanecer separados.
-- Los tokens OAuth reales siguen en filesystem local y deben rotarse antes de cualquier despliegue.
-- Memoria, Approval Queue y logs siguen ligados a JSON local; no admiten runtime multiinstancia.
+- Continuidad verificada el 08/09/2026: árbol limpio en `fd473db5607130012a5ab523162a588bc3bcac4c` antes de la reconciliación documental 4F; esta reconciliación queda sin commit/push, pendiente de auditoría.
+- Los tokens OAuth locales requieren rotación antes de habilitar OAuth remoto; Gmail/Calendar remoto sigue fuera del staging 5C.7B.4.
+- Memory, Operations y execution log siguen ligados al filesystem local e impiden escalado horizontal real. Approval ya usa PostgreSQL tras B6 y en staging real 4E; `maxInstances=1` mitiga la limitación local, no la resuelve.
 - Las colecciones Firestore reales no están inventariadas; no borrar, escribir ni activar doble escritura.
 - La excepción `draftExecutionEnabled` debe permanecer cerrada a Gmail Draft y separada de `executionEnabled=false`.
 - Las evidencias y auditorías ya aceptadas no se repetirán salvo invalidación objetiva del contexto.
 
 ## Decisión de arquitectura 5C.7B
 
-- Runtime candidato pendiente de auditoría: Cloud Run + Firebase Authentication.
+- Estado reconciliado 08/09/2026: Cloud Run directo validado en staging privado en 4E (07/09/2026), con IAM de plataforma + Firebase Bearer de aplicación, sin `allUsers`. No equivale a Runtime Permanente 24/7 ni a piloto remoto.
 - Persistencia operativa principal ratificada: PostgreSQL gestionado.
 - Firestore: POC superada; no será BBDD operativa principal.
 - Híbrida Firestore + PostgreSQL: descartada para el núcleo.
 - Primera auditoría Antigravity: recibida; veredicto APROBADA CON CORRECCIONES.
-- Riesgos aceptados: JSON multiinstancia, secretos locales, filesystem efímero, idempotencia persistente y desacoplamiento de trabajos duraderos.
+- Riesgos residuales: stores locales no compartidos y filesystem efímero, OAuth remoto pendiente y desacoplamiento de trabajos duraderos. Approval PostgreSQL ya fue demostrado en B6; no extrapolar su evidencia a otros stores ni a escalado horizontal.
 - Redis/BullMQ y Railway no se aceptan como decisiones obligatorias.
 - Persistencia principal: ratificada mediante
   `XANTALAL/00_GOVERNANCE/ADR-5C.7B.2-POSTGRESQL-PERSISTENCIA-PRINCIPAL.md`.
 - LucusHost compartido: no apto para PostgreSQL productivo con runtime externo;
   acceso remoto deshabilitado, sin PITR ni restauración PostgreSQL específica.
 - Estado: 5C.7B.1 CERRADA Y PUBLICADA; 5C.7B.2 CERRADA Y PUBLICADA,
-  PERSISTENCIA PRINCIPAL RATIFICADA.
+  PERSISTENCIA PRINCIPAL RATIFICADA. B6 / 5C.7B.3F CERRADA — PASS REAL (07/09/2026). 5C.7B.4 validada hasta 4E — PASS REAL; 4F reconciliada documentalmente el 08/09/2026, pendiente de auditoría del diff y publicación para cierre formal. **5C.7B.5 = NO ABIERTA**.
 - Segunda auditoría Antigravity: tras el piloto remoto y antes de probadores.
-- Prohibido contratar, migrar, activar doble escritura o desplegar durante esta subfase.
+- En esta reconciliación 4F solo se edita documentación: sin contratación, migración, dual-write, despliegue ni rollback real. Las ejecuciones anteriores de 4D/4E no conceden nuevas autorizaciones.
 - Documento canónico: `XANTALAL/00_GOVERNANCE/5C.7B-ARQUITECTURA-EJECUTABLE-RUNTIME.md`.
 - Decisión detallada: `XANTALAL/00_GOVERNANCE/5C.7B.2-PERSISTENCIA-DEFINITIVA.md`.
 
