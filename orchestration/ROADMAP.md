@@ -367,7 +367,7 @@ Capacidades operativas verificadas:
 
 ## Advertencias evidenciadas
 
-- Continuidad verificada el 08/09/2026: árbol limpio en `fd473db5607130012a5ab523162a588bc3bcac4c` antes de la reconciliación documental 4F; esta reconciliación queda sin commit/push, pendiente de auditoría.
+- Continuidad inicial de 4F (08/09/2026): árbol limpio en `fd473db5607130012a5ab523162a588bc3bcac4c`. POST-CLOSE: cierre publicado en `3c5aa7e441e95eae3dc0adfce36f1f98ed9f257a`; `HEAD = origin/main` y árbol limpio verificados tras publicación, antes de esta edición POST-CLOSE.
 - Los tokens OAuth locales requieren rotación antes de habilitar OAuth remoto; Gmail/Calendar remoto sigue fuera del staging 5C.7B.4.
 - Memory, Operations y execution log siguen ligados al filesystem local e impiden escalado horizontal real. Approval ya usa PostgreSQL tras B6 y en staging real 4E; `maxInstances=1` mitiga la limitación local, no la resuelve.
 - Las colecciones Firestore reales no están inventariadas; no borrar, escribir ni activar doble escritura.
@@ -388,9 +388,9 @@ Capacidades operativas verificadas:
 - LucusHost compartido: no apto para PostgreSQL productivo con runtime externo;
   acceso remoto deshabilitado, sin PITR ni restauración PostgreSQL específica.
 - Estado: 5C.7B.1 CERRADA Y PUBLICADA; 5C.7B.2 CERRADA Y PUBLICADA,
-  PERSISTENCIA PRINCIPAL RATIFICADA. B6 / 5C.7B.3F CERRADA — PASS REAL (07/09/2026). 5C.7B.4 validada hasta 4E — PASS REAL; 4F reconciliada documentalmente el 08/09/2026, pendiente de auditoría del diff y publicación para cierre formal. **5C.7B.5 = NO ABIERTA**.
+  PERSISTENCIA PRINCIPAL RATIFICADA. B6 / 5C.7B.3F CERRADA — PASS REAL (07/09/2026). **4F = CERRADA / PASS**; **5C.7B.4 = CERRADA / PASS REAL / PUBLICADA** (POST-CLOSE, 08/09/2026). Rollback Cloud Run definido y **NO ejecutado**; las limitaciones técnicas pendientes siguen vigentes. **5C.7B.5 = NO ABIERTA**; no se abre ninguna fase posterior.
 - Segunda auditoría Antigravity: tras el piloto remoto y antes de probadores.
-- En esta reconciliación 4F solo se edita documentación: sin contratación, migración, dual-write, despliegue ni rollback real. Las ejecuciones anteriores de 4D/4E no conceden nuevas autorizaciones.
+- En esta reconciliación POST-CLOSE solo se edita documentación: sin contratación, migración, dual-write, despliegue ni rollback real. Las ejecuciones anteriores de 4D/4E no conceden nuevas autorizaciones.
 - Documento canónico: `XANTALAL/00_GOVERNANCE/5C.7B-ARQUITECTURA-EJECUTABLE-RUNTIME.md`.
 - Decisión detallada: `XANTALAL/00_GOVERNANCE/5C.7B.2-PERSISTENCIA-DEFINITIVA.md`.
 

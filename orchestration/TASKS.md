@@ -6,9 +6,12 @@
   (07/09/2026); 5C.7B.4 validada hasta 4E — PASS REAL en staging Cloud Run
   privado, con IAM + Firebase, Approval `postgres` y `BUSINESS_WRITES=0`.
   Rollback de Cloud Run definido y revisado documentalmente, no ejecutado.
-  4F queda preparada para auditoría del diff; cierre formal de 5C.7B.4
-  pendiente de auditoría/publicación y árbol limpio posterior. Sin commit/push
-  en esta reconciliación. **5C.7B.5 = NO ABIERTA**.
+  **POST-CLOSE — 08/09/2026: 4F = CERRADA / PASS;
+  5C.7B.4 = CERRADA / PASS REAL / PUBLICADA**. Commit final del cierre:
+  `3c5aa7e441e95eae3dc0adfce36f1f98ed9f257a`; `HEAD = origin/main` y árbol
+  limpio verificados tras publicación, antes de esta edición POST-CLOSE.
+  Las limitaciones técnicas pendientes siguen vigentes.
+  **5C.7B.5 = NO ABIERTA**; no se abre ninguna fase posterior.
   Evidencia y límites: documento canónico
   `XANTALAL/00_GOVERNANCE/5C.7B-ARQUITECTURA-EJECUTABLE-RUNTIME.md`, sección
   «Reconciliación documental 4F y propuesta de cierre 5C.7B.4 — 08/09/2026».
