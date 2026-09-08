@@ -17,13 +17,32 @@
   presupuesto) CERRADA/PASS DOCUMENTAL, sin crear ninguna alerta, uptime
   check, dashboard, métrica custom, sink, budget ni API adicional; sin
   habilitar `billingbudgets.googleapis.com` ni `cloudbilling.googleapis.com`
-  para uso activo. **5C.7B.6 = NO ABIERTA**; no se abre ninguna fase
-  posterior.
+  para uso activo. **5C.7B.6 = DEFINIDA / NO ABIERTA** (08/09/2026):
+  resuelve la anomalía histórica 3D.5/5C.7B.6 —3D.5 no se reabre, queda
+  cerrada/no abierta como antecedente histórico; sus obligaciones de
+  pg_dump/export, destino, retención e identidad de backup se transfieren
+  formalmente a 5C.7B.6 como único contenedor operativo, sin fases
+  paralelas—; el restore diferido de 3D.6 no reabre 3D.6, su deuda se
+  transfiere a la futura 6C y solo una prueba válida de 6C podrá
+  satisfacerla; principio de cobertura fijado: DR parcial demostrado ≠ DR
+  integral de OXKIO, mientras Memory, Operations/execution log, Executive
+  Agenda, Project Registry, Security Inventory y Knowledge sigan siendo
+  filesystem local sin recuperación demostrada; estructura definida
+  6A (inventario, sin mutación/puerta humana) – 6B (backup verificable de
+  Approval PostgreSQL, con PRE-6B read-only de Neon obligatorio antes de
+  abrirla, puerta humana propia) – 6C (restore aislado, puerta humana
+  propia, nunca sobre productivo, nunca PG→JSON) – 6D (DR + RPO/RTO sin
+  cifras inventadas, puede cerrar «PARCIAL DEMOSTRADO») – 6E (evidencia y
+  cierre documental, no abre 5C.7B.7 automáticamente). Esta definición no
+  concede ninguna puerta humana, no abre 6A–6E, no ejecuta backup,
+  restore, SQL, GCP, Neon, código ni manifiestos. **5C.7B.7 = NO
+  ABIERTA**; no se abre ninguna fase posterior.
   Evidencia y límites: documento canónico
   `XANTALAL/00_GOVERNANCE/5C.7B-ARQUITECTURA-EJECUTABLE-RUNTIME.md`, secciones
-  «Reconciliación documental 4F y propuesta de cierre 5C.7B.4 — 08/09/2026» y
+  «Reconciliación documental 4F y propuesta de cierre 5C.7B.4 — 08/09/2026»,
   «Cierre canónico 5C.7B.5 — Logs, métricas, alertas y presupuesto —
-  08/09/2026».
+  08/09/2026» y «Definición canónica 5C.7B.6 — Backup, export, restore y
+  DR — 08/09/2026».
   Las entradas históricas fechadas y sus avisos SUPERSEDED se conservan.
 
 - G0002.5B.2E está cerrada, versionada y publicada en `e4c79ff`.
