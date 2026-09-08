@@ -68,16 +68,52 @@
   futuras: 1) Approval PostgreSQL/Neon, 2) Security Inventory, 3)
   procedimiento de recuperación de Secret Manager, 4) Memory/Project
   Registry/Executive Agenda/Strategic Memory, 5) Operations/execution
-  log. **No se declara DR completo de OXKIO.** **5C.7B.6 sigue ABIERTA**,
-  sin abrir PRE-6B ni 6B. **6B–6E = NO ABIERTAS. 5C.7B.7 = NO ABIERTA**;
-  no se abre ninguna fase posterior.
+  log. **No se declara DR completo de OXKIO.**
+  **PRE-6B = CERRADO / PASS READ-ONLY** (08/09/2026): verificación visual
+  real del proyecto Neon `OXKIO` (organización `XANTALAL`), realizada
+  directamente por José Antonio en la consola web ya autenticada (la
+  extensión de navegador de esta sesión no estaba conectada; ningún
+  acceso automatizado se ejecutó contra Neon). Evidencia confirmada:
+  plan **Free**; branch producción; región **AWS Europe Central 1
+  (Fráncfort)**; **PostgreSQL 18**; compute predeterminado 0,25↔2 CU,
+  observado suspendido/inactivo durante la inspección; 1 database/1
+  compute; Data API no habilitada; VPC no configurada; **ventana PITR
+  real de 6 horas**; restore disponible con vista previa; **sin
+  snapshots actuales ni programados**, creación manual disponible,
+  programación avanzada requiere mejora de plan. Uso puntual observado
+  (compute 0,66 CU-hrs, storage 32,21 MB, history 178,67 kB, network
+  1,44 MB) registrado como evidencia operacional puntual, sin
+  extrapolar coste ni declararlo coste cero. No se ejecutó restore,
+  snapshot, branch, SQL, conexión ni cambio de configuración.
+  Trazabilidad: 6A se cerró y publicó en `17f18ce7...`; después, como
+  parte del propio PRE-6B (no de 6A), se realizó primero una consulta
+  read-only de documentación oficial pública de Neon (sin acceso visual
+  al proyecto real en ese momento), que quedó PASS PARCIAL/INCOMPLETO;
+  la evidencia visual real, obtenida después, confirma únicamente los
+  datos proyecto-específicos verificables en consola (plan, región,
+  versión, compute, PITR 6h, ausencia de snapshots); soporte de
+  `pg_dump`/`pg_restore` y comportamiento de branching permanecen
+  sustentados por la documentación oficial, no por las capturas. Ambas
+  fuentes se conservan sin contradicción. Decisión arquitectónica
+  fijada para 6B: **NEON NATIVO + PG_DUMP INDEPENDIENTE** (PITR de 6h
+  confirmado visualmente e insuficiente en solitario; `pg_dump` según
+  documentación oficial; independencia de proveedor = decisión
+  arquitectónica de OXKIO; PG→JSON nunca como rollback; secretos nunca
+  exportados como backup); esta decisión no abre 6B, solo prepara su
+  diseño. Observación sobre PostgreSQL 18 en preview, detectada durante
+  la consulta documental del PRE-6B (no registrada en 6A), queda como
+  **riesgo tecnológico separado**, pendiente de reverificación
+  específica, fuera del cierre DR.
+  **5C.7B.6 sigue ABIERTA**, sin abrir 6B. **6B–6E = NO ABIERTAS.
+  5C.7B.7 = NO ABIERTA**; no se abre ninguna fase posterior.
   Evidencia y límites: documento canónico
   `XANTALAL/00_GOVERNANCE/5C.7B-ARQUITECTURA-EJECUTABLE-RUNTIME.md`, secciones
   «Reconciliación documental 4F y propuesta de cierre 5C.7B.4 — 08/09/2026»,
   «Cierre canónico 5C.7B.5 — Logs, métricas, alertas y presupuesto —
   08/09/2026», «Definición canónica 5C.7B.6 — Backup, export, restore y
-  DR — 08/09/2026» y «Cierre documental 6A — Inventario, autoridad y
-  criticidad — 08/09/2026».
+  DR — 08/09/2026», «Cierre documental 6A — Inventario, autoridad y
+  criticidad — 08/09/2026» y «Cierre documental PRE-6B — Verificación
+  real Neon — 08/09/2026».
   Las entradas históricas fechadas y sus avisos SUPERSEDED se conservan.
 
 - G0002.5B.2E está cerrada, versionada y publicada en `e4c79ff`.
