@@ -166,6 +166,46 @@
   real Neon — 08/09/2026» y «Definición canónica 6B — Backup/export
   verificable — 08/09/2026».
   Las entradas históricas fechadas y sus avisos SUPERSEDED se conservan.
+  **Consolidación documental PRE-6B — Destino, retención e identidades
+  de backup (08/09/2026):** subfases de diseño pre-ejecución
+  (`PRE-6B.1B` destino, `PRE-6B.2` retención, `PRE-6B.3` identidades),
+  distintas del `PRE-6B` singular ya cerrado (verificación Neon).
+  **PRE-6B.1B = PASS READ-ONLY**: destino primario candidato OVHcloud
+  Object Storage Standard 3-AZ París, alternativa técnicamente válida
+  Scaleway Object Storage París, secundario Google Drive/One manual/
+  humano, buffer local solo temporal; Object Lock propuesto en modo
+  Governance, no Compliance. **PRE-6B.2 = PASS READ-ONLY**: propuesta
+  pre-ejecución GFS ligero (diarios 7, semanales 4, mensuales 3,
+  generaciones lógicas aproximadas, no necesariamente objetos físicos
+  distintos); frecuencia diaria como propuesta inicial para Cliente
+  Cero, pendiente de validar contra el RPO futuro de 6D — no
+  justificada por el PITR de 6h de Neon, que cubre un dominio de fallo
+  distinto al de `pg_dump` independiente; regla `OBJECT_LOCK_EXPIRY <=
+  LIFECYCLE_EXPIRY`, sin asumir reintento automático de lifecycle
+  bloqueado. **PRE-6B.3 = CERRADA / PASS READ-ONLY** (tras ratificación
+  humana explícita de José Antonio en esta misma consolidación): B.1
+  (`oxkio-backup-prod@...`) confirmado como identidad GCP de
+  orquestación, no rol PostgreSQL, sin permisos IAM concedidos; diseño
+  de B.2 en dos roles — `PG-BKP-ROLE` (NOLOGIN, portador de privilegios,
+  incluido `BYPASSRLS` como excepción de diseño justificada) y
+  `PG-BKP-LOGIN` (LOGIN, credencial rotable) —, ninguno materializado.
+  **Corrección de formulación**: `pg_dump` sin `BYPASSRLS` contra tablas
+  con `FORCE ROW LEVEL SECURITY` (confirmado en `003`/`004` de
+  Approval) **falla con error (fail-closed)**, no exporta 0 filas
+  silenciosamente — cualquier formulación previa en ese sentido queda
+  corregida. Alcance del backup ratificado como **dominio Approval
+  únicamente** (`oxkio.approval_items` y futuros objetos del mismo
+  owner), excluyendo Mission Queue sin implicar que no necesite backup
+  en el futuro. Ningún rol PostgreSQL, secreto, bucket, credencial real
+  ni `pg_dump` se crea/ejecuta en esta consolidación, que es
+  exclusivamente documental. **Estado final: 5C.7B.6 = ABIERTA; 6A =
+  CERRADA / PASS_WITH_LIMITATIONS READ-ONLY; PRE-6B = CERRADO / PASS
+  READ-ONLY; PRE-6B.1B = PASS READ-ONLY; PRE-6B.2 = PASS READ-ONLY;
+  PRE-6B.3 = CERRADA / PASS READ-ONLY; 6B = DEFINIDA / NO ABIERTA; 6C–6E
+  = NO ABIERTAS; 5C.7B.7 = NO ABIERTA.** Evidencia: documento canónico
+  `XANTALAL/00_GOVERNANCE/5C.7B-ARQUITECTURA-EJECUTABLE-RUNTIME.md`,
+  sección «Consolidación documental PRE-6B — Destino, retención e
+  identidades de backup — 08/09/2026».
 
 - G0002.5B.2E está cerrada, versionada y publicada en `e4c79ff`.
 - El commit atómico Confirmation → Mission superó 179/179 pruebas:
