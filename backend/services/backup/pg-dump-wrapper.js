@@ -1,6 +1,6 @@
 'use strict';
 
-// 5C.7B.6B.2 — Wrapper seguro para pg_dump (implementacion OFFLINE).
+// 5C.7B.6B.2/6B.3A — Wrapper seguro para pg_dump (implementacion OFFLINE).
 //
 // Este modulo NO conecta con Neon, NO ejecuta un backup real y NO crea
 // ninguna identidad ni secreto. Implementa el contrato de invocacion
@@ -14,7 +14,13 @@
 //   - prohibicion absoluta de connectionString / URI PostgreSQL cruda,
 //     coherente con `postgres-approval-factory.js`;
 //   - alcance dominio Approval unicamente (`oxkio.approval_items` y
-//     futuros objetos del owner `oxkio_approval_owner`);
+//     futuros objetos del owner `oxkio_approval_owner`), con comparacion
+//     exacta manifiesto-vs-catalogo cuando se resuelve dinamicamente
+//     (6B.3A) — nunca por inferencia de nombre ni degradacion parcial;
+//   - CA raiz para `verify-full`: `sslrootcert=system` (libpq >= 16,
+//     confirmado en `pg_dump --version` = 18.6 local) o una ruta de
+//     archivo explicita; nunca se descarga ni empaqueta un certificado
+//     en este modulo (6B.3A);
 //   - fail-closed antes y despues del proceso hijo.
 //
 // La ejecucion real contra Neon pertenece a una puerta humana posterior.
@@ -108,6 +114,14 @@ const POSIX_ENVIRONMENT_ALLOWLIST = Object.freeze([
 ]);
 
 const MAX_CAPTURED_OUTPUT = 8000;
+
+// Valor magico documentado en PostgreSQL 18 (libpq-connect.html, seccion
+// sslrootcert, disponible desde libpq 16): carga las raices de confianza
+// del sistema operativo/implementacion SSL en lugar de un archivo propio.
+// Conocido no-funcional en Windows para usuarios sin almacen OpenSSL propio
+// (hilo oficial pgsql-hackers, abril 2025) — ver seccion B del informe
+// 6B.3A. Se usa por su nombre exacto, sin traducir ni reinterpretar.
+const SSL_ROOT_CERT_SYSTEM = 'system';
 
 // --------------------------------------------------------------------------
 // Errores fail-closed
@@ -247,50 +261,162 @@ function validateTlsPolicy({ sslMode, channelBinding }) {
   return { sslMode, channelBinding };
 }
 
+// CA raiz para `verify-full`. Solo dos formas validas: el valor magico
+// `system` (documentado desde libpq 16; ver cabecera del modulo sobre su
+// limitacion conocida en Windows) o una ruta ABSOLUTA a un archivo que
+// exista localmente. Nunca una ruta relativa, nunca vacia-pero-presente,
+// nunca un valor que el wrapper no pueda verificar por si mismo.
+function validateSslRootCert(rawValue, { fileSystem }) {
+  if (rawValue === undefined || rawValue === null) {
+    return null;
+  }
+  if (typeof rawValue !== 'string') {
+    fail('backup_ssl_root_cert_invalid');
+  }
+  const value = rawValue.trim();
+  if (value.length === 0) {
+    return null;
+  }
+  if (value === SSL_ROOT_CERT_SYSTEM) {
+    return SSL_ROOT_CERT_SYSTEM;
+  }
+  if (!path.isAbsolute(value)) {
+    fail('backup_ssl_root_cert_invalid');
+  }
+  let stats;
+  try {
+    stats = fileSystem.statSync(value);
+  } catch {
+    fail('backup_ssl_root_cert_missing');
+  }
+  if (!stats.isFile()) {
+    fail('backup_ssl_root_cert_missing');
+  }
+  return value;
+}
+
 // --------------------------------------------------------------------------
 // Alcance Approval
 // --------------------------------------------------------------------------
 
-function validateScope(scope) {
-  if (!scope || typeof scope !== 'object') {
-    fail('backup_scope_invalid');
+function validateQualifiedTable(table, schema, code) {
+  if (typeof table !== 'string' || !/^[a-z_][a-z0-9_]*\.[a-z_][a-z0-9_]*$/i.test(table)) {
+    fail(code, 'table');
   }
-
-  if (scope.mode === SCOPE_MODE_OWNER_RESOLVED) {
-    // Contrato reservado para "futuros objetos del owner
-    // oxkio_approval_owner". Resolverlo exige el catalogo real de Neon,
-    // que esta fuera del alcance autorizado de 6B.2.
-    fail('backup_scope_resolution_pending');
+  if (!table.toLowerCase().startsWith(`${schema.toLowerCase()}.`)) {
+    fail(code, 'schema');
   }
-
-  if (scope.mode !== SCOPE_MODE_EXPLICIT_TABLES) {
-    fail('backup_scope_invalid');
+  if (OUT_OF_DOMAIN_TABLES.includes(table.toLowerCase())) {
+    fail('backup_scope_out_of_domain', table);
   }
+  return table;
+}
 
+function validateExplicitScope(scope) {
   const schema = validateIdentifier(scope.schema, 'backup_scope_invalid');
   const tables = Array.isArray(scope.tables) ? scope.tables : null;
   if (!tables || tables.length === 0) {
     fail('backup_scope_invalid');
   }
-
   for (const table of tables) {
-    if (typeof table !== 'string' || !/^[a-z_][a-z0-9_]*\.[a-z_][a-z0-9_]*$/i.test(table)) {
-      fail('backup_scope_invalid', 'table');
-    }
-    if (!table.toLowerCase().startsWith(`${schema.toLowerCase()}.`)) {
-      fail('backup_scope_invalid', 'schema');
-    }
-    if (OUT_OF_DOMAIN_TABLES.includes(table.toLowerCase())) {
-      fail('backup_scope_out_of_domain', table);
-    }
+    validateQualifiedTable(table, schema, 'backup_scope_invalid');
   }
-
   return Object.freeze({
     mode: SCOPE_MODE_EXPLICIT_TABLES,
     schema,
     owner: typeof scope.owner === 'string' ? scope.owner : APPROVAL_OWNER,
     tables: Object.freeze([...tables]),
+    catalogVerified: false,
   });
+}
+
+// Alcance dinamico "futuros objetos del owner oxkio_approval_owner"
+// (6B.3A). No se consulta ningun catalogo real aqui: se compara, por
+// IGUALDAD EXACTA DE CONJUNTOS, un manifiesto versionado (`scope.expected`,
+// revisado en PR cada vez que se crea un objeto Approval) contra lo que
+// devuelva un `resolveApprovalCatalog` inyectado. Sin ambos ingredientes
+// explicitos, el modo sigue fallando cerrado como PENDIENTE — nunca se
+// activa por inercia ni se completa con un valor por defecto implicito.
+// Cualquier discrepancia en cualquier direccion (falta un objeto, sobra
+// un objeto, aparece un owner distinto, el resolver falla o devuelve un
+// resultado parcial/vacio) es fail-closed: STOP, nunca degradacion parcial.
+async function resolveOwnerScope(scope, { resolveApprovalCatalog }) {
+  const schema = validateIdentifier(scope.schema, 'backup_scope_invalid');
+  const owner = validateIdentifier(
+    typeof scope.owner === 'string' ? scope.owner : APPROVAL_OWNER,
+    'backup_scope_invalid',
+  );
+
+  const expected = Array.isArray(scope.expected) ? scope.expected : null;
+  if (!expected || expected.length === 0 || typeof resolveApprovalCatalog !== 'function') {
+    // Resolverlo exige el catalogo real de Neon y un manifiesto explicito;
+    // ninguno de los dos se asume por defecto.
+    fail('backup_scope_resolution_pending');
+  }
+
+  const expectedSet = new Set();
+  for (const table of expected) {
+    validateQualifiedTable(table, schema, 'backup_scope_invalid');
+    expectedSet.add(table.toLowerCase());
+  }
+
+  let resolved;
+  try {
+    resolved = await resolveApprovalCatalog({ schema, owner });
+  } catch {
+    fail('backup_scope_catalog_unavailable');
+  }
+
+  if (!Array.isArray(resolved) || resolved.length === 0) {
+    fail('backup_scope_catalog_unavailable');
+  }
+
+  const resolvedSet = new Set();
+  for (const record of resolved) {
+    if (
+      !record
+      || typeof record !== 'object'
+      || typeof record.table !== 'string'
+      || typeof record.owner !== 'string'
+    ) {
+      fail('backup_scope_catalog_invalid_record');
+    }
+    validateQualifiedTable(record.table, schema, 'backup_scope_catalog_invalid_record');
+    if (record.owner !== owner) {
+      fail('backup_scope_catalog_unexpected_owner', record.table);
+    }
+    resolvedSet.add(record.table.toLowerCase());
+  }
+
+  if (resolvedSet.size !== expectedSet.size) {
+    fail('backup_scope_catalog_mismatch');
+  }
+  for (const table of expectedSet) {
+    if (!resolvedSet.has(table)) {
+      fail('backup_scope_catalog_mismatch');
+    }
+  }
+
+  return Object.freeze({
+    mode: SCOPE_MODE_OWNER_RESOLVED,
+    schema,
+    owner,
+    tables: Object.freeze([...expectedSet].sort()),
+    catalogVerified: true,
+  });
+}
+
+async function resolveScope(scope, dependencies) {
+  if (!scope || typeof scope !== 'object') {
+    fail('backup_scope_invalid');
+  }
+  if (scope.mode === SCOPE_MODE_OWNER_RESOLVED) {
+    return resolveOwnerScope(scope, dependencies);
+  }
+  if (scope.mode !== SCOPE_MODE_EXPLICIT_TABLES) {
+    fail('backup_scope_invalid');
+  }
+  return validateExplicitScope(scope);
 }
 
 // --------------------------------------------------------------------------
@@ -545,8 +671,8 @@ function hashArtifact(artifactPath, { fileSystem }) {
 // Plan validado (nucleo compartido por validateOnly y runExport)
 // --------------------------------------------------------------------------
 
-function buildValidatedPlan(config, dependencies) {
-  const { fileSystem, probeVersion, parentEnv, platform } = dependencies;
+async function buildValidatedPlan(config, dependencies) {
+  const { fileSystem, probeVersion, parentEnv, platform, resolveApprovalCatalog } = dependencies;
 
   assertNoConnectionString(config);
 
@@ -570,7 +696,12 @@ function buildValidatedPlan(config, dependencies) {
       config.channelBinding === undefined ? REQUIRED_CHANNEL_BINDING : config.channelBinding,
   });
 
-  const scope = validateScope(config.scope === undefined ? APPROVAL_BACKUP_SCOPE : config.scope);
+  const sslRootCert = validateSslRootCert(config.sslRootCert, { fileSystem });
+
+  const scope = await resolveScope(
+    config.scope === undefined ? APPROVAL_BACKUP_SCOPE : config.scope,
+    { resolveApprovalCatalog },
+  );
 
   const pgDump = resolveBinary({
     binaryPath: config.pgDumpPath,
@@ -589,7 +720,7 @@ function buildValidatedPlan(config, dependencies) {
   const childEnv = buildChildEnvironment({
     connection,
     tls,
-    sslRootCert: config.sslRootCert,
+    sslRootCert,
     parentEnv,
     platform,
   });
@@ -604,10 +735,7 @@ function buildValidatedPlan(config, dependencies) {
     outputPath,
     args,
     childEnv,
-    sslRootCert:
-      typeof config.sslRootCert === 'string' && config.sslRootCert.trim().length > 0
-        ? config.sslRootCert.trim()
-        : null,
+    sslRootCert,
     timeoutMs: Number.isInteger(config.timeoutMs) && config.timeoutMs > 0 ? config.timeoutMs : null,
   };
 }
@@ -631,13 +759,19 @@ function describePlan(plan) {
     tls: Object.freeze({
       sslMode: plan.tls.sslMode,
       channelBinding: plan.tls.channelBinding,
-      sslRootCert: plan.sslRootCert === null ? 'unset' : 'explicit',
+      sslRootCert:
+        plan.sslRootCert === null
+          ? 'unset'
+          : plan.sslRootCert === SSL_ROOT_CERT_SYSTEM
+            ? 'system'
+            : 'explicit-file',
     }),
     scope: Object.freeze({
       mode: plan.scope.mode,
       schema: plan.scope.schema,
       owner: plan.scope.owner,
       tables: Object.freeze([...plan.scope.tables]),
+      catalogVerified: plan.scope.catalogVerified,
     }),
     format: DUMP_FORMAT,
     ownershipFlags: OWNERSHIP_FLAGS_DECISION,
@@ -672,16 +806,22 @@ function createPgDumpWrapper(dependencies = {}) {
     parentEnv = process.env,
     platform = process.platform,
     now = () => new Date(),
+    // Sin resolver inyectado, el modo owner_resolved sigue fallando cerrado
+    // como PENDIENTE (backup_scope_resolution_pending): no hay resolucion
+    // real de catalogo en 6B.3A, solo el contrato para probarla offline.
+    resolveApprovalCatalog,
   } = dependencies;
 
-  const shared = { fileSystem, probeVersion, parentEnv, platform };
+  const shared = { fileSystem, probeVersion, parentEnv, platform, resolveApprovalCatalog };
 
-  // ValidateOnly: valida la configuracion, resuelve el binario, construye
-  // args y entorno saneados y NO lanza pg_dump ni abre ninguna conexion.
+  // ValidateOnly: valida la configuracion (incluida, si se pide, la
+  // comparacion exacta manifiesto-vs-catalogo mediante el resolver
+  // inyectado), resuelve el binario, construye args y entorno saneados y
+  // NO lanza pg_dump ni abre ninguna conexion.
   // (La resolucion del binario incluye una sonda local `--version`, sin red
   //  y sin credenciales; sin ella la puerta de version no seria exigible.)
-  function validateOnly(config = {}) {
-    const plan = buildValidatedPlan(config, shared);
+  async function validateOnly(config = {}) {
+    const plan = await buildValidatedPlan(config, shared);
     const description = describePlan(plan);
     releaseCredential(plan);
     return description;
@@ -705,7 +845,7 @@ function createPgDumpWrapper(dependencies = {}) {
   // puerta humana separada. Se implementa aqui el comportamiento
   // fail-closed POST para que la ejecucion real de 6B no improvise.
   async function runExport(config = {}) {
-    const plan = buildValidatedPlan(config, shared);
+    const plan = await buildValidatedPlan(config, shared);
     const startedAt = Date.now();
     const ephemeralSecrets = [plan.connection.password];
 
@@ -834,6 +974,7 @@ module.exports = {
   REQUIRED_SSL_MODE,
   SCOPE_MODE_EXPLICIT_TABLES,
   SCOPE_MODE_OWNER_RESOLVED,
+  SSL_ROOT_CERT_SYSTEM,
   WINDOWS_ENVIRONMENT_ALLOWLIST,
   buildBackupArtifactName,
   buildChildEnvironment,

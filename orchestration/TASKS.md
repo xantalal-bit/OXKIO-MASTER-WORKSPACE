@@ -263,6 +263,60 @@
   `XANTALAL/00_GOVERNANCE/5C.7B-ARQUITECTURA-EJECUTABLE-RUNTIME.md`,
   sección «Apertura 6B tramo OFFLINE — 6B.1 toolchain y 6B.2 wrapper
   `pg_dump` — 09/09/2026».
+  **6B.3A — CA raíz + alcance dinámico Approval (09/09/2026):**
+  `6B.3A = PASS_WITH_LIMITATIONS OFFLINE`, estrictamente offline sobre
+  `backend/services/backup/pg-dump-wrapper.js`. CA: evidencia oficial
+  (PostgreSQL 18 `libpq-connect.html`, `release-16.html`; hilo oficial
+  `pgsql-hackers` abril 2025; documentación oficial de Neon) confirma
+  `sslrootcert=system` disponible desde libpq 16 (local = 18.6, OK) pero
+  **no fiable en Windows** para usuarios sin almacén OpenSSL propio —
+  corroborado por la propia Neon, que documenta que Windows no ofrece un
+  archivo de raíces CA utilizable y recomienda descarga manual; Neon usa
+  `ISRG Root X1` (Let's Encrypt), ampliamente presente en `ca-certificates`
+  de Linux mantenido. Decisión: **SYSTEM TRUST STORE condicionado por
+  plataforma** — recomendado para la identidad ejecutora real (Cloud
+  Run/Linux), no forzado en Windows. Wrapper: nueva constante
+  `SSL_ROOT_CERT_SYSTEM` y `validateSslRootCert` — acepta `'system'` tal
+  cual, exige ruta absoluta existente en cualquier otro caso (relativa =
+  `backup_ssl_root_cert_invalid`, inexistente =
+  `backup_ssl_root_cert_missing`), y `ValidateOnly` solo publica una
+  categoría (`unset`/`system`/`explicit-file`), nunca la ruta real.
+  Alcance dinámico: comparadas 5 estrategias (lista explícita, catálogo
+  real, inferencia por migraciones, manifiesto versionado, combinación);
+  elegida la combinación **manifiesto versionado + resolver inyectable**,
+  con **igualdad exacta de conjuntos** exigida entre ambos — cualquier
+  discrepancia en cualquier dirección es `backup_scope_catalog_mismatch`,
+  cualquier owner distinto es `backup_scope_catalog_unexpected_owner`,
+  cualquier fallo o resultado vacío del resolver es
+  `backup_scope_catalog_unavailable`, y ningún objeto de Mission Queue se
+  acepta aunque venga del propio catálogo resuelto
+  (`backup_scope_out_of_domain`). Nuevo archivo versionado
+  `backend/services/backup/approval-domain-manifest.js`
+  (`EXPECTED_APPROVAL_OBJECTS`/`EXPECTED_APPROVAL_TABLES`, hoy solo
+  `oxkio.approval_items`). Sin manifiesto y sin resolver inyectados
+  explícitamente, `owner_resolved` sigue fallando cerrado como
+  PENDIENTE — capacidad estrictamente opt-in, sin activación por
+  inercia. Privilegios de catálogo: **GAP documentado, no hecho
+  canónico** — no se encontró cita oficial exacta que confirme lectura
+  de `pg_catalog` sin privilegios adicionales para PostgreSQL 18;
+  pendiente de verificación empírica antes de implementar la consulta
+  real. `validateOnly` pasó de síncrona a `async` (cambio de contrato
+  interno, sin consumidores externos todavía). `FOCAL = 47/47 PASS`
+  (antes 34, +13 nuevos); `RELATED = 224/224 PASS, 2 SKIP` preexistentes
+  por entorno. **`COUNCIL_REQUIRED = YES`**: se solicita ratificación de
+  Xatai + Gemini/Antigravity sobre si `PGSSLROOTCERT=system` se adopta
+  como CA por defecto para la ejecución real, dado que la imagen base
+  concreta de Cloud Run no está verificada. **No se conectó a Neon, no se
+  ejecutó `pg_dump` real, no hubo SQL, no se creó `PG-BKP`, no se
+  concedió `BYPASSRLS` real, no se creó ni leyó ningún secreto, no se
+  tocó IAM, OVHcloud ni ningún bucket, y no se produjo ningún backup.**
+  **Estado final: 5C.7B.6 = ABIERTA; 6B = ABIERTA EN SU TRAMO OFFLINE;
+  6B.1 = PASS; 6B.2 = PASS OFFLINE; 6B.3A = PASS_WITH_LIMITATIONS
+  OFFLINE; 6C–6E = NO ABIERTAS; 5C.7B.7 = NO ABIERTA.** Evidencia:
+  documento canónico
+  `XANTALAL/00_GOVERNANCE/5C.7B-ARQUITECTURA-EJECUTABLE-RUNTIME.md`,
+  sección «6B.3A — CA raíz + alcance dinámico Approval — 09/09/2026».
+
 
 
 - G0002.5B.2E está cerrada, versionada y publicada en `e4c79ff`.
