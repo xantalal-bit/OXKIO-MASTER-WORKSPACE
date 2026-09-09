@@ -206,6 +206,64 @@
   `XANTALAL/00_GOVERNANCE/5C.7B-ARQUITECTURA-EJECUTABLE-RUNTIME.md`,
   sección «Consolidación documental PRE-6B — Destino, retención e
   identidades de backup — 08/09/2026».
+  **Apertura 6B tramo OFFLINE — 6B.1 toolchain y 6B.2 wrapper `pg_dump`
+  (09/09/2026):** bajo autorización humana explícita de José Antonio
+  limitada a implementar y validar **sin conexión real**. **6B.1 =
+  PASS**: PostgreSQL client tools locales verificados por ruta absoluta
+  en `C:\Program Files\PostgreSQL\18\bin` — `pg_dump`, `pg_restore` y
+  `psql`, los tres `18.6`, coincidiendo en versión mayor con el
+  PostgreSQL 18 canónico de Neon; resuelve el pendiente (6) de la
+  sección M **solo en su vertiente local**, no en la identidad ejecutora
+  B.1. **6B.2 = PASS OFFLINE**: wrapper seguro implementado en
+  `backend/services/backup/pg-dump-wrapper.js` con tests focales en
+  `backend/services/backup/pg-dump-wrapper.test.js`, reutilizando
+  `backend/security/secret-runtime.js` (`redact`/`[REDACTED]`) y el
+  contrato anti-`connectionString` de campos discretos de
+  `backend/repositories/postgres-approval-factory.js`, sin crear ningún
+  subsistema paralelo. Credencial efímera inyectada por el llamador —
+  nunca leída de `process.env` — colocada solo en el entorno del proceso
+  hijo, construido por lista blanca con purga previa de cualquier `PG*`
+  heredada, y liberada por limpieza lógica de referencias (no se afirma
+  borrado seguro de RAM); nunca en `argv`, `.env`, entorno
+  User/Machine, Git ni logs. `PGSSLMODE=verify-full` y
+  `PGCHANNELBINDING=require` impuestos por código y no debilitables;
+  endpoint DIRECTO obligatorio, `-pooler` aborta sin intentar corregirse;
+  formato custom, artefacto único, nombre determinista `asset + UTC +
+  executionId`, salida fuera del repositorio, de OneDrive y de `.git`,
+  sin overwrite. `--no-owner`/`--no-privileges` **no se emiten**:
+  decisión diferida a 6C (`PENDING_6C`). Alcance dominio Approval
+  únicamente, con Mission Queue en lista de exclusión explícita y el
+  modo `owner_resolved` reservado como contrato que **falla como
+  PENDIENTE** en vez de inventar una lista rígida, porque resolverlo
+  exige el catálogo real de Neon. `ValidateOnly` devuelve solo datos no
+  secretos (host redactado, nombres de variables sin valores, nunca
+  `PGPASSWORD`) y no lanza `pg_dump`; matiz declarado: la puerta de
+  versión sí ejecuta una sonda local `pg_dump --version`, sin red ni
+  credenciales, inyectable y doblada en tests. Fail-closed POST diseñado
+  y probado con dobles (exit code, señal/timeout, artefacto ausente,
+  tamaño 0), con tamaño y SHA-256 en el camino correcto, `stdout`/
+  `stderr` saneados y errores reportados por lista blanca de campos.
+  `pg_restore --list` implementado y probado solo offline con fixture
+  sintético. La evidencia se **devuelve**, no se persiste:
+  `backend/core/executionLogger.js` se descartó deliberadamente como
+  sumidero por escribir en `executionLog.json`, trackeado en Git.
+  `FOCAL = 34/34 PASS`; `RELATED = 211/211 PASS, 2 SKIP` preexistentes
+  bloqueados por entorno. **Hallazgo nuevo**: `verify-full` exige una CA
+  raíz resoluble (en Windows `%APPDATA%\postgresql\root.crt` si no se
+  fija `PGSSLROOTCERT`); no se ha verificado qué mecanismo usará la
+  identidad ejecutora futura y queda como pendiente pre-ejecución.
+  **No se conectó a Neon, no se ejecutó `pg_dump` real, no se creó
+  `PG-BKP-ROLE` ni `PG-BKP-LOGIN`, no hubo SQL mutativo,
+  `GRANT`/`REVOKE`, `BYPASSRLS` real, secretos, IAM, OVHcloud, bucket,
+  Object Lock/lifecycle, backup real ni subida de archivos.** **Estado
+  final: 5C.7B.6 = ABIERTA; 6B = ABIERTA EN SU TRAMO OFFLINE; 6B.1 =
+  PASS; 6B.2 = PASS OFFLINE; 6C–6E = NO ABIERTAS; 5C.7B.7 = NO
+  ABIERTA.** La ejecución real de 6B sigue exigiendo la puerta humana
+  separada de la sección K. Evidencia: documento canónico
+  `XANTALAL/00_GOVERNANCE/5C.7B-ARQUITECTURA-EJECUTABLE-RUNTIME.md`,
+  sección «Apertura 6B tramo OFFLINE — 6B.1 toolchain y 6B.2 wrapper
+  `pg_dump` — 09/09/2026».
+
 
 - G0002.5B.2E está cerrada, versionada y publicada en `e4c79ff`.
 - El commit atómico Confirmation → Mission superó 179/179 pruebas:
