@@ -316,6 +316,45 @@
   documento canónico
   `XANTALAL/00_GOVERNANCE/5C.7B-ARQUITECTURA-EJECUTABLE-RUNTIME.md`,
   sección «6B.3A — CA raíz + alcance dinámico Approval — 09/09/2026».
+  **6B.3D — Variante offline de imagen de backup (09/09/2026):**
+  `6B.3D = PASS OFFLINE`. Consejo de 6B.3A/6B.3B/6B.3C resuelto en
+  código: `PGSSLROOTCERT=system` adoptado como política Linux (sin
+  root.crt propio); base pinneada por rama (`node:22-alpine3.24`), no
+  por digest exacto todavía (digest observado en build,
+  `sha256:c610fcdf...3aa32`, registrado como evidencia, no congelado).
+  `Dockerfile`: `dependencies` reutilizada sin cambios; nueva etapa
+  compartida `app` (COPY de aplicación factorizadas); dos targets
+  hermanos derivados — `runtime` (HTTP, sigue siendo la última etapa,
+  build sin `--target` sin cambios de contrato, sin
+  `postgresql18-client`) y `backup` (nuevo, añade únicamente `apk add
+  --no-cache postgresql18-client` sin fijar versión, vuelve a `USER
+  node`). Validado con Docker real (arrancado, un único pull, sin
+  push): target HTTP sin pg_dump/pg_restore/psql (confirmado ausentes);
+  target backup con los tres en `18.6`, Alpine real `3.24.1`, trust
+  store `/etc/ssl/cert.pem`→`ca-certificates.crt` con **ISRG Root X1
+  confirmado presente**, sin certificado propio añadido
+  (`find /etc/ssl/certs/ca-certificates.crt` únicamente), sin ejecutar
+  como root, sin secretos en variables de entorno. Nuevos tests
+  colocados en `deploy/`: `dockerfile.test.js` (estático, sin Docker,
+  10/10 PASS, verifica el contrato del propio archivo) y
+  `dockerfile-build.test.js` (con Docker real, auto-omitido si no
+  disponible, 9/9 PASS, construye y elimina imágenes con tag efímero
+  por ejecución). `FOCAL = 19/19 PASS`; `RELATED = 71/71 PASS`
+  (`backend/runtime/*.test.js` + `pg-dump-wrapper.test.js`, sin
+  cambios de código, confirmados en verde). **No se conectó a Neon, no
+  se ejecutó `pg_dump` real, no se produjo backup, no hubo SQL, no se
+  creó `PG-BKP`, no se concedió `BYPASSRLS`, no se creó ni leyó ningún
+  secreto, no se tocó IAM, OVHcloud ni ningún bucket, no se hizo push
+  de ninguna imagen a ningún registry y no se desplegó nada en Cloud
+  Run/GCP.** **Estado final: 5C.7B.6 = ABIERTA; 6B = ABIERTA EN SU
+  TRAMO OFFLINE; 6B.1 = PASS; 6B.2 = PASS OFFLINE; 6B.3A =
+  PASS_WITH_LIMITATIONS OFFLINE; 6B.3B = PASS_WITH_LIMITATIONS
+  READ-ONLY; 6B.3C = PASS_WITH_LIMITATIONS READ-ONLY; 6B.3D = PASS
+  OFFLINE; 6C–6E = NO ABIERTAS; 5C.7B.7 = NO ABIERTA.** Evidencia:
+  documento canónico
+  `XANTALAL/00_GOVERNANCE/5C.7B-ARQUITECTURA-EJECUTABLE-RUNTIME.md`,
+  sección «6B.3D — Variante offline de imagen de backup — 09/09/2026».
+
 
 
 
