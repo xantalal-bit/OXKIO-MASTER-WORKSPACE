@@ -354,6 +354,53 @@
   documento canónico
   `XANTALAL/00_GOVERNANCE/5C.7B-ARQUITECTURA-EJECUTABLE-RUNTIME.md`,
   sección «6B.3D — Variante offline de imagen de backup — 09/09/2026».
+  **6B.3E — Runner offline del backup (09/09/2026):** `6B.3E = PASS
+  OFFLINE`. Nuevo `backend/services/backup/backup-runner.js`, sin
+  reimplementar nada: delega toda la logica de `pg_dump` en
+  `createPgDumpWrapper()` (`validateOnly`/`runExport`/`resolveArtifactPath`)
+  y consume `EXPECTED_APPROVAL_TABLES` de `approval-domain-manifest.js`
+  directamente, sin lista propia. CLI (`main()`) reutiliza el patron ya
+  existente de `persistence-poc-runner.js` (`if (require.main ===
+  module)`, `process.exitCode`, salida JSON saneada). Contrato de
+  proveedor de secreto `{ async getBackupCredential() }` (misma forma
+  que los providers de `secret-runtime.js`) y de catalogo
+  `resolveApprovalCatalog` reutilizado tal cual del wrapper — sin
+  ninguno de los dos inyectado, falla cerrado
+  (`runner_secret_provider_missing` / `runner_catalog_provider_missing`)
+  antes de tocar nada. Dos modos: `validate-only` (nunca abre red, nunca
+  lanza `pg_dump`, default del CLI) y `execute` (contrato interno,
+  requiere `mode==='execute'` Y `allowExecute===true` simultaneos —
+  `--execute` sin `--allow-execute` en el CLI queda bloqueado). TLS no
+  configurable desde fuera: siempre `verify-full`/`require`,
+  `PGSSLROOTCERT=system` por defecto (politica de 6B.3D), solo
+  overridable a un archivo explicito. **Integracion Docker sin ningun
+  cambio de Dockerfile**: el runner ya vive en el target `backup` via la
+  etapa compartida `app`; invocado explicitamente dentro del contenedor
+  real construido (`docker run oxkio-backup:... node
+  backend/services/backup/backup-runner.js --validate-only ...`) sin
+  providers reales inyectados (ninguno existe todavia en el repo) →
+  exit code 1, `runner_secret_provider_missing`, cero literales
+  `postgres://`/`PASSWORD` en la salida — confirmado empiricamente, no
+  solo en tests. Confirmado tambien que ningun CMD/ENTRYPOINT del target
+  backup invoca el runner automaticamente. `FOCAL = 98/98 PASS`
+  (backup-runner.test.js 30/30 nuevo + pg-dump-wrapper.test.js 47/47 +
+  dockerfile.test.js 10/10 + dockerfile-build.test.js 11/11, con 2 tests
+  nuevos de integracion real del runner en contenedor). `RELATED =
+  177/177 PASS, 2 SKIP` preexistentes por entorno, ajenos a este cambio.
+  **No se conecto a Neon, no se ejecuto `pg_dump` real, no se produjo
+  backup, no hubo SQL, no se creo `PG-BKP`, no se concedio `BYPASSRLS`,
+  no hubo `GRANT`/`REVOKE`, no se creo ni leyo ningun secreto real, no
+  se toco IAM, OVHcloud ni ningun bucket, no se subio ningun artefacto,
+  no se creo ningun Cloud Run Job y no se desplego nada en GCP.**
+  **Estado final: 5C.7B.6 = ABIERTA; 6B = ABIERTA EN SU TRAMO OFFLINE;
+  6B.1 = PASS; 6B.2 = PASS OFFLINE; 6B.3A = PASS_WITH_LIMITATIONS
+  OFFLINE; 6B.3B = PASS_WITH_LIMITATIONS READ-ONLY; 6B.3C =
+  PASS_WITH_LIMITATIONS READ-ONLY; 6B.3D = PASS OFFLINE; 6B.3E = PASS
+  OFFLINE; 6C–6E = NO ABIERTAS; 5C.7B.7 = NO ABIERTA.** Evidencia:
+  documento canónico
+  `XANTALAL/00_GOVERNANCE/5C.7B-ARQUITECTURA-EJECUTABLE-RUNTIME.md`,
+  sección «6B.3E — Runner offline del backup — 09/09/2026».
+
 
 
 

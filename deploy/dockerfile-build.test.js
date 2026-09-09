@@ -1,6 +1,8 @@
 'use strict';
 
-// 5C.7B.6B.3D — Verificacion real de build para el Dockerfile multi-stage.
+// 5C.7B.6B.3D/6B.3E — Verificacion real de build para el Dockerfile
+// multi-stage, incluida la invocacion explicita del runner de backup
+// dentro del target ya construido.
 //
 // A diferencia de `dockerfile.test.js` (estatico, siempre corre), este
 // archivo construye de verdad ambas imagenes locales (`--target runtime`
@@ -114,6 +116,40 @@ test('build (skipped without Docker): runtime y backup se construyen y se inspec
       assert.doesNotMatch(inspect.stdout, /postgres(ql)?:\/\//i);
       assert.doesNotMatch(inspect.stdout, /PASSWORD/i);
     }
+  });
+
+  // 5C.7B.6B.3E: el runner llega al target backup solo porque ya vive
+  // bajo backend/ (copiado por la etapa "app" compartida) — no hizo
+  // falta ningun cambio de Dockerfile. Invocacion explicita, sin CMD
+  // automatico: sin providers reales inyectados (ninguno existe todavia
+  // en este repositorio), debe fallar cerrado con exit code != 0 y sin
+  // conectar a ningun sitio.
+  await t.test('backup: el runner explicito falla cerrado sin providers reales (validate-only)', () => {
+    const which = run('docker', ['run', '--rm', backupTag, 'which', 'pg_dump']);
+    assert.equal(which.status, 0, which.stderr);
+    const pgDumpPath = which.stdout.trim();
+
+    const invocation = run('docker', [
+      'run', '--rm', backupTag,
+      'node', 'backend/services/backup/backup-runner.js',
+      '--validate-only',
+      '--execution-id=exec-6b3e-container-check',
+      '--output-dir=/tmp',
+      `--pg-dump-path=${pgDumpPath}`,
+    ]);
+    assert.notEqual(invocation.status, 0);
+    const parsed = JSON.parse(invocation.stdout);
+    assert.equal(parsed.ok, false);
+    assert.equal(parsed.failure.code, 'runner_secret_provider_missing');
+    assert.doesNotMatch(invocation.stdout, /postgres(ql)?:\/\//i);
+    assert.doesNotMatch(invocation.stdout, /PASSWORD/i);
+  });
+
+  await t.test('backup: el runner no se ejecuta automaticamente (sin CMD de backup)', () => {
+    const inspect = run('docker', ['image', 'inspect', backupTag, '--format', '{{json .Config.Cmd}} {{json .Config.Entrypoint}}']);
+    assert.equal(inspect.status, 0, inspect.stderr);
+    assert.doesNotMatch(inspect.stdout, /backup-runner/);
+    assert.doesNotMatch(inspect.stdout, /--execute/);
   });
 });
 
