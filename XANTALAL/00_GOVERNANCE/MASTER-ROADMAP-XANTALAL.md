@@ -114,7 +114,7 @@ Las siguientes acciones son preparación para esa revisión, no autorización de
 
 Todas las automatizaciones anteriores permanecen **PAUSADAS hasta su revisión individual**. No reactivar ninguna automáticamente ni activar nuevas. En PM-04 cada una se clasificará MANTENER / MODIFICAR / ELIMINAR / MANUAL / INTEGRAR EN PARTE DIARIO. Tras cerrar la revisión del Plan Maestro se decidirán solo las necesarias y sin duplicidades; la clasificación no ejecuta cambios por sí misma.
 
-El único Parte Diario se consolidará en el chat de gobierno existente, a las **18:30 Europe/Madrid**, adelantable a petición de José. Estos son requisitos para PM-02/PM-03, no una programación ni activación:
+El Parte Diario único forma parte del gobierno previsto de XANTALAL, pero su **canal y formato definitivos se ratificarán en PM-02**. El horario de **18:30 Europe/Madrid**, adelantable a petición de José, se mantiene como criterio inicial y su **ratificación operativa corresponde a PM-03**. Esta definición no programa ni activa ninguna automatización.
 
 1. Estado general.
 2. Qué se cerró.
