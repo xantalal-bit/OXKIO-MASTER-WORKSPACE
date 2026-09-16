@@ -210,3 +210,38 @@ Prow se toma como referencia de mercado, no como base tecnológica. XANTALAL/OXK
 ### Próximo paso derivado
 
 Usar el benchmark para el diseño del registry, del selector de skills y del futuro Workflow Engineer, empezando por funcionalidades internas y pruebas sintéticas. Mantener separado “benchmark funcional” de “implementación propia”, con evidencia de procedencia y sin copiar componentes propietarios.
+
+## 16. Benchmark público: Skywork / SkyClaw
+
+Estado de la evaluación: `AUDITED-AS-BENCHMARK` / NO ADOPTADO / NO CONECTADO.
+
+Skywork ya no debe tratarse solo como generador de presentaciones. Su documentación pública de 2026 describe una plataforma de agentes con **Expert Skills**, skills explorables y personalizadas, selección automática de capacidades, ejecución en background, tareas programadas, conexión con canales de mensajería, sandbox cloud y memoria de largo plazo. En niveles superiores añade selección de modelos y ejecución multiagente en paralelo.
+
+### Verificación clave
+
+- La afirmación “todos los expertos gratis” es **demasiado fuerte**. El nivel Free ofrece acceso básico y skills preinstaladas, pero tiene límites claros de créditos/proyectos/descargas/tamaño de archivos y no incluye toda la autonomía avanzada.
+- La memoria persistente, mayor personalización, host cloud persistente, selección de modelos superiores y flujos multiagente en paralelo pertenecen a niveles de pago según la documentación pública actual.
+- Sí es real el patrón de: `objetivo → selección de skills → ejecución autónoma/background → resultado`, y la plataforma soporta tareas programadas.
+
+### Patrones útiles para OXKIO
+
+1. **Skill discovery/selection**: el Planner no necesita conocer cada skill de memoria; consulta registry y selecciona por misión, riesgo y coste.
+2. **Skill chaining**: una misión compleja puede encadenar Research + Slides + Web + Data + Media sin convertir cada paso en un agente permanente.
+3. **Background execution**: tareas largas deben poder continuar fuera del turno conversacional y dejar estado/evidencia.
+4. **Scheduled tasks por proyecto**: cada automatización conserva historial y contexto de sus ejecuciones, en lugar de quedar como evento suelto.
+5. **Canales de entrada desacoplados**: chat, móvil o mensajería son superficies; la lógica de misión vive en OXKIO.
+6. **Sandbox temporal vs persistente**: usar entorno efímero por defecto; persistencia solo cuando la misión lo justifique.
+7. **Memoria controlada**: separar preferencias/contexto de usuario de secretos, logs y estado operacional.
+8. **Multi-model + multi-agent**: el Router puede elegir proveedor y el Supervisor decidir paralelismo únicamente cuando mejore resultado/coste/latencia.
+9. **Proactividad acotada**: tareas recurrentes o condicionadas pueden ejecutarse sin intervención, manteniendo Policy Gate para acciones materiales.
+
+### Decisión provisional
+
+- **NO contratar Skywork para el núcleo de OXKIO ahora**.
+- **SÍ mantenerlo como benchmark de prioridad alta** porque valida varias decisiones que ya tomamos: biblioteca de skills, agentes especializados, programación de tareas, ejecución background, memoria, multi-model y multiagente.
+- **PROBAR manualmente el plan gratuito solo si una prueba concreta puede responder una duda arquitectónica o comercial**, no por curiosidad.
+- La prioridad sigue siendo implementar estos patrones en la arquitectura propia de OXKIO antes de añadir otra dependencia central.
+
+### Diferenciación buscada
+
+Skywork optimiza productividad general y generación de entregables. OXKIO debe diferenciarse por gobierno humano, policy/approval, trazabilidad, evidencia, reutilización de arquitectura XANTALAL, control de costes/proveedores y capacidad de integrar workflows empresariales propios. El objetivo no es competir en “hacer una presentación”, sino coordinar capacidades y ejecución de negocio de forma supervisada.
