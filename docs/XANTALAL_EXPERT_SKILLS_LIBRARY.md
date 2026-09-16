@@ -162,3 +162,51 @@ La biblioteca es útil si reduce tiempo de José y aumenta calidad/repetibilidad
 4. auditar 3–5 skills externas de alto valor;
 5. adaptar una primera skill completa y probarla en sandbox;
 6. comparar contra baseline sin skill.
+
+## 15. Benchmark público: Prow (letsprow.com)
+
+Estado de la evaluación: `AUDITED-AS-BENCHMARK` / NO ADOPTADO / NO CONECTADO.
+
+Prow se presenta públicamente como una plataforma de automatización con workflows, integraciones externas y “empleados de IA”. En material público mostrado por José aparecen ideas de orquestación entre especialistas, intervención humana, skills/habilidades, base de conocimiento, aprendizaje continuo, selección de modelos, gestión de errores, acciones seguras y soporte MCP. Estas afirmaciones comerciales se usan solo como benchmark funcional; no se consideran verificadas internamente ni autorización para copiar implementación propietaria.
+
+### Ideas que SÍ encajan con OXKIO
+
+1. **Especialistas orquestados**: varios agentes/skills para una misma misión bajo un coordinador.
+2. **Human-in-the-loop**: aprobación explícita antes de acciones materiales.
+3. **Skills bajo demanda**: capacidad reutilizable elegida según tarea.
+4. **Knowledge/context layer**: documentos y memoria como contexto controlado.
+5. **Model-agnostic routing**: elegir modelo según tarea/coste/riesgo.
+6. **Error recovery loop**: detectar fallo, diagnosticar, corregir en entorno seguro, reintentar y escalar si persiste.
+7. **Safe actions**: permisos mínimos, allowlists y Policy Gate.
+8. **MCP/adapters**: superficie estándar para herramientas sin acoplar el núcleo a un proveedor.
+9. **Observabilidad**: cada misión debe producir estado, acciones, errores, coste y evidencia.
+
+### Ideas que NO se deben copiar literalmente
+
+- interfaz, nombres, branding, copy comercial o gráficos;
+- arquitectura interna no pública;
+- prompts, documentación privada o lógica obtenida por reverse engineering;
+- dependencias o flujos cuya licencia no esté comprobada.
+
+### Diferencia estratégica buscada
+
+Prow se toma como referencia de mercado, no como base tecnológica. XANTALAL/OXKIO debe conservar su arquitectura propia: Executive + Planner + Skill/Expert Registry + Model Router + Supervisor + Policy Gate/Approval Queue + Action Executor + Evidence Logger. El objetivo no es “empleados de IA” como metáfora comercial, sino capacidades auditables y sustituibles que puedan operar con varios proveedores y bajo gobierno humano.
+
+### Decisión provisional
+
+- **NO contratar ni conectar Prow ahora**.
+- **NO intentar clonar la plataforma**.
+- **SÍ incorporar de forma independiente los patrones genéricos que ya coinciden con la hoja de ruta OXKIO**.
+- Mantener Prow como `WATCH / BENCHMARK` y revisar solo si aparece una capacidad diferencial que ahorre desarrollo real o acelere comercialización sin lock-in significativo.
+
+### Razones
+
+- gran parte de los patrones mostrados ya están en la arquitectura objetivo de OXKIO;
+- adoptar otra plataforma central crearía dependencia y duplicaría Supervisor/Approval/Router/Workflow Engine;
+- los términos públicos de Prow limitan su uso a la organización contratante y prohíben reverse engineering, copia o desarrollo derivado a partir de su implementación propietaria;
+- XANTALAL todavía no necesita añadir otra cuenta, suscripción y custodio de datos para validar conceptos que podemos construir de forma propia y portable;
+- si en el futuro el coste de construir una capacidad concreta supera claramente el de integrarla, se reabre la decisión.
+
+### Próximo paso derivado
+
+Usar el benchmark para el diseño del registry, del selector de skills y del futuro Workflow Engineer, empezando por funcionalidades internas y pruebas sintéticas. Mantener separado “benchmark funcional” de “implementación propia”, con evidencia de procedencia y sin copiar componentes propietarios.
