@@ -48,6 +48,8 @@ const {
   sendFirebaseAuthError
 } = require("../security/firebase-server-auth");
 const { createExecutiveAuthorizer } = require("../security/executive-authorization");
+const { buildDashboardReaders, buildPrivateIdentity } = require("../security/private-identity-projection");
+const { isAuthorizedExecutiveIdentity } = require("./routes/executive-approval");
 const { safeDiagnostic } = require("../security/secret-runtime");
 const { createExecutiveRuntime } = require("../services/runtime/executive-runtime-factory");
 const {
@@ -155,23 +157,15 @@ function getEcosystemObserverViews() {
 }
 
 function buildRequestPrivateIdentity(firebaseIdentity) {
-  const privateIdentity = getClienteCeroIdentity();
-  return {
-    ...privateIdentity,
-    userId: firebaseIdentity.uid
-  };
+  return buildPrivateIdentity(firebaseIdentity, { getClienteCeroIdentity });
 }
 
 function createDashboardReaders(firebaseIdentity) {
-  const identity = buildRequestPrivateIdentity(firebaseIdentity);
-  return {
-    gmailReader: () => buildGmailPrivateContext({ ...identity, maxMessages: 5 }),
-    calendarReader: () => buildCalendarPrivateContext({
-      ...identity,
-      range: "next7Days",
-      maxResults: 10
-    })
-  };
+  return buildDashboardReaders(firebaseIdentity, {
+    getClienteCeroIdentity,
+    buildGmailPrivateContext,
+    buildCalendarPrivateContext
+  });
 }
 
 const MUTABLE_EXECUTIVE_ROUTES = new Set([
@@ -881,6 +875,13 @@ if (req.url === "/api/status") {
 }
 
 if (pathname === "/api/dashboard" && req.method === "GET") {
+  if (!isAuthorizedExecutiveIdentity(requestPrivateIdentity)) {
+    return sendJson(res, 403, {
+      ok: false,
+      code: "executive_authorization_denied",
+      message: "Tu sesión no tiene permiso para ver este panel."
+    });
+  }
   try {
     const dashboardState = await DashboardIntelligence.getDashboardState({
       ...getEcosystemObserverViews(),

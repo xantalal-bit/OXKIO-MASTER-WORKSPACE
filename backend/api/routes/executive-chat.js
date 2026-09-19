@@ -217,23 +217,31 @@ async function buildOrchestratorOptions(query, dependencies = {}, controls = {})
   }
 
   if (selection.approvals) {
-    try {
-      const queue = dependencies.approvalQueue;
-      if (!queue || typeof queue.listPending !== 'function' || typeof queue.getHistory !== 'function') throw new Error('unavailable');
-      options.contextualData.approvals = {
-        pending: queue.listPending().map(sanitizeApprovalItem),
-        history: queue.getHistory().map(sanitizeApprovalItem),
-      };
-    } catch (error) {
-      options.contextFailures.push('approvals_unavailable');
+    if (!isInternallyAuthorized(identity)) {
+      options.contextFailures.push('approvals_unauthorized');
+    } else {
+      try {
+        const queue = dependencies.approvalQueue;
+        if (!queue || typeof queue.listPending !== 'function' || typeof queue.getHistory !== 'function') throw new Error('unavailable');
+        options.contextualData.approvals = {
+          pending: queue.listPending().map(sanitizeApprovalItem),
+          history: queue.getHistory().map(sanitizeApprovalItem),
+        };
+      } catch (error) {
+        options.contextFailures.push('approvals_unavailable');
+      }
     }
   }
 
   if (selection.memory) {
-    try {
-      options.contextualData.memory = sanitizeMemoryContext(dependencies.memory);
-    } catch (error) {
-      options.contextFailures.push('memory_unavailable');
+    if (!isInternallyAuthorized(identity)) {
+      options.contextFailures.push('memory_unauthorized');
+    } else {
+      try {
+        options.contextualData.memory = sanitizeMemoryContext(dependencies.memory);
+      } catch (error) {
+        options.contextFailures.push('memory_unavailable');
+      }
     }
   }
 

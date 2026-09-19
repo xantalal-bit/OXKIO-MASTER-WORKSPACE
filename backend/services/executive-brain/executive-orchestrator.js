@@ -489,6 +489,8 @@ function buildContextFailureSummary(contextFailures) {
     approvals_unavailable: 'Approval Queue no esta disponible temporalmente.',
     memory_unavailable: 'La memoria segura no esta disponible temporalmente.',
     private_context_unauthorized: 'El contexto privado solicitado no esta autorizado.',
+    approvals_unauthorized: 'El contexto privado solicitado no esta autorizado.',
+    memory_unauthorized: 'El contexto privado solicitado no esta autorizado.',
   };
   return contextFailures.map((code) => labels[code]).filter(Boolean).join(' ');
 }

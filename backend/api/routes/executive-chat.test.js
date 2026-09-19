@@ -211,6 +211,46 @@ test('denied internal identity blocks private providers but leaves general queri
   assert.equal(general.statusCode, 200);
 });
 
+test('denied internal identity also blocks Approval Queue and memory context (no data leak on unauthorized identity)', async (t) => {
+  let queueCalls = 0;
+  const queue = {
+    listPending() { queueCalls += 1; return [{ id: 'secret-approval-id', status: 'pending', createdAt: '2026-07-20T08:00:00.000Z', publicProposal: { type: 'email_draft', summary: 'secret-summary', requiresApproval: true } }]; },
+    getHistory() { queueCalls += 1; return []; },
+  };
+  const { dependencies, runtime } = createHarness(t, {
+    approvalQueue: queue,
+    getClienteCeroIdentity: () => ({ clientId: 'family:family-uid-a', expectedClientId: 'cliente-cero', userId: 'family-uid-a', authorization: { status: 'not_available', provider: null } }),
+  });
+  runtime.memory.saveShortTerm({ intent: 'decisions', status: 'completed', query: 'secret raw query' });
+
+  const approvalsResponse = await requestChat('¿Qué tengo pendiente de aprobar?', dependencies);
+  assert.equal(approvalsResponse.statusCode, 200);
+  assert.equal(queueCalls, 0);
+  assert.equal(JSON.stringify(approvalsResponse.getJson()).includes('secret-approval-id'), false);
+  assert.match(approvalsResponse.getJson().response, /no esta autorizado/i);
+
+  const memoryResponse = await requestChat('¿Qué recuerdas de nuestras últimas decisiones?', dependencies);
+  assert.equal(memoryResponse.statusCode, 200);
+  assert.equal(JSON.stringify(memoryResponse.getJson()).includes('secret raw query'), false);
+  assert.match(memoryResponse.getJson().response, /no esta autorizado/i);
+});
+
+test('a family-beta shaped identity (clientId family:<uid>) gets zero private context but the executive chat still answers general queries', async (t) => {
+  const familyIdentity = () => ({ clientId: 'family:family-uid-a', expectedClientId: 'cliente-cero', userId: 'family-uid-a', authorization: { status: 'not_available', provider: null } });
+  const { calls, dependencies } = createHarness(t, { getClienteCeroIdentity: familyIdentity });
+
+  for (const query of ['¿Cómo está mi día?', 'Resume mis correos y reuniones de hoy.', '¿Qué reuniones tengo hoy?']) {
+    const response = await requestChat(query, dependencies);
+    assert.equal(response.statusCode, 200);
+    assert.equal(response.getJson().privateContextUsed, false);
+  }
+  assert.deepEqual(calls, { gmail: 0, calendar: 0, dashboard: 0 });
+
+  const general = await requestChat('Explícame qué es una agenda digital.', dependencies);
+  assert.equal(general.statusCode, 200);
+  assert.equal(general.getJson().privateContextUsed, false);
+});
+
 test('adds an optional supervised recommendation without executing or accepting client decisions', async (t) => {
   let decisionCalls = 0;
   let plannerCalls = 0;
