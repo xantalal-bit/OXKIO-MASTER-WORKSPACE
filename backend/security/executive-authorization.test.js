@@ -145,3 +145,29 @@ test('createExecutiveAuthorizer authorizes a configured family uid without grant
   assert.equal(result.identity.role, 'family_member');
   assert.notEqual(result.identity.clientId, 'cliente-cero');
 });
+
+test('the 4-user Family Beta V0.1 shape: 1 admin + 3 family uids from one authorizer, all distinct and simultaneous', () => {
+  const authorize = createExecutiveAuthorizer({
+    OXKIO_ADMIN_FIREBASE_UIDS: 'admin-uid',
+    OXKIO_FAMILY_FIREBASE_UIDS: 'family-uid-a,family-uid-b,family-uid-c',
+  });
+
+  const admin = authorize({ uid: 'admin-uid' });
+  const a = authorize({ uid: 'family-uid-a' });
+  const b = authorize({ uid: 'family-uid-b' });
+  const c = authorize({ uid: 'family-uid-c' });
+
+  assert.equal(admin.identity.clientId, 'cliente-cero');
+  assert.equal(admin.identity.role, 'admin');
+  for (const member of [a, b, c]) {
+    assert.equal(member.identity.role, 'family_member');
+    assert.notEqual(member.identity.clientId, 'cliente-cero');
+  }
+
+  // All four clientIds are pairwise distinct: no shared identity, no fallback to admin.
+  const clientIds = [admin, a, b, c].map((result) => result.identity.clientId);
+  assert.equal(new Set(clientIds).size, 4);
+
+  // A UID that is neither the admin nor one of the three family members is denied.
+  assert.equal(authorize({ uid: 'stranger-uid' }).code, 'auth_forbidden');
+});

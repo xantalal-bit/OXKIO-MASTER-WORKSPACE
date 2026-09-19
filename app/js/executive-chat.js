@@ -329,23 +329,35 @@ function copyPrivateIdentity(identity) {
   };
 }
 
+function hidePrivateContextControls() {
+  if (privateContextDetails) {
+    privateContextDetails.hidden = true;
+  }
+}
+
 async function loadExecutiveIdentity() {
   try {
     const response = await window.oxkioAuthenticatedFetch('/api/executive/identity');
 
     if (!response.ok) {
+      hidePrivateContextControls();
       return;
     }
 
     const data = await response.json();
 
     if (!isValidExecutiveIdentityPayload(data)) {
+      // Not the Cliente Cero admin identity (family beta included): the
+      // Gmail/Calendar private-context toggle never applies to this caller,
+      // the backend always denies it, so it is never shown in the first place.
+      hidePrivateContextControls();
       return;
     }
 
     loadedPrivateIdentity = copyPrivateIdentity(data.identity);
   } catch (error) {
     loadedPrivateIdentity = null;
+    hidePrivateContextControls();
   }
 }
 

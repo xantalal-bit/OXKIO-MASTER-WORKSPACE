@@ -50,6 +50,7 @@ const {
 const { createExecutiveAuthorizer } = require("../security/executive-authorization");
 const { buildDashboardReaders, buildPrivateIdentity } = require("../security/private-identity-projection");
 const { isAuthorizedExecutiveIdentity } = require("./routes/executive-approval");
+const { isApiRouteDeniedForIdentity } = require("../security/api-route-policy");
 const { safeDiagnostic } = require("../security/secret-runtime");
 const { createExecutiveRuntime } = require("../services/runtime/executive-runtime-factory");
 const {
@@ -270,6 +271,18 @@ const requestPrivateIdentity = req.oxkioIdentity
 const dashboardReaders = req.oxkioIdentity
   ? createDashboardReaders(req.oxkioIdentity)
   : null;
+
+// Single fail-closed choke point for every /api/* route that has no
+// per-route identity check of its own (see api-route-policy.js). Only
+// applies once Firebase authentication actually ran, so it never affects
+// the pre-auth 405 path for GET /api/approve and GET /api/execute-approved.
+if (req.oxkioIdentity && isApiRouteDeniedForIdentity(pathname, isAuthorizedExecutiveIdentity, requestPrivateIdentity)) {
+  return sendJson(res, 403, {
+    ok: false,
+    code: "executive_authorization_denied",
+    message: "Tu sesión no tiene permiso para acceder a este recurso."
+  });
+}
 
 if (isExecutiveIdentityRoute(pathname, req.method)) {
   return handleExecutiveIdentityRequest(req, res, {
@@ -875,13 +888,6 @@ if (req.url === "/api/status") {
 }
 
 if (pathname === "/api/dashboard" && req.method === "GET") {
-  if (!isAuthorizedExecutiveIdentity(requestPrivateIdentity)) {
-    return sendJson(res, 403, {
-      ok: false,
-      code: "executive_authorization_denied",
-      message: "Tu sesión no tiene permiso para ver este panel."
-    });
-  }
   try {
     const dashboardState = await DashboardIntelligence.getDashboardState({
       ...getEcosystemObserverViews(),

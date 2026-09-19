@@ -876,6 +876,31 @@ applyModoCEO();
     onAuthStateChanged(auth, async (u) => {
   if (u) {
     currentUser = u;
+
+    // This shell (greeting, dashboard nav, approvals, control center, docs,
+    // agenda) is Cliente Cero's private admin app. Any other authorized
+    // identity (family beta included) is sent straight to the neutral
+    // executive chat instead of ever rendering it. Any ambiguity (identity
+    // fetch fails, times out, or the role is missing) also redirects: this
+    // must fail closed toward the least-privileged view, never toward Jose's.
+    let identityRole = null;
+    try {
+      const identityResponse = await authenticatedFetch("/api/executive/identity");
+      if (identityResponse.ok) {
+        const identityData = await identityResponse.json();
+        identityRole = identityData && identityData.identity && typeof identityData.identity.role === "string"
+          ? identityData.identity.role
+          : null;
+      }
+    } catch (error) {
+      identityRole = null;
+    }
+
+    if (identityRole !== "admin") {
+      window.location.replace("/executive-chat.html");
+      return;
+    }
+
     showApp(u.email);
 
     try {
