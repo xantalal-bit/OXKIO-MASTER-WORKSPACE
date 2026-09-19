@@ -11,5 +11,9 @@
     "openai": "^6.39.1",
     "pdfkit": "^0.18.0",
     "pg": "^8.22.0"
+  },
+  "devDependencies": {
+    "@firebase/rules-unit-testing": "^5.0.2",
+    "firebase-tools": "^15.30.2"
   }
 }
