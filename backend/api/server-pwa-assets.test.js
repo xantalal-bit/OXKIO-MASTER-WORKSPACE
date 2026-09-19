@@ -68,6 +68,21 @@ test('protects every API with the central Firebase authority and keeps public sh
   assert.doesNotMatch(serverSource, /AUTH_DISABLED|x-oxkio-identity|x-oxkio-role/);
 });
 
+test('the Google OAuth callback requires a single-use state before ever exchanging a code', () => {
+  assert.match(serverSource, /const state = oauthStateStore\.issue\(\)/);
+  assert.match(serverSource, /getAuthUrl\(\{\s*state\s*\}\)/);
+
+  const callbackStart = serverSource.indexOf('pathname === "/oauth/google/callback"');
+  const callbackEnd = serverSource.indexOf('/api/gmail/inbox', callbackStart);
+  const callbackHandler = serverSource.slice(callbackStart, callbackEnd);
+
+  assert.match(callbackHandler, /oauthStateStore\.consume\(state\)/);
+  const stateCheckIndex = callbackHandler.indexOf('oauthStateStore.consume(state)');
+  const getTokensIndex = callbackHandler.indexOf('await getTokens(code)');
+  assert.ok(stateCheckIndex >= 0 && getTokensIndex > stateCheckIndex, 'state must be validated before getTokens is ever called');
+  assert.match(callbackHandler, /if \(!stateResult\.ok\)/);
+});
+
 test('private frontends send Firebase Bearer tokens only in headers and retry once', () => {
   const files = [
     'index.html',

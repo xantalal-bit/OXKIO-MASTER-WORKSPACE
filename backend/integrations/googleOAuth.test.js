@@ -9,6 +9,7 @@ const test = require('node:test');
 const {
   GOOGLE_OAUTH_SCOPES,
   createGoogleOAuthClient,
+  getAuthUrl,
   getGmailClient,
   inspectGoogleOAuthReadiness,
 } = require('./googleOAuth');
@@ -247,4 +248,12 @@ test('constructs OAuth through the neutral secret provider and fails closed with
 test('future authorization scopes exclude send and retain required read/compose scopes', () => {
   assert.deepEqual(GOOGLE_OAUTH_SCOPES, [READONLY_SCOPE, COMPOSE_SCOPE, CALENDAR_SCOPE]);
   assert.equal(GOOGLE_OAUTH_SCOPES.includes(SEND_SCOPE), false);
+});
+
+test('getAuthUrl carries a provided state through to Google and omits it when absent', () => {
+  const withState = new URL(getAuthUrl({ env: COMPLETE_ENV, state: 'oauth-state-value' }));
+  assert.equal(withState.searchParams.get('state'), 'oauth-state-value');
+
+  const withoutState = new URL(getAuthUrl({ env: COMPLETE_ENV }));
+  assert.equal(withoutState.searchParams.has('state'), false);
 });

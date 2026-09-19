@@ -1,0 +1,100 @@
+rules_version = '2';
+
+// OXKIO FAMILY BETA V0.1 — minimal, fail-closed Firestore rules for the
+// production project (oxkio-9af40). NOT DEPLOYED. Written on
+// agent/oxkio-autonomy-bootstrap for review only.
+//
+// Scope: this covers only the 7 collections the frontend (app/index.html)
+// actually reads or writes today, per the collection map in the delivery
+// report. Every one of them stores a single top-level "user" field holding
+// the owning Firebase Auth UID, and the client already filters every read
+// with where("user", "==", currentUser.uid) — but the client filter is
+// never trusted here; every rule re-derives ownership from request.auth.uid
+// and the document's own data.
+//
+// No admin bypass is granted anywhere in this file. The audit found zero
+// code path where Jose (or anyone) reads or writes another user's documents
+// in these 7 collections — every existing query is already self-scoped, for
+// every user including Jose. If a future feature needs Jose to read family
+// documents administratively, the minimal secure mechanism is a Firebase
+// custom claim (set server-side via the Admin SDK, e.g.
+// admin.auth().setCustomUserClaims(uid, { role: 'admin' })) checked here as
+// request.auth.token.role == 'admin'. Do not add that check speculatively:
+// add it only when a real feature needs it, reviewed at that time.
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    // The document as it exists before this request belongs to the caller.
+    function ownsExisting() {
+      return isSignedIn()
+        && resource.data.user is string
+        && resource.data.user == request.auth.uid;
+    }
+
+    // A brand-new document is being written with the caller as its owner.
+    // The client can never assign a document to someone else's uid.
+    function createsForSelf() {
+      return isSignedIn()
+        && request.resource.data.user is string
+        && request.resource.data.user == request.auth.uid;
+    }
+
+    // Ownership is immutable: an update may never change who owns the
+    // document, even when the caller already owns it.
+    function keepsOwnership() {
+      return request.resource.data.user == resource.data.user;
+    }
+
+    match /tareas/{docId} {
+      allow create: if createsForSelf();
+      allow read, delete: if ownsExisting();
+      allow update: if ownsExisting() && keepsOwnership();
+    }
+
+    match /config/{docId} {
+      allow create: if createsForSelf();
+      allow read, delete: if ownsExisting();
+      allow update: if ownsExisting() && keepsOwnership();
+    }
+
+    match /documentos/{docId} {
+      allow create: if createsForSelf();
+      allow read, delete: if ownsExisting();
+      allow update: if ownsExisting() && keepsOwnership();
+    }
+
+    match /incidencias/{docId} {
+      allow create: if createsForSelf();
+      allow read, delete: if ownsExisting();
+      allow update: if ownsExisting() && keepsOwnership();
+    }
+
+    match /reglas/{docId} {
+      allow create: if createsForSelf();
+      allow read, delete: if ownsExisting();
+      allow update: if ownsExisting() && keepsOwnership();
+    }
+
+    match /bitacora/{docId} {
+      allow create: if createsForSelf();
+      allow read, delete: if ownsExisting();
+      allow update: if ownsExisting() && keepsOwnership();
+    }
+
+    match /drive/{docId} {
+      allow create: if createsForSelf();
+      allow read, delete: if ownsExisting();
+      allow update: if ownsExisting() && keepsOwnership();
+    }
+
+    // Default deny: any collection not explicitly listed above (present or
+    // added later) is closed until it is audited and given its own rule.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

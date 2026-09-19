@@ -143,13 +143,14 @@ function loadTokens({ oauthClient = createGoogleOAuthClient() } = {}) {
   return tokens;
 }
 
-function getAuthUrl(options = {}) {
+function getAuthUrl({ state, ...options } = {}) {
   const oauthClient = createGoogleOAuthClient(options);
 
   return oauthClient.generateAuthUrl({
     access_type: "offline",
     prompt: "consent",
-    scope: GOOGLE_OAUTH_SCOPES
+    scope: GOOGLE_OAUTH_SCOPES,
+    ...(typeof state === "string" && state ? { state } : {})
   });
 }
 

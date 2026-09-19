@@ -42,6 +42,7 @@ const { handleMemoryOperationRequest, isMemoryOperationRoute } = require("./rout
 const { handleGmailOperationRequest, isGmailOperationRoute } = require("./routes/gmail-operations");
 const { handleCalendarOperationRequest, isCalendarOperationRoute } = require("./routes/calendar-operations");
 const { createExecutiveCsrf } = require("../security/executive-csrf");
+const { createOAuthStateStore } = require("../security/oauth-state-store");
 const {
   authenticateFirebaseRequest,
   createFirebaseAdminVerifier,
@@ -101,6 +102,7 @@ const executiveRuntime = createExecutiveRuntime({
   productionApprovalQueue: approvalQueue
 });
 const executiveCsrf = createExecutiveCsrf();
+const oauthStateStore = createOAuthStateStore();
 const verifyFirebaseIdToken = createFirebaseAdminVerifier();
 const authorizeFirebaseIdentity = createExecutiveAuthorizer();
 const executionConfig = Object.freeze({
@@ -317,7 +319,8 @@ if (isExecutiveChatRoute(pathname, req.method)) {
 
 if (pathname === "/oauth/google" && req.method === "GET") {
   try {
-    const authUrl = getAuthUrl();
+    const state = oauthStateStore.issue();
+    const authUrl = getAuthUrl({ state });
 
     return sendJson(res, 200, {
       ok: true,
@@ -332,9 +335,23 @@ if (pathname === "/oauth/google" && req.method === "GET") {
 }
 
 if (pathname === "/oauth/google/callback" && req.method === "GET") {
+  // This is Google's own redirect target: it carries no Authorization
+  // header, so it cannot go through requiresFirebaseAuthentication. The
+  // single-use state issued by GET /oauth/google (Cliente-Cero-only) is
+  // what proves this callback follows a flow Jose actually started, instead
+  // of an arbitrary caller supplying their own Google OAuth code.
   try {
     const fullUrl = new URL(req.url, `http://${req.headers.host}`);
     const code = fullUrl.searchParams.get("code");
+    const state = fullUrl.searchParams.get("state");
+
+    const stateResult = oauthStateStore.consume(state);
+    if (!stateResult.ok) {
+      return sendJson(res, 403, {
+        ok: false,
+        error: "oauth_state_invalid"
+      });
+    }
 
     if (!code) {
       return sendJson(res, 400, {
