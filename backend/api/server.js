@@ -109,15 +109,30 @@ const executionConfig = Object.freeze({
   executionEnabled: false,
   draftExecutionEnabled: true
 });
-const gmailDraftComposition = createAuthorizedGmailDraftProvider({
-  draftExecutionEnabled: executionConfig.draftExecutionEnabled,
-  oauthReadiness: executionConfig.draftExecutionEnabled
-    ? inspectGoogleOAuthReadiness()
-    : null,
-  getGmailClient
+// Lazy, memoized: inspectGoogleOAuthReadiness()/getGmailClient() may need to
+// read the configured OXKIO_GOOGLE_OAUTH_TOKEN_STORE (file locally, Secret
+// Manager in Cloud Run) — both are inherently async. Resolving this at
+// module load (synchronously, as before) is impossible once Secret Manager
+// is in play; resolving it lazily on first real use (via
+// ExecutionAdapter's resolveEmailProvider) avoids turning server.js's whole
+// boot sequence into an async IIFE just for this one dependency.
+let gmailDraftCompositionPromise = null;
+function resolveGmailDraftComposition() {
+  if (!gmailDraftCompositionPromise) {
+    gmailDraftCompositionPromise = (executionConfig.draftExecutionEnabled
+      ? inspectGoogleOAuthReadiness()
+      : Promise.resolve(null)
+    ).then((oauthReadiness) => createAuthorizedGmailDraftProvider({
+      draftExecutionEnabled: executionConfig.draftExecutionEnabled,
+      oauthReadiness,
+      getGmailClient
+    }));
+  }
+  return gmailDraftCompositionPromise;
+}
+const executionAdapter = new ExecutionAdapter({
+  resolveEmailProvider: async () => (await resolveGmailDraftComposition()).provider
 });
-const gmailDraftProvider = gmailDraftComposition.provider;
-const executionAdapter = new ExecutionAdapter({ emailProvider: gmailDraftProvider });
 const executionService = new ExecutionService({ approvalQueue, executionAdapter });
 const universalKnowledgeSupervisor = new UniversalKnowledgeSupervisor({ approvalQueue });
 const executionLogger = new ExecutionLogger();
@@ -378,7 +393,7 @@ return sendJson(res, 200, {
 if (pathname === "/api/gmail/inbox" && req.method === "GET") {
   try {
     const { getGmailClient } = require("../integrations/googleOAuth");
-    const gmail = getGmailClient();
+    const gmail = await getGmailClient();
 
     const listResponse = await gmail.users.messages.list({
       userId: "me",
@@ -434,7 +449,7 @@ if (pathname === "/api/gmail/analyze" && req.method === "GET") {
   try {
 
     const { getGmailClient } = require("../integrations/googleOAuth");
-    const gmail = getGmailClient();
+    const gmail = await getGmailClient();
 
     const listResponse = await gmail.users.messages.list({
       userId: "me",

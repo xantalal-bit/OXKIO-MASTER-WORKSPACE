@@ -5,6 +5,7 @@
     "simulador": "node simulador-ia/src/server.js"
   },
   "dependencies": {
+    "@google-cloud/secret-manager": "^7.1.0",
     "dotenv": "^17.4.2",
     "firebase-admin": "^14.2.0",
     "googleapis": "^171.4.0",

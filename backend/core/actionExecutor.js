@@ -54,7 +54,7 @@ class ActionExecutor {
             };
         }
 
-        const gmail = getGmailClient();
+        const gmail = await getGmailClient();
 
         const to = proposal.to || "";
         const subject = proposal.subject || "Borrador Oxkio";

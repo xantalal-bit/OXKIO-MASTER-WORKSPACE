@@ -104,8 +104,27 @@ function normalizeProviderResult(result, actionType) {
 }
 
 class ExecutionAdapter {
-  constructor({ emailProvider } = {}) {
-    this.emailProvider = emailProvider;
+  // emailProvider: an already-resolved provider (existing, synchronous
+  // callers). resolveEmailProvider: an async factory invoked lazily on the
+  // first execute() call and cached — for a provider whose construction
+  // needs an await (e.g. credentials loaded from a remote secret store)
+  // without forcing the whole composition graph that builds this adapter
+  // to become async just to be constructed.
+  constructor({ emailProvider, resolveEmailProvider } = {}) {
+    this.emailProvider = emailProvider || null;
+    this.resolveEmailProvider = typeof resolveEmailProvider === 'function' ? resolveEmailProvider : null;
+    this._resolvedEmailProviderPromise = null;
+  }
+
+  async getEmailProvider() {
+    if (this.emailProvider) return this.emailProvider;
+    if (!this.resolveEmailProvider) return null;
+    if (!this._resolvedEmailProviderPromise) {
+      this._resolvedEmailProviderPromise = Promise.resolve()
+        .then(() => this.resolveEmailProvider())
+        .catch(() => null);
+    }
+    return this._resolvedEmailProviderPromise;
   }
 
   async execute(input) {
@@ -118,13 +137,17 @@ class ExecutionAdapter {
       });
     }
 
+    const emailProvider = input.actionType === 'propose_email'
+      ? await this.getEmailProvider()
+      : null;
+
     if (
       input.actionType === 'propose_email'
-      && this.emailProvider
-      && typeof this.emailProvider.execute === 'function'
+      && emailProvider
+      && typeof emailProvider.execute === 'function'
     ) {
       try {
-        const result = await this.emailProvider.execute(input);
+        const result = await emailProvider.execute(input);
         return normalizeProviderResult(result, input.actionType);
       } catch (error) {
         return buildResult({

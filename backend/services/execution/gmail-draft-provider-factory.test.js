@@ -7,9 +7,9 @@ const test = require('node:test');
 
 const { createAuthorizedGmailDraftProvider } = require('./gmail-draft-provider-factory');
 
-test('disabled execution never inspects or constructs a Gmail client', () => {
+test('disabled execution never inspects or constructs a Gmail client', async () => {
   let clientCalls = 0;
-  const result = createAuthorizedGmailDraftProvider({
+  const result = await createAuthorizedGmailDraftProvider({
     executionEnabled: false,
     oauthReadiness: { readyForDraftCreate: true },
     getGmailClient() { clientCalls += 1; },
@@ -24,24 +24,24 @@ test('disabled execution never inspects or constructs a Gmail client', () => {
   assert.equal(clientCalls, 0);
 });
 
-test('enabled execution fails closed when OAuth is not ready', () => {
+test('enabled execution fails closed when OAuth is not ready', async () => {
   let clientCalls = 0;
-  const result = createAuthorizedGmailDraftProvider({
+  const result = await createAuthorizedGmailDraftProvider({
     executionEnabled: true,
-    oauthReadiness: { readyForDraftCreate: false, code: 'oauth_token_missing' },
+    oauthReadiness: { readyForDraftCreate: false, code: 'google_oauth_tokens_missing' },
     getGmailClient() { clientCalls += 1; },
   });
 
   assert.deepEqual(result, {
     ok: false,
     connected: false,
-    code: 'oauth_token_missing',
+    code: 'google_oauth_tokens_missing',
     provider: null,
   });
   assert.equal(clientCalls, 0);
 });
 
-test('enabled and ready execution builds SAFE_DRAFT_ONLY provider without Gmail calls', () => {
+test('enabled and ready execution builds SAFE_DRAFT_ONLY provider without Gmail calls', async () => {
   let clientCalls = 0;
   let draftCalls = 0;
   const gmail = {
@@ -51,10 +51,10 @@ test('enabled and ready execution builds SAFE_DRAFT_ONLY provider without Gmail 
       },
     },
   };
-  const result = createAuthorizedGmailDraftProvider({
+  const result = await createAuthorizedGmailDraftProvider({
     executionEnabled: true,
-    oauthReadiness: { readyForDraftCreate: true, code: null },
-    getGmailClient() {
+    oauthReadiness: { readyForDraftCreate: true, code: 'ready' },
+    async getGmailClient() {
       clientCalls += 1;
       return gmail;
     },
@@ -70,9 +70,9 @@ test('enabled and ready execution builds SAFE_DRAFT_ONLY provider without Gmail 
   assert.equal(draftCalls, 0);
 });
 
-test('factory accepts activation and clients only through internal dependencies', () => {
+test('factory accepts activation and clients only through internal dependencies', async () => {
   let clientCalls = 0;
-  const result = createAuthorizedGmailDraftProvider({
+  const result = await createAuthorizedGmailDraftProvider({
     executionEnabled: false,
     oauthReadiness: { readyForDraftCreate: true },
     getGmailClient() { clientCalls += 1; },
