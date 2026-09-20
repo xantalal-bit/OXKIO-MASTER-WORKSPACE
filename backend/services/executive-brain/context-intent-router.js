@@ -9,24 +9,38 @@ const REASONS = Object.freeze({
   COMBINED: 'combined_query',
   GENERAL: 'general_query',
   CHITCHAT: 'chitchat_query',
+  CAPABILITY: 'capability_query',
 });
 
-// Pure greeting/capability small talk ("hola", "que puedes hacer"): exact
-// match only (not includesPhrase) so a longer sentence that happens to
-// contain one of these words, e.g. "ayudame a revisar mi correo", is never
-// misclassified as chit-chat and loses its real context selection. This
-// lets the orchestrator answer with a natural capability description
-// instead of routing the query into the Knowledge Store simulator, which
-// has nothing to match a greeting against and would otherwise leak its
-// internal "No se encontraron Knowledge Objects..." wording to the user.
+// Pure greeting small talk ("hola", "quien eres"): exact match only (not
+// includesPhrase) so a longer sentence that happens to contain one of these
+// words, e.g. "ayudame a revisar mi correo", is never misclassified and
+// loses its real context selection. This lets the orchestrator answer with
+// a natural greeting instead of routing the query into the Knowledge Store
+// simulator, which has nothing to match a greeting against and would
+// otherwise leak its internal "No se encontraron Knowledge Objects..."
+// wording to the user.
 const CHITCHAT_QUERIES = new Set([
   'hola', 'buenas', 'buenos dias', 'buenas tardes', 'buenas noches',
-  'que puedes hacer', 'que sabes hacer', 'puedes responder algo',
-  'quien eres', 'que eres', 'para que sirves', 'ayudame', 'ayuda',
+  'puedes responder algo', 'quien eres', 'que eres', 'para que sirves',
+  'ayudame', 'ayuda',
+]);
+
+// V0.4 FASE 2/12: "what can/can't you do" is not small talk — it must be
+// answered from the real Capability Registry (capability-registry.js), not
+// a static string, or the answer silently goes stale as capabilities are
+// added. Same exact-match rationale as CHITCHAT_QUERIES above.
+const CAPABILITY_QUERIES = new Set([
+  'que puedes hacer', 'que sabes hacer', 'que no puedes hacer todavia',
+  'que capacidades tienes', 'que capacidades tienes activas',
 ]);
 
 function isChitchatQuery(query) {
   return CHITCHAT_QUERIES.has(query);
+}
+
+function isCapabilityQuery(query) {
+  return CAPABILITY_QUERIES.has(query);
 }
 
 function normalizeContextQuery(value) {
@@ -95,6 +109,10 @@ function selectExecutiveContext(query) {
 
   if (isChitchatQuery(normalized)) {
     return { ...selection, reason: REASONS.CHITCHAT };
+  }
+
+  if (isCapabilityQuery(normalized)) {
+    return { ...selection, reason: REASONS.CAPABILITY };
   }
 
   const emailAction = hasEmailAction(normalized);

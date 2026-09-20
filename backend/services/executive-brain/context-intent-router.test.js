@@ -60,18 +60,25 @@ test('recognizes every "revisar correo" phrasing as a Gmail query, never falling
   }
 });
 
-test('classifies plain greeting/capability small talk as chitchat_query, with no private source selected', () => {
+test('classifies plain greeting small talk as chitchat_query, with no private source selected', () => {
   const phrases = [
     'hola',
-    'qué puedes hacer',
     'puedes responder algo',
     'quién eres',
     'ayúdame',
-    'qué sabes hacer',
   ];
   for (const phrase of phrases) {
     const result = selectExecutiveContext(phrase);
     assert.equal(result.reason, 'chitchat_query', `"${phrase}" should classify as chitchat_query`);
+    assert.deepEqual(selected(phrase), { gmail: false, calendar: false, dashboard: false, memory: false, approvals: false });
+  }
+});
+
+test('V0.4: "que puedes/no puedes hacer" classifies as capability_query, answered from the real registry', () => {
+  const phrases = ['qué puedes hacer', 'qué sabes hacer', 'qué no puedes hacer todavía', 'qué capacidades tienes'];
+  for (const phrase of phrases) {
+    const result = selectExecutiveContext(phrase);
+    assert.equal(result.reason, 'capability_query', `"${phrase}" should classify as capability_query`);
     assert.deepEqual(selected(phrase), { gmail: false, calendar: false, dashboard: false, memory: false, approvals: false });
   }
 });

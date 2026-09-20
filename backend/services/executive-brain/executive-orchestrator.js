@@ -6,6 +6,7 @@ const { searchKnowledge } = require('../knowledge/knowledge-query-service');
 const { simulateExecutiveBrainQuery } = require('../knowledge/executive-brain-simulation');
 const { preparePrivateContextAdapter } = require('../private-context/private-context-adapter');
 const { buildExecutiveResponse } = require('./executive-response-builder');
+const { listAvailable, listUnavailable } = require('./capability-registry');
 
 function shouldUseKnowledgeQuery(analysis) {
   return Boolean(analysis && analysis.project);
@@ -311,6 +312,23 @@ function buildGmailContextSummary(payload) {
 // payload's own confidence field for anything that needs it internally.
 function toUserFacingResponse(executiveSummary) {
   return String(executiveSummary || '').replace(/\s*Confianza (?:alta|media|baja)\.\s*$/i, '');
+}
+
+// V0.4 FASE 2/12: "que puedes hacer"/"que no puedes hacer" must answer from
+// the real Capability Registry, never a hardcoded string that can silently
+// go stale as capabilities are added or removed. "no puedes" in the query
+// picks the unavailable-capabilities framing; anything else (que puedes
+// hacer / que sabes hacer / que capacidades tienes) lists what is available.
+function describeCapabilityAnswer(query) {
+  const asksWhatIsMissing = /\bno puedes\b/i.test(String(query || ''));
+  if (asksWhatIsMissing) {
+    const unavailable = listUnavailable();
+    const items = unavailable.map((capability) => `${capability.name.toLowerCase()} (${capability.unavailableReason})`);
+    return `Todavia no puedo: ${items.join('; ')}.`;
+  }
+  const available = listAvailable();
+  const items = available.map((capability) => capability.name.toLowerCase());
+  return `Ahora mismo puedo: ${items.join(', ')}.`;
 }
 
 function sanitizeExecutiveSources(sources) {
@@ -810,6 +828,11 @@ async function orchestrateExecutiveQuery(query, options) {
   // context-intent-router.js already classifies these deterministically, so
   // this reuses that classification instead of duplicating it here.
   const isChitchatQuery = Boolean(contextSelection && contextSelection.reason === 'chitchat_query');
+  // V0.4: "que puedes/no puedes hacer" is handled the same way as chitchat
+  // (bypasses the Knowledge Store simulator, no sources/limitations leaked),
+  // but its answer text comes from the real Capability Registry instead of
+  // a generic capability blurb — see describeCapabilityAnswer above.
+  const isCapabilityQuery = Boolean(contextSelection && contextSelection.reason === 'capability_query');
   let knowledgeQueryResult = null;
 
   if (shouldUseKnowledgeQuery(analysis)) {
@@ -835,8 +858,8 @@ async function orchestrateExecutiveQuery(query, options) {
     || preferPrivateGmailContext
     || Boolean(contextualDataSummary)
     || Boolean(contextFailureSummary);
-  const responseSources = (preferPrivateContext || isChitchatQuery) ? [] : sanitizeExecutiveSources(response.sources);
-  const responseLimitations = (preferCombinedPrivateContext || isChitchatQuery)
+  const responseSources = (preferPrivateContext || isChitchatQuery || isCapabilityQuery) ? [] : sanitizeExecutiveSources(response.sources);
+  const responseLimitations = (preferCombinedPrivateContext || isChitchatQuery || isCapabilityQuery)
     ? []
     : (preferPrivateContext
     ? filterPrivatePrimaryLimitations(response.limitations)
@@ -848,11 +871,13 @@ async function orchestrateExecutiveQuery(query, options) {
     answer: preferPrivateContext
       ? ([combinedPrivateContextSummary || privateContextSummary, contextualDataSummary, contextFailureSummary]
         .filter(Boolean).join(' '))
-      : (isChitchatQuery
-        ? 'Puedo ayudarte a revisar tu correo, organizar tareas y trabajar contigo sobre las funciones que tengas conectadas.'
-        : (privateContextSummary
-          ? `${response.answer} ${privateContextSummary}`
-          : response.answer)),
+      : (isCapabilityQuery
+        ? describeCapabilityAnswer(query)
+        : (isChitchatQuery
+          ? 'Puedo ayudarte a revisar tu correo, organizar tareas y trabajar contigo sobre las funciones que tengas conectadas.'
+          : (privateContextSummary
+            ? `${response.answer} ${privateContextSummary}`
+            : response.answer))),
     confidence: responseConfidence,
     sources: responseSources,
     reasoningSummary: response.reasoningSummary,
