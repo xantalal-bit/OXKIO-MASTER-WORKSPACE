@@ -593,6 +593,14 @@
       <div id="correoContent" class="content-hidden compact-gap"><div id="correoResumen" class="msg">Correo no configurado todavía.</div></div>
     </div>
 
+    <div id="conexionesCard" class="card">
+      <div class="section-title collapsible" onclick="toggleSection('conexionesContent', this)">Conexiones</div>
+      <div id="conexionesContent" class="content-hidden compact-gap">
+        <button id="btnConectarGoogle" class="btn-secondary" onclick="conectarGoogle()">Conectar Google</button>
+        <div id="conectarGoogleMsg" class="msg"></div>
+      </div>
+    </div>
+
     <div id="cargaCard" class="card">
       <div class="section-title collapsible" onclick="toggleSection('cargaContent', this)">Carga semanal</div>
       <div id="cargaContent" class="content-hidden compact-gap"><div id="cargaSemanal" class="msg">Analizando carga...</div></div>
@@ -1018,6 +1026,26 @@ applyModoCEO();
     if (chatMicBtnRef) chatMicBtnRef.addEventListener("click", () => { window.iniciarVoz(); });
     const chatInputRef = document.getElementById("chatInput");
     if (chatInputRef) chatInputRef.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); window.enviarChatTexto(); } });
+
+    window.conectarGoogle = async function() {
+      const btn = document.getElementById("btnConectarGoogle");
+      const msg = document.getElementById("conectarGoogleMsg");
+      if (btn) { btn.disabled = true; btn.textContent = "Conectando..."; }
+      if (msg) msg.textContent = "";
+      try {
+        const res = await window.oxkioAuthenticatedFetch("/oauth/google");
+        const data = await res.json();
+        if (data && data.ok === true && typeof data.authUrl === "string" && data.authUrl) {
+          window.location.href = data.authUrl;
+          return;
+        }
+        if (msg) msg.textContent = "No he podido iniciar la conexión con Google. Inténtalo de nuevo.";
+      } catch (error) {
+        if (msg) msg.textContent = "No he podido iniciar la conexión con Google. Inténtalo de nuevo.";
+      } finally {
+        if (btn) { btn.disabled = false; btn.textContent = "Conectar Google"; }
+      }
+    };
   </script><script>
 let executiveCsrfToken = null;
 let executiveCsrfExpiresAt = 0;
