@@ -352,6 +352,41 @@
       transform:scale(1.045);
       box-shadow:0 18px 46px rgba(2,6,23,.52), 0 0 0 8px rgba(34,197,94,.10), 0 0 42px rgba(34,197,94,.42);
     }
+    .app-top-left{ display:flex; align-items:center; gap:10px; }
+    .app-mini-logo{ width:32px; height:32px; border-radius:10px; object-fit:cover; }
+    .app-top-right{ display:flex; align-items:center; gap:10px; flex-wrap:wrap; justify-content:flex-end; }
+    .app-dashboard-link{ color:#93c5fd; font-size:13px; text-decoration:none; border:1px solid rgba(96,165,250,.3); padding:8px 12px; border-radius:12px; white-space:nowrap; }
+    .chat-hero{ display:flex; flex-direction:column; align-items:center; margin:8px 0 18px 0; }
+    .oxkio-avatar{ width:72px; height:72px; border-radius:50%; overflow:hidden; background:#0f172a; box-shadow:0 0 0 1px rgba(148,163,184,.14); display:flex; align-items:center; justify-content:center; transition:box-shadow .3s ease; }
+    .oxkio-avatar img{ width:100%; height:100%; object-fit:cover; }
+    .oxkio-avatar.state-idle{ animation:oxkioIdle 3.4s ease-in-out infinite; }
+    .oxkio-avatar.state-listening{ animation:oxkioListening 1s ease-in-out infinite; box-shadow:0 0 0 6px rgba(34,197,94,.18), 0 0 24px rgba(34,197,94,.45); }
+    .oxkio-avatar.state-thinking{ animation:oxkioThinking 1.2s linear infinite; }
+    .oxkio-avatar.state-speaking{ animation:oxkioSpeaking .55s ease-in-out infinite; box-shadow:0 0 0 6px rgba(37,99,235,.18), 0 0 26px rgba(37,99,235,.5); }
+    @keyframes oxkioIdle{ 0%,100%{ transform:scale(1); } 50%{ transform:scale(1.035); } }
+    @keyframes oxkioListening{ 0%,100%{ transform:scale(1); } 50%{ transform:scale(1.08); } }
+    @keyframes oxkioThinking{ 0%{ opacity:1; } 50%{ opacity:.55; } 100%{ opacity:1; } }
+    @keyframes oxkioSpeaking{ 0%,100%{ transform:scale(1); } 50%{ transform:scale(1.06); } }
+    .chat-greeting{ margin-top:10px; font-size:18px; font-weight:700; color:#e2e8f0; }
+    .chat-log{ display:flex; flex-direction:column; gap:10px; max-height:46vh; overflow-y:auto; padding:4px 2px 8px 2px; margin-bottom:10px; }
+    .chat-bubble{ max-width:88%; padding:12px 14px; border-radius:16px; line-height:1.45; font-size:15px; white-space:pre-wrap; word-break:break-word; }
+    .chat-bubble.chat-user{ align-self:flex-end; background:linear-gradient(135deg,#2563eb,#1d4ed8); color:white; border-bottom-right-radius:6px; }
+    .chat-bubble.chat-oxkio{ align-self:flex-start; background:#111827; color:#e2e8f0; border:1px solid rgba(148,163,184,.14); border-bottom-left-radius:6px; }
+    .chat-composer{ display:flex; align-items:center; gap:8px; background:#0f172a; border-radius:20px; padding:8px; border:1px solid rgba(148,163,184,.14); }
+    .chat-composer input{ flex:1; margin:0; background:transparent; color:white; box-shadow:none; }
+    .chat-composer input::placeholder{ color:#64748b; }
+    .chat-mic{ width:44px; height:44px; min-width:44px; border-radius:50%; margin:0; padding:0; border:none; background:radial-gradient(circle at 34% 28%, rgba(255,255,255,.22), transparent 28%), linear-gradient(135deg,#0f172a,#1d4ed8 48%,#0ea5e9); position:relative; }
+    .chat-mic::before{ content:""; width:14px; height:14px; border-radius:999px; background:#e0f2fe; display:block; margin:0 auto; box-shadow:0 0 14px rgba(224,242,254,.82); }
+    .chat-mic.listening{ background:radial-gradient(circle at 34% 28%, rgba(255,255,255,.24), transparent 28%), linear-gradient(135deg,#052e2b,#0f766e,#22c55e); }
+    .chat-send{ width:44px; height:44px; min-width:44px; border-radius:50%; margin:0; padding:0; background:#2563eb; color:white; font-size:18px; }
+    .voice-status-chat{ text-align:center; color:#94a3b8; font-size:13px; min-height:16px; margin-top:4px; }
+    .dynamic-zone{ display:flex; flex-direction:column; gap:8px; margin-top:14px; }
+    .dynamic-card{ background:#111827; border:1px solid rgba(148,163,184,.14); border-radius:14px; padding:12px 14px; font-size:14px; color:#e2e8f0; }
+    .advanced-toggle-row{ text-align:center; margin-top:18px; }
+    .advanced-toggle{ background:transparent; color:#93c5fd; border:1px solid rgba(96,165,250,.3); border-radius:14px; padding:10px 18px; font-size:14px; }
+    #avanzadoPanel{ margin-top:18px; }
+    .floating-voice{ display:none !important; }
+    @media (min-width:900px){ .container{ max-width:640px; } }
   </style></head>
 <body>
   <div class="container">
@@ -377,20 +412,43 @@
 
 <div id="app" class="app-shell">
   <div class="app-top">
-    <div id="userEmail" class="app-user"></div>
-    <button class="btn-danger" onclick="logout()">Salir</button>
+    <div class="app-top-left">
+      <img src="/app/logo.png" class="app-mini-logo" alt="Oxkio">
+      <div id="userEmail" class="app-user"></div>
+    </div>
+    <div class="app-top-right">
+      <a class="app-dashboard-link" href="executive-dashboard.html">Executive Dashboard (Cliente Cero)</a>
+      <button class="btn-danger" onclick="logout()">Salir</button>
+    </div>
   </div>
 
-  <div class="home-hero">
-    <div class="hero-title">Buenos días, Jose Antonio</div>
-    <div class="hero-subtitle">Tu asistente ejecutivo está listo.</div>
+  <div class="chat-hero">
+    <div id="oxkioAvatar" class="oxkio-avatar state-idle">
+      <img src="/app/logo.png" alt="Oxkio">
+    </div>
+    <div id="chatGreeting" class="chat-greeting">Buenos días</div>
   </div>
 
+  <div id="chatLog" class="chat-log" aria-live="polite"></div>
+
+  <div class="chat-composer">
+    <button id="chatMicBtn" class="chat-mic" type="button" title="Hablar con Oxkio" aria-label="Hablar con Oxkio"></button>
+    <input id="chatInput" type="text" placeholder="¿En qué puedo ayudarte?" autocomplete="off">
+    <button id="chatSendBtn" class="chat-send" type="button" onclick="enviarChatTexto()" aria-label="Enviar">➤</button>
+  </div>
+  <div id="voiceStatus" class="voice-status-chat"></div>
+
+  <div id="dynamicZone" class="dynamic-zone content-hidden"></div>
+
+  <div class="advanced-toggle-row">
+    <button id="btnAvanzado" class="advanced-toggle" type="button" onclick="toggleAvanzado()">Más avanzado ▾</button>
+  </div>
+
+  <div id="avanzadoPanel" class="content-hidden">
   <div class="top-nav">
     <button class="nav-pill active" id="btnMenu" onclick="mostrarSeccion('menu')">Menú</button>
     <button class="nav-pill" id="btnOtros" onclick="mostrarSeccion('otros')">Otros</button>
     <button class="nav-pill" id="btnProjects" onclick="mostrarSeccion('projects'); OxkioProjectManager.load()">Proyectos</button>
-    <a class="nav-pill" href="executive-dashboard.html">Executive Dashboard (Cliente Cero)</a>
   </div>
 
   <div id="menuSection" class="section-shell active">
@@ -572,6 +630,7 @@
       <div id="projectManagerList" class="compact-gap">Selecciona Proyectos para cargar la información.</div>
     </div>
   </div>
+  </div>
 </div>
 
   </div><button id="floatingVoiceBtn" class="floating-voice" title="Activar voz Oxkio" aria-label="Activar voz Oxkio"></button>
@@ -651,8 +710,8 @@
     function showLoading() { loadingBox.style.display = "block"; loginBox.style.display = "none"; appBox.style.display = "none"; floatingVoiceBtn.style.display = "none"; }
     function showLogin(msg = "") { loadingBox.style.display = "none"; loginBox.style.display = "block"; appBox.style.display = "none"; floatingVoiceBtn.style.display = "none"; loginMsg.textContent = msg; }
     function showApp(email) { loadingBox.style.display = "none"; loginBox.style.display = "none"; appBox.style.display = "block"; floatingVoiceBtn.style.display = "block"; userEmail.textContent = email; }
-    function setOxkioRespuesta(texto) { const el = document.getElementById('sugerencia'); if (el) el.textContent = texto; }
-    function setEstadoVoz(texto, activa = false) { if (voiceStatus) voiceStatus.textContent = texto; if (activa) floatingVoiceBtn.classList.add("listening"); else floatingVoiceBtn.classList.remove("listening"); }
+    function setOxkioRespuesta(texto) { const el = document.getElementById('sugerencia'); if (el) el.textContent = texto; if (texto && texto.trim()) appendChatMessage('oxkio', texto); }
+    function setEstadoVoz(texto, activa = false) { if (voiceStatus) voiceStatus.textContent = texto; if (activa) floatingVoiceBtn.classList.add("listening"); else floatingVoiceBtn.classList.remove("listening"); const chatMicBtnEl = document.getElementById('chatMicBtn'); if (chatMicBtnEl) chatMicBtnEl.classList.toggle('listening', activa); }
     function toggleSection(id, header){ const el = document.getElementById(id); if (!el) return; el.classList.toggle("content-hidden"); if (header) header.classList.toggle("active"); }
     window.toggleSection = toggleSection;
     function openSection(contentId) { const el = document.getElementById(contentId); if (!el) return; el.classList.remove("content-hidden"); const header = el.parentElement.querySelector(".collapsible"); if (header) header.classList.add("active"); }
@@ -798,6 +857,7 @@ if (sugerenciaBox) {
       renderResumen(pendientes, hechas, hoyCount, semanaCount, urgentesCount, retrasadasCount, renovCount || 0);
       const cargaAlta = renderCargaSemanal(semanaCount, retrasadasCount);
       renderSugerencia(pendientes, hoyCount, semanaCount, urgentesCount, retrasadasCount, cargaAlta, renovCount || 0);
+      renderDynamicZone({ urgentesCount, retrasadasCount, renovCount: renovCount || 0 });
       await cargarCorreoResumen();
 await cargarInteligenciaEstrategica();
 await cargarDocsResumen();
@@ -859,14 +919,17 @@ applyModoCEO();
     }
 
     lines.push(`Interaction ID: ${data.interactionId || "No disponible"}`);
-    setOxkioRespuesta(lines.join("\n"));
+    const sugerenciaDetalleEl = document.getElementById('sugerencia');
+    if (sugerenciaDetalleEl) sugerenciaDetalleEl.textContent = lines.join("\n");
+    appendChatMessage('oxkio', data.response);
+    hablarTexto(data.response);
 
   } catch (error) {
     console.log("Error conectando con backend Oxkio:", error);
     setOxkioRespuesta("No puedo conectar con el backend de Oxkio. Inténtalo de nuevo más tarde.");
   }
-} function hablarTexto(texto) { if (!("speechSynthesis" in window)) return; const utter = new SpeechSynthesisUtterance(texto); utter.lang = "es-ES"; speechSynthesis.cancel(); speechSynthesis.speak(utter); }
-    window.iniciarVoz = function() { if (!currentUser) return; if (escuchando) return; const rec = getVoiceRecognition(); if (!rec) { setEstadoVoz("Este navegador no soporta voz.", false); setOxkioRespuesta("La voz no está disponible en este dispositivo o navegador."); return; } recognition = rec; escuchando = true; setEstadoVoz("Escuchando...", true); setOxkioRespuesta("Te escucho."); recognition.onresult = async (event) => { const texto = event.results[0][0].transcript; setEstadoVoz(`Oído: ${texto}`, false); await procesarComandoVoz(texto); }; recognition.onerror = () => { escuchando = false; setEstadoVoz("Error de voz.", false); setOxkioRespuesta("No he podido escuchar bien. Inténtalo otra vez."); }; recognition.onend = () => { escuchando = false; if (voiceStatus && voiceStatus.textContent === "Escuchando...") setEstadoVoz("Voz en espera.", false); else floatingVoiceBtn.classList.remove("listening"); }; recognition.start(); };
+} function hablarTexto(texto) { if (!("speechSynthesis" in window)) return; const utter = new SpeechSynthesisUtterance(texto); utter.lang = "es-ES"; utter.onstart = () => setOxkioAvatarState("speaking"); utter.onend = () => setOxkioAvatarState("idle"); utter.onerror = () => setOxkioAvatarState("idle"); speechSynthesis.cancel(); speechSynthesis.speak(utter); }
+    window.iniciarVoz = function() { if (!currentUser) return; if (escuchando) return; const rec = getVoiceRecognition(); if (!rec) { setEstadoVoz("Este navegador no soporta voz.", false); setOxkioRespuesta("La voz no está disponible en este dispositivo o navegador."); return; } recognition = rec; escuchando = true; setEstadoVoz("Escuchando...", true); setOxkioAvatarState("listening"); setOxkioRespuesta("Te escucho."); recognition.onresult = async (event) => { const texto = event.results[0][0].transcript; setEstadoVoz(`Oído: ${texto}`, false); appendChatMessage("user", texto); setOxkioAvatarState("thinking"); try { await procesarComandoVoz(texto); } finally { setOxkioAvatarState("idle"); } }; recognition.onerror = () => { escuchando = false; setEstadoVoz("Error de voz.", false); setOxkioAvatarState("idle"); setOxkioRespuesta("No he podido escuchar bien. Inténtalo otra vez."); }; recognition.onend = () => { escuchando = false; setOxkioAvatarState("idle"); if (voiceStatus && voiceStatus.textContent === "Escuchando...") setEstadoVoz("Voz en espera.", false); else floatingVoiceBtn.classList.remove("listening"); }; recognition.start(); };
     floatingVoiceBtn.addEventListener("click", () => { window.iniciarVoz(); });
     function mostrarSeccion(tipo){ const sections = { menu: document.getElementById("menuSection"), otros: document.getElementById("otrosSection"), projects: document.getElementById("projectsSection") }; const buttons = { menu: document.getElementById("btnMenu"), otros: document.getElementById("btnOtros"), projects: document.getElementById("btnProjects") }; Object.entries(sections).forEach(([name, section]) => { if (section) section.classList.toggle("active", name === tipo); }); Object.entries(buttons).forEach(([name, button]) => { if (button) button.classList.toggle("active", name === tipo); }); }
     window.mostrarSeccion = mostrarSeccion;
@@ -900,6 +963,7 @@ applyModoCEO();
     }
 
     showApp(u.email);
+    actualizarSaludo();
 
     try {
       await cargar();
@@ -938,8 +1002,22 @@ applyModoCEO();
     const vozOriginalV14 = procesarComandoVoz;
     procesarComandoVoz = async function(texto){
   if(comandosDriveV15(texto.toLowerCase())) return;
+  if(detectaCrearEvento(texto)){ abrirFormularioEvento(); return; }
   await consultarOxkioBackend(texto);
 };
+
+    function appendChatMessage(role, texto) { const log = document.getElementById('chatLog'); if (!log || !texto) return; const bubble = document.createElement('div'); bubble.className = 'chat-bubble ' + (role === 'user' ? 'chat-user' : 'chat-oxkio'); bubble.textContent = texto; log.appendChild(bubble); log.scrollTop = log.scrollHeight; }
+    function setOxkioAvatarState(state) { const avatar = document.getElementById('oxkioAvatar'); if (!avatar) return; avatar.classList.remove('state-idle','state-listening','state-thinking','state-speaking'); avatar.classList.add('state-' + state); }
+    function actualizarSaludo() { const el = document.getElementById('chatGreeting'); if (!el) return; const h = new Date().getHours(); const franja = h < 12 ? "Buenos días" : h < 20 ? "Buenas tardes" : "Buenas noches"; const local = (currentUser && currentUser.email) ? currentUser.email.split("@")[0].split(/[._-]/)[0] : ""; const nombre = local ? local.charAt(0).toUpperCase() + local.slice(1) : ""; el.textContent = nombre ? `${franja}, ${nombre}` : franja; }
+    function renderDynamicZone({ urgentesCount = 0, retrasadasCount = 0, renovCount = 0 } = {}) { const zone = document.getElementById('dynamicZone'); if (!zone) return; const piezas = []; if (retrasadasCount > 0) piezas.push(`Hay ${retrasadasCount} asunto(s) retrasado(s) que requieren atención.`); if (urgentesCount > 0) piezas.push(`Hay ${urgentesCount} asunto(s) urgente(s) hoy o mañana.`); if (renovCount > 0) piezas.push(`Hay ${renovCount} documento(s) o renovación(es) próximos a vencer.`); zone.innerHTML = ""; if (piezas.length === 0) { zone.classList.add("content-hidden"); return; } zone.classList.remove("content-hidden"); piezas.forEach(texto => { const card = document.createElement("div"); card.className = "dynamic-card"; card.textContent = texto; zone.appendChild(card); }); }
+    function detectaCrearEvento(texto) { return /\b(crear|nuevo|nueva|añadir|agendar|programar)\b.*\b(evento|cita|reuni[oó]n)\b/i.test(texto || ""); }
+    function abrirFormularioEvento() { mostrarSeccion("otros"); const panel = document.getElementById("avanzadoPanel"); if (panel) panel.classList.remove("content-hidden"); openSection("nuevoEventoContent"); const header = document.querySelector("#nuevoEventoCard .collapsible"); if (header) header.classList.add("active"); const card = document.getElementById("nuevoEventoCard"); if (card) card.scrollIntoView({ behavior: "smooth", block: "start" }); setOxkioRespuesta("He abierto el formulario de nuevo evento más abajo, en Avanzado, para que lo completes."); }
+    window.enviarChatTexto = async function() { const input = document.getElementById("chatInput"); if (!input) return; const texto = input.value.trim(); if (!texto) return; input.value = ""; appendChatMessage("user", texto); setOxkioAvatarState("thinking"); try { await procesarComandoVoz(texto); } finally { setOxkioAvatarState("idle"); } };
+    window.toggleAvanzado = function() { const panel = document.getElementById("avanzadoPanel"); const btn = document.getElementById("btnAvanzado"); if (!panel) return; const ahoraOculto = panel.classList.toggle("content-hidden"); if (btn) btn.textContent = ahoraOculto ? "Más avanzado ▾" : "Ocultar avanzado ▴"; };
+    const chatMicBtnRef = document.getElementById("chatMicBtn");
+    if (chatMicBtnRef) chatMicBtnRef.addEventListener("click", () => { window.iniciarVoz(); });
+    const chatInputRef = document.getElementById("chatInput");
+    if (chatInputRef) chatInputRef.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); window.enviarChatTexto(); } });
   </script><script>
 let executiveCsrfToken = null;
 let executiveCsrfExpiresAt = 0;
