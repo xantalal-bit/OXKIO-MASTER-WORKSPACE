@@ -41,6 +41,20 @@ test('loads action context only when a safe real-world reference is required', (
   assert.equal(selectExecutiveContext('Programa una reunión según mi disponibilidad.').calendar, true);
 });
 
+test('recognizes every "revisar correo" phrasing as a Gmail query, never falling through to general/Knowledge Store', () => {
+  const phrases = [
+    'revisa mi correo',
+    'mira mis emails',
+    'que correos tengo',
+    'hay algo importante en mi correo',
+  ];
+  for (const phrase of phrases) {
+    const result = selectExecutiveContext(phrase);
+    assert.equal(result.gmail, true, `"${phrase}" should select gmail`);
+    assert.equal(result.reason, 'gmail_query', `"${phrase}" should classify as gmail_query`);
+  }
+});
+
 test('negated actions do not select context', () => {
   for (const query of ['No prepares un borrador.', 'No programes una reunión.', 'No crees una tarea.']) {
     assert.deepEqual(selected(query), { gmail: false, calendar: false, dashboard: false, memory: false, approvals: false });

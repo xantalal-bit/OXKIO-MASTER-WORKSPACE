@@ -86,7 +86,11 @@ test('matches only the unchanged POST route', () => {
 
 test('A-D select Gmail, Calendar, Dashboard, and combined context once and minimally', async (t) => {
   const cases = [
-    ['¿Qué correos tengo pendientes?', { gmail: 0, calendar: 0, dashboard: 0 }, false],
+    // V0.1: a plain, read-only Gmail query now answers directly in the same
+    // turn (executive-chat.js no longer skips Gmail context injection for
+    // the supervised gmail-review-readonly recommendation), instead of
+    // only attaching a pending decisionRecommendation.
+    ['¿Qué correos tengo pendientes?', { gmail: 1, calendar: 0, dashboard: 0 }, true],
     ['¿Qué reuniones tengo hoy?', { gmail: 0, calendar: 0, dashboard: 0 }, false],
     ['¿Cómo está mi día?', { gmail: 0, calendar: 0, dashboard: 1 }, true],
     ['Resume mis correos y reuniones de hoy.', { gmail: 1, calendar: 1, dashboard: 0 }, true],
@@ -288,20 +292,94 @@ test('adds an optional supervised recommendation without executing or accepting 
   assert.equal(JSON.stringify(payload).includes('evil'), false);
 });
 
-test('recommends supervised Gmail review without reading Gmail before confirmation', async (t) => {
+test('V0.1: a supervised Gmail review recommendation no longer blocks reading Gmail — answers directly in the same turn', async (t) => {
+  const { calls, dependencies } = createHarness(t);
+  const response = await requestChat('Revisa mi correo', dependencies);
+  const payload = response.getJson();
+  assert.equal(response.statusCode, 200);
+  assert.equal(calls.gmail, 1);
+  assert.equal(payload.privateContextUsed, true);
+  // The pending-confirmation metadata is still attached (unchanged, for any
+  // consumer that wants it), but it no longer suppresses the real answer.
+  assert.equal(payload.decisionRecommendation.decision, 'gmail-review-readonly');
+  assert.equal(payload.capabilityComposition.primaryCapability, 'gmail-review-readonly');
+  assert.equal(payload.decisionRecommendation.requiresConfirmation, true);
+  assert.doesNotMatch(payload.response, /Gmail readonly no esta disponible/i);
+  assert.match(payload.response, /correo/i);
+  // No Knowledge Store leakage into a Gmail-answered response's natural
+  // language text (payload.response) — the frontend only ever speaks/shows
+  // this field to the user, never the raw confidence/sources/analysis
+  // fields, which remain internal API contract details.
+  assert.deepEqual(payload.sources, []);
+});
+
+test('a Gmail context failure still recommends the same supervised review, with a safe fallback answer', async (t) => {
   const { calls, dependencies } = createHarness(t, {
     async buildGmailPrivateContext() {
-      throw new Error('Gmail must not be read before confirmation.');
+      calls.gmail = (calls.gmail || 0) + 1;
+      const error = new Error('Google OAuth is not ready.');
+      error.code = 'google_oauth_tokens_missing';
+      throw error;
     },
   });
   const response = await requestChat('Revisa mi correo', dependencies);
   const payload = response.getJson();
   assert.equal(response.statusCode, 200);
-  assert.equal(calls.gmail, 0);
-  assert.equal(payload.decisionRecommendation.decision, 'gmail-review-readonly');
-  assert.equal(payload.capabilityComposition.primaryCapability, 'gmail-review-readonly');
-  assert.equal(payload.decisionRecommendation.requiresConfirmation, true);
-  assert.doesNotMatch(payload.response, /Gmail readonly no esta disponible/i);
+  assert.equal(calls.gmail, 1);
+  assert.match(payload.response, /Necesito que conectes tu cuenta de Google/i);
+  assert.doesNotMatch(payload.response, /google_oauth|error|stack/i);
+});
+
+test('an insufficient-scope Gmail failure gets its own distinct natural message, never the generic one', async (t) => {
+  const { dependencies } = createHarness(t, {
+    async buildGmailPrivateContext() {
+      const error = new Error('Google OAuth is not ready.');
+      error.code = 'gmail_compose_scope_missing';
+      throw error;
+    },
+  });
+  const response = await requestChat('Revisa mi correo', dependencies);
+  const payload = response.getJson();
+  assert.match(payload.response, /No tengo todavia permiso suficiente/i);
+  assert.doesNotMatch(payload.response, /Necesito que conectes|gmail_compose_scope_missing/i);
+});
+
+test('an unrecognized Gmail failure code falls back to the generic temporary-outage message, not silence', async (t) => {
+  const { dependencies } = createHarness(t, {
+    async buildGmailPrivateContext() {
+      const error = new Error('boom');
+      error.code = 'some_unexpected_code';
+      throw error;
+    },
+  });
+  const response = await requestChat('Revisa mi correo', dependencies);
+  const payload = response.getJson();
+  assert.match(payload.response, /Gmail readonly no esta disponible temporalmente/i);
+  assert.doesNotMatch(payload.response, /boom|some_unexpected_code/i);
+});
+
+test('the Gmail intent always requests at most 5 recent messages, never a caller-supplied count', async (t) => {
+  let receivedMaxMessages = null;
+  const { dependencies } = createHarness(t, {
+    async buildGmailPrivateContext(input) {
+      receivedMaxMessages = input.maxMessages;
+      return privateContext('gmail', { source: 'gmail', messages: [] });
+    },
+  });
+  await requestChat('Revisa mi correo', dependencies, { maxMessages: 500 });
+  assert.equal(receivedMaxMessages, 5);
+});
+
+test('classifyGmailContextFailure maps known codes and falls back safely for unknown ones', () => {
+  const { classifyGmailContextFailure } = require('./executive-chat');
+  assert.equal(classifyGmailContextFailure('google_oauth_not_configured'), 'gmail_not_connected');
+  assert.equal(classifyGmailContextFailure('google_oauth_tokens_missing'), 'gmail_not_connected');
+  assert.equal(classifyGmailContextFailure('oauth_refresh_unavailable'), 'gmail_not_connected');
+  assert.equal(classifyGmailContextFailure('gmail_private_identity_required'), 'gmail_not_connected');
+  assert.equal(classifyGmailContextFailure('gmail_compose_scope_missing'), 'gmail_insufficient_scope');
+  assert.equal(classifyGmailContextFailure('google_oauth_token_store_unavailable'), 'gmail_unavailable');
+  assert.equal(classifyGmailContextFailure(undefined), 'gmail_unavailable');
+  assert.equal(classifyGmailContextFailure('anything_else'), 'gmail_unavailable');
 });
 
 test('routes an explicit email preparation to prepare-email-draft instead of Gmail review', async (t) => {

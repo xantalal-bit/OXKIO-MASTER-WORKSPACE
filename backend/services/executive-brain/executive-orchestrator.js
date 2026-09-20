@@ -484,6 +484,8 @@ function buildContextFailureSummary(contextFailures) {
   if (!Array.isArray(contextFailures) || contextFailures.length === 0) return null;
   const labels = {
     gmail_unavailable: 'Gmail readonly no esta disponible temporalmente.',
+    gmail_not_connected: 'Necesito que conectes tu cuenta de Google para revisar tu correo.',
+    gmail_insufficient_scope: 'No tengo todavia permiso suficiente para leer tu correo.',
     calendar_unavailable: 'Calendar readonly no esta disponible temporalmente.',
     dashboard_unavailable: 'El resumen agregado no esta disponible temporalmente.',
     approvals_unavailable: 'Approval Queue no esta disponible temporalmente.',

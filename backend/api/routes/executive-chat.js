@@ -11,6 +11,29 @@ const { buildGmailPrivateContext } = require('../../services/private-context/gma
 const { getDashboardState } = require('../../services/dashboard/dashboard-intelligence');
 const { recommendSupervisedOperation } = require('../../services/executive-brain/supervised-decision-engine');
 const { planOperations } = require('../../services/executive-brain/operation-planner');
+const { safeDiagnostic } = require('../../security/secret-runtime');
+
+// Distinguishes "you never connected/consented" from "you connected but the
+// grant lacks a scope OXKIO needs" — both used to collapse into the same
+// generic gmail_unavailable failure, which meant a user who simply never
+// pressed "Conectar Google" saw the same message as an actual infrastructure
+// outage. The underlying codes come from backend/integrations/googleOAuth.js
+// (inspectGoogleOAuthReadiness) and gmail-private-provider.js.
+const GMAIL_NOT_CONNECTED_CODES = new Set([
+  'google_oauth_not_configured',
+  'google_oauth_tokens_missing',
+  'oauth_refresh_unavailable',
+  'gmail_private_identity_required',
+]);
+const GMAIL_INSUFFICIENT_SCOPE_CODES = new Set([
+  'gmail_compose_scope_missing',
+]);
+
+function classifyGmailContextFailure(code) {
+  if (GMAIL_NOT_CONNECTED_CODES.has(code)) return 'gmail_not_connected';
+  if (GMAIL_INSUFFICIENT_SCOPE_CODES.has(code)) return 'gmail_insufficient_scope';
+  return 'gmail_unavailable';
+}
 
 function sendJson(res, statusCode, data) {
   res.writeHead(statusCode, {
@@ -187,7 +210,11 @@ async function buildOrchestratorOptions(query, dependencies = {}, controls = {})
         });
         privateContexts.push(sanitizeGmailContext(context));
       } catch (error) {
-        options.contextFailures.push('gmail_unavailable');
+        // Internal-only diagnostic: never surfaced to the user, never
+        // includes token values (the error codes here are a fixed enum,
+        // not free-text derived from any credential).
+        console.error('[gmail-intent] Gmail private context unavailable:', safeDiagnostic(error, 'gmail_unavailable'));
+        options.contextFailures.push(classifyGmailContextFailure(error && error.code));
       }
     }
     if (selection.calendar) {
@@ -322,7 +349,16 @@ async function handleExecutiveChatRequest(req, res, options) {
     const isSupervisedCalendarReview = preliminaryRecommendation
       && preliminaryRecommendation.decision === 'calendar-review-readonly';
     const orchestratorOptions = await buildOrchestratorOptions(query, dependencies, {
-      skipGmail: isSupervisedGmailReview,
+      // V0.1: a plain "revisa mi correo"-style query is read-only (never
+      // writes, never sends) and answers with only sender/subject/date, so
+      // it does not need the same "requiresConfirmation" gate that
+      // business/knowledge/memory/calendar operations use — it injects the
+      // real Gmail context directly and answers in the same turn, instead
+      // of surfacing a pending decisionRecommendation for the user to
+      // separately confirm. The recommendation itself is still computed
+      // and attached below (isSupervisedGmailReview), unchanged, purely as
+      // informational metadata for any consumer that wants it.
+      skipGmail: false,
       skipCalendar: isSupervisedCalendarReview,
       selectedContext,
     });
@@ -355,6 +391,7 @@ async function handleExecutiveChatRequest(req, res, options) {
 module.exports = {
   buildCapabilityComposition,
   buildOrchestratorOptions,
+  classifyGmailContextFailure,
   getInternalOrchestratorDependencies,
   handleExecutiveChatRequest,
   isExecutiveChatRoute,
