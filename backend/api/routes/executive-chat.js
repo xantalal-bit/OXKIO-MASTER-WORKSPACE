@@ -250,9 +250,15 @@ async function buildOrchestratorOptions(query, dependencies = {}, controls = {})
       try {
         const queue = dependencies.approvalQueue;
         if (!queue || typeof queue.listPending !== 'function' || typeof queue.getHistory !== 'function') throw new Error('unavailable');
+        // The real ApprovalQueue (backend/core/approvalQueue.js) declares
+        // both methods async; awaiting them here is required in production
+        // — without it, .map() runs on a Promise instead of an array and
+        // this whole branch always fails closed into approvals_unavailable,
+        // even though the queue itself has real pending/history data.
+        const [pending, history] = await Promise.all([queue.listPending(), queue.getHistory()]);
         options.contextualData.approvals = {
-          pending: queue.listPending().map(sanitizeApprovalItem),
-          history: queue.getHistory().map(sanitizeApprovalItem),
+          pending: pending.map(sanitizeApprovalItem),
+          history: history.map(sanitizeApprovalItem),
         };
       } catch (error) {
         options.contextFailures.push('approvals_unavailable');
@@ -349,17 +355,19 @@ async function handleExecutiveChatRequest(req, res, options) {
     const isSupervisedCalendarReview = preliminaryRecommendation
       && preliminaryRecommendation.decision === 'calendar-review-readonly';
     const orchestratorOptions = await buildOrchestratorOptions(query, dependencies, {
-      // V0.1: a plain "revisa mi correo"-style query is read-only (never
-      // writes, never sends) and answers with only sender/subject/date, so
-      // it does not need the same "requiresConfirmation" gate that
-      // business/knowledge/memory/calendar operations use — it injects the
-      // real Gmail context directly and answers in the same turn, instead
-      // of surfacing a pending decisionRecommendation for the user to
-      // separately confirm. The recommendation itself is still computed
-      // and attached below (isSupervisedGmailReview), unchanged, purely as
-      // informational metadata for any consumer that wants it.
+      // V0.1 (Gmail) / V0.3 (Calendar): a plain "revisa mi correo"/"que
+      // tengo manana"-style query is read-only (never writes, never sends,
+      // never creates events) and answers with only the safe summary
+      // fields, so it does not need the same "requiresConfirmation" gate
+      // that business/knowledge/memory operations use — it injects the
+      // real Gmail/Calendar context directly and answers in the same turn,
+      // instead of surfacing a pending decisionRecommendation for the user
+      // to separately confirm. The recommendation itself is still computed
+      // and attached below (isSupervisedGmailReview/isSupervisedCalendarReview),
+      // unchanged, purely as informational metadata for any consumer that
+      // wants it.
       skipGmail: false,
-      skipCalendar: isSupervisedCalendarReview,
+      skipCalendar: false,
       selectedContext,
     });
     const payload = sanitizeExecutivePayload(await orchestrator(query, orchestratorOptions));

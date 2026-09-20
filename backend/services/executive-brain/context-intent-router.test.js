@@ -22,6 +22,11 @@ test('selects each readonly source with minimum context', () => {
   assert.deepEqual(selected('¿Qué recuerdas de nuestras últimas decisiones?'), { gmail: false, calendar: false, dashboard: false, memory: true, approvals: false });
 });
 
+test('V0.3: "que esta haciendo OXKIO ahora" reuses the existing dashboard path instead of falling through to general', () => {
+  assert.deepEqual(selected('¿Qué está haciendo OXKIO ahora?'), { gmail: false, calendar: false, dashboard: true, memory: false, approvals: false });
+  assert.equal(selectExecutiveContext('¿Qué está haciendo OXKIO ahora?').reason, 'dashboard_query');
+});
+
 test('selects Gmail and Calendar together only for an explicit combined query', () => {
   const result = selectExecutiveContext('Resume mis correos y reuniones de hoy.');
   assert.deepEqual(selected('Resume mis correos y reuniones de hoy.'), { gmail: true, calendar: true, dashboard: false, memory: false, approvals: false });

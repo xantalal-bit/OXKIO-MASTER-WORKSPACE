@@ -86,12 +86,13 @@ test('matches only the unchanged POST route', () => {
 
 test('A-D select Gmail, Calendar, Dashboard, and combined context once and minimally', async (t) => {
   const cases = [
-    // V0.1: a plain, read-only Gmail query now answers directly in the same
-    // turn (executive-chat.js no longer skips Gmail context injection for
-    // the supervised gmail-review-readonly recommendation), instead of
-    // only attaching a pending decisionRecommendation.
+    // V0.1 (Gmail) / V0.3 (Calendar): a plain, read-only query now answers
+    // directly in the same turn (executive-chat.js no longer skips Gmail or
+    // Calendar context injection for their supervised readonly
+    // recommendation), instead of only attaching a pending
+    // decisionRecommendation.
     ['¿Qué correos tengo pendientes?', { gmail: 1, calendar: 0, dashboard: 0 }, true],
-    ['¿Qué reuniones tengo hoy?', { gmail: 0, calendar: 0, dashboard: 0 }, false],
+    ['¿Qué reuniones tengo hoy?', { gmail: 0, calendar: 1, dashboard: 0 }, true],
     ['¿Cómo está mi día?', { gmail: 0, calendar: 0, dashboard: 1 }, true],
     ['Resume mis correos y reuniones de hoy.', { gmail: 1, calendar: 1, dashboard: 0 }, true],
   ];
@@ -115,9 +116,13 @@ test('A-D select Gmail, Calendar, Dashboard, and combined context once and minim
 
 test('E uses only public Approval Queue views and does not expose payload or hash', async (t) => {
   let pendingCalls = 0; let historyCalls = 0;
+  // The real ApprovalQueue (backend/core/approvalQueue.js) declares both
+  // methods async; mocking them as sync here previously hid a real bug
+  // (executive-chat.js called them without await, so .map() ran on a
+  // Promise and this whole feature silently always failed closed).
   const queue = {
-    listPending() { pendingCalls += 1; return [{ id: 'a1', status: 'pending', createdAt: '2026-07-20T08:00:00.000Z', publicProposal: { type: 'email_draft', summary: 'Revision pendiente.', requiresApproval: true }, executionPayload: { body: 'secret-body' }, payloadHash: 'secret-hash' }]; },
-    getHistory() { historyCalls += 1; return []; },
+    async listPending() { pendingCalls += 1; return [{ id: 'a1', status: 'pending', createdAt: '2026-07-20T08:00:00.000Z', publicProposal: { type: 'email_draft', summary: 'Revision pendiente.', requiresApproval: true }, executionPayload: { body: 'secret-body' }, payloadHash: 'secret-hash' }]; },
+    async getHistory() { historyCalls += 1; return []; },
     add() { throw new Error('informational query must not enqueue'); },
   };
   const { calls, dependencies } = createHarness(t, { approvalQueue: queue });
@@ -474,16 +479,15 @@ test('keeps Knowledge auxiliary when explicit email preparation is the primary c
   assert.equal(Object.hasOwn(payload, 'operationPlan'), false);
 });
 
-test('recommends supervised Calendar review without reading Calendar before confirmation', async (t) => {
-  const { calls, dependencies } = createHarness(t, {
-    async buildCalendarPrivateContext() {
-      throw new Error('Calendar must not be read before confirmation.');
-    },
-  });
+test('V0.3: a supervised Calendar review recommendation no longer blocks reading Calendar — answers directly in the same turn', async (t) => {
+  const { calls, dependencies } = createHarness(t);
   const response = await requestChat('Revisa mi agenda', dependencies);
   const payload = response.getJson();
   assert.equal(response.statusCode, 200);
-  assert.equal(calls.calendar, 0);
+  assert.equal(calls.calendar, 1);
+  assert.equal(payload.privateContextUsed, true);
+  // The pending-confirmation metadata is still attached (unchanged, for any
+  // consumer that wants it), but it no longer suppresses the real answer.
   assert.equal(payload.decisionRecommendation.decision, 'calendar-review-readonly');
   assert.equal(payload.capabilityComposition.primaryCapability, 'calendar-review-readonly');
   assert.equal(payload.decisionRecommendation.requiresConfirmation, true);

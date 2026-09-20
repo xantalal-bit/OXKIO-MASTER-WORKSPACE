@@ -112,6 +112,7 @@ function selectExecutiveContext(query) {
   const dashboard = includesPhrase(normalized, [
     'como esta mi dia', 'estado general', 'resumen ejecutivo', 'requiere mi atencion',
     'requieren mi atencion', 'mis prioridades', 'cuales son mis prioridades',
+    'que esta haciendo oxkio', 'que esta haciendo ahora',
   ]);
   const approvals = includesPhrase(normalized, [
     'aprobacion', 'aprobaciones', 'pendiente de aprobar', 'pendientes de aprobar',
