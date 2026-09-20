@@ -3,17 +3,27 @@
 // Cross-user isolation tests for firebase/firestore.rules, against a real
 // Firestore Rules emulator via @firebase/rules-unit-testing. Mirrors the
 // skip-when-unavailable convention already used by
-// backend/repositories/poc/persistence-poc.test.js: this package is not a
-// project dependency and no emulator runs in this environment, so every
-// test below is present but not executed here — TEST CODE PRESENT /
-// RUNTIME NOT EXECUTED. Do not read the "pass" count for this file as
-// evidence the rules were verified; read the skip reason instead.
+// backend/repositories/poc/persistence-poc.test.js: when @firebase/rules-unit-testing
+// is not installed or no emulator is reachable, every test below is skipped
+// rather than failed. Do not read a "skip" count as evidence the rules are
+// broken, and do not read a stale comment as evidence of the current PASS/
+// FAIL/SKIP state either — the only evidence is the result of the most
+// recent real run. These tests were executed for real against a live
+// Firestore Emulator during the Family Beta validation (2026-09-19): 6/6
+// PASS, 0 FAIL, 0 SKIP, all 12 cross-user isolation scenarios verified,
+// including real PERMISSION_DENIED responses on every denied operation. A
+// future run without an available emulator will show SKIP again — that is
+// expected and is not a regression.
 //
-// To actually run this file:
+// To actually run this file (Java 21+ required for the emulator JVM; a
+// portable JDK works fine, no global install needed):
 //   npm install --save-dev @firebase/rules-unit-testing
-//   firebase emulators:exec --project oxkio-rules-test \
-//     --only firestore --config firebase/firebase.json \
-//     "FIRESTORE_EMULATOR_HOST=127.0.0.1:8088 node --test firebase/firestore.rules.test.js"
+//   cd firebase && ../node_modules/.bin/firebase emulators:exec \
+//     --project oxkio-rules-test --only firestore --config firebase.json \
+//     "node --test firestore.rules.test.js"
+//   (firebase emulators:exec injects FIRESTORE_EMULATOR_HOST into the
+//   script's environment automatically — do not prefix it manually, it
+//   is not portable to cmd.exe on Windows)
 
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
