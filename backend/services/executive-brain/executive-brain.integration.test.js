@@ -169,7 +169,10 @@ test('executes the full Executive Brain flow with ranking and response building'
       assert.ok(Array.isArray(result.sources));
       assert.ok(Array.isArray(result.limitations));
       assert.ok(result.response.includes('Evidencia principal'));
-      assert.ok(result.response.includes('Confianza'));
+      // UX Polish V0.2: confidence labels ("Confianza alta/media/baja.") must
+      // never reach the user-facing response text — the numeric value stays
+      // available on result.confidence (checked above) for internal use.
+      assert.ok(!result.response.includes('Confianza'));
       assert.ok(result.sources.length > 0);
       assert.equal(result.sources.some((source) => Object.hasOwn(source, 'path')), false);
       assertOrderedSources(result.sources);

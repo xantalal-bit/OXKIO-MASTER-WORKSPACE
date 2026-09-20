@@ -304,6 +304,15 @@ function buildGmailContextSummary(payload) {
   return `Correo privado autorizado: tienes ${messages.length} ${messageWord}:\n${bulletMessages}`;
 }
 
+// executiveSummary keeps its internal "Confianza alta/media/baja." suffix
+// (other modules and buildExecutiveResponse's own tests rely on it), but the
+// chat-facing response text must never surface confidence labels to the
+// user, visibly or via TTS — the numeric confidence stays available on the
+// payload's own confidence field for anything that needs it internally.
+function toUserFacingResponse(executiveSummary) {
+  return String(executiveSummary || '').replace(/\s*Confianza (?:alta|media|baja)\.\s*$/i, '');
+}
+
 function sanitizeExecutiveSources(sources) {
   if (!Array.isArray(sources)) {
     return [];
@@ -875,7 +884,7 @@ async function orchestrateExecutiveQuery(query, options) {
     interactionId,
     query,
     analysis,
-    response: executiveResponse.executiveSummary,
+    response: toUserFacingResponse(executiveResponse.executiveSummary),
     confidence: finalConfidence,
     sources: sanitizeExecutiveSources(executiveResponse.sources),
     privateContextUsed,
