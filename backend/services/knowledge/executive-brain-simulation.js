@@ -159,13 +159,18 @@ function buildSource(rankedEntry, knowledgeObject) {
 
 function buildAnswer(query, profile, rankedMatches) {
   if (rankedMatches.length === 0) {
-    return `No se encontraron Knowledge Objects relevantes para "${query}" en el Knowledge Store.`;
+    // UX Polish V0.2.1: this used to name "Knowledge Objects"/"Knowledge
+    // Store" directly, which is internal implementation vocabulary that
+    // leaked into the visible chat response whenever a query had no
+    // matching document. The natural-language wording belongs here, at the
+    // source, rather than as a presentation-layer patch further downstream.
+    return 'No tengo información suficiente sobre eso todavía.';
   }
 
   const topSources = rankedMatches.slice(0, 3).map((match) => match.source);
   const names = topSources.map((source) => source.name).filter(Boolean).join(', ');
 
-  return `Consulta simulada sobre ${profile.type}. Se encontraron ${rankedMatches.length} Knowledge Objects relevantes. Fuentes principales: ${names || 'sin nombre disponible'}.`;
+  return `Consulta sobre ${profile.type}. Encontré ${rankedMatches.length} referencia(s) relevante(s). Fuentes principales: ${names || 'sin nombre disponible'}.`;
 }
 
 function calculateConfidence(rankedMatches) {

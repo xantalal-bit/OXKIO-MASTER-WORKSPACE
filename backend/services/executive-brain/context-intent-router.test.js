@@ -55,6 +55,28 @@ test('recognizes every "revisar correo" phrasing as a Gmail query, never falling
   }
 });
 
+test('classifies plain greeting/capability small talk as chitchat_query, with no private source selected', () => {
+  const phrases = [
+    'hola',
+    'qué puedes hacer',
+    'puedes responder algo',
+    'quién eres',
+    'ayúdame',
+    'qué sabes hacer',
+  ];
+  for (const phrase of phrases) {
+    const result = selectExecutiveContext(phrase);
+    assert.equal(result.reason, 'chitchat_query', `"${phrase}" should classify as chitchat_query`);
+    assert.deepEqual(selected(phrase), { gmail: false, calendar: false, dashboard: false, memory: false, approvals: false });
+  }
+});
+
+test('a longer sentence that merely contains a chitchat word keeps its real context selection', () => {
+  const result = selectExecutiveContext('Ayúdame a revisar mi correo.');
+  assert.equal(result.gmail, true);
+  assert.notEqual(result.reason, 'chitchat_query');
+});
+
 test('negated actions do not select context', () => {
   for (const query of ['No prepares un borrador.', 'No programes una reunión.', 'No crees una tarea.']) {
     assert.deepEqual(selected(query), { gmail: false, calendar: false, dashboard: false, memory: false, approvals: false });

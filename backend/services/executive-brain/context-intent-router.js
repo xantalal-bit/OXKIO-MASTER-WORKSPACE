@@ -8,7 +8,26 @@ const REASONS = Object.freeze({
   APPROVALS: 'approvals_query',
   COMBINED: 'combined_query',
   GENERAL: 'general_query',
+  CHITCHAT: 'chitchat_query',
 });
+
+// Pure greeting/capability small talk ("hola", "que puedes hacer"): exact
+// match only (not includesPhrase) so a longer sentence that happens to
+// contain one of these words, e.g. "ayudame a revisar mi correo", is never
+// misclassified as chit-chat and loses its real context selection. This
+// lets the orchestrator answer with a natural capability description
+// instead of routing the query into the Knowledge Store simulator, which
+// has nothing to match a greeting against and would otherwise leak its
+// internal "No se encontraron Knowledge Objects..." wording to the user.
+const CHITCHAT_QUERIES = new Set([
+  'hola', 'buenas', 'buenos dias', 'buenas tardes', 'buenas noches',
+  'que puedes hacer', 'que sabes hacer', 'puedes responder algo',
+  'quien eres', 'que eres', 'para que sirves', 'ayudame', 'ayuda',
+]);
+
+function isChitchatQuery(query) {
+  return CHITCHAT_QUERIES.has(query);
+}
 
 function normalizeContextQuery(value) {
   return String(value || '')
@@ -72,6 +91,10 @@ function selectExecutiveContext(query) {
 
   if (!normalized || isEducationalQuery(normalized) || isNegatedAction(normalized)) {
     return selection;
+  }
+
+  if (isChitchatQuery(normalized)) {
+    return { ...selection, reason: REASONS.CHITCHAT };
   }
 
   const emailAction = hasEmailAction(normalized);

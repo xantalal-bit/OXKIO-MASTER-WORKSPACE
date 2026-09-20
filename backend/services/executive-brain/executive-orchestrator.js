@@ -802,6 +802,14 @@ async function orchestrateExecutiveQuery(query, options) {
     searchMemorySafely(memory, query, diagnostics);
   }
   const authorizedPrivateContext = selectPrimaryPrivateContext(query, analysis, authorizedPrivateContexts);
+  // Pure greeting/capability small talk ("hola", "que puedes hacer") has
+  // nothing to match in the Knowledge Store simulator, which otherwise
+  // answers with its internal "No se encontraron Knowledge Objects... en el
+  // Knowledge Store." wording — accurate for a real, unmatched business
+  // query, but not something a user should ever see for a plain greeting.
+  // context-intent-router.js already classifies these deterministically, so
+  // this reuses that classification instead of duplicating it here.
+  const isChitchatQuery = Boolean(contextSelection && contextSelection.reason === 'chitchat_query');
   let knowledgeQueryResult = null;
 
   if (shouldUseKnowledgeQuery(analysis)) {
@@ -827,8 +835,8 @@ async function orchestrateExecutiveQuery(query, options) {
     || preferPrivateGmailContext
     || Boolean(contextualDataSummary)
     || Boolean(contextFailureSummary);
-  const responseSources = preferPrivateContext ? [] : sanitizeExecutiveSources(response.sources);
-  const responseLimitations = preferCombinedPrivateContext
+  const responseSources = (preferPrivateContext || isChitchatQuery) ? [] : sanitizeExecutiveSources(response.sources);
+  const responseLimitations = (preferCombinedPrivateContext || isChitchatQuery)
     ? []
     : (preferPrivateContext
     ? filterPrivatePrimaryLimitations(response.limitations)
@@ -840,9 +848,11 @@ async function orchestrateExecutiveQuery(query, options) {
     answer: preferPrivateContext
       ? ([combinedPrivateContextSummary || privateContextSummary, contextualDataSummary, contextFailureSummary]
         .filter(Boolean).join(' '))
-      : (privateContextSummary
-        ? `${response.answer} ${privateContextSummary}`
-        : response.answer),
+      : (isChitchatQuery
+        ? 'Puedo ayudarte a revisar tu correo, organizar tareas y trabajar contigo sobre las funciones que tengas conectadas.'
+        : (privateContextSummary
+          ? `${response.answer} ${privateContextSummary}`
+          : response.answer)),
     confidence: responseConfidence,
     sources: responseSources,
     reasoningSummary: response.reasoningSummary,

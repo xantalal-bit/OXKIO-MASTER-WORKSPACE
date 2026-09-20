@@ -122,6 +122,45 @@ function buildPrivateContext(overrides = {}) {
   };
 }
 
+test('UX Polish V0.2.1: plain greeting/capability small talk gets a natural answer, never Knowledge Store wording', async () => {
+  const emptyStoreDirectory = fs.mkdtempSync(path.join(os.tmpdir(), 'executive-brain-empty-store-'));
+
+  try {
+    const phrases = ['hola', 'qué puedes hacer', 'puedes responder algo', 'quién eres', 'ayúdame', 'qué sabes hacer'];
+
+    for (const phrase of phrases) {
+      const result = await orchestrateExecutiveQuery(phrase, {
+        simulationOptions: { storeDirectory: emptyStoreDirectory },
+      });
+
+      assert.equal(typeof result.response, 'string');
+      assert.ok(result.response.length > 0, `"${phrase}" should get a non-empty answer`);
+      assert.doesNotMatch(result.response, /Knowledge Object/i, `"${phrase}" must not mention Knowledge Objects`);
+      assert.doesNotMatch(result.response, /Knowledge Store/i, `"${phrase}" must not mention the Knowledge Store`);
+      assert.doesNotMatch(result.response, /Confianza/, `"${phrase}" must not surface a confidence label`);
+      assert.deepEqual(result.sources, []);
+    }
+  } finally {
+    fs.rmSync(emptyStoreDirectory, { recursive: true, force: true });
+  }
+});
+
+test('UX Polish V0.2.1: a real but unmatched topic gets the generic natural fallback, never Knowledge Store wording', async () => {
+  const emptyStoreDirectory = fs.mkdtempSync(path.join(os.tmpdir(), 'executive-brain-empty-store-'));
+
+  try {
+    const result = await orchestrateExecutiveQuery('Cuéntame sobre el proyecto Fénix que no existe', {
+      simulationOptions: { storeDirectory: emptyStoreDirectory },
+    });
+
+    assert.equal(result.response, 'No tengo información suficiente sobre eso todavía.');
+    assert.doesNotMatch(result.response, /Knowledge Object/i);
+    assert.doesNotMatch(result.response, /Knowledge Store/i);
+  } finally {
+    fs.rmSync(emptyStoreDirectory, { recursive: true, force: true });
+  }
+});
+
 test('executes the full Executive Brain flow with ranking and response building', async () => {
   const fixture = createIntegrationFixture();
 
