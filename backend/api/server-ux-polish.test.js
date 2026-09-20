@@ -66,3 +66,35 @@ test('the greeting only uses a real Firebase displayName, never an email-derived
   assert.match(entry, /currentUser && typeof currentUser\.displayName === "string"/);
   assert.doesNotMatch(entry, /currentUser\.email\.split\("@"\)/);
 });
+
+test('"Nueva conversación" is a discrete, accessible, keyboard-usable button', () => {
+  assert.match(entry, /<button id="newConversationBtn" class="voice-reply-toggle" type="button" onclick="iniciarNuevaConversacion\(\)" aria-label="[^"]+"/);
+  assert.match(entry, />Nueva conversación</);
+});
+
+test('"Nueva conversación" resets only frontend chat state, never Firebase/OAuth/logout', () => {
+  const fnSource = entry.match(/window\.iniciarNuevaConversacion = function\(\) \{[\s\S]*?\n    \};/)[0];
+  // 1. clears the visible chat log
+  assert.match(fnSource, /getElementById\('chatLog'\)/);
+  assert.match(fnSource, /log\.innerHTML = '';/);
+  // 10. clears the input
+  assert.match(fnSource, /getElementById\('chatInput'\)/);
+  assert.match(fnSource, /input\.value = '';/);
+  // 7. cancels any active TTS
+  assert.match(fnSource, /speechSynthesis\.cancel\(\)/);
+  // 8. stops active voice recognition if any
+  assert.match(fnSource, /if \(escuchando && recognition\) \{ try \{ recognition\.stop\(\); \} catch \{\} \}/);
+  // voice status/listening visuals cleared, 9. avatar back to idle
+  assert.match(fnSource, /setEstadoVoz\('', false\);/);
+  assert.match(fnSource, /setOxkioAvatarState\('idle'\);/);
+  // 2/3/4/5/6: never touches auth, Firestore, Gmail, Calendar, or OAuth
+  assert.doesNotMatch(fnSource, /signOut|logout/i);
+  assert.doesNotMatch(fnSource, /deleteDoc|collection\(|getDocs\(/);
+  assert.doesNotMatch(fnSource, /fetch\(|oxkioAuthenticatedFetch/);
+  // 11. never touches the voice-reply preference
+  assert.doesNotMatch(fnSource, /responderConVoz/);
+});
+
+test('"Nueva conversación" is documented as a frontend-only reset, since /api/executive/chat keeps no server-side conversation state', () => {
+  assert.match(entry, /no mantiene ningun contexto conversacional en el servidor/);
+});

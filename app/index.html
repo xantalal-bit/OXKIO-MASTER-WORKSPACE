@@ -449,6 +449,7 @@
   <div id="voiceStatus" class="voice-status-chat"></div>
   <div class="voice-reply-row">
     <button id="voiceReplyToggle" class="voice-reply-toggle" type="button" onclick="toggleVoiceReply()" aria-pressed="false">Responder con voz</button>
+    <button id="newConversationBtn" class="voice-reply-toggle" type="button" onclick="iniciarNuevaConversacion()" aria-label="Iniciar una nueva conversación sin cerrar sesión">Nueva conversación</button>
   </div>
 
   <div id="dynamicZone" class="dynamic-zone content-hidden"></div>
@@ -1040,6 +1041,25 @@ applyModoCEO();
     function setOxkioAvatarState(state) { const avatar = document.getElementById('oxkioAvatar'); if (!avatar) return; avatar.classList.remove('state-idle','state-listening','state-thinking','state-speaking'); avatar.classList.add('state-' + state); }
     function actualizarToggleVoz() { const btn = document.getElementById('voiceReplyToggle'); if (!btn) return; btn.setAttribute('aria-pressed', String(responderConVoz)); btn.textContent = responderConVoz ? "Responder con voz: activado" : "Responder con voz"; }
     window.toggleVoiceReply = function() { responderConVoz = !responderConVoz; actualizarToggleVoz(); };
+    // "Nueva conversación": solo un reset visual/frontend. /api/executive/chat
+    // no mantiene ningun contexto conversacional en el servidor entre
+    // mensajes (cada peticion es independiente; la unica memoria implicada es
+    // la memoria de proyecto persistente y global, no un hilo de chat), asi
+    // que no hay conversationId/sessionId que resetear en backend. No cierra
+    // sesion, no borra Gmail/Firestore/tareas/documentos/aprobaciones, no
+    // toca OAuth ni Secret Manager, y mantiene la preferencia actual de
+    // "Responder con voz" (responderConVoz no se toca).
+    window.iniciarNuevaConversacion = function() {
+      const log = document.getElementById('chatLog');
+      if (log) log.innerHTML = '';
+      const input = document.getElementById('chatInput');
+      if (input) input.value = '';
+      if ('speechSynthesis' in window) speechSynthesis.cancel();
+      if (escuchando && recognition) { try { recognition.stop(); } catch {} }
+      escuchando = false;
+      setEstadoVoz('', false);
+      setOxkioAvatarState('idle');
+    };
     // El nombre solo viene de una fuente fiable de identidad real (el
     // displayName de Firebase Auth), nunca inferido del email: si no existe,
     // se mantiene el saludo generico en vez de inventar un nombre.
