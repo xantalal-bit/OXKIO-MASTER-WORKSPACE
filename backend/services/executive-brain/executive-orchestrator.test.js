@@ -354,6 +354,7 @@ test('reads shared memory without invoking proposal or approval dependencies or 
     'proposal',
     'approval',
     'limitations',
+    'conversationUpdate',
   ]);
 });
 

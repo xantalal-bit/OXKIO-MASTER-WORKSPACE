@@ -7,6 +7,8 @@ const { simulateExecutiveBrainQuery } = require('../knowledge/executive-brain-si
 const { preparePrivateContextAdapter } = require('../private-context/private-context-adapter');
 const { buildExecutiveResponse } = require('./executive-response-builder');
 const { listAvailable, listUnavailable } = require('./capability-registry');
+const { resolveReference } = require('./reference-resolver');
+const { classifyMailPriority } = require('../private-context/mail-priority');
 
 function shouldUseKnowledgeQuery(analysis) {
   return Boolean(analysis && analysis.project);
@@ -331,6 +333,45 @@ function describeCapabilityAnswer(query) {
   return `Ahora mismo puedo: ${items.join(', ')}.`;
 }
 
+const PRIORITY_EXPLANATION = Object.freeze({
+  urgent: 'es importante y todavia no lo has leido',
+  important: 'esta marcado como importante',
+  review: 'todavia no lo has leido',
+  informational: 'no parece urgente',
+  noise: 'no parece requerir tu atencion',
+});
+
+function extractSenderName(from) {
+  const match = String(from || '').match(/^([^<]+)</);
+  return match ? match[1].trim() : String(from || 'remitente desconocido').trim();
+}
+
+// V0.5 FASE 6, turn 2: "cual deberia responder primero" never triggers its
+// own Gmail fetch — it reasons over whatever messages the conversation
+// context already has from an earlier turn in the same thread, using the
+// existing (until now dormant) mail-priority.js classifier. Returns null
+// when there is nothing recent to prioritize, so the caller can fall back
+// to an honest "no tengo una lista reciente" instead of fabricating one.
+function buildPrioritizationAnswer(conversationContext) {
+  const messages = conversationContext && conversationContext.entities && Array.isArray(conversationContext.entities.messages)
+    ? conversationContext.entities.messages
+    : [];
+  if (messages.length === 0) return null;
+  const RANK = { urgent: 0, important: 1, review: 2, informational: 3, noise: 4 };
+  const ranked = messages
+    .map((message) => ({ message, priority: classifyMailPriority(message) }))
+    .sort((left, right) => RANK[left.priority] - RANK[right.priority]);
+  const top = ranked[0];
+  const sender = extractSenderName(top.message.from);
+  const subject = typeof top.message.subject === 'string' && top.message.subject.trim()
+    ? top.message.subject.trim() : 'sin asunto';
+  const why = PRIORITY_EXPLANATION[top.priority] || PRIORITY_EXPLANATION.informational;
+  return {
+    answer: `Yo empezaria por el correo de ${sender} ("${subject}"), porque ${why}.`,
+    selection: { sourceType: 'gmail_message', ref: top.message.ref || null, reason: top.priority },
+  };
+}
+
 function sanitizeExecutiveSources(sources) {
   if (!Array.isArray(sources)) {
     return [];
@@ -454,8 +495,9 @@ function detectActionableIntent(query) {
   }
 
   if (
-    includesAny(['prepara', 'preparar', 'redacta', 'redactar', 'crea', 'crear', 'genera', 'generar'])
-    && includesAny(['borrador', 'respuesta', 'correo', 'email'])
+    includesAny(['respondele', 'contestale'])
+    || (includesAny(['prepara', 'preparar', 'redacta', 'redactar', 'crea', 'crear', 'genera', 'generar'])
+      && includesAny(['borrador', 'respuesta', 'correo', 'email']))
   ) {
     return {
       intent: 'email',
@@ -602,14 +644,36 @@ function emailPreparationFromQuery(query) {
   };
 }
 
-function emailPreparationFromPrivateContext(generatedProposal, authorizedPrivateContext) {
+// V0.5 FASE 10: resolves which message a conversational reference ("al mas
+// importante", "respondele", "el primero"...) points to. Tries this turn's
+// freshly-fetched Gmail messages first (most current), then falls back to
+// whatever the conversation context saved from an earlier turn — e.g. a
+// bare "respondele" with no fresh fetch this turn.
+function resolveReferencedMessage(query, conversationContext, authorizedPrivateContext) {
+  const freshMessages = authorizedPrivateContext
+    && authorizedPrivateContext.sourceType === 'gmail'
+    && authorizedPrivateContext.payload
+    && Array.isArray(authorizedPrivateContext.payload.messages)
+    ? authorizedPrivateContext.payload.messages.map((message, index) => ({ ref: String(index + 1), ...message }))
+    : [];
+  const selection = conversationContext && conversationContext.selection;
+  const fromFresh = resolveReference(query, { entities: freshMessages, selection });
+  if (fromFresh.resolved) return fromFresh.item;
+  const savedMessages = conversationContext && conversationContext.entities && Array.isArray(conversationContext.entities.messages)
+    ? conversationContext.entities.messages
+    : [];
+  const fromSaved = resolveReference(query, { entities: savedMessages, selection });
+  return fromSaved.resolved ? fromSaved.item : null;
+}
+
+function emailPreparationFromPrivateContext(generatedProposal, authorizedPrivateContext, preferredMessage) {
   const messages = authorizedPrivateContext
     && authorizedPrivateContext.sourceType === 'gmail'
     && authorizedPrivateContext.payload
     && Array.isArray(authorizedPrivateContext.payload.messages)
     ? authorizedPrivateContext.payload.messages
     : [];
-  const message = messages[0];
+  const message = (preferredMessage && typeof preferredMessage === 'object') ? preferredMessage : messages[0];
   if (!message || typeof message !== 'object') return null;
   const addressMatch = String(message.from || '').match(/[A-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i);
   const generated = generatedProposal && generatedProposal.executionPayload;
@@ -633,6 +697,7 @@ function generateProposalSafely(
   executiveResponse,
   authorizedPrivateContext,
   diagnostics,
+  conversationContext,
 ) {
   diagnostics.proposalAttempted = false;
   diagnostics.proposalSucceeded = false;
@@ -653,7 +718,11 @@ function generateProposalSafely(
     const executionPayload = actionableIntent.proposalType === 'email_draft'
       ? (
         emailPreparationFromQuery(query)
-        || emailPreparationFromPrivateContext(generatedProposal, authorizedPrivateContext)
+        || emailPreparationFromPrivateContext(
+          generatedProposal,
+          authorizedPrivateContext,
+          resolveReferencedMessage(query, conversationContext, authorizedPrivateContext),
+        )
         || buildExecutionPayload(actionableIntent, generatedProposal)
       )
       : buildExecutionPayload(actionableIntent, generatedProposal);
@@ -833,6 +902,12 @@ async function orchestrateExecutiveQuery(query, options) {
   // but its answer text comes from the real Capability Registry instead of
   // a generic capability blurb — see describeCapabilityAnswer above.
   const isCapabilityQuery = Boolean(contextSelection && contextSelection.reason === 'capability_query');
+  // V0.5: reasons over messages the conversation already showed earlier in
+  // this thread (see buildPrioritizationAnswer above) instead of the
+  // Knowledge Store simulator or a fresh Gmail fetch.
+  const isPrioritizeQuery = Boolean(contextSelection && contextSelection.reason === 'prioritize_query');
+  const conversationContext = options && options.conversationContext ? options.conversationContext : null;
+  const prioritizationResult = isPrioritizeQuery ? buildPrioritizationAnswer(conversationContext) : null;
   let knowledgeQueryResult = null;
 
   if (shouldUseKnowledgeQuery(analysis)) {
@@ -858,8 +933,8 @@ async function orchestrateExecutiveQuery(query, options) {
     || preferPrivateGmailContext
     || Boolean(contextualDataSummary)
     || Boolean(contextFailureSummary);
-  const responseSources = (preferPrivateContext || isChitchatQuery || isCapabilityQuery) ? [] : sanitizeExecutiveSources(response.sources);
-  const responseLimitations = (preferCombinedPrivateContext || isChitchatQuery || isCapabilityQuery)
+  const responseSources = (preferPrivateContext || isChitchatQuery || isCapabilityQuery || isPrioritizeQuery) ? [] : sanitizeExecutiveSources(response.sources);
+  const responseLimitations = (preferCombinedPrivateContext || isChitchatQuery || isCapabilityQuery || isPrioritizeQuery)
     ? []
     : (preferPrivateContext
     ? filterPrivatePrimaryLimitations(response.limitations)
@@ -871,13 +946,17 @@ async function orchestrateExecutiveQuery(query, options) {
     answer: preferPrivateContext
       ? ([combinedPrivateContextSummary || privateContextSummary, contextualDataSummary, contextFailureSummary]
         .filter(Boolean).join(' '))
-      : (isCapabilityQuery
-        ? describeCapabilityAnswer(query)
-        : (isChitchatQuery
-          ? 'Puedo ayudarte a revisar tu correo, organizar tareas y trabajar contigo sobre las funciones que tengas conectadas.'
-          : (privateContextSummary
-            ? `${response.answer} ${privateContextSummary}`
-            : response.answer))),
+      : (isPrioritizeQuery
+        ? (prioritizationResult
+          ? prioritizationResult.answer
+          : 'No tengo una lista reciente de correos para priorizar. Pideme primero que revise tu correo.')
+        : (isCapabilityQuery
+          ? describeCapabilityAnswer(query)
+          : (isChitchatQuery
+            ? 'Puedo ayudarte a revisar tu correo, organizar tareas y trabajar contigo sobre las funciones que tengas conectadas.'
+            : (privateContextSummary
+              ? `${response.answer} ${privateContextSummary}`
+              : response.answer)))),
     confidence: responseConfidence,
     sources: responseSources,
     reasoningSummary: response.reasoningSummary,
@@ -893,6 +972,7 @@ async function orchestrateExecutiveQuery(query, options) {
     executiveResponse,
     authorizedPrivateContext,
     diagnostics,
+    conversationContext,
   );
   const proposal = proposalBundle ? proposalBundle.publicProposal : null;
   const privateContextUsed = authorizedPrivateContexts.length > 0 || Boolean(contextualDataSummary);
@@ -931,6 +1011,10 @@ async function orchestrateExecutiveQuery(query, options) {
         ? [`Knowledge Query Service did not find project ${analysis.project}.`]
         : []),
     ],
+    // V0.5: internal-only — never sent to the client. executive-chat.js
+    // reads this to decide what to persist in the conversation context
+    // store, then deletes it from the payload before responding.
+    conversationUpdate: prioritizationResult ? { selection: prioritizationResult.selection } : null,
   };
 }
 

@@ -95,6 +95,10 @@ test('"Nueva conversación" resets only frontend chat state, never Firebase/OAut
   assert.doesNotMatch(fnSource, /responderConVoz/);
 });
 
-test('"Nueva conversación" is documented as a frontend-only reset, since /api/executive/chat keeps no server-side conversation state', () => {
-  assert.match(entry, /no mantiene ningun contexto conversacional en el servidor/);
+test('V0.5: "Nueva conversación" generates a fresh conversationId, sent with every chat request', () => {
+  assert.match(entry, /let conversationId = generarConversationId\(\);/);
+  assert.match(entry, /function generarConversationId\(\)/);
+  assert.match(entry, /body: JSON\.stringify\(\{ query: textoOriginal, conversationId \}\)/);
+  const fnSource = entry.match(/window\.iniciarNuevaConversacion = function\(\) \{[\s\S]*?\n    \};/)[0];
+  assert.match(fnSource, /conversationId = generarConversationId\(\);/);
 });

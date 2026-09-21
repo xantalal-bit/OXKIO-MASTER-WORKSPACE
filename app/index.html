@@ -721,6 +721,17 @@
     // en el navegador. Default OFF: OXKIO solo habla automaticamente cuando
     // la consulta se inicio por voz.
     let responderConVoz = false;
+    // V0.5: conversationId identifies one chat thread so the backend can
+    // resolve short-term references ("el mas importante", "respondele")
+    // within it. Session-only in memory (this file has no browser storage
+    // available to it) — a page reload starts a new thread, which is an
+    // acceptable tradeoff for V0.5. "Nueva conversación" regenerates it
+    // explicitly; it is never reused across login/logout.
+    function generarConversationId() {
+      if (window.crypto && typeof window.crypto.randomUUID === "function") return window.crypto.randomUUID().replace(/-/g, "");
+      return "conv" + Date.now().toString(36) + Math.random().toString(36).slice(2, 12);
+    }
+    let conversationId = generarConversationId();
 
     const loadingBox = document.getElementById("loading");
     const loginBox = document.getElementById("loginBox");
@@ -905,7 +916,7 @@ applyModoCEO();
       headers: {
         "Content-Type": "application/json"
       },
-      body: JSON.stringify({ query: textoOriginal })
+      body: JSON.stringify({ query: textoOriginal, conversationId })
     });
 
     let data = {};
@@ -1041,15 +1052,16 @@ applyModoCEO();
     function setOxkioAvatarState(state) { const avatar = document.getElementById('oxkioAvatar'); if (!avatar) return; avatar.classList.remove('state-idle','state-listening','state-thinking','state-speaking'); avatar.classList.add('state-' + state); }
     function actualizarToggleVoz() { const btn = document.getElementById('voiceReplyToggle'); if (!btn) return; btn.setAttribute('aria-pressed', String(responderConVoz)); btn.textContent = responderConVoz ? "Responder con voz: activado" : "Responder con voz"; }
     window.toggleVoiceReply = function() { responderConVoz = !responderConVoz; actualizarToggleVoz(); };
-    // "Nueva conversación": solo un reset visual/frontend. /api/executive/chat
-    // no mantiene ningun contexto conversacional en el servidor entre
-    // mensajes (cada peticion es independiente; la unica memoria implicada es
-    // la memoria de proyecto persistente y global, no un hilo de chat), asi
-    // que no hay conversationId/sessionId que resetear en backend. No cierra
+    // "Nueva conversación": reset visual/frontend + un conversationId nuevo
+    // (V0.5). El backend guarda contexto conversacional CORTO y TEMPORAL por
+    // conversationId (para resolver referencias como "el mas importante"
+    // dentro del mismo hilo), separado por completo de la memoria de
+    // proyecto persistente y global, que nunca se toca aqui. No cierra
     // sesion, no borra Gmail/Firestore/tareas/documentos/aprobaciones, no
     // toca OAuth ni Secret Manager, y mantiene la preferencia actual de
     // "Responder con voz" (responderConVoz no se toca).
     window.iniciarNuevaConversacion = function() {
+      conversationId = generarConversationId();
       const log = document.getElementById('chatLog');
       if (log) log.innerHTML = '';
       const input = document.getElementById('chatInput');

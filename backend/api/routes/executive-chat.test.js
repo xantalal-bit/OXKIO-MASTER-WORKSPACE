@@ -5,6 +5,7 @@ const assert = require('node:assert/strict');
 const { EventEmitter } = require('events');
 const ProposalEngine = require('../../core/proposalEngine');
 const { createExecutiveRuntime, SANDBOX_MODE } = require('../../services/runtime/executive-runtime-factory');
+const { createConversationContextStore } = require('../../services/executive-brain/conversation-context-store');
 const { handleExecutiveChatRequest, isExecutiveChatRoute } = require('./executive-chat');
 
 function createRequest(body) {
@@ -540,6 +541,132 @@ test('M isolates each unavailable source and never fabricates context or proposa
       assert.equal(JSON.stringify(payload).includes('secret'), false);
     });
   }
+});
+
+test('V0.5 FASE 6: revisa mi correo -> cual primero -> preparame una respuesta al mas importante resolves across turns and drafts, never sends', async (t) => {
+  let gmailCalls = 0;
+  const conversationContextStore = createConversationContextStore();
+  const { dependencies } = createHarness(t, {
+    async buildGmailPrivateContext() {
+      gmailCalls += 1;
+      return {
+        privateContextMetadata: {
+          clientId: 'cliente-cero', userId: 'usuario-cliente-cero', scope: 'private:user',
+          sensitivity: 'confidential', sourceType: 'gmail', sourceId: 'gmail-primary',
+          authorization: { status: 'granted', provider: 'google-oauth' },
+          purpose: 'executive-briefing', retentionPolicy: 'CLIENT_CONTROLLED', promotionPolicy: 'NEVER_PROMOTE',
+        },
+        expectedClientId: 'cliente-cero',
+        privatePayload: {
+          source: 'gmail',
+          messages: [
+            { id: 'm-ana', threadId: 't-ana', from: 'Ana <ana@example.com>', subject: 'Propuesta comercial', date: '2026-09-20T08:00:00.000Z', snippet: 'x', unread: true, important: true },
+            { id: 'm-bob', threadId: 't-bob', from: 'Bob <bob@example.com>', subject: 'Factura', date: '2026-09-19T08:00:00.000Z', snippet: 'x', unread: false, important: false },
+          ],
+        },
+      };
+    },
+    conversationContextStore,
+  });
+  const conversationId = 'conv-e2e-gmail-0001';
+
+  const turn1 = await requestChat('Revisa mi correo', dependencies, { conversationId });
+  assert.equal(turn1.statusCode, 200);
+  assert.equal(gmailCalls, 1);
+  assert.match(turn1.getJson().response, /ana|bob/i);
+
+  const turn2 = await requestChat('¿Cuál debería responder primero y por qué?', dependencies, { conversationId });
+  assert.equal(turn2.statusCode, 200);
+  assert.equal(gmailCalls, 1, 'turn 2 must not trigger its own Gmail fetch');
+  assert.match(turn2.getJson().response, /ana/i);
+  assert.match(turn2.getJson().response, /propuesta comercial/i);
+
+  const turn3 = await requestChat('Prepárame una respuesta al más importante', dependencies, { conversationId });
+  assert.equal(turn3.statusCode, 200);
+  assert.equal(gmailCalls, 2, 'turn 3 fetches Gmail context to prepare the draft');
+  const proposal = turn3.getJson().proposal;
+  assert.ok(proposal, 'turn 3 must produce a draft proposal');
+  assert.equal(proposal.type, 'email_draft');
+  assert.doesNotMatch(JSON.stringify(turn3.getJson()), /\bsend\b/i);
+});
+
+test('V0.5: a bare "respondele" with truly no Gmail data and no saved context never fabricates a recipient', async (t) => {
+  // Note: detectActionableIntent already produces generic draft-proposal
+  // metadata whenever the verb+object pattern matches, independent of V0.5
+  // (pre-existing behavior, unrelated to reference resolution) — the actual
+  // "never guess" guarantee this test protects is that no specific person
+  // is invented when there is genuinely nothing to resolve the reference
+  // against; reference-resolver.test.js separately proves the resolver
+  // itself reports { resolved: false, ambiguous: true } in this exact case.
+  const conversationContextStore = createConversationContextStore();
+  const { dependencies } = createHarness(t, {
+    conversationContextStore,
+    async buildGmailPrivateContext() {
+      const error = new Error('Gmail is not available in this test.');
+      error.code = 'gmail_unavailable';
+      throw error;
+    },
+  });
+  const response = await requestChat('Respóndele', dependencies, { conversationId: 'conv-ambiguous-0001' });
+  assert.equal(response.statusCode, 200);
+  const payload = response.getJson();
+  assert.doesNotMatch(JSON.stringify(payload), /ana@example\.com|bob@example\.com/i);
+});
+
+test('V0.5: conversationId is optional — the chat still answers normally without it', async (t) => {
+  const { dependencies } = createHarness(t);
+  const response = await requestChat('Revisa mi correo', dependencies);
+  assert.equal(response.statusCode, 200);
+  assert.match(response.getJson().response, /correo/i);
+});
+
+test('V0.5: a malformed conversationId is ignored safely, never crashes the request', async (t) => {
+  const { dependencies } = createHarness(t);
+  for (const badId of ['short', '../../etc/passwd', 12345, {}, null]) {
+    const response = await requestChat('Hola', dependencies, { conversationId: badId });
+    assert.equal(response.statusCode, 200);
+  }
+});
+
+test('V0.5 FASE 8: a different UID can never read another UID\'s conversation context even with the same conversationId', async (t) => {
+  const conversationContextStore = createConversationContextStore();
+  const harnessA = createHarness(t, {
+    conversationContextStore,
+    async buildGmailPrivateContext() {
+      return {
+        privateContextMetadata: {
+          clientId: 'cliente-cero', userId: 'uid-a', scope: 'private:user',
+          sensitivity: 'confidential', sourceType: 'gmail', sourceId: 'gmail-primary',
+          authorization: { status: 'granted', provider: 'google-oauth' },
+          purpose: 'executive-briefing', retentionPolicy: 'CLIENT_CONTROLLED', promotionPolicy: 'NEVER_PROMOTE',
+        },
+        expectedClientId: 'cliente-cero',
+        privatePayload: { source: 'gmail', messages: [
+          { from: 'Secreto <secreto@example.com>', subject: 'Solo UID A', date: '2026-09-20T08:00:00.000Z', unread: true, important: true },
+        ] },
+      };
+    },
+    getClienteCeroIdentity: () => ({
+      clientId: 'cliente-cero', userId: 'uid-a', expectedClientId: 'cliente-cero',
+      authorization: { status: 'granted', provider: 'google-oauth' },
+    }),
+  });
+  const conversationId = 'conv-shared-0001';
+  await requestChat('Revisa mi correo', harnessA.dependencies, { conversationId });
+
+  let gmailCallsB = 0;
+  const harnessB = createHarness(t, {
+    conversationContextStore,
+    async buildGmailPrivateContext() { gmailCallsB += 1; throw new Error('uid-b has no Gmail context in this test'); },
+    getClienteCeroIdentity: () => ({
+      clientId: 'cliente-cero', userId: 'uid-b', expectedClientId: 'cliente-cero',
+      authorization: { status: 'granted', provider: 'google-oauth' },
+    }),
+  });
+  const responseB = await requestChat('¿Cuál debería responder primero y por qué?', harnessB.dependencies, { conversationId });
+  assert.equal(responseB.statusCode, 200);
+  assert.doesNotMatch(responseB.getJson().response, /secreto/i);
+  assert.match(responseB.getJson().response, /no tengo una lista reciente/i);
 });
 
 test('rejects missing query and invalid JSON without changing the contract', async () => {
