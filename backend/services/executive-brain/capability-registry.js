@@ -51,7 +51,11 @@ const CAPABILITIES = Object.freeze([
     // classifyMailPriority for real. Previously reported as unavailable —
     // that was stale the moment V0.5 shipped; corrected in FULL RUNTIME REVEAL.
     requiresApproval: false, available: true, partial: true,
-    unavailableReason: 'Solo reconoce frases exactas (ver PRIORITIZE_QUERIES) y solo razona sobre los correos ya mostrados en la conversacion, nunca hace una reclasificacion en vivo de toda la bandeja.',
+    // V0.6.1 PROBLEMA 5: this text can reach the user (describeCapabilityAnswer
+    // interpolates unavailableReason verbatim), so it stays free of internal
+    // identifiers (function/constant names, file paths) — those live in
+    // `source`/`dependencies` instead, for developers/audits.
+    unavailableReason: 'Solo reconoce peticiones con frases concretas y solo razona sobre los correos que ya te mostre en esta conversacion, nunca vuelve a clasificar toda la bandeja en vivo.',
     source: 'backend/services/private-context/mail-priority.js',
     dependencies: ['gmail.read'],
   }),
@@ -114,10 +118,11 @@ const CAPABILITIES = Object.freeze([
     description: 'Resumen agregado de tu dia (agenda, correo, aprobaciones).',
     mode: 'read', owner: 'dashboard-intelligence', risk: 'low',
     // partial: /api/dashboard exposes the full state; the chat only exposes
-    // the fields sanitizeDashboardContext() keeps (executive-chat.js) —
-    // status/agenda/gmail/memory/approvals/executiveSummary/morningBriefing.
+    // a saned subset (status/agenda/gmail/memory/approvals/executiveSummary/
+    // morningBriefing) — see sanitizeDashboardContext() in executive-chat.js
+    // for the technical detail; unavailableReason itself stays human-facing.
     requiresApproval: false, available: true, partial: true,
-    unavailableReason: 'El chat solo expone un subconjunto saneado del estado del dashboard (sanitizeDashboardContext en executive-chat.js); el resto solo es visible via GET /api/dashboard.',
+    unavailableReason: 'El chat solo muestra un resumen del estado general; el detalle completo del dashboard solo esta disponible en el panel, no en el chat.',
     source: 'backend/services/dashboard/dashboard-intelligence.js',
     dependencies: ['gmail.read', 'calendar.read', 'approvals.read'],
   }),
@@ -130,9 +135,13 @@ const CAPABILITIES = Object.freeze([
     // disconnected — its output is computed and then discarded by
     // sanitizeDashboardContext() in executive-chat.js before it ever reaches
     // the user. The user-facing effect (chat cannot answer this) is correct;
-    // the previous reason ("no conectado") was not.
+    // the previous reason ("no conectado") was not. V0.6.1 PROBLEMA 5:
+    // unavailableReason can reach the user verbatim (describeCapabilityAnswer),
+    // so the technical mechanism (which functions run, where the discard
+    // happens) stays in this comment and in `source`, never in the string
+    // itself.
     requiresApproval: false, available: false, partial: false,
-    unavailableReason: 'Se calcula en cada getDashboardState() pero su resultado se descarta en sanitizeDashboardContext() antes de llegar al chat; no hay ningun campo de gobernanza expuesto todavia.',
+    unavailableReason: 'El estado de gobernanza todavia no esta disponible directamente en el chat; solo se calcula para el panel completo.',
     source: 'backend/services/executive-brain/ecosystem-observer.js',
     dependencies: ['dashboard.read'],
   }),

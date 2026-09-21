@@ -603,11 +603,23 @@ test('V0.5 FASE 6: revisa mi correo -> cual primero -> preparame una respuesta a
     /referencia\(s\) relevante|no tengo informaci.n suficiente|fuentes principales/i,
     'turn 3 must not fall through to the Knowledge Store simulator answer',
   );
+  // V0.6.1 PROBLEMA 2: goes further than just avoiding Knowledge Store noise
+  // — the chat text now describes the actual draft it prepared (matching the
+  // dashboard's proposal card) instead of re-listing the whole inbox, so a
+  // user reading only the chat never sees "revisa mi correo" twice in a row
+  // for what was actually a successful draft-preparation request.
   assert.match(
     turn3.getJson().response,
-    /^Correo privado autorizado/,
-    'turn 3 must answer from the authorized Gmail context it just fetched',
+    /he preparado un borrador/i,
+    'turn 3 must describe the draft it prepared, not just list Gmail again',
   );
+  assert.match(turn3.getJson().response, /ana/i);
+  assert.doesNotMatch(turn3.getJson().response, /factura/i, 'must not also mention the unrelated second message');
+  // V0.6.1 PROBLEMA 3: the proposal carries the interactionId of the turn
+  // that created it, reusing the id already returned at the top level —
+  // enough to audit "turn N -> proposal X" without new infrastructure.
+  assert.equal(proposal.interactionId, turn3.getJson().interactionId);
+  assert.match(proposal.interactionId, /^[0-9a-f-]{36}$/i);
 });
 
 test('V0.5: a bare "respondele" with truly no Gmail data and no saved context never fabricates a recipient', async (t) => {
@@ -673,6 +685,111 @@ test('V0.5 FASE 18: an ambiguous reference between two real messages asks instea
   assert.doesNotMatch(JSON.stringify(payload), /ana@example\.com|bob@example\.com/i, 'must never guess a recipient');
   assert.match(payload.response, /ana/i, 'the clarifying question must name the real candidates');
   assert.match(payload.response, /bob/i);
+});
+
+// V0.6.1 PROBLEMA 1 / matriz item A: reproduces the real-world staging
+// report — when the top-ranked message is only 'informational' priority
+// (neither unread nor important), the old text ("porque no parece urgente")
+// justified prioritizing it BY explaining why it is NOT interesting, a
+// non-sequitur. The fix must never claim absolute urgency it does not have,
+// but must still explain the relative ranking coherently.
+test('V0.6.1: prioritization explanation never justifies "answer first" with "it is not urgent"', async (t) => {
+  const conversationContextStore = createConversationContextStore();
+  const { dependencies } = createHarness(t, {
+    conversationContextStore,
+    async buildGmailPrivateContext() {
+      return {
+        privateContextMetadata: {
+          clientId: 'cliente-cero', userId: 'usuario-cliente-cero', scope: 'private:user',
+          sensitivity: 'confidential', sourceType: 'gmail', sourceId: 'gmail-primary',
+          authorization: { status: 'granted', provider: 'google-oauth' },
+          purpose: 'executive-briefing', retentionPolicy: 'CLIENT_CONTROLLED', promotionPolicy: 'NEVER_PROMOTE',
+        },
+        expectedClientId: 'cliente-cero',
+        privatePayload: {
+          source: 'gmail',
+          messages: [
+            { id: 'm-lh', threadId: 't-lh', from: 'Learning Heroes <hola@learningheroes.example>', subject: 'Nuevo curso disponible', date: '2026-09-20T08:00:00.000Z', snippet: 'x', unread: false, important: false },
+          ],
+        },
+      };
+    },
+  });
+  const conversationId = 'conv-priority-coherence-0001';
+  await requestChat('Revisa mi correo', dependencies, { conversationId });
+  const turn2 = await requestChat('¿Cuál debería responder primero y por qué?', dependencies, { conversationId });
+  assert.equal(turn2.statusCode, 200);
+  const answer = turn2.getJson().response;
+  assert.doesNotMatch(
+    answer,
+    /porque no parece urgente/i,
+    'must never present "it does not seem urgent" as the reason to answer it first',
+  );
+  assert.match(answer, /learning heroes/i);
+  assert.match(
+    answer,
+    /aunque no parece urgente|mayor prioridad relativa/i,
+    'must explain this is the best of a low-urgency batch, not claim false urgency',
+  );
+});
+
+// V0.6.1 PROBLEMA 5 / matriz item F: "que no puedes hacer todavia" must
+// never surface internal identifiers (function calls, file paths) — those
+// belong to the registry's source/dependencies fields, never the chat text.
+test('V0.6.1: capability limits answer never leaks internal function or file names', async (t) => {
+  const { dependencies } = createHarness(t);
+  const response = await requestChat('¿Qué no puedes hacer todavía?', dependencies);
+  assert.equal(response.statusCode, 200);
+  const answer = response.getJson().response;
+  assert.doesNotMatch(
+    answer,
+    /[a-zA-Z_][a-zA-Z0-9_]*\(\)|\.js\b|GET \/api\//,
+    `capability answer leaks an internal identifier: "${answer}"`,
+  );
+  assert.match(answer, /gobernanza/i, 'must still mention governance in human language');
+});
+
+// V0.6.1 PROBLEMA 4 escenario "selección previa inequivoca" / matriz
+// item E: after turn 2 picks a message unambiguously (via
+// buildPrioritizationAnswer's saved selection), a bare "Respondele" in turn
+// 3 must use that selection instead of asking for clarification — the FASE
+// 18 ambiguity guard must not over-trigger once a selection already exists.
+test('V0.6.1: "Respondele" after an unambiguous prior selection drafts without asking', async (t) => {
+  const conversationContextStore = createConversationContextStore();
+  const { dependencies } = createHarness(t, {
+    conversationContextStore,
+    async buildGmailPrivateContext() {
+      return {
+        privateContextMetadata: {
+          clientId: 'cliente-cero', userId: 'usuario-cliente-cero', scope: 'private:user',
+          sensitivity: 'confidential', sourceType: 'gmail', sourceId: 'gmail-primary',
+          authorization: { status: 'granted', provider: 'google-oauth' },
+          purpose: 'executive-briefing', retentionPolicy: 'CLIENT_CONTROLLED', promotionPolicy: 'NEVER_PROMOTE',
+        },
+        expectedClientId: 'cliente-cero',
+        privatePayload: {
+          source: 'gmail',
+          messages: [
+            { id: 'm-ana', threadId: 't-ana', from: 'Ana <ana@example.com>', subject: 'Propuesta comercial', date: '2026-09-20T08:00:00.000Z', snippet: 'x', unread: true, important: true },
+            { id: 'm-bob', threadId: 't-bob', from: 'Bob <bob@example.com>', subject: 'Factura', date: '2026-09-19T08:00:00.000Z', snippet: 'x', unread: false, important: false },
+          ],
+        },
+      };
+    },
+  });
+  const conversationId = 'conv-unambiguous-selection-0001';
+  await requestChat('Revisa mi correo', dependencies, { conversationId });
+  const turn2 = await requestChat('¿Cuál debería responder primero y por qué?', dependencies, { conversationId });
+  assert.match(turn2.getJson().response, /ana/i, 'turn 2 must select Ana (urgent: unread + important)');
+
+  const turn3 = await requestChat('Respóndele', dependencies, { conversationId });
+  assert.equal(turn3.statusCode, 200);
+  const payload = turn3.getJson();
+  assert.ok(payload.proposal, 'an unambiguous prior selection must produce a draft, not a clarifying question');
+  assert.equal(payload.proposal.type, 'email_draft');
+  assert.doesNotMatch(payload.response, /no tengo claro a cual correo/i);
+  assert.match(payload.response, /ana/i, 'must describe the draft for the previously selected message (Ana), not Bob');
+  assert.doesNotMatch(payload.response, /bob/i);
 });
 
 test('V0.5: conversationId is optional — the chat still answers normally without it', async (t) => {

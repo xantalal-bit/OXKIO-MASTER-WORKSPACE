@@ -67,9 +67,28 @@ test('gmail.prioritize is registered as connected (V0.5 wired it into the chat)'
 // governance.read previously claimed ecosystem-observer.js "no esta
 // conectado" — it runs on every getDashboardState() call; its output is
 // discarded by sanitizeDashboardContext() before reaching the chat. The
-// reason must describe that discard, not a nonexistent disconnection.
-test('governance.read explains that its data is computed and then discarded, not disconnected', () => {
+// mechanism belongs in `source`/code comments; unavailableReason itself
+// (which describeCapabilityAnswer shows to the user verbatim, V0.6.1
+// PROBLEMA 5) must stay a plain, human sentence, not "not connected".
+test('governance.read explains itself in plain language, not as a disconnection', () => {
   const governance = getCapability('governance.read');
   assert.equal(governance.available, false);
-  assert.match(governance.unavailableReason, /descarta|sanitizeDashboardContext/i);
+  assert.doesNotMatch(governance.unavailableReason, /no esta conectad/i);
+  assert.match(governance.unavailableReason, /gobernanza/i);
+  assert.match(governance.source, /ecosystem-observer/);
+});
+
+// V0.6.1 PROBLEMA 5: "Que no puedes hacer todavia?" must never surface
+// internal identifiers (function calls, file paths) — those are for the
+// registry/developers (`source`/`dependencies`), never the chat text.
+const CODE_IDENTIFIER_PATTERN = /[a-zA-Z_][a-zA-Z0-9_]*\(\)|\.js\b|\bGET \/api\//;
+test('no unavailableReason exposes internal function or file names to the user', () => {
+  for (const capability of listCapabilities()) {
+    if (!capability.unavailableReason) continue;
+    assert.doesNotMatch(
+      capability.unavailableReason,
+      CODE_IDENTIFIER_PATTERN,
+      `${capability.id}.unavailableReason leaks an internal identifier: "${capability.unavailableReason}"`,
+    );
+  }
 });

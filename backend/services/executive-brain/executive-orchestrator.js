@@ -340,13 +340,21 @@ function describeCapabilityAnswer(query) {
   return `Ahora mismo puedo: ${items.join(', ')}.`;
 }
 
+// V0.6.1: only urgent/important/review are legitimate absolute reasons to
+// put a message first (each is a real, verifiable property of the message
+// itself). 'informational' (classifyMailPriority's lowest real tier — this
+// classifier never returns 'noise') has no such property: previously it
+// reused the tier's own self-description ("no parece urgente") verbatim as
+// the reason to prioritize it, producing "porque no parece urgente" — a
+// description of why the message is NOT interesting, presented as the
+// reason to answer it first. That tier now gets a relative framing instead
+// (best of a low-urgency batch), never an absolute claim of urgency.
 const PRIORITY_EXPLANATION = Object.freeze({
-  urgent: 'es importante y todavia no lo has leido',
+  urgent: 'esta sin leer y marcado como importante',
   important: 'esta marcado como importante',
   review: 'todavia no lo has leido',
-  informational: 'no parece urgente',
-  noise: 'no parece requerir tu atencion',
 });
+const RELATIVE_PRIORITY_EXPLANATION = 'aunque no parece urgente, es el que tiene mayor prioridad relativa entre los correos recientes';
 
 function extractSenderName(from) {
   const match = String(from || '').match(/^([^<]+)</);
@@ -369,6 +377,25 @@ function buildAmbiguousReferenceQuestion(candidates) {
   return `No tengo claro a cual correo te refieres. ¿A cual de estos: ${options}?`;
 }
 
+// V0.6.1 PROBLEMA 2: describes the draft that was ACTUALLY built (same
+// proposalBundle the caller already computed, not a re-guess) so the chat
+// text and the dashboard's proposal card never disagree. Returns null
+// whenever there is no usable executionPayload (proposal generation failed,
+// or executionPayload.to could not be resolved) so the caller can fall back
+// to its normal answer instead of describing a draft that was not created.
+function buildEmailDraftReadyAnswer(proposalBundle, emailReferenceResolution) {
+  const executionPayload = proposalBundle && proposalBundle.executionPayload;
+  if (!executionPayload || !executionPayload.to) return null;
+  const resolvedMessage = emailReferenceResolution && emailReferenceResolution.item;
+  const recipientLabel = resolvedMessage ? extractSenderName(resolvedMessage.from) : executionPayload.to;
+  const resolvedSubject = resolvedMessage && typeof resolvedMessage.subject === 'string' && resolvedMessage.subject.trim()
+    ? resolvedMessage.subject.trim()
+    : (typeof executionPayload.subject === 'string' ? executionPayload.subject.replace(/^Re:\s*/i, '').trim() : '');
+  const subjectLabel = resolvedSubject || 'tu mensaje';
+  return `He preparado un borrador para ${recipientLabel} sobre "${subjectLabel}". `
+    + 'Esta pendiente de tu aprobacion y no se enviara automaticamente.';
+}
+
 // V0.5 FASE 6, turn 2: "cual deberia responder primero" never triggers its
 // own Gmail fetch — it reasons over whatever messages the conversation
 // context already has from an earlier turn in the same thread, using the
@@ -388,9 +415,11 @@ function buildPrioritizationAnswer(conversationContext) {
   const sender = extractSenderName(top.message.from);
   const subject = typeof top.message.subject === 'string' && top.message.subject.trim()
     ? top.message.subject.trim() : 'sin asunto';
-  const why = PRIORITY_EXPLANATION[top.priority] || PRIORITY_EXPLANATION.informational;
+  const reasonClause = PRIORITY_EXPLANATION[top.priority]
+    ? `porque ${PRIORITY_EXPLANATION[top.priority]}`
+    : RELATIVE_PRIORITY_EXPLANATION;
   return {
-    answer: `Yo empezaria por el correo de ${sender} ("${subject}"), porque ${why}.`,
+    answer: `Yo empezaria por el correo de ${sender} ("${subject}"), ${reasonClause}.`,
     selection: { sourceType: 'gmail_message', ref: top.message.ref || null, reason: top.priority },
   };
 }
@@ -607,7 +636,14 @@ function buildProposalEngineInput(query, analysis, executiveResponse, actionable
   };
 }
 
-function buildSafeProposalMetadata(actionableIntent, generatedProposal) {
+// V0.6.1 PROBLEMA 3: interactionId is the same id already generated once per
+// orchestrateExecutiveQuery call and already threaded into the Approval
+// Queue's context and the memory entry (see buildSafeApprovalContext,
+// buildSafeMemoryEntry) — reused here, not a new id scheme, so a client (or
+// an auditor reading the Approval Queue / memory log) can correlate "this
+// proposal" back to "this turn" from the proposal object alone, without
+// having to also keep the enclosing chat response around.
+function buildSafeProposalMetadata(actionableIntent, generatedProposal, interactionId) {
   if (!generatedProposal || typeof generatedProposal !== 'object') {
     return null;
   }
@@ -623,6 +659,7 @@ function buildSafeProposalMetadata(actionableIntent, generatedProposal) {
     actionType: actionableIntent.actionType,
     summary: summaries[actionableIntent.proposalType],
     requiresApproval: generatedProposal.requiresApproval === true,
+    interactionId: typeof interactionId === 'string' ? interactionId : null,
   };
 }
 
@@ -734,6 +771,7 @@ function generateProposalSafely(
   authorizedPrivateContext,
   diagnostics,
   conversationContext,
+  interactionId,
 ) {
   diagnostics.proposalAttempted = false;
   diagnostics.proposalSucceeded = false;
@@ -766,7 +804,7 @@ function generateProposalSafely(
   try {
     const proposalInput = buildProposalEngineInput(query, analysis, executiveResponse, actionableIntent);
     const generatedProposal = proposalEngine.generate(proposalInput);
-    const publicProposal = buildSafeProposalMetadata(actionableIntent, generatedProposal);
+    const publicProposal = buildSafeProposalMetadata(actionableIntent, generatedProposal, interactionId);
     const executionPayload = actionableIntent.proposalType === 'email_draft'
       ? (
         emailPreparationFromQuery(query)
@@ -973,6 +1011,32 @@ async function orchestrateExecutiveQuery(query, options) {
     && !emailPreparationFromQuery(query)
   ) ? resolveReferencedMessage(query, conversationContext, authorizedPrivateContext) : null;
   const isAmbiguousEmailReference = Boolean(emailReferenceResolution && emailReferenceResolution.ambiguous);
+  // V0.6.1 PROBLEMA 2: computed here (before the answer text) instead of
+  // after, so the chat answer can describe the actual, already-resolved
+  // draft instead of a generic Gmail listing. Before this, "Prepareme una
+  // respuesta al mas importante" produced a real proposal (visible on the
+  // dashboard) while the chat text just re-listed the inbox — proposal and
+  // response were built independently and could disagree. `executiveResponse`
+  // is passed as null: core/proposalEngine.js's generateEmailProposal never
+  // reads it (its executionPayload is a fixed template), so this has no
+  // effect on the generated draft, only on the timing of when it runs.
+  const proposalBundle = isAmbiguousEmailReference
+    ? null
+    : generateProposalSafely(
+      proposalEngine,
+      query,
+      analysis,
+      null,
+      authorizedPrivateContext,
+      diagnostics,
+      conversationContext,
+      interactionId,
+    );
+  const emailDraftReadyAnswer = (
+    !isAmbiguousEmailReference
+    && emailActionIntent
+    && emailActionIntent.proposalType === 'email_draft'
+  ) ? buildEmailDraftReadyAnswer(proposalBundle, emailReferenceResolution) : null;
   let knowledgeQueryResult = null;
 
   if (shouldUseKnowledgeQuery(analysis)) {
@@ -998,8 +1062,8 @@ async function orchestrateExecutiveQuery(query, options) {
     || preferPrivateGmailContext
     || Boolean(contextualDataSummary)
     || Boolean(contextFailureSummary);
-  const responseSources = (preferPrivateContext || isChitchatQuery || isCapabilityQuery || isPrioritizeQuery || isAmbiguousEmailReference) ? [] : sanitizeExecutiveSources(response.sources);
-  const responseLimitations = (preferCombinedPrivateContext || isChitchatQuery || isCapabilityQuery || isPrioritizeQuery || isAmbiguousEmailReference)
+  const responseSources = (preferPrivateContext || isChitchatQuery || isCapabilityQuery || isPrioritizeQuery || isAmbiguousEmailReference || Boolean(emailDraftReadyAnswer)) ? [] : sanitizeExecutiveSources(response.sources);
+  const responseLimitations = (preferCombinedPrivateContext || isChitchatQuery || isCapabilityQuery || isPrioritizeQuery || isAmbiguousEmailReference || Boolean(emailDraftReadyAnswer))
     ? []
     : (preferPrivateContext
     ? filterPrivatePrimaryLimitations(response.limitations)
@@ -1010,6 +1074,8 @@ async function orchestrateExecutiveQuery(query, options) {
   const executiveResponse = responseBuilder({
     answer: isAmbiguousEmailReference
       ? buildAmbiguousReferenceQuestion(emailReferenceResolution.candidates)
+      : (emailDraftReadyAnswer
+      ? emailDraftReadyAnswer
       : (preferPrivateContext
       ? ([combinedPrivateContextSummary || privateContextSummary, contextualDataSummary, contextFailureSummary]
         .filter(Boolean).join(' '))
@@ -1023,7 +1089,7 @@ async function orchestrateExecutiveQuery(query, options) {
             ? 'Puedo ayudarte a revisar tu correo, organizar tareas y trabajar contigo sobre las funciones que tengas conectadas.'
             : (privateContextSummary
               ? `${response.answer} ${privateContextSummary}`
-              : response.answer))))),
+              : response.answer)))))),
     confidence: responseConfidence,
     sources: responseSources,
     reasoningSummary: response.reasoningSummary,
@@ -1032,15 +1098,6 @@ async function orchestrateExecutiveQuery(query, options) {
   const finalConfidence = preferPrivateContext
     ? executiveResponse.confidence
     : Math.min(analysis.confidence, executiveResponse.confidence);
-  const proposalBundle = generateProposalSafely(
-    proposalEngine,
-    query,
-    analysis,
-    executiveResponse,
-    authorizedPrivateContext,
-    diagnostics,
-    conversationContext,
-  );
   const proposal = proposalBundle ? proposalBundle.publicProposal : null;
   const privateContextUsed = authorizedPrivateContexts.length > 0 || Boolean(contextualDataSummary);
   const approval = await enqueueApprovalSafely(
