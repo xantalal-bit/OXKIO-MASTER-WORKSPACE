@@ -23,6 +23,8 @@ test('reuses compatible cached decisions and derives avoided cost from controlle
     test_small: {
       provider: 'test', tier: 'small', inputUsdPerMillion: 1,
       outputUsdPerMillion: 2, residency: 'eu', privacy: 'internal',
+      pricingVersion: 'test-v1', pricingSource: 'https://example.invalid/pricing',
+      reviewedAt: '2026-09-21',
     },
   };
   const controller = new CostController({ cache, catalog, now: () => '2026-09-18T15:30:00.000Z' });
