@@ -16,17 +16,23 @@ test('selects deterministic work and emits auditable evidence', () => {
   assert.match(result.evidence.evidenceHash, /^[a-f0-9]{64}$/);
 });
 
-test('reuses compatible cached decisions and records avoided estimated cost', () => {
+test('reuses compatible cached decisions and derives avoided cost from controlled catalog', () => {
   let nowMs = 1000;
   const cache = new CostDecisionCache({ now: () => nowMs });
-  const controller = new CostController({ cache, now: () => '2026-09-18T15:30:00.000Z' });
+  const catalog = {
+    test_small: {
+      provider: 'test', tier: 'small', inputUsdPerMillion: 1,
+      outputUsdPerMillion: 2, residency: 'eu', privacy: 'internal',
+    },
+  };
+  const controller = new CostController({ cache, catalog, now: () => '2026-09-18T15:30:00.000Z' });
   const request = {
     mission: { missionId: 'm-2', smallModelEstimatedCostUsd: 0.01 },
     cacheContext: {
       taskType: 'classify', capability: 'routing', privacyClass: 'internal',
       residency: 'eu', policyVersion: 1, inputFingerprint: 'sha256:abc',
     },
-    estimatedAvoidedCostUsd: 0.01,
+    costBasis: { modelId: 'test_small', inputTokens: 6000, outputTokens: 2000 },
   };
   const first = controller.decide(request);
   const second = controller.decide(request);
@@ -35,6 +41,20 @@ test('reuses compatible cached decisions and records avoided estimated cost', ()
   assert.equal(second.evidence.evidenceHash, first.evidence.evidenceHash);
   assert.equal(controller.metrics().hits, 1);
   assert.equal(controller.metrics().avoidedEstimatedCostUsd, 0.01);
+});
+
+test('ignores caller-declared savings and fails closed for unknown catalog model', () => {
+  const controller = new CostController();
+  const request = {
+    mission: { missionId: 'm-3', deterministicAvailable: true },
+    cacheContext: { inputFingerprint: 'safe-fingerprint', policyVersion: 1 },
+    costBasis: { modelId: 'unknown-model', inputTokens: 1000000, outputTokens: 1000000 },
+    estimatedAvoidedCostUsd: 999999,
+  };
+  controller.decide(request);
+  controller.decide(request);
+  assert.equal(controller.metrics().hits, 1);
+  assert.equal(controller.metrics().avoidedEstimatedCostUsd, 0);
 });
 
 test('does not cache when no privacy-safe input fingerprint is supplied', () => {
