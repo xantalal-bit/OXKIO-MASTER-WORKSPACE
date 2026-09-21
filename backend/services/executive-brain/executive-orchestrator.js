@@ -91,7 +91,14 @@ function shouldPreferPrivateGmailContext(query, analysis, authorizedContext) {
   return Boolean(
     authorizedContext
       && authorizedContext.sourceType === 'gmail'
-      && isEmailQuery(query, analysis),
+      // isEmailQuery only matches literal nouns ("correo"/"email"/"mensaje").
+      // A reference-driven draft request ("preparame una respuesta al mas
+      // importante") names no such noun, so without this it fell through to
+      // the Knowledge Store's generic "no tengo informacion suficiente"
+      // answer even though a real, authorized Gmail context was already
+      // fetched and the draft itself (the separate `proposal` field) was
+      // built correctly — only the conversational answer text was wrong.
+      && (isEmailQuery(query, analysis) || (detectActionableIntent(query) || {}).intent === 'email'),
   );
 }
 
@@ -344,6 +351,22 @@ const PRIORITY_EXPLANATION = Object.freeze({
 function extractSenderName(from) {
   const match = String(from || '').match(/^([^<]+)</);
   return match ? match[1].trim() : String(from || 'remitente desconocido').trim();
+}
+
+// FULL RUNTIME REVEAL FASE 18: "no fallback generico, no inventar" — when a
+// conversational reference cannot be resolved cleanly, ask which candidate
+// the user meant instead of silently drafting against a guess.
+function buildAmbiguousReferenceQuestion(candidates) {
+  const list = Array.isArray(candidates) ? candidates.slice(0, 5) : [];
+  if (list.length === 0) {
+    return 'No tengo claro a que correo te refieres. ¿Puedes decirme el remitente o el asunto?';
+  }
+  const options = list
+    .map((message, index) => `${index + 1}) ${extractSenderName(message && message.from)} ("${
+      message && typeof message.subject === 'string' && message.subject.trim() ? message.subject.trim() : 'sin asunto'
+    }")`)
+    .join('; ');
+  return `No tengo claro a cual correo te refieres. ¿A cual de estos: ${options}?`;
 }
 
 // V0.5 FASE 6, turn 2: "cual deberia responder primero" never triggers its
@@ -649,6 +672,14 @@ function emailPreparationFromQuery(query) {
 // freshly-fetched Gmail messages first (most current), then falls back to
 // whatever the conversation context saved from an earlier turn — e.g. a
 // bare "respondele" with no fresh fetch this turn.
+//
+// FULL RUNTIME REVEAL FASE 18: returns the ambiguous/candidates signal
+// reference-resolver.js already computes instead of discarding it. Before
+// this, a query like "Respondele" over two equally-plausible messages (no
+// prior selection, neither flagged important, no ordinal) collapsed to the
+// same "null" as "no reference language at all", and the caller silently
+// defaulted to the first message — fabricating a recipient for a real
+// Approval Queue entry instead of asking which one was meant.
 function resolveReferencedMessage(query, conversationContext, authorizedPrivateContext) {
   const freshMessages = authorizedPrivateContext
     && authorizedPrivateContext.sourceType === 'gmail'
@@ -658,12 +689,17 @@ function resolveReferencedMessage(query, conversationContext, authorizedPrivateC
     : [];
   const selection = conversationContext && conversationContext.selection;
   const fromFresh = resolveReference(query, { entities: freshMessages, selection });
-  if (fromFresh.resolved) return fromFresh.item;
+  if (fromFresh.resolved) return { item: fromFresh.item, ambiguous: false, candidates: freshMessages };
   const savedMessages = conversationContext && conversationContext.entities && Array.isArray(conversationContext.entities.messages)
     ? conversationContext.entities.messages
     : [];
   const fromSaved = resolveReference(query, { entities: savedMessages, selection });
-  return fromSaved.resolved ? fromSaved.item : null;
+  if (fromSaved.resolved) return { item: fromSaved.item, ambiguous: false, candidates: savedMessages };
+  return {
+    item: null,
+    ambiguous: Boolean(fromFresh.ambiguous || fromSaved.ambiguous),
+    candidates: freshMessages.length > 0 ? freshMessages : savedMessages,
+  };
 }
 
 function emailPreparationFromPrivateContext(generatedProposal, authorizedPrivateContext, preferredMessage) {
@@ -708,6 +744,22 @@ function generateProposalSafely(
     return null;
   }
 
+  // FULL RUNTIME REVEAL FASE 18: an ambiguous conversational reference
+  // ("Respondele" with two equally-plausible messages, no prior selection,
+  // none flagged important) must never fabricate a proposal — not even one
+  // whose executionPayload ends up empty, because the publicProposal summary
+  // ("Borrador de email preparado...") would still misleadingly tell the
+  // user a draft is ready. This returns null before touching the (legacy,
+  // template-based) proposal engine at all, so the caller's own answer text
+  // (see buildAmbiguousReferenceQuestion) is what the user actually sees.
+  if (actionableIntent.proposalType === 'email_draft' && !emailPreparationFromQuery(query)) {
+    const referenceResolution = resolveReferencedMessage(query, conversationContext, authorizedPrivateContext);
+    if (referenceResolution.ambiguous) {
+      diagnostics.proposalAmbiguousReference = true;
+      return null;
+    }
+  }
+
   diagnostics.proposalAttempted = true;
   diagnostics.proposalType = actionableIntent.proposalType;
 
@@ -721,7 +773,7 @@ function generateProposalSafely(
         || emailPreparationFromPrivateContext(
           generatedProposal,
           authorizedPrivateContext,
-          resolveReferencedMessage(query, conversationContext, authorizedPrivateContext),
+          resolveReferencedMessage(query, conversationContext, authorizedPrivateContext).item,
         )
         || buildExecutionPayload(actionableIntent, generatedProposal)
       )
@@ -908,6 +960,19 @@ async function orchestrateExecutiveQuery(query, options) {
   const isPrioritizeQuery = Boolean(contextSelection && contextSelection.reason === 'prioritize_query');
   const conversationContext = options && options.conversationContext ? options.conversationContext : null;
   const prioritizationResult = isPrioritizeQuery ? buildPrioritizationAnswer(conversationContext) : null;
+  // FULL RUNTIME REVEAL FASE 18: computed here, before the Knowledge Store
+  // simulator and the answer text are built, so an ambiguous conversational
+  // reference ("Respondele" over two equally-plausible messages) produces a
+  // clarifying question instead of silently falling through to Knowledge
+  // Store noise or a guessed recipient (see resolveReferencedMessage and
+  // generateProposalSafely for the matching proposal-side guard).
+  const emailActionIntent = detectActionableIntent(query);
+  const emailReferenceResolution = (
+    emailActionIntent
+    && emailActionIntent.proposalType === 'email_draft'
+    && !emailPreparationFromQuery(query)
+  ) ? resolveReferencedMessage(query, conversationContext, authorizedPrivateContext) : null;
+  const isAmbiguousEmailReference = Boolean(emailReferenceResolution && emailReferenceResolution.ambiguous);
   let knowledgeQueryResult = null;
 
   if (shouldUseKnowledgeQuery(analysis)) {
@@ -933,8 +998,8 @@ async function orchestrateExecutiveQuery(query, options) {
     || preferPrivateGmailContext
     || Boolean(contextualDataSummary)
     || Boolean(contextFailureSummary);
-  const responseSources = (preferPrivateContext || isChitchatQuery || isCapabilityQuery || isPrioritizeQuery) ? [] : sanitizeExecutiveSources(response.sources);
-  const responseLimitations = (preferCombinedPrivateContext || isChitchatQuery || isCapabilityQuery || isPrioritizeQuery)
+  const responseSources = (preferPrivateContext || isChitchatQuery || isCapabilityQuery || isPrioritizeQuery || isAmbiguousEmailReference) ? [] : sanitizeExecutiveSources(response.sources);
+  const responseLimitations = (preferCombinedPrivateContext || isChitchatQuery || isCapabilityQuery || isPrioritizeQuery || isAmbiguousEmailReference)
     ? []
     : (preferPrivateContext
     ? filterPrivatePrimaryLimitations(response.limitations)
@@ -943,7 +1008,9 @@ async function orchestrateExecutiveQuery(query, options) {
     ? Math.max(analysis.confidence, 0.7)
     : response.confidence;
   const executiveResponse = responseBuilder({
-    answer: preferPrivateContext
+    answer: isAmbiguousEmailReference
+      ? buildAmbiguousReferenceQuestion(emailReferenceResolution.candidates)
+      : (preferPrivateContext
       ? ([combinedPrivateContextSummary || privateContextSummary, contextualDataSummary, contextFailureSummary]
         .filter(Boolean).join(' '))
       : (isPrioritizeQuery
@@ -956,7 +1023,7 @@ async function orchestrateExecutiveQuery(query, options) {
             ? 'Puedo ayudarte a revisar tu correo, organizar tareas y trabajar contigo sobre las funciones que tengas conectadas.'
             : (privateContextSummary
               ? `${response.answer} ${privateContextSummary}`
-              : response.answer)))),
+              : response.answer))))),
     confidence: responseConfidence,
     sources: responseSources,
     reasoningSummary: response.reasoningSummary,

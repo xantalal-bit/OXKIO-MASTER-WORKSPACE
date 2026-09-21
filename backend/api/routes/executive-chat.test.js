@@ -588,6 +588,26 @@ test('V0.5 FASE 6: revisa mi correo -> cual primero -> preparame una respuesta a
   assert.ok(proposal, 'turn 3 must produce a draft proposal');
   assert.equal(proposal.type, 'email_draft');
   assert.doesNotMatch(JSON.stringify(turn3.getJson()), /\bsend\b/i);
+  // Reproduces the real staging failure: the draft proposal was already
+  // correct, but the conversational `response` text fell through to the
+  // Knowledge Store simulator (it answers every query, matching real
+  // project files by keyword) instead of describing the authorized Gmail
+  // context it actually used — because a reference-driven draft request
+  // ("al mas importante") names no literal "correo"/"email" noun for
+  // isEmailQuery to match. A user reading only the chat text saw an
+  // apparent failure (Knowledge Store noise, e.g. "No tengo informacion
+  // suficiente..." or fabricated "referencia(s) relevante(s)" from
+  // unrelated repo files) even though the draft itself was ready.
+  assert.doesNotMatch(
+    turn3.getJson().response,
+    /referencia\(s\) relevante|no tengo informaci.n suficiente|fuentes principales/i,
+    'turn 3 must not fall through to the Knowledge Store simulator answer',
+  );
+  assert.match(
+    turn3.getJson().response,
+    /^Correo privado autorizado/,
+    'turn 3 must answer from the authorized Gmail context it just fetched',
+  );
 });
 
 test('V0.5: a bare "respondele" with truly no Gmail data and no saved context never fabricates a recipient', async (t) => {
@@ -611,6 +631,48 @@ test('V0.5: a bare "respondele" with truly no Gmail data and no saved context ne
   assert.equal(response.statusCode, 200);
   const payload = response.getJson();
   assert.doesNotMatch(JSON.stringify(payload), /ana@example\.com|bob@example\.com/i);
+});
+
+// FULL RUNTIME REVEAL FASE 18: reproduces the real (not merely
+// no-data-available) ambiguous case — two real messages, neither flagged
+// important, no prior selection, no ordinal in the query. Before this fix,
+// emailPreparationFromPrivateContext's `messages[0]` fallback silently
+// picked Ana's message and would have queued a real Approval Queue entry
+// addressed to her for a reply the user never specified.
+test('V0.5 FASE 18: an ambiguous reference between two real messages asks instead of guessing', async (t) => {
+  const conversationContextStore = createConversationContextStore();
+  const { dependencies } = createHarness(t, {
+    conversationContextStore,
+    async buildGmailPrivateContext() {
+      return {
+        privateContextMetadata: {
+          clientId: 'cliente-cero', userId: 'usuario-cliente-cero', scope: 'private:user',
+          sensitivity: 'confidential', sourceType: 'gmail', sourceId: 'gmail-primary',
+          authorization: { status: 'granted', provider: 'google-oauth' },
+          purpose: 'executive-briefing', retentionPolicy: 'CLIENT_CONTROLLED', promotionPolicy: 'NEVER_PROMOTE',
+        },
+        expectedClientId: 'cliente-cero',
+        privatePayload: {
+          source: 'gmail',
+          messages: [
+            { id: 'm-ana', threadId: 't-ana', from: 'Ana <ana@example.com>', subject: 'Propuesta comercial', date: '2026-09-20T08:00:00.000Z', snippet: 'x', unread: true, important: false },
+            { id: 'm-bob', threadId: 't-bob', from: 'Bob <bob@example.com>', subject: 'Factura', date: '2026-09-19T08:00:00.000Z', snippet: 'x', unread: true, important: false },
+          ],
+        },
+      };
+    },
+  });
+  const conversationId = 'conv-ambiguous-real-0001';
+  const turn1 = await requestChat('Revisa mi correo', dependencies, { conversationId });
+  assert.equal(turn1.statusCode, 200);
+
+  const turn2 = await requestChat('Respóndele', dependencies, { conversationId });
+  assert.equal(turn2.statusCode, 200);
+  const payload = turn2.getJson();
+  assert.equal(payload.proposal, null, 'must never fabricate a draft proposal for an ambiguous reference');
+  assert.doesNotMatch(JSON.stringify(payload), /ana@example\.com|bob@example\.com/i, 'must never guess a recipient');
+  assert.match(payload.response, /ana/i, 'the clarifying question must name the real candidates');
+  assert.match(payload.response, /bob/i);
 });
 
 test('V0.5: conversationId is optional — the chat still answers normally without it', async (t) => {
