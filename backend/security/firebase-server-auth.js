@@ -112,25 +112,12 @@ function sendFirebaseAuthError(res, result) {
 }
 
 function createFirebaseAdminVerifier({ env = process.env, admin } = {}) {
-  const projectId = String(env.FIREBASE_PROJECT_ID || '').trim();
-  const clientEmail = String(env.FIREBASE_CLIENT_EMAIL || '').trim();
-  const privateKey = String(env.FIREBASE_PRIVATE_KEY || '').replace(/\\n/g, '\n').trim();
-  const hasIndividualCredentials = Boolean(projectId && clientEmail && privateKey);
-  const hasApplicationDefaultCredentials = Boolean(
-    projectId
-    && (env.GOOGLE_APPLICATION_CREDENTIALS || env.GOOGLE_CLOUD_PROJECT)
-  );
-  if (!hasIndividualCredentials && !hasApplicationDefaultCredentials) return null;
+  const { getOrCreateAdminApp } = require('./firebase-admin-credential');
+  const app = getOrCreateAdminApp({ appName: 'oxkio-server-auth', env, admin });
+  if (!app) return null;
 
   try {
-    const adminApp = admin || require('firebase-admin/app');
     const adminAuth = require('firebase-admin/auth');
-    const appName = 'oxkio-server-auth';
-    const existing = adminApp.getApps().find((app) => app.name === appName);
-    const credential = hasIndividualCredentials
-      ? adminApp.cert({ projectId, clientEmail, privateKey })
-      : adminApp.applicationDefault();
-    const app = existing || adminApp.initializeApp({ credential, projectId }, appName);
     return (token) => adminAuth.getAuth(app).verifyIdToken(token);
   } catch (error) {
     return null;

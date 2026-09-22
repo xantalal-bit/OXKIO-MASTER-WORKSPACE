@@ -11,6 +11,36 @@ const { buildGmailPrivateContext } = require('../../services/private-context/gma
 const { getDashboardState } = require('../../services/dashboard/dashboard-intelligence');
 const { recommendSupervisedOperation } = require('../../services/executive-brain/supervised-decision-engine');
 const { planOperations } = require('../../services/executive-brain/operation-planner');
+const { safeDiagnostic } = require('../../security/secret-runtime');
+const { createConversationContextStore } = require('../../services/executive-brain/conversation-context-store');
+
+// V0.5: process-wide, in-memory, ephemeral store — see
+// conversation-context-store.js for why this is intentionally not a new
+// persistent infrastructure dependency. A test can inject its own instance
+// via dependencies.conversationContextStore.
+const defaultConversationContextStore = createConversationContextStore();
+
+// Distinguishes "you never connected/consented" from "you connected but the
+// grant lacks a scope OXKIO needs" — both used to collapse into the same
+// generic gmail_unavailable failure, which meant a user who simply never
+// pressed "Conectar Google" saw the same message as an actual infrastructure
+// outage. The underlying codes come from backend/integrations/googleOAuth.js
+// (inspectGoogleOAuthReadiness) and gmail-private-provider.js.
+const GMAIL_NOT_CONNECTED_CODES = new Set([
+  'google_oauth_not_configured',
+  'google_oauth_tokens_missing',
+  'oauth_refresh_unavailable',
+  'gmail_private_identity_required',
+]);
+const GMAIL_INSUFFICIENT_SCOPE_CODES = new Set([
+  'gmail_compose_scope_missing',
+]);
+
+function classifyGmailContextFailure(code) {
+  if (GMAIL_NOT_CONNECTED_CODES.has(code)) return 'gmail_not_connected';
+  if (GMAIL_INSUFFICIENT_SCOPE_CODES.has(code)) return 'gmail_insufficient_scope';
+  return 'gmail_unavailable';
+}
 
 function sendJson(res, statusCode, data) {
   res.writeHead(statusCode, {
@@ -90,6 +120,34 @@ function sanitizeCalendarContext(context) {
   };
 }
 
+// OXKIO CANONICAL RUNTIME CONSOLIDATION (22/09/2026): governance.read
+// conectado de forma sanitizada. state.ecosystemObserver ya se calcula en
+// cada getDashboardState() (dashboard-intelligence.js) pero contiene detalle
+// interno de roadmap/proyecto (fase actual, bloque, drift, auditoria...) que
+// NO debe llegar al chat. Esta funcion expone unicamente la politica de
+// seguridad/aprobacion (ecosystemObserver.supervisorPolicy, ya una constante
+// estatica sin PII: modo, autoridad de decision, executionEnabled) mas la
+// lista fija de acciones que hoy requieren aprobacion humana explicita.
+const GOVERNANCE_ACTIONS_REQUIRING_APPROVAL = Object.freeze([
+  'prepare-email-draft',
+]);
+
+function sanitizeGovernanceContext(state) {
+  const observer = state && state.ecosystemObserver;
+  const policy = observer && observer.supervisorPolicy && typeof observer.supervisorPolicy === 'object'
+    ? observer.supervisorPolicy
+    : null;
+  return {
+    available: Boolean(policy),
+    safeMode: policy ? policy.executionEnabled === false : true,
+    decisionAuthority: policy && typeof policy.decisionAuthority === 'string'
+      ? policy.decisionAuthority
+      : 'human',
+    mode: policy && typeof policy.mode === 'string' ? policy.mode : 'readonly-advisory',
+    actionsRequiringApproval: GOVERNANCE_ACTIONS_REQUIRING_APPROVAL,
+  };
+}
+
 function sanitizeDashboardContext(state) {
   const safeNumber = (value) => (Number.isFinite(value) ? value : 0);
   const executiveSummary = state && state.executiveSummary;
@@ -119,6 +177,7 @@ function sanitizeDashboardContext(state) {
     morningBriefing: typeof morningBriefing === 'string'
       ? morningBriefing
       : (morningBriefing && typeof morningBriefing.summary === 'string' ? morningBriefing.summary : null),
+    governance: sanitizeGovernanceContext(state),
   };
 }
 
@@ -167,9 +226,11 @@ async function buildOrchestratorOptions(query, dependencies = {}, controls = {})
   };
   const identity = (dependencies.getClienteCeroIdentity || getClienteCeroIdentity)();
   const internalDependencies = getInternalOrchestratorDependencies(dependencies);
+  const conversationEntities = {};
   const options = {
     dependencies: internalDependencies,
     contextSelection: selection,
+    conversationContext: controls.conversationContext || null,
     contextualData: { dashboard: null, approvals: null, memory: null },
     contextFailures: [],
   };
@@ -185,9 +246,16 @@ async function buildOrchestratorOptions(query, dependencies = {}, controls = {})
           ...identity,
           maxMessages: 5,
         });
-        privateContexts.push(sanitizeGmailContext(context));
+        const sanitized = sanitizeGmailContext(context);
+        privateContexts.push(sanitized);
+        conversationEntities.messages = (sanitized.privatePayload.messages || [])
+          .map((message, index) => ({ ref: String(index + 1), ...message }));
       } catch (error) {
-        options.contextFailures.push('gmail_unavailable');
+        // Internal-only diagnostic: never surfaced to the user, never
+        // includes token values (the error codes here are a fixed enum,
+        // not free-text derived from any credential).
+        console.error('[gmail-intent] Gmail private context unavailable:', safeDiagnostic(error, 'gmail_unavailable'));
+        options.contextFailures.push(classifyGmailContextFailure(error && error.code));
       }
     }
     if (selection.calendar) {
@@ -197,7 +265,10 @@ async function buildOrchestratorOptions(query, dependencies = {}, controls = {})
           range: calendarRangeForQuery(query),
           maxResults: 10,
         });
-        privateContexts.push(sanitizeCalendarContext(context));
+        const sanitized = sanitizeCalendarContext(context);
+        privateContexts.push(sanitized);
+        conversationEntities.events = (sanitized.privatePayload.events || [])
+          .map((event, index) => ({ ref: String(index + 1), ...event }));
       } catch (error) {
         options.contextFailures.push('calendar_unavailable');
       }
@@ -217,23 +288,40 @@ async function buildOrchestratorOptions(query, dependencies = {}, controls = {})
   }
 
   if (selection.approvals) {
-    try {
-      const queue = dependencies.approvalQueue;
-      if (!queue || typeof queue.listPending !== 'function' || typeof queue.getHistory !== 'function') throw new Error('unavailable');
-      options.contextualData.approvals = {
-        pending: queue.listPending().map(sanitizeApprovalItem),
-        history: queue.getHistory().map(sanitizeApprovalItem),
-      };
-    } catch (error) {
-      options.contextFailures.push('approvals_unavailable');
+    if (!isInternallyAuthorized(identity)) {
+      options.contextFailures.push('approvals_unauthorized');
+    } else {
+      try {
+        const queue = dependencies.approvalQueue;
+        if (!queue || typeof queue.listPending !== 'function' || typeof queue.getHistory !== 'function') throw new Error('unavailable');
+        // The real ApprovalQueue (backend/core/approvalQueue.js) declares
+        // both methods async; awaiting them here is required in production
+        // — without it, .map() runs on a Promise instead of an array and
+        // this whole branch always fails closed into approvals_unavailable,
+        // even though the queue itself has real pending/history data.
+        const [pending, history] = await Promise.all([queue.listPending(), queue.getHistory()]);
+        const sanitizedPending = pending.map(sanitizeApprovalItem);
+        options.contextualData.approvals = {
+          pending: sanitizedPending,
+          history: history.map(sanitizeApprovalItem),
+        };
+        conversationEntities.approvals = sanitizedPending
+          .map((approval, index) => ({ ref: String(index + 1), ...approval }));
+      } catch (error) {
+        options.contextFailures.push('approvals_unavailable');
+      }
     }
   }
 
   if (selection.memory) {
-    try {
-      options.contextualData.memory = sanitizeMemoryContext(dependencies.memory);
-    } catch (error) {
-      options.contextFailures.push('memory_unavailable');
+    if (!isInternallyAuthorized(identity)) {
+      options.contextFailures.push('memory_unauthorized');
+    } else {
+      try {
+        options.contextualData.memory = sanitizeMemoryContext(dependencies.memory);
+      } catch (error) {
+        options.contextFailures.push('memory_unavailable');
+      }
     }
   }
 
@@ -247,13 +335,14 @@ async function buildOrchestratorOptions(query, dependencies = {}, controls = {})
     options.privateContexts = privateContexts;
     options.privateContextRequiredPurpose = 'executive-briefing';
   }
-  return options;
+  return { options, conversationEntities };
 }
 
 function isEmailActionRequest(query) {
   const normalized = String(query || '').normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '').toLowerCase();
-  return /\b(?:prepara|preparar|redacta|redactar|crea|crear|genera|generar)\b/.test(normalized)
+  if (/\b(?:respondele|contestale)\b/.test(normalized)) return true;
+  return /\b(?:prepara|preparame|preparar|redacta|redactame|redactar|crea|crear|genera|generar)\b/.test(normalized)
     && /\b(?:borrador|respuesta|correo|email|contestacion)\b/.test(normalized);
 }
 
@@ -291,6 +380,33 @@ function sendSafeError(res, error) {
   return sendJson(res, 400, { ok: false, error: error && error.message ? error.message : 'Invalid request.' });
 }
 
+// OXKIO CANONICAL RUNTIME CONSOLIDATION (22/09/2026), FASE 7+8: correlacion
+// de bajo riesgo por turno (interactionId -> capability/supervisor decision
+// -> proposal -> approval -> log), conectando executionLogger.js (ya usado
+// por operations-coordinator.js) tambien al runtime moderno de chat, con
+// solo metadata segura — nunca query/response/contenido privado. Best-effort:
+// un fallo de logging nunca debe romper la respuesta del chat.
+function logExecutiveChatTurn(executionLogger, {
+  interactionId, intent, capability, supervisorDecision, proposalType, approvalState, outcomeCategory,
+}) {
+  if (!executionLogger || typeof executionLogger.add !== 'function') return;
+  try {
+    executionLogger.add({
+      type: 'executive-chat-turn',
+      interactionId: interactionId || null,
+      intent: intent || null,
+      capability: capability || null,
+      supervisorDecision: supervisorDecision || null,
+      proposalType: proposalType || null,
+      approvalState: approvalState || null,
+      outcomeCategory: outcomeCategory || 'ok',
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    // Never break the chat response for a logging failure.
+  }
+}
+
 async function handleExecutiveChatRequest(req, res, options) {
   const dependencies = options && options.dependencies ? options.dependencies : {};
   const orchestrator = dependencies.orchestrateExecutiveQuery || orchestrateExecutiveQuery;
@@ -299,6 +415,18 @@ async function handleExecutiveChatRequest(req, res, options) {
     const query = typeof body.query === 'string' ? body.query.trim() : '';
     if (!query) return sendJson(res, 400, { ok: false, error: 'query is required.' });
     const identity = (dependencies.getClienteCeroIdentity || getClienteCeroIdentity)();
+    // V0.5: conversationId is client-supplied, so it is validated for shape
+    // only (never trusted as an identity) and always paired with the
+    // server's own resolved uid — never used alone. If it is missing or
+    // invalid, or the identity is not authorized, the chat still answers
+    // normally, just without short-term conversational memory.
+    const conversationStore = dependencies.conversationContextStore || defaultConversationContextStore;
+    const rawConversationId = typeof body.conversationId === 'string' ? body.conversationId : null;
+    const uid = identity && typeof identity.userId === 'string' ? identity.userId : null;
+    const hasUsableConversation = Boolean(
+      uid && rawConversationId && conversationStore.isValidConversationId(rawConversationId),
+    );
+    const conversationContext = hasUsableConversation ? conversationStore.get(uid, rawConversationId) : null;
     const decisionEngine = dependencies.recommendSupervisedOperation || recommendSupervisedOperation;
     const selectedContext = (dependencies.selectExecutiveContext || selectExecutiveContext)(query);
     const emailActionRequest = isEmailActionRequest(query);
@@ -313,12 +441,27 @@ async function handleExecutiveChatRequest(req, res, options) {
       && preliminaryRecommendation.decision === 'gmail-review-readonly';
     const isSupervisedCalendarReview = preliminaryRecommendation
       && preliminaryRecommendation.decision === 'calendar-review-readonly';
-    const orchestratorOptions = await buildOrchestratorOptions(query, dependencies, {
-      skipGmail: isSupervisedGmailReview,
-      skipCalendar: isSupervisedCalendarReview,
+    const { options: orchestratorOptions, conversationEntities } = await buildOrchestratorOptions(query, dependencies, {
+      // V0.1 (Gmail) / V0.3 (Calendar): a plain "revisa mi correo"/"que
+      // tengo manana"-style query is read-only (never writes, never sends,
+      // never creates events) and answers with only the safe summary
+      // fields, so it does not need the same "requiresConfirmation" gate
+      // that business/knowledge/memory operations use — it injects the
+      // real Gmail/Calendar context directly and answers in the same turn,
+      // instead of surfacing a pending decisionRecommendation for the user
+      // to separately confirm. The recommendation itself is still computed
+      // and attached below (isSupervisedGmailReview/isSupervisedCalendarReview),
+      // unchanged, purely as informational metadata for any consumer that
+      // wants it.
+      skipGmail: false,
+      skipCalendar: false,
       selectedContext,
+      conversationContext,
     });
-    const payload = sanitizeExecutivePayload(await orchestrator(query, orchestratorOptions));
+    const rawResult = await orchestrator(query, orchestratorOptions);
+    const conversationUpdate = rawResult && rawResult.conversationUpdate ? rawResult.conversationUpdate : null;
+    if (rawResult && typeof rawResult === 'object') delete rawResult.conversationUpdate;
+    const payload = sanitizeExecutivePayload(rawResult);
     const planner = dependencies.planOperations || planOperations;
     const recommendation = emailActionRequest
       ? null
@@ -338,6 +481,35 @@ async function handleExecutiveChatRequest(req, res, options) {
     }
     const capabilityComposition = buildCapabilityComposition(query, recommendation, operationPlan);
     if (capabilityComposition) payload.capabilityComposition = capabilityComposition;
+    if (hasUsableConversation) {
+      const previous = conversationContext || {};
+      const previousEntities = previous.entities || {};
+      conversationStore.save(uid, rawConversationId, {
+        lastIntent: selectedContext.reason,
+        entities: {
+          messages: conversationEntities.messages || previousEntities.messages || [],
+          events: conversationEntities.events || previousEntities.events || [],
+          approvals: conversationEntities.approvals || previousEntities.approvals || [],
+          documents: previousEntities.documents || [],
+        },
+        selection: (conversationUpdate && conversationUpdate.selection) || previous.selection || null,
+        lastProposal: payload.proposal
+          ? { type: payload.proposal.type || null, summary: payload.proposal.summary || null }
+          : (previous.lastProposal || null),
+        updatedAt: Date.now(),
+      });
+    }
+    logExecutiveChatTurn(dependencies.executionLogger, {
+      interactionId: payload.interactionId,
+      intent: selectedContext.reason,
+      capability: capabilityComposition ? capabilityComposition.primaryCapability : null,
+      supervisorDecision: recommendation ? recommendation.decision : null,
+      proposalType: payload.proposal ? payload.proposal.type : null,
+      approvalState: payload.approval ? payload.approval.status : null,
+      outcomeCategory: orchestratorOptions.contextFailures && orchestratorOptions.contextFailures.length > 0
+        ? 'partial'
+        : 'ok',
+    });
     return sendJson(res, 200, payload);
   } catch (error) {
     return sendSafeError(res, error);
@@ -347,6 +519,7 @@ async function handleExecutiveChatRequest(req, res, options) {
 module.exports = {
   buildCapabilityComposition,
   buildOrchestratorOptions,
+  classifyGmailContextFailure,
   getInternalOrchestratorDependencies,
   handleExecutiveChatRequest,
   isExecutiveChatRoute,

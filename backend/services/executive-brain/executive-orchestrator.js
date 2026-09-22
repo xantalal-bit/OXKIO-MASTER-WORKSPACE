@@ -6,6 +6,9 @@ const { searchKnowledge } = require('../knowledge/knowledge-query-service');
 const { simulateExecutiveBrainQuery } = require('../knowledge/executive-brain-simulation');
 const { preparePrivateContextAdapter } = require('../private-context/private-context-adapter');
 const { buildExecutiveResponse } = require('./executive-response-builder');
+const { listAvailable, listUnavailable } = require('./capability-registry');
+const { resolveReference } = require('./reference-resolver');
+const { classifyMailPriority } = require('../private-context/mail-priority');
 
 function shouldUseKnowledgeQuery(analysis) {
   return Boolean(analysis && analysis.project);
@@ -88,7 +91,14 @@ function shouldPreferPrivateGmailContext(query, analysis, authorizedContext) {
   return Boolean(
     authorizedContext
       && authorizedContext.sourceType === 'gmail'
-      && isEmailQuery(query, analysis),
+      // isEmailQuery only matches literal nouns ("correo"/"email"/"mensaje").
+      // A reference-driven draft request ("preparame una respuesta al mas
+      // importante") names no such noun, so without this it fell through to
+      // the Knowledge Store's generic "no tengo informacion suficiente"
+      // answer even though a real, authorized Gmail context was already
+      // fetched and the draft itself (the separate `proposal` field) was
+      // built correctly — only the conversational answer text was wrong.
+      && (isEmailQuery(query, analysis) || (detectActionableIntent(query) || {}).intent === 'email'),
   );
 }
 
@@ -304,6 +314,134 @@ function buildGmailContextSummary(payload) {
   return `Correo privado autorizado: tienes ${messages.length} ${messageWord}:\n${bulletMessages}`;
 }
 
+// executiveSummary keeps its internal "Confianza alta/media/baja." suffix
+// (other modules and buildExecutiveResponse's own tests rely on it), but the
+// chat-facing response text must never surface confidence labels to the
+// user, visibly or via TTS — the numeric confidence stays available on the
+// payload's own confidence field for anything that needs it internally.
+function toUserFacingResponse(executiveSummary) {
+  return String(executiveSummary || '').replace(/\s*Confianza (?:alta|media|baja)\.\s*$/i, '');
+}
+
+// V0.4 FASE 2/12: "que puedes hacer"/"que no puedes hacer" must answer from
+// the real Capability Registry, never a hardcoded string that can silently
+// go stale as capabilities are added or removed. "no puedes" in the query
+// picks the unavailable-capabilities framing; anything else (que puedes
+// hacer / que sabes hacer / que capacidades tienes) lists what is available.
+function describeCapabilityAnswer(query) {
+  const asksWhatIsMissing = /\bno puedes\b/i.test(String(query || ''));
+  if (asksWhatIsMissing) {
+    const unavailable = listUnavailable();
+    const items = unavailable.map((capability) => `${capability.name.toLowerCase()} (${capability.unavailableReason})`);
+    return `Todavia no puedo: ${items.join('; ')}.`;
+  }
+  const available = listAvailable();
+  const items = available.map((capability) => capability.name.toLowerCase());
+  return `Ahora mismo puedo: ${items.join(', ')}.`;
+}
+
+// OXKIO CANONICAL RUNTIME CONSOLIDATION (22/09/2026): governance.read.
+// `governance` is the sanitized object from sanitizeGovernanceContext()
+// (executive-chat.js) via options.contextualData.dashboard.governance —
+// already stripped of any internal roadmap/project detail, only policy
+// facts remain.
+function describeGovernanceAnswer(governance) {
+  if (!governance || typeof governance !== 'object' || !governance.available) {
+    return 'No tengo disponible ahora mismo mi estado de gobernanza.';
+  }
+  const modeDescription = governance.safeMode
+    ? 'modo seguro: solo leo, analizo y preparo borradores, nunca ejecuto una accion por mi cuenta'
+    : 'un modo con ejecucion habilitada';
+  const actions = Array.isArray(governance.actionsRequiringApproval) && governance.actionsRequiringApproval.length > 0
+    ? governance.actionsRequiringApproval.join(', ')
+    : 'ninguna accion configurada todavia';
+  return `Estoy en ${modeDescription}. La decision final siempre la toma un humano (${governance.decisionAuthority}), yo solo puedo recomendar. Accion(es) que hoy requieren tu aprobacion explicita antes de ejecutarse: ${actions}.`;
+}
+
+// V0.6.1: only urgent/important/review are legitimate absolute reasons to
+// put a message first (each is a real, verifiable property of the message
+// itself). 'informational' (classifyMailPriority's lowest real tier — this
+// classifier never returns 'noise') has no such property: previously it
+// reused the tier's own self-description ("no parece urgente") verbatim as
+// the reason to prioritize it, producing "porque no parece urgente" — a
+// description of why the message is NOT interesting, presented as the
+// reason to answer it first. That tier now gets a relative framing instead
+// (best of a low-urgency batch), never an absolute claim of urgency.
+const PRIORITY_EXPLANATION = Object.freeze({
+  urgent: 'esta sin leer y marcado como importante',
+  important: 'esta marcado como importante',
+  review: 'todavia no lo has leido',
+});
+const RELATIVE_PRIORITY_EXPLANATION = 'aunque no parece urgente, es el que tiene mayor prioridad relativa entre los correos recientes';
+
+function extractSenderName(from) {
+  const match = String(from || '').match(/^([^<]+)</);
+  return match ? match[1].trim() : String(from || 'remitente desconocido').trim();
+}
+
+// FULL RUNTIME REVEAL FASE 18: "no fallback generico, no inventar" — when a
+// conversational reference cannot be resolved cleanly, ask which candidate
+// the user meant instead of silently drafting against a guess.
+function buildAmbiguousReferenceQuestion(candidates) {
+  const list = Array.isArray(candidates) ? candidates.slice(0, 5) : [];
+  if (list.length === 0) {
+    return 'No tengo claro a que correo te refieres. ¿Puedes decirme el remitente o el asunto?';
+  }
+  const options = list
+    .map((message, index) => `${index + 1}) ${extractSenderName(message && message.from)} ("${
+      message && typeof message.subject === 'string' && message.subject.trim() ? message.subject.trim() : 'sin asunto'
+    }")`)
+    .join('; ');
+  return `No tengo claro a cual correo te refieres. ¿A cual de estos: ${options}?`;
+}
+
+// V0.6.1 PROBLEMA 2: describes the draft that was ACTUALLY built (same
+// proposalBundle the caller already computed, not a re-guess) so the chat
+// text and the dashboard's proposal card never disagree. Returns null
+// whenever there is no usable executionPayload (proposal generation failed,
+// or executionPayload.to could not be resolved) so the caller can fall back
+// to its normal answer instead of describing a draft that was not created.
+function buildEmailDraftReadyAnswer(proposalBundle, emailReferenceResolution) {
+  const executionPayload = proposalBundle && proposalBundle.executionPayload;
+  if (!executionPayload || !executionPayload.to) return null;
+  const resolvedMessage = emailReferenceResolution && emailReferenceResolution.item;
+  const recipientLabel = resolvedMessage ? extractSenderName(resolvedMessage.from) : executionPayload.to;
+  const resolvedSubject = resolvedMessage && typeof resolvedMessage.subject === 'string' && resolvedMessage.subject.trim()
+    ? resolvedMessage.subject.trim()
+    : (typeof executionPayload.subject === 'string' ? executionPayload.subject.replace(/^Re:\s*/i, '').trim() : '');
+  const subjectLabel = resolvedSubject || 'tu mensaje';
+  return `He preparado un borrador para ${recipientLabel} sobre "${subjectLabel}". `
+    + 'Esta pendiente de tu aprobacion y no se enviara automaticamente.';
+}
+
+// V0.5 FASE 6, turn 2: "cual deberia responder primero" never triggers its
+// own Gmail fetch — it reasons over whatever messages the conversation
+// context already has from an earlier turn in the same thread, using the
+// existing (until now dormant) mail-priority.js classifier. Returns null
+// when there is nothing recent to prioritize, so the caller can fall back
+// to an honest "no tengo una lista reciente" instead of fabricating one.
+function buildPrioritizationAnswer(conversationContext) {
+  const messages = conversationContext && conversationContext.entities && Array.isArray(conversationContext.entities.messages)
+    ? conversationContext.entities.messages
+    : [];
+  if (messages.length === 0) return null;
+  const RANK = { urgent: 0, important: 1, review: 2, informational: 3, noise: 4 };
+  const ranked = messages
+    .map((message) => ({ message, priority: classifyMailPriority(message) }))
+    .sort((left, right) => RANK[left.priority] - RANK[right.priority]);
+  const top = ranked[0];
+  const sender = extractSenderName(top.message.from);
+  const subject = typeof top.message.subject === 'string' && top.message.subject.trim()
+    ? top.message.subject.trim() : 'sin asunto';
+  const reasonClause = PRIORITY_EXPLANATION[top.priority]
+    ? `porque ${PRIORITY_EXPLANATION[top.priority]}`
+    : RELATIVE_PRIORITY_EXPLANATION;
+  return {
+    answer: `Yo empezaria por el correo de ${sender} ("${subject}"), ${reasonClause}.`,
+    selection: { sourceType: 'gmail_message', ref: top.message.ref || null, reason: top.priority },
+  };
+}
+
 function sanitizeExecutiveSources(sources) {
   if (!Array.isArray(sources)) {
     return [];
@@ -427,8 +565,9 @@ function detectActionableIntent(query) {
   }
 
   if (
-    includesAny(['prepara', 'preparar', 'redacta', 'redactar', 'crea', 'crear', 'genera', 'generar'])
-    && includesAny(['borrador', 'respuesta', 'correo', 'email'])
+    includesAny(['respondele', 'contestale'])
+    || (includesAny(['prepara', 'preparar', 'redacta', 'redactar', 'crea', 'crear', 'genera', 'generar'])
+      && includesAny(['borrador', 'respuesta', 'correo', 'email']))
   ) {
     return {
       intent: 'email',
@@ -484,11 +623,15 @@ function buildContextFailureSummary(contextFailures) {
   if (!Array.isArray(contextFailures) || contextFailures.length === 0) return null;
   const labels = {
     gmail_unavailable: 'Gmail readonly no esta disponible temporalmente.',
+    gmail_not_connected: 'Necesito que conectes tu cuenta de Google para revisar tu correo.',
+    gmail_insufficient_scope: 'No tengo todavia permiso suficiente para leer tu correo.',
     calendar_unavailable: 'Calendar readonly no esta disponible temporalmente.',
     dashboard_unavailable: 'El resumen agregado no esta disponible temporalmente.',
     approvals_unavailable: 'Approval Queue no esta disponible temporalmente.',
     memory_unavailable: 'La memoria segura no esta disponible temporalmente.',
     private_context_unauthorized: 'El contexto privado solicitado no esta autorizado.',
+    approvals_unauthorized: 'El contexto privado solicitado no esta autorizado.',
+    memory_unauthorized: 'El contexto privado solicitado no esta autorizado.',
   };
   return contextFailures.map((code) => labels[code]).filter(Boolean).join(' ');
 }
@@ -511,7 +654,14 @@ function buildProposalEngineInput(query, analysis, executiveResponse, actionable
   };
 }
 
-function buildSafeProposalMetadata(actionableIntent, generatedProposal) {
+// V0.6.1 PROBLEMA 3: interactionId is the same id already generated once per
+// orchestrateExecutiveQuery call and already threaded into the Approval
+// Queue's context and the memory entry (see buildSafeApprovalContext,
+// buildSafeMemoryEntry) — reused here, not a new id scheme, so a client (or
+// an auditor reading the Approval Queue / memory log) can correlate "this
+// proposal" back to "this turn" from the proposal object alone, without
+// having to also keep the enclosing chat response around.
+function buildSafeProposalMetadata(actionableIntent, generatedProposal, interactionId) {
   if (!generatedProposal || typeof generatedProposal !== 'object') {
     return null;
   }
@@ -527,6 +677,7 @@ function buildSafeProposalMetadata(actionableIntent, generatedProposal) {
     actionType: actionableIntent.actionType,
     summary: summaries[actionableIntent.proposalType],
     requiresApproval: generatedProposal.requiresApproval === true,
+    interactionId: typeof interactionId === 'string' ? interactionId : null,
   };
 }
 
@@ -571,14 +722,49 @@ function emailPreparationFromQuery(query) {
   };
 }
 
-function emailPreparationFromPrivateContext(generatedProposal, authorizedPrivateContext) {
+// V0.5 FASE 10: resolves which message a conversational reference ("al mas
+// importante", "respondele", "el primero"...) points to. Tries this turn's
+// freshly-fetched Gmail messages first (most current), then falls back to
+// whatever the conversation context saved from an earlier turn — e.g. a
+// bare "respondele" with no fresh fetch this turn.
+//
+// FULL RUNTIME REVEAL FASE 18: returns the ambiguous/candidates signal
+// reference-resolver.js already computes instead of discarding it. Before
+// this, a query like "Respondele" over two equally-plausible messages (no
+// prior selection, neither flagged important, no ordinal) collapsed to the
+// same "null" as "no reference language at all", and the caller silently
+// defaulted to the first message — fabricating a recipient for a real
+// Approval Queue entry instead of asking which one was meant.
+function resolveReferencedMessage(query, conversationContext, authorizedPrivateContext) {
+  const freshMessages = authorizedPrivateContext
+    && authorizedPrivateContext.sourceType === 'gmail'
+    && authorizedPrivateContext.payload
+    && Array.isArray(authorizedPrivateContext.payload.messages)
+    ? authorizedPrivateContext.payload.messages.map((message, index) => ({ ref: String(index + 1), ...message }))
+    : [];
+  const selection = conversationContext && conversationContext.selection;
+  const fromFresh = resolveReference(query, { entities: freshMessages, selection });
+  if (fromFresh.resolved) return { item: fromFresh.item, ambiguous: false, candidates: freshMessages };
+  const savedMessages = conversationContext && conversationContext.entities && Array.isArray(conversationContext.entities.messages)
+    ? conversationContext.entities.messages
+    : [];
+  const fromSaved = resolveReference(query, { entities: savedMessages, selection });
+  if (fromSaved.resolved) return { item: fromSaved.item, ambiguous: false, candidates: savedMessages };
+  return {
+    item: null,
+    ambiguous: Boolean(fromFresh.ambiguous || fromSaved.ambiguous),
+    candidates: freshMessages.length > 0 ? freshMessages : savedMessages,
+  };
+}
+
+function emailPreparationFromPrivateContext(generatedProposal, authorizedPrivateContext, preferredMessage) {
   const messages = authorizedPrivateContext
     && authorizedPrivateContext.sourceType === 'gmail'
     && authorizedPrivateContext.payload
     && Array.isArray(authorizedPrivateContext.payload.messages)
     ? authorizedPrivateContext.payload.messages
     : [];
-  const message = messages[0];
+  const message = (preferredMessage && typeof preferredMessage === 'object') ? preferredMessage : messages[0];
   if (!message || typeof message !== 'object') return null;
   const addressMatch = String(message.from || '').match(/[A-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i);
   const generated = generatedProposal && generatedProposal.executionPayload;
@@ -602,6 +788,8 @@ function generateProposalSafely(
   executiveResponse,
   authorizedPrivateContext,
   diagnostics,
+  conversationContext,
+  interactionId,
 ) {
   diagnostics.proposalAttempted = false;
   diagnostics.proposalSucceeded = false;
@@ -612,17 +800,37 @@ function generateProposalSafely(
     return null;
   }
 
+  // FULL RUNTIME REVEAL FASE 18: an ambiguous conversational reference
+  // ("Respondele" with two equally-plausible messages, no prior selection,
+  // none flagged important) must never fabricate a proposal — not even one
+  // whose executionPayload ends up empty, because the publicProposal summary
+  // ("Borrador de email preparado...") would still misleadingly tell the
+  // user a draft is ready. This returns null before touching the (legacy,
+  // template-based) proposal engine at all, so the caller's own answer text
+  // (see buildAmbiguousReferenceQuestion) is what the user actually sees.
+  if (actionableIntent.proposalType === 'email_draft' && !emailPreparationFromQuery(query)) {
+    const referenceResolution = resolveReferencedMessage(query, conversationContext, authorizedPrivateContext);
+    if (referenceResolution.ambiguous) {
+      diagnostics.proposalAmbiguousReference = true;
+      return null;
+    }
+  }
+
   diagnostics.proposalAttempted = true;
   diagnostics.proposalType = actionableIntent.proposalType;
 
   try {
     const proposalInput = buildProposalEngineInput(query, analysis, executiveResponse, actionableIntent);
     const generatedProposal = proposalEngine.generate(proposalInput);
-    const publicProposal = buildSafeProposalMetadata(actionableIntent, generatedProposal);
+    const publicProposal = buildSafeProposalMetadata(actionableIntent, generatedProposal, interactionId);
     const executionPayload = actionableIntent.proposalType === 'email_draft'
       ? (
         emailPreparationFromQuery(query)
-        || emailPreparationFromPrivateContext(generatedProposal, authorizedPrivateContext)
+        || emailPreparationFromPrivateContext(
+          generatedProposal,
+          authorizedPrivateContext,
+          resolveReferencedMessage(query, conversationContext, authorizedPrivateContext).item,
+        )
         || buildExecutionPayload(actionableIntent, generatedProposal)
       )
       : buildExecutionPayload(actionableIntent, generatedProposal);
@@ -789,6 +997,72 @@ async function orchestrateExecutiveQuery(query, options) {
     searchMemorySafely(memory, query, diagnostics);
   }
   const authorizedPrivateContext = selectPrimaryPrivateContext(query, analysis, authorizedPrivateContexts);
+  // Pure greeting/capability small talk ("hola", "que puedes hacer") has
+  // nothing to match in the Knowledge Store simulator, which otherwise
+  // answers with its internal "No se encontraron Knowledge Objects... en el
+  // Knowledge Store." wording — accurate for a real, unmatched business
+  // query, but not something a user should ever see for a plain greeting.
+  // context-intent-router.js already classifies these deterministically, so
+  // this reuses that classification instead of duplicating it here.
+  const isChitchatQuery = Boolean(contextSelection && contextSelection.reason === 'chitchat_query');
+  // V0.4: "que puedes/no puedes hacer" is handled the same way as chitchat
+  // (bypasses the Knowledge Store simulator, no sources/limitations leaked),
+  // but its answer text comes from the real Capability Registry instead of
+  // a generic capability blurb — see describeCapabilityAnswer above.
+  const isCapabilityQuery = Boolean(contextSelection && contextSelection.reason === 'capability_query');
+  // V0.5: reasons over messages the conversation already showed earlier in
+  // this thread (see buildPrioritizationAnswer above) instead of the
+  // Knowledge Store simulator or a fresh Gmail fetch.
+  const isPrioritizeQuery = Boolean(contextSelection && contextSelection.reason === 'prioritize_query');
+  // OXKIO CANONICAL RUNTIME CONSOLIDATION (22/09/2026): governance.read.
+  // contextSelection.dashboard is true for this reason (see
+  // context-intent-router.js), so options.contextualData.dashboard.governance
+  // is populated by sanitizeGovernanceContext() in executive-chat.js by the
+  // time this function runs — answered directly from it, bypassing the
+  // generic dashboard summary (morningBriefing/executiveSummary), never
+  // leaking ecosystemObserver's internal roadmap fields.
+  const isGovernanceQuery = Boolean(contextSelection && contextSelection.reason === 'governance_query');
+  const conversationContext = options && options.conversationContext ? options.conversationContext : null;
+  const prioritizationResult = isPrioritizeQuery ? buildPrioritizationAnswer(conversationContext) : null;
+  // FULL RUNTIME REVEAL FASE 18: computed here, before the Knowledge Store
+  // simulator and the answer text are built, so an ambiguous conversational
+  // reference ("Respondele" over two equally-plausible messages) produces a
+  // clarifying question instead of silently falling through to Knowledge
+  // Store noise or a guessed recipient (see resolveReferencedMessage and
+  // generateProposalSafely for the matching proposal-side guard).
+  const emailActionIntent = detectActionableIntent(query);
+  const emailReferenceResolution = (
+    emailActionIntent
+    && emailActionIntent.proposalType === 'email_draft'
+    && !emailPreparationFromQuery(query)
+  ) ? resolveReferencedMessage(query, conversationContext, authorizedPrivateContext) : null;
+  const isAmbiguousEmailReference = Boolean(emailReferenceResolution && emailReferenceResolution.ambiguous);
+  // V0.6.1 PROBLEMA 2: computed here (before the answer text) instead of
+  // after, so the chat answer can describe the actual, already-resolved
+  // draft instead of a generic Gmail listing. Before this, "Prepareme una
+  // respuesta al mas importante" produced a real proposal (visible on the
+  // dashboard) while the chat text just re-listed the inbox — proposal and
+  // response were built independently and could disagree. `executiveResponse`
+  // is passed as null: core/proposalEngine.js's generateEmailProposal never
+  // reads it (its executionPayload is a fixed template), so this has no
+  // effect on the generated draft, only on the timing of when it runs.
+  const proposalBundle = isAmbiguousEmailReference
+    ? null
+    : generateProposalSafely(
+      proposalEngine,
+      query,
+      analysis,
+      null,
+      authorizedPrivateContext,
+      diagnostics,
+      conversationContext,
+      interactionId,
+    );
+  const emailDraftReadyAnswer = (
+    !isAmbiguousEmailReference
+    && emailActionIntent
+    && emailActionIntent.proposalType === 'email_draft'
+  ) ? buildEmailDraftReadyAnswer(proposalBundle, emailReferenceResolution) : null;
   let knowledgeQueryResult = null;
 
   if (shouldUseKnowledgeQuery(analysis)) {
@@ -814,8 +1088,8 @@ async function orchestrateExecutiveQuery(query, options) {
     || preferPrivateGmailContext
     || Boolean(contextualDataSummary)
     || Boolean(contextFailureSummary);
-  const responseSources = preferPrivateContext ? [] : sanitizeExecutiveSources(response.sources);
-  const responseLimitations = preferCombinedPrivateContext
+  const responseSources = (preferPrivateContext || isChitchatQuery || isCapabilityQuery || isPrioritizeQuery || isGovernanceQuery || isAmbiguousEmailReference || Boolean(emailDraftReadyAnswer)) ? [] : sanitizeExecutiveSources(response.sources);
+  const responseLimitations = (preferCombinedPrivateContext || isChitchatQuery || isCapabilityQuery || isPrioritizeQuery || isGovernanceQuery || isAmbiguousEmailReference || Boolean(emailDraftReadyAnswer))
     ? []
     : (preferPrivateContext
     ? filterPrivatePrimaryLimitations(response.limitations)
@@ -824,12 +1098,29 @@ async function orchestrateExecutiveQuery(query, options) {
     ? Math.max(analysis.confidence, 0.7)
     : response.confidence;
   const executiveResponse = responseBuilder({
-    answer: preferPrivateContext
+    answer: isAmbiguousEmailReference
+      ? buildAmbiguousReferenceQuestion(emailReferenceResolution.candidates)
+      : (emailDraftReadyAnswer
+      ? emailDraftReadyAnswer
+      : (isGovernanceQuery
+      ? describeGovernanceAnswer(
+        options && options.contextualData && options.contextualData.dashboard
+          && options.contextualData.dashboard.governance,
+      )
+      : (preferPrivateContext
       ? ([combinedPrivateContextSummary || privateContextSummary, contextualDataSummary, contextFailureSummary]
         .filter(Boolean).join(' '))
-      : (privateContextSummary
-        ? `${response.answer} ${privateContextSummary}`
-        : response.answer),
+      : (isPrioritizeQuery
+        ? (prioritizationResult
+          ? prioritizationResult.answer
+          : 'No tengo una lista reciente de correos para priorizar. Pideme primero que revise tu correo.')
+        : (isCapabilityQuery
+          ? describeCapabilityAnswer(query)
+          : (isChitchatQuery
+            ? 'Puedo ayudarte a revisar tu correo, organizar tareas y trabajar contigo sobre las funciones que tengas conectadas.'
+            : (privateContextSummary
+              ? `${response.answer} ${privateContextSummary}`
+              : response.answer))))))),
     confidence: responseConfidence,
     sources: responseSources,
     reasoningSummary: response.reasoningSummary,
@@ -838,14 +1129,6 @@ async function orchestrateExecutiveQuery(query, options) {
   const finalConfidence = preferPrivateContext
     ? executiveResponse.confidence
     : Math.min(analysis.confidence, executiveResponse.confidence);
-  const proposalBundle = generateProposalSafely(
-    proposalEngine,
-    query,
-    analysis,
-    executiveResponse,
-    authorizedPrivateContext,
-    diagnostics,
-  );
   const proposal = proposalBundle ? proposalBundle.publicProposal : null;
   const privateContextUsed = authorizedPrivateContexts.length > 0 || Boolean(contextualDataSummary);
   const approval = await enqueueApprovalSafely(
@@ -871,7 +1154,7 @@ async function orchestrateExecutiveQuery(query, options) {
     interactionId,
     query,
     analysis,
-    response: executiveResponse.executiveSummary,
+    response: toUserFacingResponse(executiveResponse.executiveSummary),
     confidence: finalConfidence,
     sources: sanitizeExecutiveSources(executiveResponse.sources),
     privateContextUsed,
@@ -883,6 +1166,10 @@ async function orchestrateExecutiveQuery(query, options) {
         ? [`Knowledge Query Service did not find project ${analysis.project}.`]
         : []),
     ],
+    // V0.5: internal-only — never sent to the client. executive-chat.js
+    // reads this to decide what to persist in the conversation context
+    // store, then deletes it from the payload before responding.
+    conversationUpdate: prioritizationResult ? { selection: prioritizationResult.selection } : null,
   };
 }
 

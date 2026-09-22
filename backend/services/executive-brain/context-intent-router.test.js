@@ -22,6 +22,11 @@ test('selects each readonly source with minimum context', () => {
   assert.deepEqual(selected('¿Qué recuerdas de nuestras últimas decisiones?'), { gmail: false, calendar: false, dashboard: false, memory: true, approvals: false });
 });
 
+test('V0.3: "que esta haciendo OXKIO ahora" reuses the existing dashboard path instead of falling through to general', () => {
+  assert.deepEqual(selected('¿Qué está haciendo OXKIO ahora?'), { gmail: false, calendar: false, dashboard: true, memory: false, approvals: false });
+  assert.equal(selectExecutiveContext('¿Qué está haciendo OXKIO ahora?').reason, 'dashboard_query');
+});
+
 test('selects Gmail and Calendar together only for an explicit combined query', () => {
   const result = selectExecutiveContext('Resume mis correos y reuniones de hoy.');
   assert.deepEqual(selected('Resume mis correos y reuniones de hoy.'), { gmail: true, calendar: true, dashboard: false, memory: false, approvals: false });
@@ -39,6 +44,49 @@ test('loads action context only when a safe real-world reference is required', (
   assert.equal(selectExecutiveContext('Prepara una respuesta al último correo.').gmail, true);
   assert.equal(selectExecutiveContext('Programa una reunión.').calendar, false);
   assert.equal(selectExecutiveContext('Programa una reunión según mi disponibilidad.').calendar, true);
+});
+
+test('recognizes every "revisar correo" phrasing as a Gmail query, never falling through to general/Knowledge Store', () => {
+  const phrases = [
+    'revisa mi correo',
+    'mira mis emails',
+    'que correos tengo',
+    'hay algo importante en mi correo',
+  ];
+  for (const phrase of phrases) {
+    const result = selectExecutiveContext(phrase);
+    assert.equal(result.gmail, true, `"${phrase}" should select gmail`);
+    assert.equal(result.reason, 'gmail_query', `"${phrase}" should classify as gmail_query`);
+  }
+});
+
+test('classifies plain greeting small talk as chitchat_query, with no private source selected', () => {
+  const phrases = [
+    'hola',
+    'puedes responder algo',
+    'quién eres',
+    'ayúdame',
+  ];
+  for (const phrase of phrases) {
+    const result = selectExecutiveContext(phrase);
+    assert.equal(result.reason, 'chitchat_query', `"${phrase}" should classify as chitchat_query`);
+    assert.deepEqual(selected(phrase), { gmail: false, calendar: false, dashboard: false, memory: false, approvals: false });
+  }
+});
+
+test('V0.4: "que puedes/no puedes hacer" classifies as capability_query, answered from the real registry', () => {
+  const phrases = ['qué puedes hacer', 'qué sabes hacer', 'qué no puedes hacer todavía', 'qué capacidades tienes'];
+  for (const phrase of phrases) {
+    const result = selectExecutiveContext(phrase);
+    assert.equal(result.reason, 'capability_query', `"${phrase}" should classify as capability_query`);
+    assert.deepEqual(selected(phrase), { gmail: false, calendar: false, dashboard: false, memory: false, approvals: false });
+  }
+});
+
+test('a longer sentence that merely contains a chitchat word keeps its real context selection', () => {
+  const result = selectExecutiveContext('Ayúdame a revisar mi correo.');
+  assert.equal(result.gmail, true);
+  assert.notEqual(result.reason, 'chitchat_query');
 });
 
 test('negated actions do not select context', () => {

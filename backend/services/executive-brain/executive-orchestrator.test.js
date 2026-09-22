@@ -354,6 +354,7 @@ test('reads shared memory without invoking proposal or approval dependencies or 
     'proposal',
     'approval',
     'limitations',
+    'conversationUpdate',
   ]);
 });
 
@@ -641,6 +642,13 @@ test('generates safe proposals for explicit email, meeting, and task actions', a
     });
 
     assert.equal(memoryReads, 1);
+    // V0.6.1: proposal generation now runs before buildExecutiveResponse (so
+    // the chat answer can describe the actual draft — see
+    // buildEmailDraftReadyAnswer), so the mocked recommendation text is no
+    // longer available yet and this falls back to the generic decision
+    // string. This has no real-world effect: core/proposalEngine.js's
+    // generate() never reads decision.recommendation for email/meeting/task
+    // proposals (its templates are fixed), only this test's mock echoed it.
     assert.deepEqual(proposalInput, {
       message: testCase.query,
       analysis: {
@@ -650,7 +658,7 @@ test('generates safe proposals for explicit email, meeting, and task actions', a
         requiresApproval: true,
       },
       decision: {
-        recommendation: 'Validar antes de ejecutar.',
+        recommendation: 'Preparar propuesta para revision humana.',
         requiresApproval: true,
       },
     });
@@ -663,6 +671,7 @@ test('generates safe proposals for explicit email, meeting, and task actions', a
         task_proposal: 'Propuesta de tarea preparada para revision.',
       }[testCase.proposalType],
       requiresApproval: true,
+      interactionId: result.interactionId,
     });
     assert.deepEqual(queuedProposal, result.proposal);
     assert.deepEqual(queuedExecutionPayload, testCase.intent === 'email' ? {
@@ -849,7 +858,14 @@ test('keeps proposal when Approval Queue is absent or fails', async () => {
 
   assert.notEqual(withoutQueue.proposal, null);
   assert.equal(withoutQueue.approval, null);
-  assert.deepEqual(withQueueFailure.proposal, withoutQueue.proposal);
+  // V0.6.1: proposal.interactionId correlates a draft back to its own turn
+  // (see buildSafeProposalMetadata), so it is expected to differ between
+  // these two independent calls, same as the top-level interactionId.
+  assert.deepEqual(
+    { ...withQueueFailure.proposal, interactionId: '<interaction-id>' },
+    { ...withoutQueue.proposal, interactionId: '<interaction-id>' },
+  );
+  assert.notEqual(withQueueFailure.proposal.interactionId, withoutQueue.proposal.interactionId);
   assert.equal(withQueueFailure.approval, null);
   assert.equal(withQueueFailure.response, withoutQueue.response);
   assert.match(withQueueFailure.interactionId, UUID_PATTERN);
@@ -892,7 +908,12 @@ test('does not enqueue a proposal that does not require approval', async () => {
   assert.equal(approvalCalls, 0);
 });
 
-test('writes only safe completed metadata after response, proposal, and approval are built', async () => {
+// V0.6.1: proposal generation now runs before the response builder (not
+// after) so the conversational answer can describe an actually-prepared
+// draft instead of a generic context listing (see buildEmailDraftReadyAnswer
+// in executive-orchestrator.js) — this call order is the intentional fix,
+// not a regression.
+test('writes only safe completed metadata after proposal, response, and approval are built', async () => {
   const calls = [];
   let savedEntry = null;
   let approvalContext = null;
@@ -970,9 +991,9 @@ test('writes only safe completed metadata after response, proposal, and approval
   assert.deepEqual(calls, [
     'analysis',
     'memory.search',
+    'proposal',
     'response',
     'response-builder',
-    'proposal',
     'approval',
     'memory.write',
   ]);
@@ -1210,11 +1231,16 @@ test('memory write failure or missing saveShortTerm does not change the executiv
     },
   });
 
+  // V0.6.1: proposal.interactionId correlates a draft back to the turn that
+  // created it (see buildSafeProposalMetadata) and is therefore expected to
+  // differ between these two independent calls, same as the top-level id.
   assert.deepEqual(
-    { ...withWriteFailure, interactionId: '<interaction-id>' },
-    { ...withoutWriter, interactionId: '<interaction-id>' },
+    { ...withWriteFailure, interactionId: '<interaction-id>', proposal: { ...withWriteFailure.proposal, interactionId: '<interaction-id>' } },
+    { ...withoutWriter, interactionId: '<interaction-id>', proposal: { ...withoutWriter.proposal, interactionId: '<interaction-id>' } },
   );
   assert.notEqual(withWriteFailure.interactionId, withoutWriter.interactionId);
+  assert.notEqual(withWriteFailure.proposal.interactionId, withoutWriter.proposal.interactionId);
+  assert.equal(withWriteFailure.proposal.interactionId, withWriteFailure.interactionId);
   assert.match(withWriteFailure.interactionId, UUID_PATTERN);
   assert.equal(diagnostics.memoryWriteAttempted, true);
   assert.equal(diagnostics.memoryWriteSucceeded, false);
@@ -1681,13 +1707,14 @@ test('builds a combined Calendar and Gmail answer for mixed private queries', as
   assert.equal(result.privateContextUsed, true);
   assert.equal(
     result.response,
-    'Agenda privada autorizada: tienes 4 eventos hoy: Evento privado A a las 10:00; Evento privado B a las 12:15; Evento privado C a las 15:30 y 1 evento(s) mas. Correo privado autorizado: tienes 4 correos recientes:\n- Correo privado A de Remitente privado\n- Correo privado B de Remitente B\n- Correo privado C de Remitente C y 1 correo(s) mas. Confianza media.',
+    'Agenda privada autorizada: tienes 4 eventos hoy: Evento privado A a las 10:00; Evento privado B a las 12:15; Evento privado C a las 15:30 y 1 evento(s) mas. Correo privado autorizado: tienes 4 correos recientes:\n- Correo privado A de Remitente privado\n- Correo privado B de Remitente B\n- Correo privado C de Remitente C y 1 correo(s) mas.',
   );
   assert.match(result.response, /\n- Correo privado A de Remitente privado/);
   assert.match(result.response, /\n- Correo privado B de Remitente B/);
   assert.match(result.response, /\n- Correo privado C de Remitente C/);
   assert.doesNotMatch(result.response, /No se encontraron Knowledge Objects/);
   assert.doesNotMatch(result.response, /Knowledge Store/);
+  assert.doesNotMatch(result.response, /Confianza/);
   assert.doesNotMatch(result.response, /Evento privado D/);
   assert.doesNotMatch(result.response, /Correo privado D/);
   assert.doesNotMatch(result.response, /event-private-1/);
@@ -1847,10 +1874,10 @@ test('prioritizes authorized Calendar agenda over noisy Knowledge Store response
   });
 
   assert.equal(result.privateContextUsed, true);
-  assert.equal(result.response, 'Agenda privada autorizada: tienes 1 evento hoy: Prueba Calendar Oxkio a las 12:15. Confianza media.');
+  assert.equal(result.response, 'Agenda privada autorizada: tienes 1 evento hoy: Prueba Calendar Oxkio a las 12:15.');
   assert.doesNotMatch(result.response, /No se encontraron Knowledge Objects/);
   assert.doesNotMatch(result.response, /Knowledge Store/);
-  assert.doesNotMatch(result.response, /Confianza baja/);
+  assert.doesNotMatch(result.response, /Confianza/);
   assert.equal(builderInput.confidence, 0.7);
   assert.equal(result.confidence, 0.7);
   assert.deepEqual(result.sources, []);
@@ -1959,13 +1986,14 @@ test('prioritizes authorized Gmail over noisy Knowledge Store response without e
   assert.equal(result.privateContextUsed, true);
   assert.equal(
     result.response,
-    'Correo privado autorizado: tienes 4 correos recientes:\n- Asunto A de Remitente A\n- Asunto B de Remitente B\n- Asunto C de Remitente C y 1 correo(s) mas. Confianza media.',
+    'Correo privado autorizado: tienes 4 correos recientes:\n- Asunto A de Remitente A\n- Asunto B de Remitente B\n- Asunto C de Remitente C y 1 correo(s) mas.',
   );
   assert.match(result.response, /\n- Asunto A de Remitente A/);
   assert.match(result.response, /\n- Asunto B de Remitente B/);
   assert.match(result.response, /\n- Asunto C de Remitente C/);
   assert.doesNotMatch(result.response, /No se encontraron Knowledge Objects/);
   assert.doesNotMatch(result.response, /Knowledge Store/);
+  assert.doesNotMatch(result.response, /Confianza/);
   assert.doesNotMatch(result.response, /Asunto D/);
   assert.doesNotMatch(result.response, /msg-private-1/);
   assert.doesNotMatch(result.response, /thread-private-1/);

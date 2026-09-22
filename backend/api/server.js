@@ -42,12 +42,16 @@ const { handleMemoryOperationRequest, isMemoryOperationRoute } = require("./rout
 const { handleGmailOperationRequest, isGmailOperationRoute } = require("./routes/gmail-operations");
 const { handleCalendarOperationRequest, isCalendarOperationRoute } = require("./routes/calendar-operations");
 const { createExecutiveCsrf } = require("../security/executive-csrf");
+const { createOAuthStateStore } = require("../security/oauth-state-store");
 const {
   authenticateFirebaseRequest,
   createFirebaseAdminVerifier,
   sendFirebaseAuthError
 } = require("../security/firebase-server-auth");
 const { createExecutiveAuthorizer } = require("../security/executive-authorization");
+const { buildDashboardReaders, buildPrivateIdentity } = require("../security/private-identity-projection");
+const { isAuthorizedExecutiveIdentity } = require("./routes/executive-approval");
+const { isApiRouteDeniedForIdentity } = require("../security/api-route-policy");
 const { safeDiagnostic } = require("../security/secret-runtime");
 const { createExecutiveRuntime } = require("../services/runtime/executive-runtime-factory");
 const {
@@ -98,21 +102,37 @@ const executiveRuntime = createExecutiveRuntime({
   productionApprovalQueue: approvalQueue
 });
 const executiveCsrf = createExecutiveCsrf();
+const oauthStateStore = createOAuthStateStore();
 const verifyFirebaseIdToken = createFirebaseAdminVerifier();
 const authorizeFirebaseIdentity = createExecutiveAuthorizer();
 const executionConfig = Object.freeze({
   executionEnabled: false,
   draftExecutionEnabled: true
 });
-const gmailDraftComposition = createAuthorizedGmailDraftProvider({
-  draftExecutionEnabled: executionConfig.draftExecutionEnabled,
-  oauthReadiness: executionConfig.draftExecutionEnabled
-    ? inspectGoogleOAuthReadiness()
-    : null,
-  getGmailClient
+// Lazy, memoized: inspectGoogleOAuthReadiness()/getGmailClient() may need to
+// read the configured OXKIO_GOOGLE_OAUTH_TOKEN_STORE (file locally, Secret
+// Manager in Cloud Run) — both are inherently async. Resolving this at
+// module load (synchronously, as before) is impossible once Secret Manager
+// is in play; resolving it lazily on first real use (via
+// ExecutionAdapter's resolveEmailProvider) avoids turning server.js's whole
+// boot sequence into an async IIFE just for this one dependency.
+let gmailDraftCompositionPromise = null;
+function resolveGmailDraftComposition() {
+  if (!gmailDraftCompositionPromise) {
+    gmailDraftCompositionPromise = (executionConfig.draftExecutionEnabled
+      ? inspectGoogleOAuthReadiness()
+      : Promise.resolve(null)
+    ).then((oauthReadiness) => createAuthorizedGmailDraftProvider({
+      draftExecutionEnabled: executionConfig.draftExecutionEnabled,
+      oauthReadiness,
+      getGmailClient
+    }));
+  }
+  return gmailDraftCompositionPromise;
+}
+const executionAdapter = new ExecutionAdapter({
+  resolveEmailProvider: async () => (await resolveGmailDraftComposition()).provider
 });
-const gmailDraftProvider = gmailDraftComposition.provider;
-const executionAdapter = new ExecutionAdapter({ emailProvider: gmailDraftProvider });
 const executionService = new ExecutionService({ approvalQueue, executionAdapter });
 const universalKnowledgeSupervisor = new UniversalKnowledgeSupervisor({ approvalQueue });
 const executionLogger = new ExecutionLogger();
@@ -155,23 +175,15 @@ function getEcosystemObserverViews() {
 }
 
 function buildRequestPrivateIdentity(firebaseIdentity) {
-  const privateIdentity = getClienteCeroIdentity();
-  return {
-    ...privateIdentity,
-    userId: firebaseIdentity.uid
-  };
+  return buildPrivateIdentity(firebaseIdentity, { getClienteCeroIdentity });
 }
 
 function createDashboardReaders(firebaseIdentity) {
-  const identity = buildRequestPrivateIdentity(firebaseIdentity);
-  return {
-    gmailReader: () => buildGmailPrivateContext({ ...identity, maxMessages: 5 }),
-    calendarReader: () => buildCalendarPrivateContext({
-      ...identity,
-      range: "next7Days",
-      maxResults: 10
-    })
-  };
+  return buildDashboardReaders(firebaseIdentity, {
+    getClienteCeroIdentity,
+    buildGmailPrivateContext,
+    buildCalendarPrivateContext
+  });
 }
 
 const MUTABLE_EXECUTIVE_ROUTES = new Set([
@@ -277,6 +289,18 @@ const dashboardReaders = req.oxkioIdentity
   ? createDashboardReaders(req.oxkioIdentity)
   : null;
 
+// Single fail-closed choke point for every /api/* route that has no
+// per-route identity check of its own (see api-route-policy.js). Only
+// applies once Firebase authentication actually ran, so it never affects
+// the pre-auth 405 path for GET /api/approve and GET /api/execute-approved.
+if (req.oxkioIdentity && isApiRouteDeniedForIdentity(pathname, isAuthorizedExecutiveIdentity, requestPrivateIdentity)) {
+  return sendJson(res, 403, {
+    ok: false,
+    code: "executive_authorization_denied",
+    message: "Tu sesión no tiene permiso para acceder a este recurso."
+  });
+}
+
 if (isExecutiveIdentityRoute(pathname, req.method)) {
   return handleExecutiveIdentityRequest(req, res, {
     dependencies: { getClienteCeroIdentity: () => req.oxkioIdentity }
@@ -303,14 +327,19 @@ if (isExecutiveChatRoute(pathname, req.method)) {
         ...options,
       }),
       dashboardGmailReader: dashboardReaders.gmailReader,
-      dashboardCalendarReader: dashboardReaders.calendarReader
+      dashboardCalendarReader: dashboardReaders.calendarReader,
+      // OXKIO CANONICAL RUNTIME CONSOLIDATION (22/09/2026), FASE 8: metadata
+      // segura por turno (interactionId/capability/supervisor decision/
+      // proposal type/approval state), nunca contenido privado.
+      executionLogger
     }
   });
 }
 
 if (pathname === "/oauth/google" && req.method === "GET") {
   try {
-    const authUrl = getAuthUrl();
+    const state = oauthStateStore.issue();
+    const authUrl = getAuthUrl({ state });
 
     return sendJson(res, 200, {
       ok: true,
@@ -325,9 +354,23 @@ if (pathname === "/oauth/google" && req.method === "GET") {
 }
 
 if (pathname === "/oauth/google/callback" && req.method === "GET") {
+  // This is Google's own redirect target: it carries no Authorization
+  // header, so it cannot go through requiresFirebaseAuthentication. The
+  // single-use state issued by GET /oauth/google (Cliente-Cero-only) is
+  // what proves this callback follows a flow Jose actually started, instead
+  // of an arbitrary caller supplying their own Google OAuth code.
   try {
     const fullUrl = new URL(req.url, `http://${req.headers.host}`);
     const code = fullUrl.searchParams.get("code");
+    const state = fullUrl.searchParams.get("state");
+
+    const stateResult = oauthStateStore.consume(state);
+    if (!stateResult.ok) {
+      return sendJson(res, 403, {
+        ok: false,
+        error: "oauth_state_invalid"
+      });
+    }
 
     if (!code) {
       return sendJson(res, 400, {
@@ -354,7 +397,7 @@ return sendJson(res, 200, {
 if (pathname === "/api/gmail/inbox" && req.method === "GET") {
   try {
     const { getGmailClient } = require("../integrations/googleOAuth");
-    const gmail = getGmailClient();
+    const gmail = await getGmailClient();
 
     const listResponse = await gmail.users.messages.list({
       userId: "me",
@@ -410,7 +453,7 @@ if (pathname === "/api/gmail/analyze" && req.method === "GET") {
   try {
 
     const { getGmailClient } = require("../integrations/googleOAuth");
-    const gmail = getGmailClient();
+    const gmail = await getGmailClient();
 
     const listResponse = await gmail.users.messages.list({
       userId: "me",
@@ -915,274 +958,39 @@ if (pathname === "/api/projects" && req.method === "GET") {
   }
 }
 
+  // OXKIO CANONICAL RUNTIME CONSOLIDATION (22/09/2026): endpoint legacy
+  // desactivado. Sin callers reales (frontend usa /api/executive/chat desde
+  // hace tiempo; ver app/index.html). Se preserva EmailAgent/EmailWorkflow
+  // como modulos (no se borran), pero este endpoint ya no los invoca, para
+  // que no ejecuten una cadena de logging/memoria legacy en paralelo a la
+  // moderna. 410 Gone en vez de redirigir silenciosamente.
   if (req.url === "/api/process-email") {
-
-    const emailAgent = new EmailAgent();
-    const workflow = new EmailWorkflow(emailAgent);
-
-    const testEmail = {
-      from: "ceo@empresa.com",
-      subject: "URGENTE: reunión consejo",
-      body: "Necesitamos confirmar asistencia antes de las 18:00"
-    };
-
-    const result = workflow.process(testEmail);
-
-    system.memory.saveShortTerm({
-      type: "EMAIL_WORKFLOW",
-      result
-    });
-
-    system.logs.addLog(
-      "WORKFLOW",
-      "Email procesado mediante endpoint /api/process-email",
-      result
-    );
-
-    return sendJson(res, 200, {
-      ok: true,
-      result,
-      memory: system.memory.getStatus(),
-      logs: system.logs.getStatus()
+    return sendJson(res, 410, {
+      ok: false,
+      error: "legacy_endpoint_disabled",
+      message: "Este endpoint legacy ha sido desactivado. No sustituye a ningun endpoint moderno (era una demo con un email de ejemplo fijo)."
     });
   }
 
- if (req.url.startsWith("/api/chat")) {
-
-  const url = new URL(req.url, `http://${req.headers.host}`);
-
-  const message = url.searchParams.get("message");
-  const queryType = matchExecutiveQuery(message);
-
-  switch (queryType) {
-    case "knowledgeSearch": {
-      try {
-        const assetName = extractAssetSearchTerm(message);
-        let result = searchKnowledge(assetName);
-
-        if (!result.found && assetName.includes(" ")) {
-          result = searchKnowledge(assetName.replace(/\s+/g, "-"));
-        }
-
-        if (result.found) {
-          const dashboardState = await DashboardIntelligence.getDashboardState({
-            ...getEcosystemObserverViews(),
-            approvalQueue,
-          });
-          const knowledgeInventory = dashboardState.knowledgeInventory || {};
-          const recommendation = knowledgeInventory.recommendation || {};
-          const pipeline = result.pipeline || {};
-          const catalog = pipeline.catalog || {};
-
-          return sendJson(res, 200, {
-            ok: true,
-            module: "chat",
-            message,
-            source: "documentCatalog",
-            response: {
-              title: "Catálogo documental del activo",
-              asset: result.asset.name,
-              folder: pipeline.folder,
-              summary: catalog.summary,
-              extensions: catalog.extensions,
-              recommendation: recommendation.message
-            }
-          });
-        }
-
-        return sendJson(res, 200, {
-          ok: true,
-          module: "chat",
-          message,
-          source: "assetLocator",
-          response: {
-            title: "Activo no encontrado",
-            matches: []
-          }
-        });
-      } catch (error) {
-        return sendJson(res, 500, {
-          ok: false,
-          module: "chat",
-          error: "No se pudo localizar el activo."
-        });
-      }
-    }
-
-    case "morningBriefing": {
-      try {
-        const dashboardState = await DashboardIntelligence.getDashboardState({
-          ...getEcosystemObserverViews(),
-          approvalQueue,
-        });
-        const morningBriefing = dashboardState.morningBriefing || {};
-
-        return sendJson(res, 200, {
-          ok: true,
-          module: "chat",
-          message,
-          source: "morningBriefing",
-          response: {
-            title: morningBriefing.title,
-            summary: morningBriefing.summary,
-            priorities: morningBriefing.priorities,
-            recommendations: morningBriefing.recommendations
-          }
-        });
-      } catch (error) {
-        return sendJson(res, 500, {
-          ok: false,
-          module: "chat",
-          error: "No se pudo construir el briefing ejecutivo del dia."
-        });
-      }
-    }
-
-    case "projects": {
-      try {
-        const dashboardState = await DashboardIntelligence.getDashboardState({
-          ...getEcosystemObserverViews(),
-          approvalQueue,
-        });
-        const knowledgeInventory = dashboardState.knowledgeInventory || {};
-        const summary = knowledgeInventory.summary || {};
-        const recommendation = knowledgeInventory.recommendation || {};
-        const assets = Array.isArray(knowledgeInventory.assets)
-          ? knowledgeInventory.assets.filter((asset) => asset.recognized)
-          : [];
-
-        return sendJson(res, 200, {
-          ok: true,
-          module: "chat",
-          message,
-          source: "knowledgeInventory",
-          response: {
-            title: "Proyectos prioritarios",
-            summary: `Activos estratégicos detectados: ${summary.recognizedAssets || assets.length}.`,
-            projects: assets,
-            recommendation: recommendation.message
-          }
-        });
-      } catch (error) {
-        return sendJson(res, 500, {
-          ok: false,
-          module: "chat",
-          error: "No se pudo construir el inventario de conocimiento."
-        });
-      }
-    }
-
-    case "knowledgeInventory": {
-      try {
-        const dashboardState = await DashboardIntelligence.getDashboardState({
-          ...getEcosystemObserverViews(),
-          approvalQueue,
-        });
-        const knowledgeInventory = dashboardState.knowledgeInventory || {};
-        const recommendation = knowledgeInventory.recommendation || {};
-        const assets = Array.isArray(knowledgeInventory.assets)
-          ? knowledgeInventory.assets.filter((asset) => asset.recognized)
-          : [];
-
-        return sendJson(res, 200, {
-          ok: true,
-          module: "chat",
-          message,
-          source: "knowledgeInventory",
-          response: {
-            title: "Conocimiento disponible",
-            summary: `Proyectos estratégicos conocidos: ${assets.length}.`,
-            knownAssets: assets,
-            nextRecommendation: recommendation.message
-          }
-        });
-      } catch (error) {
-        return sendJson(res, 500, {
-          ok: false,
-          module: "chat",
-          error: "No se pudo construir el conocimiento disponible."
-        });
-      }
-    }
-
-    case "greeting": {
-      try {
-        const dashboardState = await DashboardIntelligence.getDashboardState({
-          ...getEcosystemObserverViews(),
-          approvalQueue,
-        });
-        const executiveBriefing = dashboardState.executiveBriefing;
-
-        return sendJson(res, 200, {
-          ok: true,
-          module: "chat",
-          message,
-          source: "executiveBriefing",
-          executiveBriefing,
-          response: executiveBriefing.executiveResponse
-        });
-      } catch (error) {
-        return sendJson(res, 500, {
-          ok: false,
-          module: "chat",
-          error: "No se pudo construir el briefing ejecutivo."
-        });
-      }
-    }
+  // OXKIO CANONICAL RUNTIME CONSOLIDATION (22/09/2026): endpoint legacy
+  // desactivado. Sin callers reales: app/index.html solo llama a
+  // /api/executive/chat (POST, ver routes/executive-chat.js), que es el
+  // camino ejecutivo canonico. Este GET /api/chat, cuando no matcheaba un
+  // queryType conocido, caia en una cadena de supervisor/agentes/logging
+  // legacy en paralelo (executiveBrain.think -> SupervisorAgent/policyEngine
+  // -> proposalEngine -> approvalQueue.add + system.logs/system.memory
+  // legacy) — esa duplicidad queda cerrada aqui. Los modulos legacy
+  // (executiveBrain, SupervisorAgent, policyEngine, matchExecutiveQuery,
+  // searchKnowledge...) se preservan intactos, solo se retira este caller.
+  // 410 Gone en vez de redirigir silenciosamente (cambia de semantica: GET
+  // con query param vs. POST con body JSON).
+  if (req.url.startsWith("/api/chat")) {
+    return sendJson(res, 410, {
+      ok: false,
+      error: "legacy_endpoint_disabled",
+      message: "Este endpoint legacy ha sido desactivado. Usa POST /api/executive/chat."
+    });
   }
-
- const brainResult = executiveBrain.think(message);
-const analysis = brainResult.analysis;
-const proposal = proposalEngine.generate(brainResult);
-
-
-const approvalItem = await approvalQueue.add(
-  proposal,
-  {
-    message,
-    analysis
-  }
-);
- system.memory.saveShortTerm({
-  type: "chat",
-  message,
-  analysis,
-  timestamp: new Date().toISOString()
-});
-
-system.logs.addLog({
-  type: "CHAT",
-  message,
-  analysis,
-  timestamp: new Date().toISOString()
-});
-
-  res.writeHead(200, {
-    "Content-Type": "application/json"
-  });
-
-res.end(JSON.stringify({
-  ok: true,
-  module: "chat",
- message,
-analysis,
-brainResult,
-proposal,
-approvalItem,
-response: {
-      summary: "He analizado tu solicitud.",
-      intent: analysis.intent,
-      urgency: analysis.urgency,
-      proposedAction: analysis.actionType,
-      requiresApproval: analysis.requiresApproval,
-      nextStep: analysis.requiresApproval
-        ? "Necesito tu autorización antes de ejecutar esta acción."
-        : "Puedo responder directamente sin ejecutar ninguna acción."
-    }
-  }));
-
-  return;
-}
 if (req.url.startsWith("/api/add-rule")) {
 
   const url = new URL(req.url, `http://${req.headers.host}`);

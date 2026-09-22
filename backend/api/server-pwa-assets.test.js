@@ -68,6 +68,21 @@ test('protects every API with the central Firebase authority and keeps public sh
   assert.doesNotMatch(serverSource, /AUTH_DISABLED|x-oxkio-identity|x-oxkio-role/);
 });
 
+test('the Google OAuth callback requires a single-use state before ever exchanging a code', () => {
+  assert.match(serverSource, /const state = oauthStateStore\.issue\(\)/);
+  assert.match(serverSource, /getAuthUrl\(\{\s*state\s*\}\)/);
+
+  const callbackStart = serverSource.indexOf('pathname === "/oauth/google/callback"');
+  const callbackEnd = serverSource.indexOf('/api/gmail/inbox', callbackStart);
+  const callbackHandler = serverSource.slice(callbackStart, callbackEnd);
+
+  assert.match(callbackHandler, /oauthStateStore\.consume\(state\)/);
+  const stateCheckIndex = callbackHandler.indexOf('oauthStateStore.consume(state)');
+  const getTokensIndex = callbackHandler.indexOf('await getTokens(code)');
+  assert.ok(stateCheckIndex >= 0 && getTokensIndex > stateCheckIndex, 'state must be validated before getTokens is ever called');
+  assert.match(callbackHandler, /if \(!stateResult\.ok\)/);
+});
+
 test('private frontends send Firebase Bearer tokens only in headers and retry once', () => {
   const files = [
     'index.html',
@@ -174,4 +189,38 @@ test('frontend API calls cannot bypass the authenticated fetch helper', () => {
     assert.match(source, /typeof window\.oxkioAuthenticatedFetch !== ["']function["']/);
     assert.match(source, /window\.oxkioAuthenticatedFetch\(["']\/api\//);
   });
+});
+
+test('the "Conectar Google" button reuses the authenticated fetch helper safely, without leaking internals', () => {
+  const entry = fs.readFileSync(path.join(appPath, 'index.html'), 'utf8');
+
+  assert.match(entry, />Conectar Google</);
+  assert.match(entry, /id="btnConectarGoogle"/);
+  assert.match(entry, /onclick="conectarGoogle\(\)"/);
+
+  const fnStart = entry.indexOf('window.conectarGoogle = async function()');
+  assert.ok(fnStart >= 0, 'window.conectarGoogle must be defined');
+  const fnEnd = entry.indexOf('\n    };', fnStart);
+  const fnSource = entry.slice(fnStart, fnEnd);
+
+  // Reuses the shared authenticated-fetch helper — never a bare fetch().
+  assert.match(fnSource, /await window\.oxkioAuthenticatedFetch\(["']\/oauth\/google["']\)/);
+  assert.doesNotMatch(fnSource, /(?<!oxkioAuthenticatedFetch\()\bfetch\s*\(/);
+
+  // Only navigates when the backend explicitly says ok, using its authUrl.
+  assert.match(fnSource, /data\.ok === true[\s\S]*?window\.location\.href = data\.authUrl/);
+
+  // A natural, non-technical message on failure — never the backend's
+  // internal code/error field, never a stack, never the authUrl itself.
+  assert.match(fnSource, /No he podido iniciar la conexión con Google\. Inténtalo de nuevo\./);
+  assert.doesNotMatch(fnSource, /data\.code|data\.error|\.stack|authUrl\}/);
+
+  // Never touches Firebase tokens, headers, or browser storage directly —
+  // that is entirely oxkioAuthenticatedFetch's job.
+  assert.doesNotMatch(fnSource, /getIdToken|Authorization|localStorage|sessionStorage/);
+
+  // Button gets a temporary disabled/"Conectando..." state around the call.
+  assert.match(fnSource, /btn\.disabled = true/);
+  assert.match(fnSource, /Conectando\.\.\./);
+  assert.match(fnSource, /btn\.disabled = false/);
 });

@@ -2,7 +2,7 @@
 
 const { GmailDraftProvider } = require('./providers/gmail-draft-provider');
 
-function createAuthorizedGmailDraftProvider({
+async function createAuthorizedGmailDraftProvider({
   executionEnabled,
   draftExecutionEnabled,
   oauthReadiness,
@@ -38,7 +38,7 @@ function createAuthorizedGmailDraftProvider({
   }
 
   try {
-    const gmail = getGmailClient();
+    const gmail = await getGmailClient();
     if (!gmail || typeof gmail !== 'object') {
       return {
         ok: false,

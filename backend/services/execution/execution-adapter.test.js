@@ -22,6 +22,59 @@ function buildContract(overrides = {}) {
   };
 }
 
+test('resolveEmailProvider is invoked lazily, at most once, and cached across calls', async () => {
+  let resolveCalls = 0;
+  let executeCalls = 0;
+  const provider = {
+    async execute() { executeCalls += 1; return { success: true, provider: 'stub', mode: 'SAFE_DRAFT_ONLY' }; },
+  };
+  const adapter = new ExecutionAdapter({
+    async resolveEmailProvider() {
+      resolveCalls += 1;
+      return provider;
+    },
+  });
+
+  assert.equal(resolveCalls, 0);
+  await adapter.execute(buildContract({ actionType: 'propose_email' }));
+  await adapter.execute(buildContract({ actionType: 'propose_email' }));
+  assert.equal(resolveCalls, 1);
+  assert.equal(executeCalls, 2);
+});
+
+test('resolveEmailProvider is never invoked for non-email action types', async () => {
+  let resolveCalls = 0;
+  const adapter = new ExecutionAdapter({
+    async resolveEmailProvider() { resolveCalls += 1; return { execute: async () => ({}) }; },
+  });
+
+  await adapter.execute(buildContract({ actionType: 'propose_meeting' }));
+  assert.equal(resolveCalls, 0);
+});
+
+test('a rejected resolveEmailProvider fails closed as execution_not_connected, never throws', async () => {
+  const adapter = new ExecutionAdapter({
+    async resolveEmailProvider() { throw new Error('boom'); },
+  });
+
+  const result = await adapter.execute(buildContract({ actionType: 'propose_email' }));
+  assert.equal(result.success, false);
+  assert.equal(result.code, 'execution_not_connected');
+});
+
+test('an already-resolved emailProvider takes precedence over resolveEmailProvider', async () => {
+  let resolveCalls = 0;
+  let resolvedExecuted = false;
+  const adapter = new ExecutionAdapter({
+    emailProvider: { async execute() { resolvedExecuted = true; return { success: true, mode: 'SAFE_DRAFT_ONLY' }; } },
+    async resolveEmailProvider() { resolveCalls += 1; return {}; },
+  });
+
+  await adapter.execute(buildContract({ actionType: 'propose_email' }));
+  assert.equal(resolveCalls, 0);
+  assert.equal(resolvedExecuted, true);
+});
+
 test('accepts every current actionType and returns a disconnected result', async () => {
   assert.deepEqual(ACCEPTED_ACTION_TYPES, [
     'propose_email',

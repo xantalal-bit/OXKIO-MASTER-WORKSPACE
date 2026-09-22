@@ -13,7 +13,7 @@ function normalizeEvent(event) {
 }
 
 async function listUpcomingEvents(options = {}) {
-  const calendar = getCalendarClient();
+  const calendar = await getCalendarClient();
   const response = await calendar.events.list({
     calendarId: options.calendarId || "primary",
     timeMin: options.timeMin || new Date().toISOString(),

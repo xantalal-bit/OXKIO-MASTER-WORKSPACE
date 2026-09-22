@@ -17,6 +17,18 @@ const ENVIRONMENT_VARIABLES = Object.freeze({
   GOOGLE_CLIENT_ID: Object.freeze({ kind: 'sensitive_config', classifications: ['required'], scope: 'google_oauth' }),
   GOOGLE_CLIENT_SECRET: Object.freeze({ kind: 'secret', classifications: ['required', 'secret'], scope: 'google_oauth' }),
   GOOGLE_REDIRECT_URI: Object.freeze({ kind: 'sensitive_config', classifications: ['required'], scope: 'google_oauth' }),
+  // Google OAuth token persistence backend (backend/integrations/
+  // google-oauth-token-store.js). "file" (default when unset) keeps today's
+  // local backend/auth/googleTokens.json behavior; "secret_manager" reads
+  // and writes tokens through the Secret Manager API at runtime instead —
+  // never as a mounted env var, since access_token/refresh_token are
+  // mutable and Google can rotate them at any time.
+  OXKIO_GOOGLE_OAUTH_TOKEN_STORE: Object.freeze({ kind: 'config', classifications: ['optional'], scope: 'google_oauth' }),
+  // Full Secret Manager resource name (projects/<project>/secrets/<secret>)
+  // holding the OAuth tokens JSON. Required only when
+  // OXKIO_GOOGLE_OAUTH_TOKEN_STORE=secret_manager. Not itself a secret value
+  // — it is the name/address of a secret, not the secret's content.
+  OXKIO_GOOGLE_OAUTH_TOKENS_SECRET: Object.freeze({ kind: 'sensitive_config', classifications: ['optional'], scope: 'google_oauth' }),
   FIREBASE_PROJECT_ID: Object.freeze({ kind: 'sensitive_config', classifications: ['required'], scope: 'firebase' }),
   FIREBASE_CLIENT_EMAIL: Object.freeze({ kind: 'sensitive_config', classifications: ['optional'], scope: 'firebase' }),
   FIREBASE_PRIVATE_KEY: Object.freeze({ kind: 'secret', classifications: ['optional', 'secret'], scope: 'firebase' }),

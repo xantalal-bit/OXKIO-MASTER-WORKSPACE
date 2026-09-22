@@ -147,6 +147,10 @@ test('dashboard injection is lazy and frontend renders only whitelisted Gmail da
     path.join(__dirname, '..', '..', '..', 'api', 'server.js'),
     'utf8',
   );
+  const identityProjectionSource = fs.readFileSync(
+    path.join(__dirname, '..', '..', '..', 'security', 'private-identity-projection.js'),
+    'utf8',
+  );
   const html = fs.readFileSync(
     path.join(__dirname, '..', '..', '..', '..', 'app', 'executive-dashboard.html'),
     'utf8',
@@ -156,7 +160,7 @@ test('dashboard injection is lazy and frontend renders only whitelisted Gmail da
   const renderer = html.slice(renderStart, renderEnd);
 
   assert.match(dashboardSource, /getGmail\(timestamp, options\.gmailReader\)/);
-  assert.match(serverSource, /gmailReader: \(\) => buildGmailPrivateContext/);
+  assert.match(identityProjectionSource, /gmailReader: \(\) => buildGmailPrivateContext/);
   assert.match(serverSource, /pathname === ["']\/api\/dashboard["'][\s\S]*gmailReader: dashboardReaders\.gmailReader/);
   assert.match(renderer, /gmail\.available !== true \|\| gmail\.source !== ["']gmail["']/);
   assert.match(renderer, /Gmail no disponible/);

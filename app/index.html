@@ -99,6 +99,10 @@
       margin-bottom:12px;
       font-size:16px;
     }
+    .password-field{ position:relative; margin-bottom:12px; }
+    .password-field input{ margin-bottom:0; padding-right:44px; }
+    .password-toggle{ position:absolute; top:50%; right:6px; transform:translateY(-50%); width:32px; height:32px; padding:0; margin:0; background:transparent; border:none; color:#64748b; font-size:16px; line-height:1; cursor:pointer; }
+    .password-toggle:hover{ color:#0f172a; }
     textarea{
       min-height:96px;
       resize:vertical;
@@ -352,6 +356,44 @@
       transform:scale(1.045);
       box-shadow:0 18px 46px rgba(2,6,23,.52), 0 0 0 8px rgba(34,197,94,.10), 0 0 42px rgba(34,197,94,.42);
     }
+    .app-top-left{ display:flex; align-items:center; gap:10px; }
+    .app-mini-logo{ width:32px; height:32px; border-radius:10px; object-fit:cover; }
+    .app-top-right{ display:flex; align-items:center; gap:10px; flex-wrap:wrap; justify-content:flex-end; }
+    .app-dashboard-link{ color:#93c5fd; font-size:13px; text-decoration:none; border:1px solid rgba(96,165,250,.3); padding:8px 12px; border-radius:12px; white-space:nowrap; }
+    .chat-hero{ display:flex; flex-direction:column; align-items:center; margin:8px 0 18px 0; }
+    .oxkio-avatar{ width:72px; height:72px; border-radius:50%; overflow:hidden; background:#0f172a; box-shadow:0 0 0 1px rgba(148,163,184,.14); display:flex; align-items:center; justify-content:center; transition:box-shadow .3s ease; }
+    .oxkio-avatar img{ width:100%; height:100%; object-fit:cover; }
+    .oxkio-avatar.state-idle{ animation:oxkioIdle 3.4s ease-in-out infinite; }
+    .oxkio-avatar.state-listening{ animation:oxkioListening 1s ease-in-out infinite; box-shadow:0 0 0 6px rgba(34,197,94,.18), 0 0 24px rgba(34,197,94,.45); }
+    .oxkio-avatar.state-thinking{ animation:oxkioThinking 1.2s linear infinite; }
+    .oxkio-avatar.state-speaking{ animation:oxkioSpeaking .55s ease-in-out infinite; box-shadow:0 0 0 6px rgba(37,99,235,.18), 0 0 26px rgba(37,99,235,.5); }
+    @keyframes oxkioIdle{ 0%,100%{ transform:scale(1); } 50%{ transform:scale(1.035); } }
+    @keyframes oxkioListening{ 0%,100%{ transform:scale(1); } 50%{ transform:scale(1.08); } }
+    @keyframes oxkioThinking{ 0%{ opacity:1; } 50%{ opacity:.55; } 100%{ opacity:1; } }
+    @keyframes oxkioSpeaking{ 0%,100%{ transform:scale(1); } 50%{ transform:scale(1.06); } }
+    .chat-greeting{ margin-top:10px; font-size:18px; font-weight:700; color:#e2e8f0; }
+    .chat-log{ display:flex; flex-direction:column; gap:10px; max-height:46vh; overflow-y:auto; padding:4px 2px 8px 2px; margin-bottom:10px; }
+    .chat-bubble{ max-width:88%; padding:12px 14px; border-radius:16px; line-height:1.45; font-size:15px; white-space:pre-wrap; word-break:break-word; }
+    .chat-bubble.chat-user{ align-self:flex-end; background:linear-gradient(135deg,#2563eb,#1d4ed8); color:white; border-bottom-right-radius:6px; }
+    .chat-bubble.chat-oxkio{ align-self:flex-start; background:#111827; color:#e2e8f0; border:1px solid rgba(148,163,184,.14); border-bottom-left-radius:6px; }
+    .chat-composer{ display:flex; align-items:center; gap:8px; background:#0f172a; border-radius:20px; padding:8px; border:1px solid rgba(148,163,184,.14); }
+    .chat-composer input{ flex:1; margin:0; background:transparent; color:white; box-shadow:none; }
+    .chat-composer input::placeholder{ color:#64748b; }
+    .chat-mic{ width:44px; height:44px; min-width:44px; border-radius:50%; margin:0; padding:0; border:none; background:radial-gradient(circle at 34% 28%, rgba(255,255,255,.22), transparent 28%), linear-gradient(135deg,#0f172a,#1d4ed8 48%,#0ea5e9); position:relative; }
+    .chat-mic::before{ content:""; width:14px; height:14px; border-radius:999px; background:#e0f2fe; display:block; margin:0 auto; box-shadow:0 0 14px rgba(224,242,254,.82); }
+    .chat-mic.listening{ background:radial-gradient(circle at 34% 28%, rgba(255,255,255,.24), transparent 28%), linear-gradient(135deg,#052e2b,#0f766e,#22c55e); }
+    .chat-send{ width:44px; height:44px; min-width:44px; border-radius:50%; margin:0; padding:0; background:#2563eb; color:white; font-size:18px; }
+    .voice-status-chat{ text-align:center; color:#94a3b8; font-size:13px; min-height:16px; margin-top:4px; }
+    .voice-reply-row{ text-align:center; margin-top:6px; }
+    .voice-reply-toggle{ background:transparent; color:#64748b; border:1px solid rgba(148,163,184,.25); border-radius:12px; padding:4px 12px; font-size:12px; }
+    .voice-reply-toggle[aria-pressed="true"]{ color:#93c5fd; border-color:rgba(96,165,250,.4); }
+    .dynamic-zone{ display:flex; flex-direction:column; gap:8px; margin-top:14px; }
+    .dynamic-card{ background:#111827; border:1px solid rgba(148,163,184,.14); border-radius:14px; padding:12px 14px; font-size:14px; color:#e2e8f0; }
+    .advanced-toggle-row{ text-align:center; margin-top:18px; }
+    .advanced-toggle{ background:transparent; color:#93c5fd; border:1px solid rgba(96,165,250,.3); border-radius:14px; padding:10px 18px; font-size:14px; }
+    #avanzadoPanel{ margin-top:18px; }
+    .floating-voice{ display:none !important; }
+    @media (min-width:900px){ .container{ max-width:640px; } }
   </style></head>
 <body>
   <div class="container">
@@ -364,10 +406,12 @@
 <div id="loginBox" class="auth-card">
   <div class="subtitle-premium">Executive Intelligence Assistant</div>
   <input id="email" type="email" placeholder="Usuario o email">
-  <input id="password" type="password" placeholder="Contraseña">
+  <div class="password-field">
+    <input id="password" type="password" placeholder="Contraseña">
+    <button type="button" id="togglePasswordBtn" class="password-toggle" onclick="togglePasswordVisibility()" aria-label="Mostrar contraseña" aria-pressed="false">👁</button>
+  </div>
   <button class="auth-main" onclick="login()">Inicio</button>
-  <button class="auth-link" onclick="register()">Registro</button>
-  <div class="auth-extra">¿Olvidaste acceso?</div>
+  <div class="auth-extra">¿Olvidaste acceso? Contacta al administrador para que te dé de alta.</div>
   <div class="legal-box">
     🔒 Seguridad empresarial<br>
     🛡 Privacidad total<br>
@@ -378,20 +422,47 @@
 
 <div id="app" class="app-shell">
   <div class="app-top">
-    <div id="userEmail" class="app-user"></div>
-    <button class="btn-danger" onclick="logout()">Salir</button>
+    <div class="app-top-left">
+      <img src="/app/logo.png" class="app-mini-logo" alt="Oxkio">
+      <div id="userEmail" class="app-user"></div>
+    </div>
+    <div class="app-top-right">
+      <a class="app-dashboard-link" href="executive-dashboard.html">Executive Dashboard (Cliente Cero)</a>
+      <button class="btn-danger" onclick="logout()">Salir</button>
+    </div>
   </div>
 
-  <div class="home-hero">
-    <div class="hero-title">Buenos días, Jose Antonio</div>
-    <div class="hero-subtitle">Tu asistente ejecutivo está listo.</div>
+  <div class="chat-hero">
+    <div id="oxkioAvatar" class="oxkio-avatar state-idle">
+      <img src="/app/logo.png" alt="Oxkio">
+    </div>
+    <div id="chatGreeting" class="chat-greeting">Buenos días</div>
   </div>
 
+  <div id="chatLog" class="chat-log" aria-live="polite"></div>
+
+  <div class="chat-composer">
+    <button id="chatMicBtn" class="chat-mic" type="button" title="Hablar con Oxkio" aria-label="Hablar con Oxkio"></button>
+    <input id="chatInput" type="text" placeholder="¿En qué puedo ayudarte?" autocomplete="off">
+    <button id="chatSendBtn" class="chat-send" type="button" onclick="enviarChatTexto()" aria-label="Enviar">➤</button>
+  </div>
+  <div id="voiceStatus" class="voice-status-chat"></div>
+  <div class="voice-reply-row">
+    <button id="voiceReplyToggle" class="voice-reply-toggle" type="button" onclick="toggleVoiceReply()" aria-pressed="false">Responder con voz</button>
+    <button id="newConversationBtn" class="voice-reply-toggle" type="button" onclick="iniciarNuevaConversacion()" aria-label="Iniciar una nueva conversación sin cerrar sesión">Nueva conversación</button>
+  </div>
+
+  <div id="dynamicZone" class="dynamic-zone content-hidden"></div>
+
+  <div class="advanced-toggle-row">
+    <button id="btnAvanzado" class="advanced-toggle" type="button" onclick="toggleAvanzado()">Más avanzado ▾</button>
+  </div>
+
+  <div id="avanzadoPanel" class="content-hidden">
   <div class="top-nav">
     <button class="nav-pill active" id="btnMenu" onclick="mostrarSeccion('menu')">Menú</button>
     <button class="nav-pill" id="btnOtros" onclick="mostrarSeccion('otros')">Otros</button>
     <button class="nav-pill" id="btnProjects" onclick="mostrarSeccion('projects'); OxkioProjectManager.load()">Proyectos</button>
-    <a class="nav-pill" href="executive-dashboard.html">Executive Dashboard (Cliente Cero)</a>
   </div>
 
   <div id="menuSection" class="section-shell active">
@@ -536,6 +607,14 @@
       <div id="correoContent" class="content-hidden compact-gap"><div id="correoResumen" class="msg">Correo no configurado todavía.</div></div>
     </div>
 
+    <div id="conexionesCard" class="card">
+      <div class="section-title collapsible" onclick="toggleSection('conexionesContent', this)">Conexiones</div>
+      <div id="conexionesContent" class="content-hidden compact-gap">
+        <button id="btnConectarGoogle" class="btn-secondary" onclick="conectarGoogle()">Conectar Google</button>
+        <div id="conectarGoogleMsg" class="msg"></div>
+      </div>
+    </div>
+
     <div id="cargaCard" class="card">
       <div class="section-title collapsible" onclick="toggleSection('cargaContent', this)">Carga semanal</div>
       <div id="cargaContent" class="content-hidden compact-gap"><div id="cargaSemanal" class="msg">Analizando carga...</div></div>
@@ -573,6 +652,7 @@
       <div id="projectManagerList" class="compact-gap">Selecciona Proyectos para cargar la información.</div>
     </div>
   </div>
+  </div>
 </div>
 
   </div><button id="floatingVoiceBtn" class="floating-voice" title="Activar voz Oxkio" aria-label="Activar voz Oxkio"></button>
@@ -593,7 +673,7 @@
 
 <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-    import { browserLocalPersistence, initializeAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+    import { browserLocalPersistence, initializeAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
     import { getFirestore, collection, addDoc, getDocs, updateDoc, deleteDoc, doc, query, where } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
     const firebaseConfig = {
@@ -634,6 +714,24 @@
     let modoCEO = false;
     let recognition = null;
     let escuchando = false;
+    // Preferencia de "responder con voz": booleano puro, sin datos sensibles.
+    // No hay mecanismo de preferencias por usuario reutilizable todavia, asi
+    // que se mantiene solo como estado de sesion en memoria de la pestaña
+    // (se reinicia a OFF en cada recarga), sin ningun almacenamiento persistente
+    // en el navegador. Default OFF: OXKIO solo habla automaticamente cuando
+    // la consulta se inicio por voz.
+    let responderConVoz = false;
+    // V0.5: conversationId identifies one chat thread so the backend can
+    // resolve short-term references ("el mas importante", "respondele")
+    // within it. Session-only in memory (this file has no browser storage
+    // available to it) — a page reload starts a new thread, which is an
+    // acceptable tradeoff for V0.5. "Nueva conversación" regenerates it
+    // explicitly; it is never reused across login/logout.
+    function generarConversationId() {
+      if (window.crypto && typeof window.crypto.randomUUID === "function") return window.crypto.randomUUID().replace(/-/g, "");
+      return "conv" + Date.now().toString(36) + Math.random().toString(36).slice(2, 12);
+    }
+    let conversationId = generarConversationId();
 
     const loadingBox = document.getElementById("loading");
     const loginBox = document.getElementById("loginBox");
@@ -652,8 +750,8 @@
     function showLoading() { loadingBox.style.display = "block"; loginBox.style.display = "none"; appBox.style.display = "none"; floatingVoiceBtn.style.display = "none"; }
     function showLogin(msg = "") { loadingBox.style.display = "none"; loginBox.style.display = "block"; appBox.style.display = "none"; floatingVoiceBtn.style.display = "none"; loginMsg.textContent = msg; }
     function showApp(email) { loadingBox.style.display = "none"; loginBox.style.display = "none"; appBox.style.display = "block"; floatingVoiceBtn.style.display = "block"; userEmail.textContent = email; }
-    function setOxkioRespuesta(texto) { const el = document.getElementById('sugerencia'); if (el) el.textContent = texto; }
-    function setEstadoVoz(texto, activa = false) { if (voiceStatus) voiceStatus.textContent = texto; if (activa) floatingVoiceBtn.classList.add("listening"); else floatingVoiceBtn.classList.remove("listening"); }
+    function setOxkioRespuesta(texto) { const el = document.getElementById('sugerencia'); if (el) el.textContent = texto; if (texto && texto.trim()) appendChatMessage('oxkio', texto); }
+    function setEstadoVoz(texto, activa = false) { if (voiceStatus) voiceStatus.textContent = texto; if (activa) floatingVoiceBtn.classList.add("listening"); else floatingVoiceBtn.classList.remove("listening"); const chatMicBtnEl = document.getElementById('chatMicBtn'); if (chatMicBtnEl) chatMicBtnEl.classList.toggle('listening', activa); }
     function toggleSection(id, header){ const el = document.getElementById(id); if (!el) return; el.classList.toggle("content-hidden"); if (header) header.classList.toggle("active"); }
     window.toggleSection = toggleSection;
     function openSection(contentId) { const el = document.getElementById(contentId); if (!el) return; el.classList.remove("content-hidden"); const header = el.parentElement.querySelector(".collapsible"); if (header) header.classList.add("active"); }
@@ -783,7 +881,7 @@ if (sugerenciaBox) {
     async function cargarRenovaciones() { const box = document.getElementById("renovaciones"); if (!currentUser) return 0; const q = query(collection(db, "documentos"), where("user", "==", currentUser.uid)); const snap = await getDocs(q); const items = []; snap.forEach(d => items.push({ id: d.id, ...d.data() })); items.sort((a, b) => { const fa = parseFecha(a.vence || ""); const fb = parseFecha(b.vence || ""); if (fa && fb) return fa - fb; if (fa) return -1; if (fb) return 1; return 0; }); let html = "", count = 0; for (const item of items) { if (!item.vence) continue; const f = parseFecha(item.vence); if (!f) continue; const diff = diasHasta(f); if (diff <= 30) { count++; const tag = tagAviso(diff); html += `<div class="task"><b>${item.nombre}</b><br>${item.tipo} - vence: ${item.vence}<br><span class="tag ${tag.clase}">${tag.texto}</span>${item.carpeta ? `<span class="tag tag-blue">${item.carpeta}</span>` : ""}${item.ruta ? `<span class="tag tag-blue">${item.ruta}</span>` : ""}</div>`; } } box.innerHTML = html || "Sin renovaciones detectadas"; return count; }
     async function cargarListaDocs() { const box = document.getElementById("docsLista"); if (!currentUser) return; const q = query(collection(db, "documentos"), where("user", "==", currentUser.uid)); const snap = await getDocs(q); const items = []; snap.forEach(d => items.push({ id: d.id, ...d.data() })); items.sort((a, b) => { const fa = parseFecha(a.vence || ""); const fb = parseFecha(b.vence || ""); if (fa && fb) return fa - fb; return (a.createdAt || 0) - (b.createdAt || 0); }); let html = ""; for (const item of items) { let tag = ""; if (item.vence) { const f = parseFecha(item.vence); if (f) { const diff = diasHasta(f); const aviso = tagAviso(diff); tag = `<span class="tag ${aviso.clase}">${aviso.texto}</span>`; } } const pendiente = item.ruta === "pendiente de carpeta final" || !item.ruta; html += `<div class="task"><b>${item.nombre}</b><br>${item.tipo}${item.vence ? " - vence: " + item.vence : ""}<br>${tag}${item.carpeta ? `<span class="tag tag-blue">${item.carpeta}</span>` : ""}${item.ruta ? `<span class="tag tag-blue">${item.ruta}</span>` : ""}${item.mimeType ? `<span class="tag tag-blue">${item.mimeType}</span>` : ""}${item.fileSize ? `<span class="tag tag-blue">${item.fileSize} bytes</span>` : ""}${pendiente ? `<br><button class="btn-secondary" onclick="asignarCarpetaDocumento('${item.id}', '${String(item.nombre).replace(/'/g,"\\'")}')">Asignar carpeta</button>` : ""}${item.notas ? `<div class="msg mono">${item.notas}</div>` : ""}</div>`; } box.innerHTML = html || "Sin documentos"; }
     window.login = async function() { const email = document.getElementById("email").value.trim(); const password = document.getElementById("password").value.trim(); if (!email || !password) { showLogin("Escribe email y contraseña."); return; } try { await signInWithEmailAndPassword(auth, email, password); } catch { showLogin("Email o contraseña incorrectos."); } };
-    window.register = async function() { const email = document.getElementById("email").value.trim(); const password = document.getElementById("password").value.trim(); if (!email || !password) { showLogin("Escribe email y contraseña."); return; } if (password.length < 6) { showLogin("La contraseña debe tener al menos 6 caracteres."); return; } try { await createUserWithEmailAndPassword(auth, email, password); } catch (e) { if (e.code === "auth/email-already-in-use") showLogin("Ese email ya está registrado. Pulsa Inicio."); else showLogin("No se pudo registrar."); } };
+    window.togglePasswordVisibility = function() { const input = document.getElementById("password"); const btn = document.getElementById("togglePasswordBtn"); if (!input || !btn) return; const showing = input.type === "text"; input.type = showing ? "password" : "text"; btn.setAttribute("aria-pressed", String(!showing)); btn.setAttribute("aria-label", showing ? "Mostrar contraseña" : "Ocultar contraseña"); };
     window.logout = async function() { await signOut(auth); };
     window.guardar = async function() { if (!currentUser) { agendaMsg.textContent = "Debes iniciar sesión."; return; } const titulo = document.getElementById("titulo").value.trim(); const fecha = autoFormatFecha(document.getElementById("fecha").value); const tipo = document.getElementById("tipo").value.trim(); const recurrencia = document.getElementById("recurrencia").value; const recordatorio = parseInt(document.getElementById("recordatorio").value, 10); const categoriaAviso = document.getElementById("categoriaAviso").value; document.getElementById("fecha").value = fecha; if (!titulo || !fecha || !tipo) { agendaMsg.textContent = "Completa título, fecha y tipo."; await registrarIncidencia("agenda", "Intento de guardar evento sin completar todos los campos."); return; } if (!parseFecha(fecha)) { agendaMsg.textContent = "Fecha no válida. Usa DD/MM/AAAA o escribe 13042026."; await registrarIncidencia("agenda", `Fecha no válida al guardar evento: ${titulo}`); return; } try { await addDoc(collection(db, "tareas"), { titulo, fecha, tipo, recurrencia, recordatorio, categoriaAviso, estado: "pendiente", user: currentUser.uid, createdAt: Date.now(), lastDoneOccurrence: "" }); await registrarBitacora(`Evento guardado: ${titulo}`); document.getElementById("titulo").value = ""; document.getElementById("fecha").value = ""; document.getElementById("tipo").value = ""; document.getElementById("recurrencia").value = "ninguna"; document.getElementById("recordatorio").value = "0"; document.getElementById("categoriaAviso").value = "auto"; agendaMsg.textContent = "Guardado."; await cargar(); setTimeout(cargarInteligenciaEstrategica, 1000); } catch { agendaMsg.textContent = "No se pudo guardar."; await registrarIncidencia("agenda", `Fallo al guardar evento: ${titulo}`); } };
     async function crearTareaPorVoz(textoOriginal) { if (!currentUser) return false; let limpio = textoOriginal.replace(/^añadir tarea/i, "").replace(/^crear tarea/i, "").replace(/^nueva tarea/i, "").trim(); if (!limpio) { setOxkioRespuesta("No he podido extraer el texto de la tarea."); return true; } let fecha = formatFecha(todayDate()); let titulo = limpio; const tipo = "Voz"; if (limpio.toLowerCase().includes("mañana")) { fecha = formatFecha(addDays(todayDate(), 1)); titulo = titulo.replace(/mañana/ig, "").trim(); } const fecha8 = limpio.match(/\d{8}/); if (fecha8) { fecha = autoFormatFecha(fecha8[0]); titulo = titulo.replace(fecha8[0], "").trim(); } if (!titulo) titulo = "Nueva tarea por voz"; try { await addDoc(collection(db, "tareas"), { titulo, fecha, tipo, recurrencia: "ninguna", recordatorio: 0, categoriaAviso: "auto", estado: "pendiente", user: currentUser.uid, createdAt: Date.now(), lastDoneOccurrence: "" }); await registrarBitacora(`Tarea creada por voz: ${titulo}`); await cargar(); setOxkioRespuesta(`Tarea creada: ${titulo}.`); } catch { setOxkioRespuesta("No he podido crear la tarea por voz."); } return true; }
@@ -800,6 +898,7 @@ if (sugerenciaBox) {
       renderResumen(pendientes, hechas, hoyCount, semanaCount, urgentesCount, retrasadasCount, renovCount || 0);
       const cargaAlta = renderCargaSemanal(semanaCount, retrasadasCount);
       renderSugerencia(pendientes, hoyCount, semanaCount, urgentesCount, retrasadasCount, cargaAlta, renovCount || 0);
+      renderDynamicZone({ urgentesCount, retrasadasCount, renovCount: renovCount || 0 });
       await cargarCorreoResumen();
 await cargarInteligenciaEstrategica();
 await cargarDocsResumen();
@@ -807,8 +906,8 @@ await cargarListaDocs();
 applyModoCEO();
     }
     function getVoiceRecognition() { const SR = window.SpeechRecognition || window.webkitSpeechRecognition; if (!SR) return null; const rec = new SR(); rec.lang = "es-ES"; rec.interimResults = false; rec.continuous = false; rec.maxAlternatives = 1; return rec; }
-    async function procesarComandoVoz(textoOriginal) { const texto = (textoOriginal || "").toLowerCase().trim(); if (!texto) { setOxkioRespuesta("No he entendido la orden."); return; } if (texto.startsWith("añadir tarea") || texto.startsWith("crear tarea") || texto.startsWith("nueva tarea")) { await crearTareaPorVoz(textoOriginal); return; } if (texto.includes("modo ceo")) { if (!modoCEO) window.toggleModoCEO(); setOxkioRespuesta("Modo CEO activado."); return; } if (texto.includes("quitar modo ceo") || texto.includes("salir modo ceo")) { if (modoCEO) window.toggleModoCEO(); setOxkioRespuesta("Modo CEO desactivado."); return; } if (texto.includes("documentos") || texto.includes("abre documentos") || texto.includes("muéstrame documentos")) { mostrarSeccion('otros'); openSection("docsListaContent"); const header = document.querySelector('#docsListaCard .collapsible'); if (header) header.classList.add("active"); setOxkioRespuesta("Mostrando documentos."); return; } if (texto.includes("agenda completa") || texto.includes("abre agenda") || texto.includes("muéstrame agenda")) { mostrarSeccion('otros'); openSection("agendaContent"); const header = document.querySelector('#agendaCard .collapsible'); if (header) header.classList.add("active"); setOxkioRespuesta("Mostrando agenda completa."); return; } if (texto.includes("hoy")) { mostrarSeccion('menu'); openSection("hoyContent"); const header = document.querySelector('#hoyCard .collapsible'); if (header) header.classList.add("active"); setOxkioRespuesta("Mostrando hoy."); return; } if (texto.includes("urgentes") || texto.includes("urgente")) { mostrarSeccion('otros'); openSection("urgentesContent"); const header = document.querySelector('#urgentesCard .collapsible'); if (header) header.classList.add("active"); setOxkioRespuesta("Mostrando urgentes."); return; } if (texto.includes("resumen")) { mostrarSeccion('menu'); openSection("resumenContent"); const header = document.querySelector('#resumenCard .collapsible'); if (header) header.classList.add("active"); setOxkioRespuesta("Mostrando resumen."); return; } if (texto.includes("configuración") || texto.includes("abre configuración")) { mostrarSeccion('otros'); if (modoCEO) { setOxkioRespuesta("La configuración no se muestra en modo CEO."); return; } configBox.classList.remove("content-hidden"); setOxkioRespuesta("Mostrando configuración."); return; } if (texto.includes("centro de control") || texto.includes("incidencias") || texto.includes("reglas") || texto.includes("bitácora")) { mostrarSeccion('otros'); openSection("controlContent"); const header = document.querySelector('#controlCard .collapsible'); if (header) header.classList.add("active"); if (texto.includes("incidencias")) { await window.cargarIncidencias(); setOxkioRespuesta("Mostrando incidencias."); } else if (texto.includes("reglas")) { await window.cargarReglas(); setOxkioRespuesta("Mostrando reglas."); } else if (texto.includes("bitácora")) { await window.cargarBitacora(); setOxkioRespuesta("Mostrando aprendizaje."); } else setOxkioRespuesta("Mostrando centro de control."); return; } if (texto.includes("próximos") || texto.includes("esta semana")) { mostrarSeccion('otros'); openSection("proximosContent"); const header = document.querySelector('#proximosCard .collapsible'); if (header) header.classList.add("active"); setOxkioRespuesta("Mostrando próximos días."); return; } await consultarOxkioBackend(textoOriginal); }
-    async function consultarOxkioBackend(textoOriginal) {
+    async function procesarComandoVoz(textoOriginal, porVoz = false) { const texto = (textoOriginal || "").toLowerCase().trim(); if (!texto) { setOxkioRespuesta("No he entendido la orden."); return; } if (texto.startsWith("añadir tarea") || texto.startsWith("crear tarea") || texto.startsWith("nueva tarea")) { await crearTareaPorVoz(textoOriginal); return; } if (texto.includes("modo ceo")) { if (!modoCEO) window.toggleModoCEO(); setOxkioRespuesta("Modo CEO activado."); return; } if (texto.includes("quitar modo ceo") || texto.includes("salir modo ceo")) { if (modoCEO) window.toggleModoCEO(); setOxkioRespuesta("Modo CEO desactivado."); return; } if (texto.includes("documentos") || texto.includes("abre documentos") || texto.includes("muéstrame documentos")) { mostrarSeccion('otros'); openSection("docsListaContent"); const header = document.querySelector('#docsListaCard .collapsible'); if (header) header.classList.add("active"); setOxkioRespuesta("Mostrando documentos."); return; } if (texto.includes("agenda completa") || texto.includes("abre agenda") || texto.includes("muéstrame agenda")) { mostrarSeccion('otros'); openSection("agendaContent"); const header = document.querySelector('#agendaCard .collapsible'); if (header) header.classList.add("active"); setOxkioRespuesta("Mostrando agenda completa."); return; } if (texto.includes("hoy")) { mostrarSeccion('menu'); openSection("hoyContent"); const header = document.querySelector('#hoyCard .collapsible'); if (header) header.classList.add("active"); setOxkioRespuesta("Mostrando hoy."); return; } if (texto.includes("urgentes") || texto.includes("urgente")) { mostrarSeccion('otros'); openSection("urgentesContent"); const header = document.querySelector('#urgentesCard .collapsible'); if (header) header.classList.add("active"); setOxkioRespuesta("Mostrando urgentes."); return; } if (texto.includes("resumen")) { mostrarSeccion('menu'); openSection("resumenContent"); const header = document.querySelector('#resumenCard .collapsible'); if (header) header.classList.add("active"); setOxkioRespuesta("Mostrando resumen."); return; } if (texto.includes("configuración") || texto.includes("abre configuración")) { mostrarSeccion('otros'); if (modoCEO) { setOxkioRespuesta("La configuración no se muestra en modo CEO."); return; } configBox.classList.remove("content-hidden"); setOxkioRespuesta("Mostrando configuración."); return; } if (texto.includes("centro de control") || texto.includes("incidencias") || texto.includes("reglas") || texto.includes("bitácora")) { mostrarSeccion('otros'); openSection("controlContent"); const header = document.querySelector('#controlCard .collapsible'); if (header) header.classList.add("active"); if (texto.includes("incidencias")) { await window.cargarIncidencias(); setOxkioRespuesta("Mostrando incidencias."); } else if (texto.includes("reglas")) { await window.cargarReglas(); setOxkioRespuesta("Mostrando reglas."); } else if (texto.includes("bitácora")) { await window.cargarBitacora(); setOxkioRespuesta("Mostrando aprendizaje."); } else setOxkioRespuesta("Mostrando centro de control."); return; } if (texto.includes("próximos") || texto.includes("esta semana")) { mostrarSeccion('otros'); openSection("proximosContent"); const header = document.querySelector('#proximosCard .collapsible'); if (header) header.classList.add("active"); setOxkioRespuesta("Mostrando próximos días."); return; } await consultarOxkioBackend(textoOriginal, porVoz); }
+    async function consultarOxkioBackend(textoOriginal, porVoz = false) {
   try {
     const executiveChatEndpoint = "/api/executive/chat";
     // Reversión temporal: GET /api/chat?message=<texto codificado>.
@@ -817,7 +916,7 @@ applyModoCEO();
       headers: {
         "Content-Type": "application/json"
       },
-      body: JSON.stringify({ query: textoOriginal })
+      body: JSON.stringify({ query: textoOriginal, conversationId })
     });
 
     let data = {};
@@ -861,14 +960,17 @@ applyModoCEO();
     }
 
     lines.push(`Interaction ID: ${data.interactionId || "No disponible"}`);
-    setOxkioRespuesta(lines.join("\n"));
+    const sugerenciaDetalleEl = document.getElementById('sugerencia');
+    if (sugerenciaDetalleEl) sugerenciaDetalleEl.textContent = lines.join("\n");
+    appendChatMessage('oxkio', data.response);
+    if (porVoz || responderConVoz) hablarTexto(data.response);
 
   } catch (error) {
     console.log("Error conectando con backend Oxkio:", error);
     setOxkioRespuesta("No puedo conectar con el backend de Oxkio. Inténtalo de nuevo más tarde.");
   }
-} function hablarTexto(texto) { if (!("speechSynthesis" in window)) return; const utter = new SpeechSynthesisUtterance(texto); utter.lang = "es-ES"; speechSynthesis.cancel(); speechSynthesis.speak(utter); }
-    window.iniciarVoz = function() { if (!currentUser) return; if (escuchando) return; const rec = getVoiceRecognition(); if (!rec) { setEstadoVoz("Este navegador no soporta voz.", false); setOxkioRespuesta("La voz no está disponible en este dispositivo o navegador."); return; } recognition = rec; escuchando = true; setEstadoVoz("Escuchando...", true); setOxkioRespuesta("Te escucho."); recognition.onresult = async (event) => { const texto = event.results[0][0].transcript; setEstadoVoz(`Oído: ${texto}`, false); await procesarComandoVoz(texto); }; recognition.onerror = () => { escuchando = false; setEstadoVoz("Error de voz.", false); setOxkioRespuesta("No he podido escuchar bien. Inténtalo otra vez."); }; recognition.onend = () => { escuchando = false; if (voiceStatus && voiceStatus.textContent === "Escuchando...") setEstadoVoz("Voz en espera.", false); else floatingVoiceBtn.classList.remove("listening"); }; recognition.start(); };
+} function hablarTexto(texto) { if (!("speechSynthesis" in window)) return; const utter = new SpeechSynthesisUtterance(texto); utter.lang = "es-ES"; utter.onstart = () => setOxkioAvatarState("speaking"); utter.onend = () => setOxkioAvatarState("idle"); utter.onerror = () => setOxkioAvatarState("idle"); speechSynthesis.cancel(); speechSynthesis.speak(utter); }
+    window.iniciarVoz = function() { if (!currentUser) return; if (escuchando) return; const rec = getVoiceRecognition(); if (!rec) { setEstadoVoz("Este navegador no soporta voz.", false); setOxkioRespuesta("La voz no está disponible en este dispositivo o navegador."); return; } recognition = rec; escuchando = true; setEstadoVoz("Escuchando...", true); setOxkioAvatarState("listening"); recognition.onresult = async (event) => { const texto = event.results[0][0].transcript; setEstadoVoz("Procesando...", false); appendChatMessage("user", texto); setOxkioAvatarState("thinking"); try { await procesarComandoVoz(texto, true); } finally { setOxkioAvatarState("idle"); setEstadoVoz("", false); } }; recognition.onerror = () => { escuchando = false; setEstadoVoz("Error de voz.", false); setOxkioAvatarState("idle"); setOxkioRespuesta("No he podido escuchar bien. Inténtalo otra vez."); }; recognition.onend = () => { escuchando = false; setOxkioAvatarState("idle"); if (voiceStatus && voiceStatus.textContent === "Escuchando...") setEstadoVoz("Voz en espera.", false); else floatingVoiceBtn.classList.remove("listening"); }; recognition.start(); };
     floatingVoiceBtn.addEventListener("click", () => { window.iniciarVoz(); });
     function mostrarSeccion(tipo){ const sections = { menu: document.getElementById("menuSection"), otros: document.getElementById("otrosSection"), projects: document.getElementById("projectsSection") }; const buttons = { menu: document.getElementById("btnMenu"), otros: document.getElementById("btnOtros"), projects: document.getElementById("btnProjects") }; Object.entries(sections).forEach(([name, section]) => { if (section) section.classList.toggle("active", name === tipo); }); Object.entries(buttons).forEach(([name, button]) => { if (button) button.classList.toggle("active", name === tipo); }); }
     window.mostrarSeccion = mostrarSeccion;
@@ -876,7 +978,34 @@ applyModoCEO();
     onAuthStateChanged(auth, async (u) => {
   if (u) {
     currentUser = u;
+
+    // This shell (greeting, dashboard nav, approvals, control center, docs,
+    // agenda) is Cliente Cero's private admin app. Any other authorized
+    // identity (family beta included) is sent straight to the neutral
+    // executive chat instead of ever rendering it. Any ambiguity (identity
+    // fetch fails, times out, or the role is missing) also redirects: this
+    // must fail closed toward the least-privileged view, never toward Jose's.
+    let identityRole = null;
+    try {
+      const identityResponse = await authenticatedFetch("/api/executive/identity");
+      if (identityResponse.ok) {
+        const identityData = await identityResponse.json();
+        identityRole = identityData && identityData.identity && typeof identityData.identity.role === "string"
+          ? identityData.identity.role
+          : null;
+      }
+    } catch (error) {
+      identityRole = null;
+    }
+
+    if (identityRole !== "admin") {
+      window.location.replace("/executive-chat.html");
+      return;
+    }
+
     showApp(u.email);
+    actualizarSaludo();
+    actualizarToggleVoz();
 
     try {
       await cargar();
@@ -915,8 +1044,67 @@ applyModoCEO();
     const vozOriginalV14 = procesarComandoVoz;
     procesarComandoVoz = async function(texto){
   if(comandosDriveV15(texto.toLowerCase())) return;
+  if(detectaCrearEvento(texto)){ abrirFormularioEvento(); return; }
   await consultarOxkioBackend(texto);
 };
+
+    function appendChatMessage(role, texto) { const log = document.getElementById('chatLog'); if (!log || !texto) return; const bubble = document.createElement('div'); bubble.className = 'chat-bubble ' + (role === 'user' ? 'chat-user' : 'chat-oxkio'); bubble.textContent = texto; log.appendChild(bubble); log.scrollTop = log.scrollHeight; }
+    function setOxkioAvatarState(state) { const avatar = document.getElementById('oxkioAvatar'); if (!avatar) return; avatar.classList.remove('state-idle','state-listening','state-thinking','state-speaking'); avatar.classList.add('state-' + state); }
+    function actualizarToggleVoz() { const btn = document.getElementById('voiceReplyToggle'); if (!btn) return; btn.setAttribute('aria-pressed', String(responderConVoz)); btn.textContent = responderConVoz ? "Responder con voz: activado" : "Responder con voz"; }
+    window.toggleVoiceReply = function() { responderConVoz = !responderConVoz; actualizarToggleVoz(); };
+    // "Nueva conversación": reset visual/frontend + un conversationId nuevo
+    // (V0.5). El backend guarda contexto conversacional CORTO y TEMPORAL por
+    // conversationId (para resolver referencias como "el mas importante"
+    // dentro del mismo hilo), separado por completo de la memoria de
+    // proyecto persistente y global, que nunca se toca aqui. No cierra
+    // sesion, no borra Gmail/Firestore/tareas/documentos/aprobaciones, no
+    // toca OAuth ni Secret Manager, y mantiene la preferencia actual de
+    // "Responder con voz" (responderConVoz no se toca).
+    window.iniciarNuevaConversacion = function() {
+      conversationId = generarConversationId();
+      const log = document.getElementById('chatLog');
+      if (log) log.innerHTML = '';
+      const input = document.getElementById('chatInput');
+      if (input) input.value = '';
+      if ('speechSynthesis' in window) speechSynthesis.cancel();
+      if (escuchando && recognition) { try { recognition.stop(); } catch {} }
+      escuchando = false;
+      setEstadoVoz('', false);
+      setOxkioAvatarState('idle');
+    };
+    // El nombre solo viene de una fuente fiable de identidad real (el
+    // displayName de Firebase Auth), nunca inferido del email: si no existe,
+    // se mantiene el saludo generico en vez de inventar un nombre.
+    function actualizarSaludo() { const el = document.getElementById('chatGreeting'); if (!el) return; const h = new Date().getHours(); const franja = h < 12 ? "Buenos días" : h < 20 ? "Buenas tardes" : "Buenas noches"; const nombre = (currentUser && typeof currentUser.displayName === "string") ? currentUser.displayName.trim() : ""; el.textContent = nombre ? `${franja}, ${nombre}` : franja; }
+    function renderDynamicZone({ urgentesCount = 0, retrasadasCount = 0, renovCount = 0 } = {}) { const zone = document.getElementById('dynamicZone'); if (!zone) return; const piezas = []; if (retrasadasCount > 0) piezas.push(`Hay ${retrasadasCount} asunto(s) retrasado(s) que requieren atención.`); if (urgentesCount > 0) piezas.push(`Hay ${urgentesCount} asunto(s) urgente(s) hoy o mañana.`); if (renovCount > 0) piezas.push(`Hay ${renovCount} documento(s) o renovación(es) próximos a vencer.`); zone.innerHTML = ""; if (piezas.length === 0) { zone.classList.add("content-hidden"); return; } zone.classList.remove("content-hidden"); piezas.forEach(texto => { const card = document.createElement("div"); card.className = "dynamic-card"; card.textContent = texto; zone.appendChild(card); }); }
+    function detectaCrearEvento(texto) { return /\b(crear|nuevo|nueva|añadir|agendar|programar)\b.*\b(evento|cita|reuni[oó]n)\b/i.test(texto || ""); }
+    function abrirFormularioEvento() { mostrarSeccion("otros"); const panel = document.getElementById("avanzadoPanel"); if (panel) panel.classList.remove("content-hidden"); openSection("nuevoEventoContent"); const header = document.querySelector("#nuevoEventoCard .collapsible"); if (header) header.classList.add("active"); const card = document.getElementById("nuevoEventoCard"); if (card) card.scrollIntoView({ behavior: "smooth", block: "start" }); setOxkioRespuesta("He abierto el formulario de nuevo evento más abajo, en Avanzado, para que lo completes."); }
+    window.enviarChatTexto = async function() { const input = document.getElementById("chatInput"); if (!input) return; const texto = input.value.trim(); if (!texto) return; input.value = ""; appendChatMessage("user", texto); setOxkioAvatarState("thinking"); try { await procesarComandoVoz(texto); } finally { setOxkioAvatarState("idle"); } };
+    window.toggleAvanzado = function() { const panel = document.getElementById("avanzadoPanel"); const btn = document.getElementById("btnAvanzado"); if (!panel) return; const ahoraOculto = panel.classList.toggle("content-hidden"); if (btn) btn.textContent = ahoraOculto ? "Más avanzado ▾" : "Ocultar avanzado ▴"; };
+    const chatMicBtnRef = document.getElementById("chatMicBtn");
+    if (chatMicBtnRef) chatMicBtnRef.addEventListener("click", () => { window.iniciarVoz(); });
+    const chatInputRef = document.getElementById("chatInput");
+    if (chatInputRef) chatInputRef.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); window.enviarChatTexto(); } });
+
+    window.conectarGoogle = async function() {
+      const btn = document.getElementById("btnConectarGoogle");
+      const msg = document.getElementById("conectarGoogleMsg");
+      if (btn) { btn.disabled = true; btn.textContent = "Conectando..."; }
+      if (msg) msg.textContent = "";
+      try {
+        const res = await window.oxkioAuthenticatedFetch("/oauth/google");
+        const data = await res.json();
+        if (data && data.ok === true && typeof data.authUrl === "string" && data.authUrl) {
+          window.location.href = data.authUrl;
+          return;
+        }
+        if (msg) msg.textContent = "No he podido iniciar la conexión con Google. Inténtalo de nuevo.";
+      } catch (error) {
+        if (msg) msg.textContent = "No he podido iniciar la conexión con Google. Inténtalo de nuevo.";
+      } finally {
+        if (btn) { btn.disabled = false; btn.textContent = "Conectar Google"; }
+      }
+    };
   </script><script>
 let executiveCsrfToken = null;
 let executiveCsrfExpiresAt = 0;

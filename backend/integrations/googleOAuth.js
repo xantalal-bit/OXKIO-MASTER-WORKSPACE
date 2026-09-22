@@ -1,10 +1,10 @@
 const { google } = require("googleapis");
-const fs = require("fs");
 const path = require("path");
 const {
   createEnvironmentSecretProvider,
   createSecretRuntime,
 } = require("../security/secret-runtime");
+const { createGoogleOAuthTokenStore } = require("./google-oauth-token-store");
 
 const TOKENS_PATH = path.join(__dirname, "../auth/googleTokens.json");
 const GMAIL_COMPOSE_SCOPE = "https://www.googleapis.com/auth/gmail.compose";
@@ -31,62 +31,66 @@ function buildSafeOAuthError(code) {
   return error;
 }
 
-function readTokenFile({ tokensPath = TOKENS_PATH, fsModule = fs } = {}) {
-  if (!fsModule.existsSync(tokensPath)) {
-    return { present: false, parseable: false, tokens: null };
-  }
-
-  try {
-    const raw = fsModule.readFileSync(tokensPath, "utf8");
-    if (!raw || !raw.trim()) return { present: true, parseable: false, tokens: null };
-    const tokens = JSON.parse(raw);
-    if (!tokens || typeof tokens !== "object" || Array.isArray(tokens)) {
-      return { present: true, parseable: false, tokens: null };
-    }
-    return { present: true, parseable: true, tokens };
-  } catch (error) {
-    return { present: true, parseable: false, tokens: null };
-  }
-}
-
-function inspectGoogleOAuthReadiness({
+// Readiness states (fail-closed, never exposes token values):
+//   A. OAuth client config absent       -> google_oauth_not_configured
+//   B. configured, but store has no
+//      usable tokens yet                -> google_oauth_tokens_missing
+//   C. tokens available and usable      -> "ready"
+//   D. the configured token store itself
+//      could not be reached/read        -> google_oauth_token_store_unavailable
+// Finer-grained states below C (expired without a refresh token, excess
+// scope, missing compose scope) keep their existing specific codes — they
+// only apply once a token was actually found.
+async function inspectGoogleOAuthReadiness({
   env = process.env,
   secretRuntime = runtimeForEnvironment(env),
-  tokensPath = TOKENS_PATH,
-  fsModule = fs,
   now = Date.now(),
+  ...storeOptions
 } = {}) {
   const configured = getMissingGoogleOAuthConfig({ env, secretRuntime }).length === 0;
-  const tokenFile = readTokenFile({ tokensPath, fsModule });
-  const tokens = tokenFile.tokens || {};
-  const accessTokenPresent = typeof tokens.access_token === "string" && Boolean(tokens.access_token.trim());
-  const refreshTokenPresent = typeof tokens.refresh_token === "string" && Boolean(tokens.refresh_token.trim());
-  const expiryDate = Number(tokens.expiry_date);
+
+  let tokens = null;
+  let storeUnavailable = false;
+  if (configured) {
+    try {
+      tokens = await resolveTokenStore({ env, ...storeOptions }).load();
+    } catch (error) {
+      storeUnavailable = true;
+    }
+  }
+
+  const tokenPresent = Boolean(tokens);
+  const accessTokenPresent = Boolean(tokens && typeof tokens.access_token === "string" && tokens.access_token.trim());
+  const refreshTokenPresent = Boolean(tokens && typeof tokens.refresh_token === "string" && tokens.refresh_token.trim());
+  const expiryDate = Number(tokens && tokens.expiry_date);
   const expired = Number.isFinite(expiryDate) && expiryDate <= now;
-  const scopes = typeof tokens.scope === "string"
+  const scopes = tokens && typeof tokens.scope === "string"
     ? tokens.scope.split(/\s+/).filter(Boolean)
     : [];
   const requiredScopesPresent = scopes.includes(GMAIL_COMPOSE_SCOPE);
   const excessiveScopesPresent = scopes.includes(GMAIL_SEND_SCOPE);
 
-  let code = null;
-  if (!configured) code = "oauth_not_configured";
-  else if (!tokenFile.present) code = "oauth_token_missing";
-  else if (!tokenFile.parseable) code = "oauth_token_invalid";
-  else if (!accessTokenPresent && !refreshTokenPresent) code = "oauth_access_unavailable";
+  // Note: a plausible token object (per the store's own contract) always
+  // has at least one of access_token/refresh_token as a non-empty string —
+  // the same test the store uses to decide something is even worth
+  // returning from load(). So once tokenPresent is true, "neither token is
+  // present" cannot occur; there is deliberately no such branch here.
+  let code = "ready";
+  if (!configured) code = "google_oauth_not_configured";
+  else if (storeUnavailable) code = "google_oauth_token_store_unavailable";
+  else if (!tokenPresent) code = "google_oauth_tokens_missing";
   else if (expired && !refreshTokenPresent) code = "oauth_refresh_unavailable";
   else if (!requiredScopesPresent) code = "gmail_compose_scope_missing";
 
   return {
     configured,
-    tokenPresent: tokenFile.present,
-    tokenParseable: tokenFile.parseable,
+    tokenPresent,
     accessTokenPresent,
     refreshTokenPresent,
     expired,
     requiredScopesPresent,
     excessiveScopesPresent,
-    readyForDraftCreate: code === null,
+    readyForDraftCreate: code === "ready",
     code,
   };
 }
@@ -126,30 +130,35 @@ function createGoogleOAuthClient({
   );
 }
 
-function saveTokens(tokens) {
-  fs.writeFileSync(TOKENS_PATH, JSON.stringify(tokens, null, 2));
+// tokenStore selection is explicit-only (OXKIO_GOOGLE_OAUTH_TOKEN_STORE),
+// per backend/integrations/google-oauth-token-store.js: absent/unset keeps
+// today's file-based local behavior unchanged.
+function resolveTokenStore({ env = process.env, tokenStore, tokensPath = TOKENS_PATH, fsModule, secretManagerClient } = {}) {
+  return tokenStore || createGoogleOAuthTokenStore({ env, tokensPath, fsModule, secretManagerClient });
 }
 
-function loadTokens({ oauthClient = createGoogleOAuthClient() } = {}) {
-  if (!fs.existsSync(TOKENS_PATH)) return null;
+async function saveTokens(tokens, options = {}) {
+  const store = resolveTokenStore(options);
+  return store.save(tokens);
+}
 
-  const raw = fs.readFileSync(TOKENS_PATH, "utf8");
-  if (!raw || raw.trim() === "") return null;
-
-  const tokens = JSON.parse(raw);
-  if (!tokens || Object.keys(tokens).length === 0) return null;
+async function loadTokens({ oauthClient = createGoogleOAuthClient(), ...options } = {}) {
+  const store = resolveTokenStore(options);
+  const tokens = await store.load();
+  if (!tokens) return null;
 
   oauthClient.setCredentials(tokens);
   return tokens;
 }
 
-function getAuthUrl(options = {}) {
+function getAuthUrl({ state, ...options } = {}) {
   const oauthClient = createGoogleOAuthClient(options);
 
   return oauthClient.generateAuthUrl({
     access_type: "offline",
     prompt: "consent",
-    scope: GOOGLE_OAUTH_SCOPES
+    scope: GOOGLE_OAUTH_SCOPES,
+    ...(typeof state === "string" && state ? { state } : {})
   });
 }
 
@@ -158,31 +167,52 @@ async function getTokens(code, options = {}) {
 
   const { tokens } = await oauthClient.getToken(code);
   oauthClient.setCredentials(tokens);
-  saveTokens(tokens);
+  await saveTokens(tokens, options);
   return tokens;
 }
 
-function setCredentials(tokens, options = {}) {
+async function setCredentials(tokens, options = {}) {
   const oauthClient = createGoogleOAuthClient(options);
   oauthClient.setCredentials(tokens);
-  saveTokens(tokens);
+  await saveTokens(tokens, options);
 }
 
-function getGmailClient({
+// google-auth-library's OAuth2Client refreshes an expired access_token
+// transparently (whenever a request needs one and a refresh_token is on
+// file) and emits "tokens" with whatever Google returned — which may omit
+// refresh_token entirely (Google only re-issues one when it decides to
+// rotate it). Without persisting that event, every future getGmailClient/
+// getCalendarClient call keeps loading the stale, already-expired
+// access_token from the store and silently re-refreshing it in memory on
+// every call, never converging. Reusing saveTokens() here both persists
+// the refresh AND preserves the existing refresh_token when Google's
+// response omits one (see withRefreshTokenPreservation).
+function attachTokenPersistence(oauthClient, options) {
+  if (!oauthClient || typeof oauthClient.on !== "function") return;
+  oauthClient.on("tokens", (refreshedTokens) => {
+    saveTokens(refreshedTokens, options).catch(() => {
+      // Best-effort: the in-memory client still works for the current
+      // request either way. A failed persistence here is not fatal — it
+      // just means the next getGmailClient/getCalendarClient call may
+      // have to refresh again from the still-stale stored token.
+    });
+  });
+}
+
+async function getGmailClient({
   env = process.env,
-  tokensPath = TOKENS_PATH,
-  fsModule = fs,
   now = Date.now(),
   secretRuntime = runtimeForEnvironment(env),
   oauthClient,
   googleApi = google,
+  ...storeOptions
 } = {}) {
-  const readiness = inspectGoogleOAuthReadiness({ env, secretRuntime, tokensPath, fsModule, now });
+  const readiness = await inspectGoogleOAuthReadiness({ env, secretRuntime, now, ...storeOptions });
   if (!readiness.readyForDraftCreate) throw buildSafeOAuthError(readiness.code);
 
-  const tokenFile = readTokenFile({ tokensPath, fsModule });
   const client = oauthClient || createGoogleOAuthClient({ env, secretRuntime, googleApi });
-  client.setCredentials(tokenFile.tokens);
+  await loadTokens({ oauthClient: client, env, ...storeOptions });
+  attachTokenPersistence(client, { env, ...storeOptions });
 
   return googleApi.gmail({
     version: "v1",
@@ -190,11 +220,13 @@ function getGmailClient({
   });
 }
 
-function getCalendarClient() {
-  const oauthClient = createGoogleOAuthClient();
-  loadTokens({ oauthClient });
+async function getCalendarClient(options = {}) {
+  const { googleApi = google, ...rest } = options;
+  const oauthClient = createGoogleOAuthClient({ ...rest, googleApi });
+  await loadTokens({ oauthClient, ...rest });
+  attachTokenPersistence(oauthClient, rest);
 
-  return google.calendar({
+  return googleApi.calendar({
     version: "v3",
     auth: oauthClient
   });

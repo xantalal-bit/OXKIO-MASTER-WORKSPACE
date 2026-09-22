@@ -11,9 +11,17 @@ test('production keeps global execution disabled and enables only Gmail draft co
   assert.match(source, /executionEnabled:\s*false/);
   assert.match(source, /draftExecutionEnabled:\s*true/);
   assert.match(source, /createAuthorizedGmailDraftProvider\(\{[\s\S]*?draftExecutionEnabled:\s*executionConfig\.draftExecutionEnabled/);
-  assert.match(source, /oauthReadiness:\s*executionConfig\.draftExecutionEnabled\s*\?/);
-  assert.match(source, /const gmailDraftProvider = gmailDraftComposition\.provider/);
-  assert.match(source, /new ExecutionAdapter\(\{\s*emailProvider:\s*gmailDraftProvider\s*\}\)/);
+  // Readiness is still gated by the exact same flag as before — only the
+  // shape changed (a ternary wrapping the async readiness call, resolved
+  // lazily/once via resolveGmailDraftComposition(), instead of an eager
+  // synchronous call at module load — inspectGoogleOAuthReadiness() reads
+  // the configured OXKIO_GOOGLE_OAUTH_TOKEN_STORE, which is inherently
+  // async once Secret Manager is in play).
+  assert.match(source, /executionConfig\.draftExecutionEnabled\s*\?\s*inspectGoogleOAuthReadiness\(\)/);
+  assert.match(source, /let gmailDraftCompositionPromise = null/);
+  assert.match(source, /function resolveGmailDraftComposition\(\)/);
+  assert.match(source, /if \(!gmailDraftCompositionPromise\)/);
+  assert.match(source, /new ExecutionAdapter\(\{\s*resolveEmailProvider:\s*async \(\) => \(await resolveGmailDraftComposition\(\)\)\.provider/);
   assert.doesNotMatch(source, /(?:^|[^A-Za-z])executionEnabled:\s*true/);
   assert.match(source, /const executiveCsrf = createExecutiveCsrf\(\)/);
   assert.match(source, /pathname === ["']\/api\/executive\/security-context["']/);

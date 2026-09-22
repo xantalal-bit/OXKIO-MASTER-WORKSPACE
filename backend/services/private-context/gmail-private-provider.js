@@ -88,7 +88,7 @@ function normalizeGmailMessage(message = {}) {
 
 async function listReadonlyGmailMessages(options = {}, dependencies = {}) {
   const gmailClientFactory = dependencies.getGmailClient || getGmailClient;
-  const gmail = gmailClientFactory();
+  const gmail = await gmailClientFactory();
   const maxMessages = clampMaxMessages(options.maxMessages);
   const listResponse = await gmail.users.messages.list({
     userId: 'me',
