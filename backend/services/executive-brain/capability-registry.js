@@ -128,20 +128,18 @@ const CAPABILITIES = Object.freeze([
   }),
   Object.freeze({
     id: 'governance.read', name: 'Consultar el estado de gobernanza de OXKIO',
-    description: 'Consultar politicas y estado del propio proyecto OXKIO.',
+    description: 'Consultar el modo de seguridad, quien decide y que acciones requieren tu aprobacion.',
     mode: 'read', owner: 'ecosystem-observer', risk: 'low',
-    // Corrected in FULL RUNTIME REVEAL: buildEcosystemObserver() DOES run on
-    // every getDashboardState() call (dashboard-intelligence.js), it is not
-    // disconnected — its output is computed and then discarded by
-    // sanitizeDashboardContext() in executive-chat.js before it ever reaches
-    // the user. The user-facing effect (chat cannot answer this) is correct;
-    // the previous reason ("no conectado") was not. V0.6.1 PROBLEMA 5:
-    // unavailableReason can reach the user verbatim (describeCapabilityAnswer),
-    // so the technical mechanism (which functions run, where the discard
-    // happens) stays in this comment and in `source`, never in the string
-    // itself.
-    requiresApproval: false, available: false, partial: false,
-    unavailableReason: 'El estado de gobernanza todavia no esta disponible directamente en el chat; solo se calcula para el panel completo.',
+    // OXKIO CANONICAL RUNTIME CONSOLIDATION (22/09/2026): conectado de forma
+    // sanitizada (sanitizeGovernanceContext() en executive-chat.js,
+    // describeGovernanceAnswer() en executive-orchestrator.js,
+    // GOVERNANCE_QUERIES en context-intent-router.js). Solo expone la
+    // politica de seguridad/aprobacion (modo seguro, autoridad de decision,
+    // acciones que requieren aprobacion) — nunca el detalle interno de
+    // roadmap/proyecto que buildEcosystemObserver() tambien calcula (fase
+    // actual, bloque, drift, auditoria...), que sigue sin llegar al chat.
+    requiresApproval: false, available: true, partial: true,
+    unavailableReason: 'El chat solo responde con la politica de seguridad y aprobacion (modo seguro, quien decide, que requiere tu aprobacion); el detalle completo de estado interno del proyecto solo esta disponible en el panel.',
     source: 'backend/services/executive-brain/ecosystem-observer.js',
     dependencies: ['dashboard.read'],
   }),
@@ -160,6 +158,50 @@ const CAPABILITIES = Object.freeze([
     requiresApproval: false, available: false, partial: false,
     unavailableReason: 'Todavia no existe un motor de priorizacion cruzada entre fuentes.',
     source: null, dependencies: [],
+  }),
+  // OXKIO CANONICAL RUNTIME CONSOLIDATION (22/09/2026), FASE 5+6: Mission
+  // Queue (backend/services/mission-queue/) esta completa, probada y no
+  // duplica orchestrator/approvalQueue/operations-coordinator, pero tiene
+  // cero callers en produccion y su persistencia Postgres requiere un
+  // secreto (OXKIO_MISSION_PG_RUNTIME_URL) deliberadamente no provisionado
+  // todavia. Estas 4 capabilities se registran honestamente: la logica
+  // existe, el runtime no esta activado, la persistencia no esta lista —
+  // nunca simplemente "no existe".
+  Object.freeze({
+    id: 'mission.create', name: 'Crear una mision a partir de un plan confirmado',
+    description: 'Registrar una mision con objetivo, pasos y aprobaciones asociadas.',
+    mode: 'propose', owner: 'mission-service', risk: 'medium',
+    requiresApproval: true, available: false, partial: false,
+    unavailableReason: 'La logica de creacion de misiones ya existe en el backend, pero el runtime todavia no esta activado y su base de datos aun no esta provisionada.',
+    source: 'backend/services/mission-queue/mission-service.js',
+    dependencies: [],
+  }),
+  Object.freeze({
+    id: 'mission.track', name: 'Consultar el estado de una mision',
+    description: 'Consultar estado, tareas y bloqueos de una mision en curso.',
+    mode: 'read', owner: 'mission-service', risk: 'low',
+    requiresApproval: false, available: false, partial: false,
+    unavailableReason: 'La logica de consulta de misiones ya existe en el backend, pero el runtime todavia no esta activado y su base de datos aun no esta provisionada.',
+    source: 'backend/services/mission-queue/mission-service.js',
+    dependencies: [],
+  }),
+  Object.freeze({
+    id: 'mission.resume', name: 'Reanudar una mision existente',
+    description: 'Retomar una mision a partir de su estado durable guardado.',
+    mode: 'read', owner: 'mission-service', risk: 'low',
+    requiresApproval: false, available: false, partial: false,
+    unavailableReason: 'El estado de una mision es durable y reconsultable en el diseno actual, pero el metodo explicito de reanudacion todavia no esta conectado al chat, y el runtime general sigue desactivado.',
+    source: 'backend/services/mission-queue/mission-service.js',
+    dependencies: [],
+  }),
+  Object.freeze({
+    id: 'mission.close', name: 'Cerrar una mision',
+    description: 'Marcar una mision como completada con su resultado y evidencia.',
+    mode: 'execute', owner: 'mission-service', risk: 'medium',
+    requiresApproval: true, available: false, partial: false,
+    unavailableReason: 'La logica de cierre de misiones ya existe en el backend, pero el runtime todavia no esta activado y su base de datos aun no esta provisionada.',
+    source: 'backend/services/mission-queue/mission-service.js',
+    dependencies: [],
   }),
 ]);
 

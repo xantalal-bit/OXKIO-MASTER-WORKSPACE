@@ -64,18 +64,32 @@ test('gmail.prioritize is registered as connected (V0.5 wired it into the chat)'
   assert.match(prioritize.unavailableReason, /PRIORITIZE_QUERIES|conversacion/i);
 });
 
-// governance.read previously claimed ecosystem-observer.js "no esta
-// conectado" — it runs on every getDashboardState() call; its output is
-// discarded by sanitizeDashboardContext() before reaching the chat. The
-// mechanism belongs in `source`/code comments; unavailableReason itself
-// (which describeCapabilityAnswer shows to the user verbatim, V0.6.1
-// PROBLEMA 5) must stay a plain, human sentence, not "not connected".
-test('governance.read explains itself in plain language, not as a disconnection', () => {
+// OXKIO CANONICAL RUNTIME CONSOLIDATION (22/09/2026): governance.read is now
+// connected (sanitizeGovernanceContext() in executive-chat.js), narrower
+// than the full ecosystem-observer.js output — same partial=true pattern as
+// gmail.prioritize/dashboard.read above, not a disconnection anymore.
+test('governance.read is registered as connected but narrower than the full ecosystem observer', () => {
   const governance = getCapability('governance.read');
-  assert.equal(governance.available, false);
+  assert.equal(governance.available, true);
+  assert.equal(governance.partial, true);
   assert.doesNotMatch(governance.unavailableReason, /no esta conectad/i);
-  assert.match(governance.unavailableReason, /gobernanza/i);
+  assert.match(governance.unavailableReason, /aprobacion|seguridad/i);
   assert.match(governance.source, /ecosystem-observer/);
+});
+
+// FASE 6: registered honestly — logic exists, runtime disabled, persistence
+// not provisioned — never simply "does not exist" (Mission Queue is real,
+// tested, and has zero production callers today; see mission-service.js).
+test('mission.* capabilities are registered honestly, not as nonexistent', () => {
+  for (const id of ['mission.create', 'mission.track', 'mission.resume', 'mission.close']) {
+    const capability = getCapability(id);
+    assert.ok(capability, `${id} must be registered`);
+    assert.equal(capability.available, false);
+    assert.doesNotMatch(capability.unavailableReason, /no existe/i);
+    assert.match(capability.unavailableReason, /logica|estado/i);
+    assert.match(capability.unavailableReason, /runtime/i);
+    assert.match(capability.source, /mission-queue/);
+  }
 });
 
 // V0.6.1 PROBLEMA 5: "Que no puedes hacer todavia?" must never surface

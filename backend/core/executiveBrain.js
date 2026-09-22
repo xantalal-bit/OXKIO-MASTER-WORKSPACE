@@ -1,3 +1,10 @@
+// LEGACY_DISABLED (OXKIO CANONICAL RUNTIME CONSOLIDATION, 22/09/2026):
+// ExecutiveBrain.think() (below) was, until this change, reachable only from
+// the legacy GET /api/chat fallback in backend/api/server.js, which is now
+// disabled (410 Gone). SupervisorAgent/policyEngine below no longer execute
+// from any active endpoint. The canonical supervisor for the live runtime is
+// backend/services/executive-brain/supervised-decision-engine.js, wired into
+// POST /api/executive/chat. Not deleted (preserva historial/modulos).
 const SupervisorAgent = require("../agents/executive/supervisorAgent");
 const ExecutiveDispatcher = require("./executiveDispatcher");
 const knowledgeCurator = require("../knowledge/knowledgeCurator");

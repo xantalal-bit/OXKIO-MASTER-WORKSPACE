@@ -327,7 +327,11 @@ if (isExecutiveChatRoute(pathname, req.method)) {
         ...options,
       }),
       dashboardGmailReader: dashboardReaders.gmailReader,
-      dashboardCalendarReader: dashboardReaders.calendarReader
+      dashboardCalendarReader: dashboardReaders.calendarReader,
+      // OXKIO CANONICAL RUNTIME CONSOLIDATION (22/09/2026), FASE 8: metadata
+      // segura por turno (interactionId/capability/supervisor decision/
+      // proposal type/approval state), nunca contenido privado.
+      executionLogger
     }
   });
 }
@@ -954,274 +958,39 @@ if (pathname === "/api/projects" && req.method === "GET") {
   }
 }
 
+  // OXKIO CANONICAL RUNTIME CONSOLIDATION (22/09/2026): endpoint legacy
+  // desactivado. Sin callers reales (frontend usa /api/executive/chat desde
+  // hace tiempo; ver app/index.html). Se preserva EmailAgent/EmailWorkflow
+  // como modulos (no se borran), pero este endpoint ya no los invoca, para
+  // que no ejecuten una cadena de logging/memoria legacy en paralelo a la
+  // moderna. 410 Gone en vez de redirigir silenciosamente.
   if (req.url === "/api/process-email") {
-
-    const emailAgent = new EmailAgent();
-    const workflow = new EmailWorkflow(emailAgent);
-
-    const testEmail = {
-      from: "ceo@empresa.com",
-      subject: "URGENTE: reunión consejo",
-      body: "Necesitamos confirmar asistencia antes de las 18:00"
-    };
-
-    const result = workflow.process(testEmail);
-
-    system.memory.saveShortTerm({
-      type: "EMAIL_WORKFLOW",
-      result
-    });
-
-    system.logs.addLog(
-      "WORKFLOW",
-      "Email procesado mediante endpoint /api/process-email",
-      result
-    );
-
-    return sendJson(res, 200, {
-      ok: true,
-      result,
-      memory: system.memory.getStatus(),
-      logs: system.logs.getStatus()
+    return sendJson(res, 410, {
+      ok: false,
+      error: "legacy_endpoint_disabled",
+      message: "Este endpoint legacy ha sido desactivado. No sustituye a ningun endpoint moderno (era una demo con un email de ejemplo fijo)."
     });
   }
 
- if (req.url.startsWith("/api/chat")) {
-
-  const url = new URL(req.url, `http://${req.headers.host}`);
-
-  const message = url.searchParams.get("message");
-  const queryType = matchExecutiveQuery(message);
-
-  switch (queryType) {
-    case "knowledgeSearch": {
-      try {
-        const assetName = extractAssetSearchTerm(message);
-        let result = searchKnowledge(assetName);
-
-        if (!result.found && assetName.includes(" ")) {
-          result = searchKnowledge(assetName.replace(/\s+/g, "-"));
-        }
-
-        if (result.found) {
-          const dashboardState = await DashboardIntelligence.getDashboardState({
-            ...getEcosystemObserverViews(),
-            approvalQueue,
-          });
-          const knowledgeInventory = dashboardState.knowledgeInventory || {};
-          const recommendation = knowledgeInventory.recommendation || {};
-          const pipeline = result.pipeline || {};
-          const catalog = pipeline.catalog || {};
-
-          return sendJson(res, 200, {
-            ok: true,
-            module: "chat",
-            message,
-            source: "documentCatalog",
-            response: {
-              title: "Catálogo documental del activo",
-              asset: result.asset.name,
-              folder: pipeline.folder,
-              summary: catalog.summary,
-              extensions: catalog.extensions,
-              recommendation: recommendation.message
-            }
-          });
-        }
-
-        return sendJson(res, 200, {
-          ok: true,
-          module: "chat",
-          message,
-          source: "assetLocator",
-          response: {
-            title: "Activo no encontrado",
-            matches: []
-          }
-        });
-      } catch (error) {
-        return sendJson(res, 500, {
-          ok: false,
-          module: "chat",
-          error: "No se pudo localizar el activo."
-        });
-      }
-    }
-
-    case "morningBriefing": {
-      try {
-        const dashboardState = await DashboardIntelligence.getDashboardState({
-          ...getEcosystemObserverViews(),
-          approvalQueue,
-        });
-        const morningBriefing = dashboardState.morningBriefing || {};
-
-        return sendJson(res, 200, {
-          ok: true,
-          module: "chat",
-          message,
-          source: "morningBriefing",
-          response: {
-            title: morningBriefing.title,
-            summary: morningBriefing.summary,
-            priorities: morningBriefing.priorities,
-            recommendations: morningBriefing.recommendations
-          }
-        });
-      } catch (error) {
-        return sendJson(res, 500, {
-          ok: false,
-          module: "chat",
-          error: "No se pudo construir el briefing ejecutivo del dia."
-        });
-      }
-    }
-
-    case "projects": {
-      try {
-        const dashboardState = await DashboardIntelligence.getDashboardState({
-          ...getEcosystemObserverViews(),
-          approvalQueue,
-        });
-        const knowledgeInventory = dashboardState.knowledgeInventory || {};
-        const summary = knowledgeInventory.summary || {};
-        const recommendation = knowledgeInventory.recommendation || {};
-        const assets = Array.isArray(knowledgeInventory.assets)
-          ? knowledgeInventory.assets.filter((asset) => asset.recognized)
-          : [];
-
-        return sendJson(res, 200, {
-          ok: true,
-          module: "chat",
-          message,
-          source: "knowledgeInventory",
-          response: {
-            title: "Proyectos prioritarios",
-            summary: `Activos estratégicos detectados: ${summary.recognizedAssets || assets.length}.`,
-            projects: assets,
-            recommendation: recommendation.message
-          }
-        });
-      } catch (error) {
-        return sendJson(res, 500, {
-          ok: false,
-          module: "chat",
-          error: "No se pudo construir el inventario de conocimiento."
-        });
-      }
-    }
-
-    case "knowledgeInventory": {
-      try {
-        const dashboardState = await DashboardIntelligence.getDashboardState({
-          ...getEcosystemObserverViews(),
-          approvalQueue,
-        });
-        const knowledgeInventory = dashboardState.knowledgeInventory || {};
-        const recommendation = knowledgeInventory.recommendation || {};
-        const assets = Array.isArray(knowledgeInventory.assets)
-          ? knowledgeInventory.assets.filter((asset) => asset.recognized)
-          : [];
-
-        return sendJson(res, 200, {
-          ok: true,
-          module: "chat",
-          message,
-          source: "knowledgeInventory",
-          response: {
-            title: "Conocimiento disponible",
-            summary: `Proyectos estratégicos conocidos: ${assets.length}.`,
-            knownAssets: assets,
-            nextRecommendation: recommendation.message
-          }
-        });
-      } catch (error) {
-        return sendJson(res, 500, {
-          ok: false,
-          module: "chat",
-          error: "No se pudo construir el conocimiento disponible."
-        });
-      }
-    }
-
-    case "greeting": {
-      try {
-        const dashboardState = await DashboardIntelligence.getDashboardState({
-          ...getEcosystemObserverViews(),
-          approvalQueue,
-        });
-        const executiveBriefing = dashboardState.executiveBriefing;
-
-        return sendJson(res, 200, {
-          ok: true,
-          module: "chat",
-          message,
-          source: "executiveBriefing",
-          executiveBriefing,
-          response: executiveBriefing.executiveResponse
-        });
-      } catch (error) {
-        return sendJson(res, 500, {
-          ok: false,
-          module: "chat",
-          error: "No se pudo construir el briefing ejecutivo."
-        });
-      }
-    }
+  // OXKIO CANONICAL RUNTIME CONSOLIDATION (22/09/2026): endpoint legacy
+  // desactivado. Sin callers reales: app/index.html solo llama a
+  // /api/executive/chat (POST, ver routes/executive-chat.js), que es el
+  // camino ejecutivo canonico. Este GET /api/chat, cuando no matcheaba un
+  // queryType conocido, caia en una cadena de supervisor/agentes/logging
+  // legacy en paralelo (executiveBrain.think -> SupervisorAgent/policyEngine
+  // -> proposalEngine -> approvalQueue.add + system.logs/system.memory
+  // legacy) — esa duplicidad queda cerrada aqui. Los modulos legacy
+  // (executiveBrain, SupervisorAgent, policyEngine, matchExecutiveQuery,
+  // searchKnowledge...) se preservan intactos, solo se retira este caller.
+  // 410 Gone en vez de redirigir silenciosamente (cambia de semantica: GET
+  // con query param vs. POST con body JSON).
+  if (req.url.startsWith("/api/chat")) {
+    return sendJson(res, 410, {
+      ok: false,
+      error: "legacy_endpoint_disabled",
+      message: "Este endpoint legacy ha sido desactivado. Usa POST /api/executive/chat."
+    });
   }
-
- const brainResult = executiveBrain.think(message);
-const analysis = brainResult.analysis;
-const proposal = proposalEngine.generate(brainResult);
-
-
-const approvalItem = await approvalQueue.add(
-  proposal,
-  {
-    message,
-    analysis
-  }
-);
- system.memory.saveShortTerm({
-  type: "chat",
-  message,
-  analysis,
-  timestamp: new Date().toISOString()
-});
-
-system.logs.addLog({
-  type: "CHAT",
-  message,
-  analysis,
-  timestamp: new Date().toISOString()
-});
-
-  res.writeHead(200, {
-    "Content-Type": "application/json"
-  });
-
-res.end(JSON.stringify({
-  ok: true,
-  module: "chat",
- message,
-analysis,
-brainResult,
-proposal,
-approvalItem,
-response: {
-      summary: "He analizado tu solicitud.",
-      intent: analysis.intent,
-      urgency: analysis.urgency,
-      proposedAction: analysis.actionType,
-      requiresApproval: analysis.requiresApproval,
-      nextStep: analysis.requiresApproval
-        ? "Necesito tu autorización antes de ejecutar esta acción."
-        : "Puedo responder directamente sin ejecutar ninguna acción."
-    }
-  }));
-
-  return;
-}
 if (req.url.startsWith("/api/add-rule")) {
 
   const url = new URL(req.url, `http://${req.headers.host}`);

@@ -746,7 +746,11 @@ test('V0.6.1: capability limits answer never leaks internal function or file nam
     /[a-zA-Z_][a-zA-Z0-9_]*\(\)|\.js\b|GET \/api\//,
     `capability answer leaks an internal identifier: "${answer}"`,
   );
-  assert.match(answer, /gobernanza/i, 'must still mention governance in human language');
+  // OXKIO CANONICAL RUNTIME CONSOLIDATION (22/09/2026): governance.read is
+  // now connected (available: true, partial: true — see capability-registry.js),
+  // so it no longer appears in "que no puedes hacer". mission.* took its
+  // place as the newest honestly-unavailable capabilities, in human language.
+  assert.match(answer, /mision/i, 'must still mention mission capabilities in human language');
 });
 
 // V0.6.1 PROBLEMA 4 escenario "selección previa inequivoca" / matriz
@@ -855,4 +859,69 @@ test('rejects missing query and invalid JSON without changing the contract', asy
     assert.equal(response.statusCode, 400);
     assert.equal(response.getJson().ok, false);
   }
+});
+
+// OXKIO CANONICAL RUNTIME CONSOLIDATION (22/09/2026), FASE 4, TEST D:
+// governance.read answers from the sanitized policy subset only
+// (sanitizeGovernanceContext() -> describeGovernanceAnswer()), never
+// leaking ecosystemObserver's internal roadmap/project fields.
+test('governance.read answers from the sanitized policy, never leaking internal roadmap detail', async (t) => {
+  const { calls, dependencies } = createHarness(t);
+  dependencies.getDashboardState = async () => {
+    calls.dashboard += 1;
+    return {
+      executiveSummary: 'Estado agregado estable.',
+      morningBriefing: 'Dos prioridades requieren atencion.',
+      ecosystemObserver: {
+        supervisorPolicy: {
+          role: 'ecosystem-operational-supervisor',
+          mode: 'readonly-advisory',
+          decisionAuthority: 'human',
+          executionEnabled: false,
+        },
+        currentPhase: 'secret-internal-roadmap-phase',
+        currentBlock: 'secret-internal-block',
+        auditAnswers: { reused: ['secret-audit-detail'] },
+      },
+    };
+  };
+  const response = await requestChat('¿Estás en modo seguro?', dependencies);
+  const payload = response.getJson();
+  assert.equal(response.statusCode, 200);
+  assert.deepEqual(calls, { gmail: 0, calendar: 0, dashboard: 1 });
+  assert.match(payload.response, /modo seguro/i);
+  assert.match(payload.response, /human/i);
+  const serialized = JSON.stringify(payload);
+  assert.equal(serialized.includes('secret-internal-roadmap-phase'), false);
+  assert.equal(serialized.includes('secret-internal-block'), false);
+  assert.equal(serialized.includes('secret-audit-detail'), false);
+});
+
+// OXKIO CANONICAL RUNTIME CONSOLIDATION (22/09/2026), FASE 7+8, TEST G:
+// interactionId correlates proposal/approval/log — executionLogger.add()
+// (when provided) receives the same interactionId as the chat response,
+// with safe metadata only, never the raw query or private content.
+test('interactionId correlates the chat turn with the executionLogger entry, with safe metadata only', async (t) => {
+  const logged = [];
+  const { dependencies } = createHarness(t, {
+    executionLogger: { add: (entry) => { logged.push(entry); return entry; } },
+  });
+  const response = await requestChat('Programa una reunión.', dependencies);
+  const payload = response.getJson();
+  assert.equal(response.statusCode, 200);
+  assert.equal(logged.length, 1);
+  assert.equal(logged[0].interactionId, payload.interactionId);
+  assert.equal(typeof logged[0].interactionId, 'string');
+  assert.ok(logged[0].interactionId.length > 0);
+  assert.equal(logged[0].proposalType, 'meeting_proposal');
+  assert.equal(logged[0].approvalState, 'pending');
+  assert.equal(logged[0].type, 'executive-chat-turn');
+  const serializedLog = JSON.stringify(logged[0]);
+  assert.equal(serializedLog.includes('Programa una reunión'), false);
+});
+
+test('a missing executionLogger dependency never breaks the chat response', async (t) => {
+  const { dependencies } = createHarness(t);
+  const response = await requestChat('Programa una reunión.', dependencies);
+  assert.equal(response.statusCode, 200);
 });

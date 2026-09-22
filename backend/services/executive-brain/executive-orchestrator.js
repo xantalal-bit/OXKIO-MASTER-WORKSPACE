@@ -340,6 +340,24 @@ function describeCapabilityAnswer(query) {
   return `Ahora mismo puedo: ${items.join(', ')}.`;
 }
 
+// OXKIO CANONICAL RUNTIME CONSOLIDATION (22/09/2026): governance.read.
+// `governance` is the sanitized object from sanitizeGovernanceContext()
+// (executive-chat.js) via options.contextualData.dashboard.governance —
+// already stripped of any internal roadmap/project detail, only policy
+// facts remain.
+function describeGovernanceAnswer(governance) {
+  if (!governance || typeof governance !== 'object' || !governance.available) {
+    return 'No tengo disponible ahora mismo mi estado de gobernanza.';
+  }
+  const modeDescription = governance.safeMode
+    ? 'modo seguro: solo leo, analizo y preparo borradores, nunca ejecuto una accion por mi cuenta'
+    : 'un modo con ejecucion habilitada';
+  const actions = Array.isArray(governance.actionsRequiringApproval) && governance.actionsRequiringApproval.length > 0
+    ? governance.actionsRequiringApproval.join(', ')
+    : 'ninguna accion configurada todavia';
+  return `Estoy en ${modeDescription}. La decision final siempre la toma un humano (${governance.decisionAuthority}), yo solo puedo recomendar. Accion(es) que hoy requieren tu aprobacion explicita antes de ejecutarse: ${actions}.`;
+}
+
 // V0.6.1: only urgent/important/review are legitimate absolute reasons to
 // put a message first (each is a real, verifiable property of the message
 // itself). 'informational' (classifyMailPriority's lowest real tier — this
@@ -996,6 +1014,14 @@ async function orchestrateExecutiveQuery(query, options) {
   // this thread (see buildPrioritizationAnswer above) instead of the
   // Knowledge Store simulator or a fresh Gmail fetch.
   const isPrioritizeQuery = Boolean(contextSelection && contextSelection.reason === 'prioritize_query');
+  // OXKIO CANONICAL RUNTIME CONSOLIDATION (22/09/2026): governance.read.
+  // contextSelection.dashboard is true for this reason (see
+  // context-intent-router.js), so options.contextualData.dashboard.governance
+  // is populated by sanitizeGovernanceContext() in executive-chat.js by the
+  // time this function runs — answered directly from it, bypassing the
+  // generic dashboard summary (morningBriefing/executiveSummary), never
+  // leaking ecosystemObserver's internal roadmap fields.
+  const isGovernanceQuery = Boolean(contextSelection && contextSelection.reason === 'governance_query');
   const conversationContext = options && options.conversationContext ? options.conversationContext : null;
   const prioritizationResult = isPrioritizeQuery ? buildPrioritizationAnswer(conversationContext) : null;
   // FULL RUNTIME REVEAL FASE 18: computed here, before the Knowledge Store
@@ -1062,8 +1088,8 @@ async function orchestrateExecutiveQuery(query, options) {
     || preferPrivateGmailContext
     || Boolean(contextualDataSummary)
     || Boolean(contextFailureSummary);
-  const responseSources = (preferPrivateContext || isChitchatQuery || isCapabilityQuery || isPrioritizeQuery || isAmbiguousEmailReference || Boolean(emailDraftReadyAnswer)) ? [] : sanitizeExecutiveSources(response.sources);
-  const responseLimitations = (preferCombinedPrivateContext || isChitchatQuery || isCapabilityQuery || isPrioritizeQuery || isAmbiguousEmailReference || Boolean(emailDraftReadyAnswer))
+  const responseSources = (preferPrivateContext || isChitchatQuery || isCapabilityQuery || isPrioritizeQuery || isGovernanceQuery || isAmbiguousEmailReference || Boolean(emailDraftReadyAnswer)) ? [] : sanitizeExecutiveSources(response.sources);
+  const responseLimitations = (preferCombinedPrivateContext || isChitchatQuery || isCapabilityQuery || isPrioritizeQuery || isGovernanceQuery || isAmbiguousEmailReference || Boolean(emailDraftReadyAnswer))
     ? []
     : (preferPrivateContext
     ? filterPrivatePrimaryLimitations(response.limitations)
@@ -1076,6 +1102,11 @@ async function orchestrateExecutiveQuery(query, options) {
       ? buildAmbiguousReferenceQuestion(emailReferenceResolution.candidates)
       : (emailDraftReadyAnswer
       ? emailDraftReadyAnswer
+      : (isGovernanceQuery
+      ? describeGovernanceAnswer(
+        options && options.contextualData && options.contextualData.dashboard
+          && options.contextualData.dashboard.governance,
+      )
       : (preferPrivateContext
       ? ([combinedPrivateContextSummary || privateContextSummary, contextualDataSummary, contextFailureSummary]
         .filter(Boolean).join(' '))
@@ -1089,7 +1120,7 @@ async function orchestrateExecutiveQuery(query, options) {
             ? 'Puedo ayudarte a revisar tu correo, organizar tareas y trabajar contigo sobre las funciones que tengas conectadas.'
             : (privateContextSummary
               ? `${response.answer} ${privateContextSummary}`
-              : response.answer)))))),
+              : response.answer))))))),
     confidence: responseConfidence,
     sources: responseSources,
     reasoningSummary: response.reasoningSummary,

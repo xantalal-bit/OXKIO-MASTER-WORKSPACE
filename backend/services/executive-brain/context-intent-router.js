@@ -11,6 +11,7 @@ const REASONS = Object.freeze({
   CHITCHAT: 'chitchat_query',
   CAPABILITY: 'capability_query',
   PRIORITIZE: 'prioritize_query',
+  GOVERNANCE: 'governance_query',
 });
 
 // Pure greeting small talk ("hola", "quien eres"): exact match only (not
@@ -46,6 +47,19 @@ const PRIORITIZE_QUERIES = new Set([
   'cual es el mas urgente', 'que deberia atender primero',
 ]);
 
+// OXKIO CANONICAL RUNTIME CONSOLIDATION (22/09/2026): governance.read
+// conectado de forma sanitizada — ver sanitizeGovernanceContext() en
+// executive-chat.js y describeGovernanceAnswer() en executive-orchestrator.js.
+// Solo expone politica de seguridad/aprobacion (modo seguro, quien decide,
+// que requiere aprobacion humana), nunca detalle interno de roadmap/proyecto.
+// Exact-match, misma razon que CHITCHAT_QUERIES/CAPABILITY_QUERIES arriba.
+const GOVERNANCE_QUERIES = new Set([
+  'cual es tu estado de gobernanza', 'estado de gobernanza',
+  'que limites tienes', 'que limites tienes ahora',
+  'que acciones requieren aprobacion', 'que acciones requieren tu aprobacion',
+  'estas en modo seguro', 'estas en modo seguro ahora',
+]);
+
 function isChitchatQuery(query) {
   return CHITCHAT_QUERIES.has(query);
 }
@@ -56,6 +70,10 @@ function isCapabilityQuery(query) {
 
 function isPrioritizeQuery(query) {
   return PRIORITIZE_QUERIES.has(query);
+}
+
+function isGovernanceQuery(query) {
+  return GOVERNANCE_QUERIES.has(query);
 }
 
 function normalizeContextQuery(value) {
@@ -147,6 +165,10 @@ function selectExecutiveContext(query) {
 
   if (isPrioritizeQuery(normalized)) {
     return { ...selection, reason: REASONS.PRIORITIZE };
+  }
+
+  if (isGovernanceQuery(normalized)) {
+    return { ...selection, dashboard: true, reason: REASONS.GOVERNANCE };
   }
 
   const emailAction = hasEmailAction(normalized);

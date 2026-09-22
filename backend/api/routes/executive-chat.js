@@ -120,6 +120,34 @@ function sanitizeCalendarContext(context) {
   };
 }
 
+// OXKIO CANONICAL RUNTIME CONSOLIDATION (22/09/2026): governance.read
+// conectado de forma sanitizada. state.ecosystemObserver ya se calcula en
+// cada getDashboardState() (dashboard-intelligence.js) pero contiene detalle
+// interno de roadmap/proyecto (fase actual, bloque, drift, auditoria...) que
+// NO debe llegar al chat. Esta funcion expone unicamente la politica de
+// seguridad/aprobacion (ecosystemObserver.supervisorPolicy, ya una constante
+// estatica sin PII: modo, autoridad de decision, executionEnabled) mas la
+// lista fija de acciones que hoy requieren aprobacion humana explicita.
+const GOVERNANCE_ACTIONS_REQUIRING_APPROVAL = Object.freeze([
+  'prepare-email-draft',
+]);
+
+function sanitizeGovernanceContext(state) {
+  const observer = state && state.ecosystemObserver;
+  const policy = observer && observer.supervisorPolicy && typeof observer.supervisorPolicy === 'object'
+    ? observer.supervisorPolicy
+    : null;
+  return {
+    available: Boolean(policy),
+    safeMode: policy ? policy.executionEnabled === false : true,
+    decisionAuthority: policy && typeof policy.decisionAuthority === 'string'
+      ? policy.decisionAuthority
+      : 'human',
+    mode: policy && typeof policy.mode === 'string' ? policy.mode : 'readonly-advisory',
+    actionsRequiringApproval: GOVERNANCE_ACTIONS_REQUIRING_APPROVAL,
+  };
+}
+
 function sanitizeDashboardContext(state) {
   const safeNumber = (value) => (Number.isFinite(value) ? value : 0);
   const executiveSummary = state && state.executiveSummary;
@@ -149,6 +177,7 @@ function sanitizeDashboardContext(state) {
     morningBriefing: typeof morningBriefing === 'string'
       ? morningBriefing
       : (morningBriefing && typeof morningBriefing.summary === 'string' ? morningBriefing.summary : null),
+    governance: sanitizeGovernanceContext(state),
   };
 }
 
@@ -351,6 +380,33 @@ function sendSafeError(res, error) {
   return sendJson(res, 400, { ok: false, error: error && error.message ? error.message : 'Invalid request.' });
 }
 
+// OXKIO CANONICAL RUNTIME CONSOLIDATION (22/09/2026), FASE 7+8: correlacion
+// de bajo riesgo por turno (interactionId -> capability/supervisor decision
+// -> proposal -> approval -> log), conectando executionLogger.js (ya usado
+// por operations-coordinator.js) tambien al runtime moderno de chat, con
+// solo metadata segura — nunca query/response/contenido privado. Best-effort:
+// un fallo de logging nunca debe romper la respuesta del chat.
+function logExecutiveChatTurn(executionLogger, {
+  interactionId, intent, capability, supervisorDecision, proposalType, approvalState, outcomeCategory,
+}) {
+  if (!executionLogger || typeof executionLogger.add !== 'function') return;
+  try {
+    executionLogger.add({
+      type: 'executive-chat-turn',
+      interactionId: interactionId || null,
+      intent: intent || null,
+      capability: capability || null,
+      supervisorDecision: supervisorDecision || null,
+      proposalType: proposalType || null,
+      approvalState: approvalState || null,
+      outcomeCategory: outcomeCategory || 'ok',
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    // Never break the chat response for a logging failure.
+  }
+}
+
 async function handleExecutiveChatRequest(req, res, options) {
   const dependencies = options && options.dependencies ? options.dependencies : {};
   const orchestrator = dependencies.orchestrateExecutiveQuery || orchestrateExecutiveQuery;
@@ -443,6 +499,17 @@ async function handleExecutiveChatRequest(req, res, options) {
         updatedAt: Date.now(),
       });
     }
+    logExecutiveChatTurn(dependencies.executionLogger, {
+      interactionId: payload.interactionId,
+      intent: selectedContext.reason,
+      capability: capabilityComposition ? capabilityComposition.primaryCapability : null,
+      supervisorDecision: recommendation ? recommendation.decision : null,
+      proposalType: payload.proposal ? payload.proposal.type : null,
+      approvalState: payload.approval ? payload.approval.status : null,
+      outcomeCategory: orchestratorOptions.contextFailures && orchestratorOptions.contextFailures.length > 0
+        ? 'partial'
+        : 'ok',
+    });
     return sendJson(res, 200, payload);
   } catch (error) {
     return sendSafeError(res, error);
