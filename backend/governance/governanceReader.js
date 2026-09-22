@@ -361,6 +361,24 @@ function readGovernanceSummary() {
   }
 }
 
+// OXKIO ECOSYSTEM OBSERVER FAILS - IMPLEMENTACION CANONICA DE CONTINUIDAD
+// (22/09/2026): extraccion real desde la seccion "## Politica de
+// continuidad canonica" de SUPERVISOR-RULES-REGISTRY-V1.md. El contrato
+// parseable son los encabezados `### Continuity Policy` / `### Canonical
+// Reentry Policy`; la redaccion de cada item bajo ellos puede evolucionar
+// sin romper la extraccion mientras los encabezados se mantengan. Si la
+// seccion no existe (documento reescrito sin preservarla), devuelve un
+// array vacio - nunca inventa contenido.
+function extractPolicyText(supervisorRules, heading) {
+  const escapedHeading = heading.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const items = linesFromBlock(sectionBetween(
+    supervisorRules,
+    new RegExp(`^###\\s+${escapedHeading}\\s*$`, "im"),
+    /^#{2,3}\s+/im
+  ));
+  return items.join(" ").slice(0, 500);
+}
+
 function readGovernanceStateView() {
   const governance = readGovernanceSummary();
   const currentRoadmap = normalizeMarkdown(
@@ -369,9 +387,19 @@ function readGovernanceStateView() {
   const supervisorRules = normalizeMarkdown(
     readRepositoryGovernanceFileSafe("SUPERVISOR-RULES-REGISTRY-V1.md")
   );
+  // OXKIO ECOSYSTEM OBSERVER FAILS - IMPLEMENTACION CANONICA DE CONTINUIDAD
+  // (22/09/2026): "- Objetivo estratégico:" ya no aparece en
+  // MASTER-ROADMAP-XANTALAL.md; la reconciliacion 13/09/2026 introdujo un
+  // "Objetivo:" en prosa bajo la seccion especifica de OXKIO
+  // ("### OXKIO — resumen exclusivo de PM-20 / PM-21"). Se mantiene el
+  // patron original como alternativa por si un futuro documento vuelve a
+  // usarlo.
   const strategicObjective = firstMatch(
     currentRoadmap,
-    [/^-\s+Objetivo estratégico:\s*([^\n]+)/im],
+    [
+      /^-\s+Objetivo estratégico:\s*([^\n]+)/im,
+      /^Objetivo:\s*([^\n]+)/im,
+    ],
     ""
   );
   const currentPriority = firstMatch(
@@ -379,9 +407,15 @@ function readGovernanceStateView() {
     [/^-\s+Prioridad vigente:\s*([^\n]+)/im],
     ""
   );
+  // "- Recomendación estratégica:" tampoco aparece ya en
+  // MASTER-ROADMAP-XANTALAL.md; el equivalente vigente es el parrafo
+  // "Comité multi-IA futuro:" en la seccion especifica de OXKIO.
   const strategicRecommendation = firstMatch(
     currentRoadmap,
-    [/^-\s+Recomendación estratégica:\s*([^\n]+)/im],
+    [
+      /^-\s+Recomendación estratégica:\s*([^\n]+)/im,
+      /^Comité multi-IA futuro:\s*([^\n]+)/im,
+    ],
     ""
   );
   const currentReminder = firstMatch(
@@ -415,6 +449,8 @@ function readGovernanceStateView() {
     /^## Lecciones aprendidas\s*$/im,
     /^##\s+/im
   )).slice(0, 10);
+  const continuityPolicy = extractPolicyText(supervisorRules, "Continuity Policy");
+  const canonicalReentryPolicy = extractPolicyText(supervisorRules, "Canonical Reentry Policy");
 
   return Object.freeze({
     strategicObjective: strategicObjective || legacyObjective,
@@ -423,6 +459,8 @@ function readGovernanceStateView() {
     ),
     reminders: Object.freeze(reminders),
     learnedLessons: Object.freeze(learnedLessons),
+    continuityPolicy,
+    canonicalReentryPolicy,
     strategicRecommendations: Object.freeze(
       strategicRecommendation ? [strategicRecommendation] : []
     )

@@ -157,6 +157,31 @@ Estas reglas aplican a:
 - El Supervisor supervisa el proyecto completo: codigo, documentacion, arquitectura, pruebas, roadmap, gobernanza, reutilizacion y experiencia presente y futura.
 - Una subfase abierta no implica que todo el bloque permanezca abierto. El Supervisor distinguira siempre bloque, subfase, publicacion y capacidades consolidadas.
 
+## Politica de continuidad canonica
+
+Seccion estructurada y estable, pensada para lectura por codigo
+(backend/governance/governanceReader.js). Los encabezados `###` y la lista
+de items bajo cada uno son el contrato parseable; la redaccion de cada item
+puede ajustarse con el tiempo sin romper la extraccion, siempre que la
+estructura de encabezados se mantenga.
+
+### Continuity Policy
+
+- Recuperar el ultimo estado consistente conocido.
+- Reutilizar evidencia valida existente antes de generar nueva.
+- Continuar antes que reiniciar.
+- No reconstruir desde cero sin necesidad real.
+- Detectar contradicciones o residuos antes de continuar.
+
+### Canonical Reentry Policy
+
+- Consultar el historial de ChatGPT (chat de gobierno y Parte Diario) como registro canonico de decisiones y seguimiento antes de reanudar.
+- Localizar el estado canonico vigente.
+- Verificar evidencia y contexto disponibles.
+- Conciliar discrepancias detectadas.
+- Reanudar desde el ultimo punto consistente.
+- Exigir intervencion humana ante contradiccion material.
+
 ## Lecciones aprendidas
 
 - Integrar antes de continuar.

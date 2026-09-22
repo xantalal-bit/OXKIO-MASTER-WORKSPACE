@@ -15,6 +15,222 @@ const SystemStateManager = require('../../core/systemStateManager');
 const ProjectManagerService = require('../../projects/projectManagerService');
 const { readGovernanceStateView } = require('../../governance/governanceReader');
 
+// OXKIO ECOSYSTEM OBSERVER FAILS - IMPLEMENTACION CANONICA DE CONTINUIDAD
+// (22/09/2026): reemplaza la dependencia de orchestration/ROADMAP.md real
+// (un documento humano en evolucion activa) por fixtures markdown
+// controlados. Los tests de mas abajo verifican contrato/forma y
+// comportamiento del parser (findLabeledValue/findBulletItems/etc en
+// projectManagerService.js), nunca la redaccion literal del documento vivo.
+function withMockedOrchestrationDocs(docs, run) {
+  const originalReadFileSync = fs.readFileSync;
+  fs.readFileSync = function readFileSyncWithFixture(filePath, ...args) {
+    const fileName = String(filePath).split(path.sep).pop();
+    if (
+      String(filePath).includes(`${path.sep}orchestration${path.sep}`)
+      && Object.prototype.hasOwnProperty.call(docs, fileName)
+    ) {
+      return docs[fileName];
+    }
+    return originalReadFileSync.call(fs, filePath, ...args);
+  };
+  try {
+    run();
+  } finally {
+    fs.readFileSync = originalReadFileSync;
+  }
+}
+
+function buildRoadmapFixture({ objective, nextStep }) {
+  return `# OXKIO ROADMAP (fixture)
+
+## Estado operativo vigente
+
+- Código de bloque: 9Z.1
+- Bloque actual: Bloque de Prueba
+- Subfase activa: 9Z.1A — Subfase de prueba
+- Fase actual: 9Z.1 — Fase de prueba
+- Objetivo inmediato: ${objective}
+- Siguiente paso recomendado: ${nextStep}
+- Último hito publicado: 9Z.0 — Hito de prueba.
+- Siguiente fase prevista: 9Z.2 — Fase siguiente de prueba.
+- Resumen de la sesión: sesión de prueba controlada.
+
+## No abrir todavía
+
+- Capacidad de prueba bloqueada.
+
+## Advertencias evidenciadas
+
+- Advertencia de prueba.
+
+## Elementos a reutilizar
+
+- Elemento reutilizable de prueba.
+
+## Duplicación eliminada o evitada
+
+- Se evitó otro supervisor de prueba duplicado.
+
+## Logros de la sesión
+
+- Logro 1 de prueba.
+- Logro 2 de prueba.
+
+## Capacidades consolidadas y publicadas
+
+- Capacidad Consolidada de Prueba.
+- Otra Capacidad de Prueba.
+
+## Evidencia de cierre
+
+- Implementación: Completado
+- Integración: Completado
+- Pruebas: Completado
+- Piloto manual: Pendiente
+- Auditoría: Pendiente
+- Documentación canónica: Completado
+- Observer alineado: Completado
+- Validación del Supervisor: Completado
+- Staging selectivo preparado: Pendiente
+- Commit: Pendiente
+- Publicación: Pendiente
+`;
+}
+
+const PROJECTS_FIXTURE_ALIGNED = `# PROYECTOS (fixture)
+
+1. OXKIO
+- Estado: En curso
+- Prioridad: Alta
+- Rol: Centro de mando
+- Objetivo inmediato: validar el contrato del parser con datos controlados.
+`;
+
+const TASKS_FIXTURE_ALIGNED = `# TAREAS (fixture)
+
+## Prioridad inmediata vigente
+
+1. revisar el fixture de prueba.
+2. confirmar comportamiento con etiquetas ausentes.
+`;
+
+test('ProjectManagerService extracts every contract field from a controlled roadmap fixture', () => {
+  withMockedOrchestrationDocs(
+    {
+      'ROADMAP.md': buildRoadmapFixture({
+        objective: 'validar el contrato del parser con datos controlados.',
+        nextStep: 'revisar el fixture de prueba.',
+      }),
+      'PROJECTS.md': PROJECTS_FIXTURE_ALIGNED,
+      'TASKS.md': TASKS_FIXTURE_ALIGNED,
+    },
+    () => {
+      const view = ProjectManagerService.getProjectStateView('OXKIO');
+      assert.deepEqual(Object.keys(view), [
+        'project', 'blockPhase', 'activeSubphase', 'currentBlock', 'currentPhase', 'currentObjective',
+        'roadmapAlignment', 'nextRecommendedStep', 'lastMilestone',
+        'nextPlannedPhase', 'remainingSteps', 'doNotOpenYet', 'driftEvidence',
+        'reuseEvidence', 'duplicationEvidence', 'sessionAchievements',
+        'consolidatedCapabilities',
+        'closureEvidence', 'sessionSummary',
+      ]);
+      assert.equal(view.project, 'OXKIO');
+      assert.equal(view.blockPhase, '9Z.1');
+      assert.equal(view.activeSubphase, '9Z.1A — Subfase de prueba');
+      assert.equal(view.currentBlock, 'Bloque de Prueba');
+      assert.equal(view.currentPhase, '9Z.1 — Fase de prueba');
+      assert.equal(view.currentObjective, 'validar el contrato del parser con datos controlados.');
+      assert.equal(view.nextRecommendedStep, 'revisar el fixture de prueba.');
+      assert.equal(view.lastMilestone, '9Z.0 — Hito de prueba.');
+      assert.equal(view.nextPlannedPhase, '9Z.2 — Fase siguiente de prueba.');
+      assert.equal(view.sessionSummary, 'sesión de prueba controlada.');
+      // objective and next step agree between ROADMAP.md/PROJECTS.md/TASKS.md -> aligned
+      assert.equal(view.roadmapAlignment, 'aligned');
+      assert.deepEqual(view.remainingSteps, [
+        'revisar el fixture de prueba.',
+        'confirmar comportamiento con etiquetas ausentes.',
+      ]);
+      assert.deepEqual(view.doNotOpenYet, ['Capacidad de prueba bloqueada.']);
+      assert.deepEqual(view.driftEvidence, ['Advertencia de prueba.']);
+      assert.deepEqual(view.reuseEvidence, ['Elemento reutilizable de prueba.']);
+      assert.ok(view.duplicationEvidence.some((item) => /otro supervisor/i.test(item)));
+      assert.equal(view.sessionAchievements.length, 2);
+      assert.deepEqual(view.consolidatedCapabilities, [
+        'Capacidad Consolidada de Prueba', 'Otra Capacidad de Prueba',
+      ]);
+      assert.equal(view.closureEvidence.implementation, true);
+      assert.equal(view.closureEvidence.integration, true);
+      assert.equal(view.closureEvidence.manualPilot, false);
+      assert.equal(view.closureEvidence.audit, false);
+      assert.equal(view.closureEvidence.commit, false);
+      assert.equal(view.closureEvidence.publication, false);
+      assert.doesNotMatch(JSON.stringify(view), /[A-Za-z]:\\|path|ruta/i);
+
+      const observer = buildEcosystemObserver({
+        projectStateView: view,
+        systemStateView: { state: 'running', alertsSummary: [] },
+        governanceStateView: {},
+      });
+      assert.equal(observer.operationalGuidance.phaseClosureStatus, 'work_remaining');
+      assert.deepEqual(observer.blockStatus, { phase: '9Z.1', state: 'in_progress' });
+      assert.deepEqual(observer.releaseStatus, { state: 'pending' });
+      assert.equal(observer.supervisorRecommendation.action, 'revisar el fixture de prueba.');
+      assert.equal(observer.operationalGuidance.nextBestAction, 'revisar el fixture de prueba.');
+    },
+  );
+});
+
+test('ProjectManagerService marks conflicting canonical evidence as attention', () => {
+  withMockedOrchestrationDocs(
+    {
+      // Roadmap and PROJECTS.md objectives disagree, and the roadmap's next
+      // step never matches the active task -> both agreement checks fail.
+      'ROADMAP.md': buildRoadmapFixture({
+        objective: 'validar el contrato del parser con datos controlados.',
+        nextStep: 'Abrir una fase no vigente.',
+      }),
+      'PROJECTS.md': PROJECTS_FIXTURE_ALIGNED,
+      'TASKS.md': TASKS_FIXTURE_ALIGNED,
+    },
+    () => {
+      assert.equal(ProjectManagerService.getProjectStateView('OXKIO').roadmapAlignment, 'attention');
+    },
+  );
+});
+
+test('ProjectManagerService returns empty fields (never throws) when roadmap labels are absent', () => {
+  withMockedOrchestrationDocs(
+    {
+      'ROADMAP.md': '# OXKIO ROADMAP (fixture sin etiquetas)\n\nSin secciones reconocidas.\n',
+      'PROJECTS.md': '# PROYECTOS (fixture sin proyectos)\n',
+      'TASKS.md': '# TAREAS (fixture sin prioridad vigente)\n',
+    },
+    () => {
+      const view = ProjectManagerService.getProjectStateView('OXKIO');
+      assert.equal(view.project, 'OXKIO');
+      assert.equal(view.blockPhase, '');
+      assert.equal(view.activeSubphase, '');
+      assert.equal(view.currentBlock, '');
+      assert.equal(view.currentPhase, '');
+      assert.equal(view.currentObjective, '');
+      assert.equal(view.nextRecommendedStep, '');
+      assert.equal(view.roadmapAlignment, 'unknown');
+      assert.deepEqual(view.remainingSteps, []);
+      assert.deepEqual(view.doNotOpenYet, []);
+      assert.equal(view.closureEvidence.implementation, null);
+      assert.equal(view.closureEvidence.publication, null);
+
+      const observer = buildEcosystemObserver({
+        projectStateView: view,
+        systemStateView: { alertsSummary: [] },
+        governanceStateView: {},
+      });
+      assert.equal(observer.operationalGuidance.phaseClosureStatus, 'unknown');
+      assert.equal(observer.roadmapAlignment, 'unknown');
+    },
+  );
+});
+
 function fixture(overrides = {}) {
   return {
     systemStateView: {
@@ -397,102 +613,6 @@ test('SystemStateManager supplies only the sanitized technical state view', () =
   assert.equal(Object.isFrozen(view), true);
 });
 
-test('ProjectManagerService supplies project phase and roadmap without paths', () => {
-  const view = ProjectManagerService.getProjectStateView('OXKIO');
-  assert.deepEqual(Object.keys(view), [
-    'project', 'blockPhase', 'activeSubphase', 'currentBlock', 'currentPhase', 'currentObjective',
-    'roadmapAlignment', 'nextRecommendedStep', 'lastMilestone',
-    'nextPlannedPhase', 'remainingSteps', 'doNotOpenYet', 'driftEvidence',
-    'reuseEvidence', 'duplicationEvidence', 'sessionAchievements',
-    'consolidatedCapabilities',
-    'closureEvidence', 'sessionSummary',
-  ]);
-  assert.equal(view.project, 'OXKIO');
-  assert.equal(view.blockPhase, '5C.7');
-  assert.equal(view.activeSubphase, '5C.7B — Arquitectura Ejecutable del Runtime');
-  assert.equal(view.currentBlock, 'Runtime Permanente e Infraestructura');
-  assert.equal(view.currentPhase, '5C.7 — Runtime Permanente 24/7');
-  assert.equal(
-    view.currentObjective,
-    'preparar staging selectivo del backend cloud-ready neutral validado.',
-  );
-  assert.notEqual(view.currentObjective, view.nextRecommendedStep);
-  assert.equal(
-    view.nextRecommendedStep,
-    'Revisar y autorizar staging selectivo exclusivo de 5C.7B.1.',
-  );
-  assert.equal(view.lastMilestone, '5C.6D.1 — Gmail Draft supervisado.');
-  assert.equal(view.roadmapAlignment, 'attention');
-  assert.equal(view.closureEvidence.manualPilot, true);
-  assert.equal(view.closureEvidence.integration, true);
-  assert.equal(view.closureEvidence.supervisorValidation, true);
-  assert.equal(view.closureEvidence.commit, false);
-  assert.equal(view.closureEvidence.publication, false);
-  assert.deepEqual(view.remainingSteps, [
-    'Revisar y autorizar staging selectivo exclusivo de 5C.7B.1.',
-    'Preparar la apertura documental de 5C.7B.2: comparativa de adaptadores y decisión de persistencia.',
-    'Mantener runtime y BBDD pendientes hasta comparar adaptadores, pruebas y métricas.',
-    'Obtener del proveedor las respuestas técnicas y contractuales de LucusHost.',
-  ]);
-  assert.ok(view.remainingSteps.length <= 5);
-  assert.deepEqual(view.doNotOpenYet, [
-    'Envío de Gmail.',
-    'Calendar Execution.',
-    'Automatizaciones y activación de otros agentes.',
-  ]);
-  assert.ok(view.duplicationEvidence.some((item) => /otro supervisor/i.test(item)));
-  assert.equal(view.sessionAchievements.length, 5);
-  assert.deepEqual(view.consolidatedCapabilities.slice(0, 3), [
-    'Dashboard Intelligence',
-    'Executive Summary',
-    'Business Readonly',
-  ]);
-  assert.match(
-    JSON.stringify(view.consolidatedCapabilities),
-    /Gmail Draft supervisado bajo SAFE_DRAFT_ONLY/i,
-  );
-  assert.doesNotMatch(JSON.stringify(view), /[A-Za-z]:\\|path|ruta/i);
-
-  const observer = buildEcosystemObserver({
-    projectStateView: view,
-    systemStateView: { health: 'stable', alertsSummary: [] },
-    governanceStateView: {},
-  });
-  assert.equal(observer.operationalGuidance.phaseClosureStatus, 'work_remaining');
-  assert.deepEqual(observer.blockStatus, { phase: '5C.7', state: 'in_progress' });
-  assert.deepEqual(observer.releaseStatus, { state: 'pending' });
-  assert.equal(
-    observer.supervisorRecommendation.action,
-    'Revisar y autorizar staging selectivo exclusivo de 5C.7B.1.',
-  );
-  assert.equal(
-    observer.operationalGuidance.nextBestAction,
-    'Revisar y autorizar staging selectivo exclusivo de 5C.7B.1.',
-  );
-  assert.match(observer.progressMessage, /Solo falta: Revisar y autorizar staging selectivo exclusivo de 5C\.7B\.1/i);
-  assert.match(JSON.stringify(view.consolidatedCapabilities), /Gmail Draft supervisado/i);
-});
-
-test('ProjectManagerService marks conflicting canonical evidence as attention', () => {
-  const originalReadFileSync = fs.readFileSync;
-  fs.readFileSync = function readFileSyncWithStaleRoadmap(filePath, ...args) {
-    const content = originalReadFileSync.call(fs, filePath, ...args);
-    if (!String(filePath).endsWith(`${path.sep}orchestration${path.sep}ROADMAP.md`)) {
-      return content;
-    }
-    return String(content).replace(
-      'Siguiente paso recomendado: ejecutar el piloto local cloud-ready con puerto dinámico, probes y shutdown, sin desplegar.',
-      'Siguiente paso recomendado: Abrir una fase no vigente.',
-    );
-  };
-
-  try {
-    assert.equal(ProjectManagerService.getProjectStateView('OXKIO').roadmapAlignment, 'attention');
-  } finally {
-    fs.readFileSync = originalReadFileSync;
-  }
-});
-
 test('canonical orchestration sources retain stale entries only as substituted history', () => {
   const roadmap = fs.readFileSync(path.join(__dirname, '../../../orchestration/ROADMAP.md'), 'utf8');
   const tasks = fs.readFileSync(path.join(__dirname, '../../../orchestration/TASKS.md'), 'utf8');
@@ -508,8 +628,13 @@ test('canonical orchestration sources retain stale entries only as substituted h
   assert.match(roadmap, /Fase 1 - Orquestación local/);
   assert.match(tasks, /Historial sustituido/);
   assert.match(tasks, /Crear Centro de Mando de Proyectos en Oxkio/);
-  assert.match(governanceRoadmap, /Las auditorías futuras podrán comparar opiniones sanitizadas/);
-  assert.match(governanceRoadmap, /Ninguna IA tendrá autoridad única/);
+  // OXKIO ECOSYSTEM OBSERVER FAILS - IMPLEMENTACION CANONICA DE CONTINUIDAD
+  // (22/09/2026): comité multi-IA/no-autoridad-única verificado por concepto
+  // estable (la etiqueta "Comité multi-IA" y la negación explícita de
+  // sustituir la aprobación del Cliente Cero), no por la redacción completa
+  // de la frase humana, que ya cambió una vez por reconciliación documental.
+  assert.match(governanceRoadmap, /Comité multi-IA/i);
+  assert.match(governanceRoadmap, /ninguna IA sustituye la aprobación/i);
   assert.match(supervisorRules, /Ecosystem Observer es la proyeccion asesora readonly/);
   assert.match(supervisorRules, /SupervisorAgent conserva la coordinacion/);
   assert.match(supervisorRules, /OxkioSupervisor conserva el control humano/);
@@ -517,10 +642,17 @@ test('canonical orchestration sources retain stale entries only as substituted h
     supervisorRules,
     /Una subfase abierta no implica que todo el bloque permanezca abierto/,
   );
-  assert.match(supervisorRules, /Continuidad operativa y reutilizacion de evidencias/);
-  assert.match(supervisorRules, /Recuperar el ultimo estado consistente conocido/);
-  assert.match(supervisorRules, /Continuar antes que reiniciar/);
-  assert.match(supervisorRules, /cambios en el codigo que invaliden las pruebas/);
+  // La politica de continuidad/reentrada se verifica por sus encabezados
+  // estables (contrato parseable de governanceReader.js), no por prosa
+  // extensa que pueda reformularse con el tiempo.
+  assert.match(supervisorRules, /^###\s+Continuity Policy\s*$/im);
+  assert.match(supervisorRules, /^###\s+Canonical Reentry Policy\s*$/im);
+  assert.match(supervisorRules, /Recuperar el ultimo estado consistente conocido/i);
+  assert.match(supervisorRules, /historial de ChatGPT/i);
+  assert.match(
+    supervisorRules,
+    /No cerrar como aprobado un sprint que tenga auditoria pendiente/i,
+  );
 });
 
 test('Governance supplies only strategic objective, priority labels and brief reminders', () => {
@@ -544,9 +676,15 @@ test('Governance supplies only strategic objective, priority labels and brief re
     'Actualizar primero las fuentes canonicas.',
     'No dejar capacidades desconectadas del ecosistema.',
   ]);
-  assert.deepEqual(view.strategicRecommendations, [
-    'Preparar el futuro Comité de Inteligencia sin habilitar modelos externos ni ejecución.',
-  ]);
+  // OXKIO ECOSYSTEM OBSERVER FAILS - IMPLEMENTACION CANONICA DE CONTINUIDAD
+  // (22/09/2026): "- Recomendación estratégica:" ya no existe en
+  // MASTER-ROADMAP-XANTALAL.md; se verifica por concepto estable (comité
+  // multi-IA futuro sin modelos externos ni ejecución habilitada), no por
+  // la redacción exacta previa ("Preparar el futuro Comité de
+  // Inteligencia..."), que ya no aparece en el documento vigente.
+  assert.equal(view.strategicRecommendations.length, 1);
+  assert.match(view.strategicRecommendations[0], /modelos externos no habilitados/i);
+  assert.match(view.strategicRecommendations[0], /ejecución no habilitada/i);
 });
 
 test('missing owner views fail closed without invented values', () => {
