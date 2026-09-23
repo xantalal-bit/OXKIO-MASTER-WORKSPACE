@@ -35,16 +35,20 @@ function run(command, args, options = {}) {
   return result;
 }
 
+// El Dockerfile es Linux-only: un daemon en modo Windows containers
+// (p. ej. runners windows-latest de GitHub Actions) responde a
+// `docker info` pero no puede construir estas imagenes, asi que solo
+// cuenta como disponible si reporta OSType=linux.
 function dockerAvailable() {
-  const result = run('docker', ['info']);
-  return result.status === 0;
+  const result = run('docker', ['info', '--format', '{{.OSType}}']);
+  return result.status === 0 && result.stdout.trim() === 'linux';
 }
 
 let builtImages = [];
 
 test('build (skipped without Docker): runtime y backup se construyen y se inspeccionan', async (t) => {
   if (!dockerAvailable()) {
-    t.skip('Docker no disponible (no instalado o daemon apagado) en esta maquina.');
+    t.skip('Docker Linux no disponible (no instalado, daemon apagado o en modo Windows containers) en esta maquina.');
     return;
   }
 
