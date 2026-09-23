@@ -12,8 +12,22 @@ test('selects deterministic work and emits auditable evidence', () => {
   });
   assert.equal(result.source, 'policy');
   assert.equal(result.decision.level, 'deterministic');
+  assert.equal(result.executionPattern.pattern, 'deterministic');
   assert.equal(result.evidence.missionId, 'm-1');
   assert.match(result.evidence.evidenceHash, /^[a-f0-9]{64}$/);
+});
+
+test('selects the minimum execution pattern together with the cost level', () => {
+  const controller = new CostController();
+  const simple = controller.decide({ mission: { missionId: 'm-pattern-simple' } });
+  assert.equal(simple.executionPattern.pattern, 'single_shot');
+  assert.equal(simple.executionPattern.reason, 'simplest_sufficient_pattern');
+
+  const sensitive = controller.decide({
+    mission: { missionId: 'm-pattern-sensitive', sensitiveAction: true },
+  });
+  assert.equal(sensitive.executionPattern.pattern, 'verifier_gated');
+  assert.equal(sensitive.executionPattern.reason, 'verification_required');
 });
 
 test('reuses compatible cached decisions and derives avoided cost from controlled catalog', () => {
@@ -40,6 +54,7 @@ test('reuses compatible cached decisions and derives avoided cost from controlle
   const second = controller.decide(request);
   assert.equal(first.source, 'policy');
   assert.equal(second.source, 'cache');
+  assert.equal(second.executionPattern.pattern, first.executionPattern.pattern);
   assert.equal(second.evidence.evidenceHash, first.evidence.evidenceHash);
   assert.equal(controller.metrics().hits, 1);
   assert.equal(controller.metrics().avoidedEstimatedCostUsd, 0.01);
