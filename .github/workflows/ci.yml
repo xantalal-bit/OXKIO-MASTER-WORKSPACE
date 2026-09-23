@@ -34,3 +34,24 @@ jobs:
 
       - name: Run backend test suite
         run: node --test
+
+  docker-image-build:
+    name: docker-image-build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run Linux Docker image build checks
+        run: node --test deploy/dockerfile-build.test.js
