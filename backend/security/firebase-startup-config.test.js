@@ -598,11 +598,51 @@ test('Job Object (dinamico, terminacion forzada): el hijo Node muere automaticam
     launcherPid = launcherChild.pid;
     assert.ok(Number.isInteger(launcherPid) && launcherPid > 0);
 
-    const childAppeared = await waitUntil(() => fs.existsSync(pidMarkerPath), { timeoutMs: 20000, intervalMs: 200 });
-    assert.equal(childAppeared, true, 'el hijo Node sintetico nunca escribio su PID marcador a tiempo');
+    // Handshake explicito: el arranque del launcher (PowerShell, Add-Type C#,
+    // Node) tarda 35-47 s en windows-latest, y el marcador PID por si solo no
+    // garantiza que Node ya este asignado al Job Object. Solo se termina el
+    // launcher cuando anuncio la contencion y el marcador coincide con el PID
+    // anunciado; si el launcher sale antes, se falla de inmediato.
+    let launcherOutput = '';
+    let launcherExit = null;
+    launcherChild.stdout.setEncoding('utf8');
+    launcherChild.stderr.setEncoding('utf8');
+    launcherChild.stdout.on('data', (chunk) => { launcherOutput += chunk; });
+    launcherChild.stderr.on('data', (chunk) => { launcherOutput += chunk; });
+    launcherChild.on('exit', (code, signal) => { launcherExit = { code, signal }; });
 
-    childPid = Number(fs.readFileSync(pidMarkerPath, 'utf8').trim());
-    assert.ok(Number.isInteger(childPid) && childPid > 0);
+    const sensitiveValues = [
+      ...Object.values(prepared.values),
+      prepared.credentialPath,
+      prepared.gcloudOptions.secretValue,
+    ].filter(Boolean);
+    const describeLauncher = () => {
+      const redacted = sensitiveValues
+        .reduce((output, value) => output.split(value).join('[REDACTED]'), launcherOutput);
+      return `launcher exit=${JSON.stringify(launcherExit)}; salida del launcher:\n${redacted.slice(-4000)}`;
+    };
+    const readMarkerPid = () => {
+      try {
+        const pid = Number(fs.readFileSync(pidMarkerPath, 'utf8').trim());
+        return Number.isInteger(pid) && pid > 0 ? pid : null;
+      } catch {
+        return null;
+      }
+    };
+    const containmentConfirmed = () => /\[OK\] Proceso Node contenido en el Job Object/.test(launcherOutput);
+
+    // 120 s es solo red de seguridad; la condicion primaria es el handshake.
+    const handshakeCompleted = await waitUntil(
+      () => launcherExit !== null || (containmentConfirmed() && readMarkerPid() !== null),
+      { timeoutMs: 120000, intervalMs: 200 },
+    );
+    assert.equal(launcherExit, null, `el launcher termino antes de completar el handshake; ${describeLauncher()}`);
+    assert.equal(handshakeCompleted, true, `handshake incompleto tras 120 s; ${describeLauncher()}`);
+
+    childPid = readMarkerPid();
+    const pidAnnouncement = launcherOutput.match(/Proceso Node iniciado \(PID (\d+)\)/);
+    assert.ok(pidAnnouncement, `el launcher no anuncio el PID del hijo Node; ${describeLauncher()}`);
+    assert.equal(childPid, Number(pidAnnouncement[1]), 'el PID del marcador debe coincidir con el PID anunciado por el launcher');
     assert.notEqual(childPid, launcherPid, 'el PID del hijo Node debe ser distinto del PID del launcher');
 
     const childAliveBefore = await waitUntil(() => isProcessAlive(childPid), { timeoutMs: 5000, intervalMs: 200 });
