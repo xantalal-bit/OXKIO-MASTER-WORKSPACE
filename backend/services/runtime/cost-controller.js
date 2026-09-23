@@ -4,6 +4,7 @@ const { selectExecutionLevel } = require('./cost-policy');
 const { buildCostDecisionEvidence } = require('./cost-decision-evidence');
 const { buildDecisionCacheKey, CostDecisionCache } = require('./cost-decision-cache');
 const { DEFAULT_CATALOG, normalizeCatalog, estimateCatalogCostUsd } = require('./model-cost-catalog');
+const { selectExecutionPattern } = require('./execution-pattern-router');
 
 class CostController {
   constructor({ policy = {}, cache = null, catalog = DEFAULT_CATALOG, now = () => new Date().toISOString() } = {}) {
@@ -20,14 +21,19 @@ class CostController {
       if (cached) return { ...cached, source: 'cache', cacheKey };
     }
 
+    // Cost level and execution architecture are deliberately selected in the
+    // same controller so callers cannot independently escalate either model
+    // spend or agentic complexity. The pattern router remains deterministic
+    // and does not grant execution permission or bypass human approval gates.
     const decision = selectExecutionLevel(mission, this.policy);
+    const executionPattern = selectExecutionPattern(mission);
     const evidence = buildCostDecisionEvidence({
       mission,
       policy: this.policy,
       decision,
       timestamp: this.now(),
     });
-    const result = { decision, evidence, source: 'policy' };
+    const result = { decision, executionPattern, evidence, source: 'policy' };
 
     if (cacheKey) {
       // Savings are derived only from the controller-owned reviewed catalog.
