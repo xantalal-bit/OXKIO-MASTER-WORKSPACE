@@ -2,7 +2,7 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { CostController } = require('./cost-controller');
+const { CostController, isCostDecision } = require('./cost-controller');
 const { CostDecisionCache } = require('./cost-decision-cache');
 const { stableHash } = require('./cost-decision-evidence');
 
@@ -350,4 +350,40 @@ test('cache hit reuses the decision but rebinds evidence to the current mission'
   // The cache holds only the reusable routing outcome, never request evidence.
   const [entry] = cache.entries.values();
   assert.deepEqual(Object.keys(entry.value).sort(), ['decision', 'executionPattern']);
+});
+
+test('isCostDecision brands only the exact objects returned by decide()', () => {
+  const cache = new CostDecisionCache();
+  const controller = new CostController({ cache, now: () => '2026-09-24T12:00:00.000Z' });
+  const request = { mission: { smallModelEstimatedCostUsd: 0.01 }, cacheContext: { inputFingerprint: 'fp', policyVersion: 1 } };
+  const fresh = controller.decide(request);
+  const hit = controller.decide(request);
+  const uncached = controller.decide({ mission: {} });
+  assert.equal(hit.source, 'cache');
+  for (const real of [fresh, hit, uncached]) assert.equal(isCostDecision(real), true);
+
+  const deepFreeze = (value) => {
+    if (value && typeof value === 'object') { Object.freeze(value); Object.values(value).forEach(deepFreeze); }
+    return value;
+  };
+  const lookAlikes = [
+    structuredClone(fresh),
+    { ...fresh },
+    deepFreeze(structuredClone(fresh)),
+    deepFreeze(JSON.parse(JSON.stringify(fresh))),
+    fresh.decision,
+    [...cache.entries.values()][0].value,
+    {}, null, undefined, 'decision', 42,
+  ];
+  for (const value of lookAlikes) assert.equal(isCostDecision(value), false);
+});
+
+test('branding does not change the decide() contract', () => {
+  const controller = new CostController({ now: () => '2026-09-24T12:00:00.000Z' });
+  const result = controller.decide({ mission: { missionId: 'm-brand', smallModelEstimatedCostUsd: 0.01 } });
+  assert.deepEqual(Object.keys(result).sort(), ['cacheKey', 'costEstimate', 'decision', 'evidence', 'executionPattern', 'source']);
+  assert.ok(Object.isFrozen(result));
+  assert.equal(Object.getOwnPropertySymbols(result).length, 0);
+  assert.equal(result.decision.level, 'small_model');
+  assert.equal(result.evidence.missionId, 'm-brand');
 });
