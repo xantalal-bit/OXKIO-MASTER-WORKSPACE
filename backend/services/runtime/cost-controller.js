@@ -67,6 +67,20 @@ function frozenCopy(value) {
   return deepFreeze(structuredClone(value));
 }
 
+// Provenance brand: identities of the exact objects returned by decide().
+// Holds no data and never leaks; clones or look-alike objects are not branded.
+const issuedDecisions = new WeakSet();
+
+function issueDecision(value) {
+  const decision = frozenCopy(value);
+  issuedDecisions.add(decision);
+  return decision;
+}
+
+function isCostDecision(value) {
+  return typeof value === 'object' && value !== null && issuedDecisions.has(value);
+}
+
 class CostController {
   constructor({ policy = {}, cache = null, catalog = DEFAULT_CATALOG, now = () => new Date().toISOString() } = {}) {
     this.policy = { ...policy };
@@ -116,7 +130,7 @@ class CostController {
         // originally populated the entry.
         const { decision, executionPattern } = cached;
         const evidence = this.buildEvidence(mission, decision);
-        return frozenCopy({ decision, executionPattern, evidence, source: 'cache', cacheKey, costEstimate });
+        return issueDecision({ decision, executionPattern, evidence, source: 'cache', cacheKey, costEstimate });
       }
     }
 
@@ -134,7 +148,7 @@ class CostController {
       this.cache.set(cacheKey, frozenCopy({ decision, executionPattern }), { group: contextKey });
     }
 
-    return frozenCopy({ decision, executionPattern, evidence, source: 'policy', cacheKey, costEstimate });
+    return issueDecision({ decision, executionPattern, evidence, source: 'policy', cacheKey, costEstimate });
   }
 
   buildEvidence(mission, decision) {
@@ -156,4 +170,4 @@ class CostController {
   }
 }
 
-module.exports = { COST_ESTIMATE_STATUS, ROUTING_SIGNALS, CostController };
+module.exports = { COST_ESTIMATE_STATUS, ROUTING_SIGNALS, CostController, isCostDecision };
