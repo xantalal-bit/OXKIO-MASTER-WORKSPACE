@@ -110,7 +110,14 @@ class CostController {
     const { contextKey, cacheKey } = this.cacheKeyFor(cacheContext, mission);
     if (cacheKey) {
       const cached = this.cache.get(cacheKey);
-      if (cached) return frozenCopy({ ...cached, source: 'cache', cacheKey, costEstimate });
+      if (cached) {
+        // Only the routing outcome is reused; evidence always describes the
+        // current request (its mission, its timestamp), never the one that
+        // originally populated the entry.
+        const { decision, executionPattern } = cached;
+        const evidence = this.buildEvidence(mission, decision);
+        return frozenCopy({ decision, executionPattern, evidence, source: 'cache', cacheKey, costEstimate });
+      }
     }
 
     // Cost level and execution architecture are deliberately selected in the
@@ -119,22 +126,20 @@ class CostController {
     // and does not grant execution permission or bypass human approval gates.
     const decision = selectExecutionLevel(mission, this.policy);
     const executionPattern = selectExecutionPattern(mission);
-    const evidence = buildCostDecisionEvidence({
-      mission,
-      policy: this.policy,
-      decision,
-      timestamp: this.now(),
-    });
-    const result = { decision, executionPattern, evidence, source: 'policy' };
+    const evidence = this.buildEvidence(mission, decision);
 
     if (cacheKey) {
       // avoidedEstimatedCostUsd stays nominal: only an estimated cost counts,
       // unknown or unrequested estimates contribute zero to the metric.
       const avoided = costEstimate.status === COST_ESTIMATE_STATUS.ESTIMATED ? costEstimate.estimatedCostUsd : 0;
-      this.cache.set(cacheKey, frozenCopy(result), { estimatedCostUsd: avoided, group: contextKey });
+      this.cache.set(cacheKey, frozenCopy({ decision, executionPattern }), { estimatedCostUsd: avoided, group: contextKey });
     }
 
-    return frozenCopy({ ...result, cacheKey, costEstimate });
+    return frozenCopy({ decision, executionPattern, evidence, source: 'policy', cacheKey, costEstimate });
+  }
+
+  buildEvidence(mission, decision) {
+    return buildCostDecisionEvidence({ mission, policy: this.policy, decision, timestamp: this.now() });
   }
 
   // Invalidates every routing variant cached under this cache context.

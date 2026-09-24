@@ -4,6 +4,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const { CostController } = require('./cost-controller');
 const { CostDecisionCache } = require('./cost-decision-cache');
+const { stableHash } = require('./cost-decision-evidence');
 
 test('selects deterministic work and emits auditable evidence', () => {
   const controller = new CostController({ now: () => '2026-09-18T15:30:00.000Z' });
@@ -258,4 +259,46 @@ test('mutating a returned decision cannot alter the cache or later results', () 
   const again = controller.decide(request);
   assert.notEqual(again.evidence, hit.evidence);
   assert.deepEqual(again.evidence, snapshot.evidence);
+});
+
+test('cache hit reuses the decision but rebinds evidence to the current mission', () => {
+  const timestamps = ['2026-09-24T10:00:00.000Z', '2026-09-24T10:05:00.000Z'];
+  let calls = 0;
+  const cache = new CostDecisionCache();
+  const controller = new CostController({ cache, now: () => timestamps[calls++] });
+  const cacheContext = { taskType: 'classify', inputFingerprint: 'sha256:shared', policyVersion: 1 };
+  const signals = { smallModelEstimatedCostUsd: 0.01, missionSpentUsd: 0.02 };
+
+  const first = controller.decide({ mission: { missionId: 'mission-A', ...signals }, cacheContext });
+  const second = controller.decide({
+    mission: { missionId: 'mission-B', ...signals },
+    cacheContext,
+    costBasis: { modelId: 'local_deterministic', inputTokens: 10, outputTokens: 10 },
+  });
+
+  assert.equal(first.source, 'policy');
+  assert.equal(second.source, 'cache');
+  assert.equal(second.cacheKey, first.cacheKey);
+  assert.deepEqual(second.decision, first.decision);
+  assert.equal(second.decision.level, 'small_model');
+  assert.deepEqual(second.executionPattern, first.executionPattern);
+
+  assert.equal(first.evidence.missionId, 'mission-A');
+  assert.equal(second.evidence.missionId, 'mission-B');
+  assert.equal(JSON.stringify(second.evidence).includes('mission-A'), false);
+  assert.equal(first.evidence.timestamp, timestamps[0]);
+  assert.equal(second.evidence.timestamp, timestamps[1]);
+  assert.deepEqual(second.evidence.decision, first.evidence.decision);
+
+  const { evidenceHash, ...material } = second.evidence;
+  assert.equal(evidenceHash, stableHash(material));
+  assert.notEqual(evidenceHash, first.evidence.evidenceHash);
+
+  assert.equal(first.costEstimate.status, 'not_requested');
+  assert.equal(second.costEstimate.status, 'estimated');
+  assert.ok(Object.isFrozen(second.evidence) && Object.isFrozen(second.evidence.decision));
+
+  // The cache holds only the reusable routing outcome, never request evidence.
+  const [entry] = cache.entries.values();
+  assert.deepEqual(Object.keys(entry.value).sort(), ['decision', 'executionPattern']);
 });
