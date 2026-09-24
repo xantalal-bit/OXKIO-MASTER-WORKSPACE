@@ -90,3 +90,172 @@ test('explicit invalidation forces a fresh policy decision', () => {
   assert.equal(fresh.source, 'policy');
   assert.equal(controller.metrics().invalidations, 1);
 });
+
+test('exposes a controlled costEstimate on the policy path without a cache key', () => {
+  const controller = new CostController();
+  const result = controller.decide({
+    mission: { deterministicAvailable: true },
+    costBasis: { modelId: 'local_deterministic', inputTokens: 1000, outputTokens: 1000 },
+  });
+  assert.equal(result.cacheKey, null);
+  assert.deepEqual(result.costEstimate, {
+    status: 'estimated', estimatedCostUsd: 0, modelId: 'local_deterministic', pricingVersion: 'builtin-zero-v1',
+  });
+});
+
+test('distinguishes unknown model and missing estimate from zero cost', () => {
+  const controller = new CostController();
+  const unknown = controller.decide({ costBasis: { modelId: 'toString', inputTokens: 10 } });
+  assert.deepEqual(unknown.costEstimate, { status: 'unknown_model', estimatedCostUsd: null, modelId: 'toString', pricingVersion: null });
+
+  const missing = controller.decide({});
+  assert.deepEqual(missing.costEstimate, { status: 'not_requested', estimatedCostUsd: null, modelId: null, pricingVersion: null });
+
+  const noTokens = controller.decide({ costBasis: { modelId: 'local_deterministic' } });
+  assert.equal(noTokens.costEstimate.status, 'not_requested');
+  assert.equal(noTokens.costEstimate.estimatedCostUsd, null);
+
+  const badTokens = controller.decide({ costBasis: { modelId: 'local_deterministic', inputTokens: -5 } });
+  assert.equal(badTokens.costEstimate.status, 'not_requested');
+});
+
+test('never trusts caller-supplied USD as the cost estimate', () => {
+  const controller = new CostController();
+  const result = controller.decide({
+    costBasis: { modelId: 'unknown-model', inputTokens: 1000, estimatedCostUsd: 0.5, usd: 0.5 },
+  });
+  assert.equal(result.costEstimate.status, 'unknown_model');
+  assert.equal(result.costEstimate.estimatedCostUsd, null);
+});
+
+test('costEstimate is coherent on fresh, cache-keyed and cache-hit paths', () => {
+  const catalog = {
+    test_small: {
+      provider: 'test', tier: 'small', inputUsdPerMillion: 1, outputUsdPerMillion: 2,
+      residency: 'eu', privacy: 'internal', pricingVersion: 'test-v1',
+      pricingSource: 'https://example.invalid/pricing', reviewedAt: '2026-09-21',
+    },
+  };
+  const controller = new CostController({ catalog });
+  const cacheContext = { inputFingerprint: 'safe-fingerprint', policyVersion: 1 };
+  const mission = { smallModelEstimatedCostUsd: 0.01 };
+  const first = controller.decide({ mission, cacheContext, costBasis: { modelId: 'test_small', inputTokens: 1000, outputTokens: 500 } });
+  const hit = controller.decide({ mission, cacheContext, costBasis: { modelId: 'test_small', inputTokens: 2000, outputTokens: 0 } });
+  const hitUnknown = controller.decide({ mission, cacheContext, costBasis: { modelId: 'missing' } });
+  const expected = { status: 'estimated', estimatedCostUsd: 0.002, modelId: 'test_small', pricingVersion: 'test-v1' };
+  assert.equal(first.source, 'policy');
+  assert.deepEqual(first.costEstimate, expected);
+  assert.equal(hit.source, 'cache');
+  assert.deepEqual(hit.costEstimate, expected);
+  assert.equal(hitUnknown.source, 'cache');
+  assert.equal(hitUnknown.costEstimate.status, 'unknown_model');
+  assert.equal(hitUnknown.costEstimate.estimatedCostUsd, null);
+});
+
+test('cache never degrades a sensitive mission to a cached single_shot decision', () => {
+  const controller = new CostController({ now: () => '2026-09-24T10:00:00.000Z' });
+  const cacheContext = {
+    taskType: 'classify', capability: 'routing', privacyClass: 'internal',
+    residency: 'eu', policyVersion: 1, inputFingerprint: 'sha256:same',
+  };
+  const first = controller.decide({ mission: { missionId: 'm-plain' }, cacheContext });
+  assert.equal(first.executionPattern.pattern, 'single_shot');
+
+  const second = controller.decide({ mission: { missionId: 'm-sensitive', sensitiveAction: true }, cacheContext });
+  assert.equal(second.source, 'policy');
+  assert.equal(second.executionPattern.pattern, 'verifier_gated');
+  assert.notEqual(second.cacheKey, first.cacheKey);
+
+  const repeat = controller.decide({ mission: { missionId: 'm-sensitive', sensitiveAction: true }, cacheContext });
+  assert.equal(repeat.source, 'cache');
+  assert.equal(repeat.executionPattern.pattern, 'verifier_gated');
+});
+
+test('cache key separates signals that differ by type or by cost-policy inputs', () => {
+  const controller = new CostController();
+  const cacheContext = { inputFingerprint: 'safe-fingerprint', policyVersion: 1 };
+  const plain = controller.decide({ mission: { specialistHandoffs: null }, cacheContext });
+  const stringy = controller.decide({ mission: { specialistHandoffs: '2' }, cacheContext });
+  assert.equal(plain.executionPattern.pattern, 'single_shot');
+  assert.equal(stringy.source, 'policy');
+  assert.equal(stringy.executionPattern.pattern, 'planner_executor');
+
+  const withinBudget = controller.decide({ mission: { smallModelEstimatedCostUsd: 0.01 }, cacheContext });
+  const overBudget = controller.decide({ mission: { smallModelEstimatedCostUsd: 0.01, dailySpentUsd: 2 }, cacheContext });
+  assert.equal(withinBudget.decision.level, 'small_model');
+  assert.equal(overBudget.source, 'policy');
+  assert.equal(overBudget.decision.level, null);
+});
+
+test('shared cache does not leak decisions between controllers with different policies', () => {
+  const cache = new CostDecisionCache();
+  const cacheContext = { inputFingerprint: 'safe-fingerprint', policyVersion: 1 };
+  const mission = { premiumModelEstimatedCostUsd: 0.1, expectedValueUsd: 5, smallModelSufficient: false };
+  const permissive = new CostController({ cache }).decide({ mission, cacheContext });
+  const restricted = new CostController({ cache, policy: { allowPremium: false } }).decide({ mission, cacheContext });
+  assert.equal(permissive.decision.level, 'premium_model');
+  assert.equal(restricted.source, 'policy');
+  assert.equal(restricted.decision.level, null);
+});
+
+test('non-primitive routing signals disable caching instead of risking collisions', () => {
+  const controller = new CostController();
+  const result = controller.decide({
+    mission: { parallelSubtasks: [3] },
+    cacheContext: { inputFingerprint: 'safe-fingerprint', policyVersion: 1 },
+  });
+  assert.equal(result.cacheKey, null);
+  assert.equal(controller.metrics().writes, 0);
+});
+
+test('routing signal list covers every mission field read by both selectors', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const { ROUTING_SIGNALS } = require('./cost-controller');
+  for (const file of ['cost-policy.js', 'execution-pattern-router.js']) {
+    const source = fs.readFileSync(path.join(__dirname, file), 'utf8');
+    const fields = new Set([...source.matchAll(/\bmission\.([A-Za-z_$][\w$]*)/g)].map((match) => match[1]));
+    assert.ok(fields.size > 0);
+    for (const field of fields) assert.ok(ROUTING_SIGNALS.includes(field), `${file} reads mission.${field}`);
+  }
+});
+
+test('invalidation removes every routing variant of a cache context', () => {
+  const controller = new CostController();
+  const cacheContext = { inputFingerprint: 'safe-fingerprint', policyVersion: 1 };
+  controller.decide({ mission: {}, cacheContext });
+  controller.decide({ mission: { sensitiveAction: true }, cacheContext });
+  assert.equal(controller.invalidate(cacheContext), true);
+  assert.equal(controller.metrics().size, 0);
+  assert.equal(controller.metrics().invalidations, 2);
+  assert.equal(controller.invalidate(cacheContext), false);
+});
+
+test('mutating a returned decision cannot alter the cache or later results', () => {
+  const controller = new CostController({ now: () => '2026-09-24T10:00:00.000Z' });
+  const request = {
+    mission: { missionId: 'm-alias', smallModelEstimatedCostUsd: 0.01 },
+    cacheContext: { inputFingerprint: 'safe-fingerprint', policyVersion: 1 },
+    costBasis: { modelId: 'local_deterministic', inputTokens: 10, outputTokens: 10 },
+  };
+  const first = controller.decide(request);
+  const snapshot = structuredClone(first);
+
+  assert.ok(Object.isFrozen(first));
+  assert.throws(() => { first.decision.level = 'multi_agent'; }, TypeError);
+  assert.throws(() => { first.executionPattern.pattern = 'react'; }, TypeError);
+  assert.throws(() => { first.evidence.decision.reason = 'tampered'; }, TypeError);
+  assert.throws(() => { first.costEstimate.estimatedCostUsd = 999; }, TypeError);
+  assert.equal(Reflect.deleteProperty(first.evidence.spend, 'dailySpentUsd'), false);
+  assert.deepEqual(first, snapshot);
+
+  const hit = controller.decide(request);
+  assert.equal(hit.source, 'cache');
+  for (const field of ['decision', 'executionPattern', 'evidence', 'costEstimate']) {
+    assert.deepEqual(hit[field], snapshot[field]);
+    assert.notEqual(hit[field], first[field]);
+  }
+  const again = controller.decide(request);
+  assert.notEqual(again.evidence, hit.evidence);
+  assert.deepEqual(again.evidence, snapshot.evidence);
+});

@@ -42,7 +42,7 @@ class CostDecisionCache {
     return entry.value;
   }
 
-  set(key, value, { estimatedCostUsd = 0 } = {}) {
+  set(key, value, { estimatedCostUsd = 0, group = null } = {}) {
     if (!key) return false;
     if (this.entries.size >= this.maxEntries && !this.entries.has(key)) {
       const oldestKey = this.entries.keys().next().value;
@@ -54,6 +54,7 @@ class CostDecisionCache {
       value,
       expiresAt: this.now() + this.ttlMs,
       estimatedCostUsd: Number.isFinite(estimatedCostUsd) && estimatedCostUsd > 0 ? estimatedCostUsd : 0,
+      group: typeof group === 'string' && group.length > 0 ? group : null,
     });
     this.metrics.writes += 1;
     return true;
@@ -64,6 +65,20 @@ class CostDecisionCache {
     const deleted = this.entries.delete(key);
     if (deleted) this.metrics.invalidations += 1;
     return deleted;
+  }
+
+  // Removes every entry written under one group (e.g. all routing variants of
+  // a cache context) so context-level invalidation cannot leave stale variants.
+  invalidateGroup(group) {
+    if (typeof group !== 'string' || group.length === 0) return 0;
+    let count = 0;
+    for (const [key, entry] of this.entries) {
+      if (entry.group !== group) continue;
+      this.entries.delete(key);
+      count += 1;
+    }
+    this.metrics.invalidations += count;
+    return count;
   }
 
   clear() {
