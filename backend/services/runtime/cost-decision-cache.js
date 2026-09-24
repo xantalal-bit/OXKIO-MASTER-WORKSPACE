@@ -25,7 +25,7 @@ class CostDecisionCache {
     this.maxEntries = Number.isInteger(maxEntries) && maxEntries > 0 ? maxEntries : DEFAULT_MAX_ENTRIES;
     this.now = now;
     this.entries = new Map();
-    this.metrics = { hits: 0, misses: 0, writes: 0, evictions: 0, invalidations: 0, avoidedEstimatedCostUsd: 0 };
+    this.metrics = { hits: 0, misses: 0, writes: 0, evictions: 0, invalidations: 0 };
   }
 
   get(key) {
@@ -38,11 +38,10 @@ class CostDecisionCache {
       return null;
     }
     this.metrics.hits += 1;
-    this.metrics.avoidedEstimatedCostUsd += entry.estimatedCostUsd;
     return entry.value;
   }
 
-  set(key, value, { estimatedCostUsd = 0, group = null } = {}) {
+  set(key, value, { group = null } = {}) {
     if (!key) return false;
     if (this.entries.size >= this.maxEntries && !this.entries.has(key)) {
       const oldestKey = this.entries.keys().next().value;
@@ -53,7 +52,6 @@ class CostDecisionCache {
     this.entries.set(key, {
       value,
       expiresAt: this.now() + this.ttlMs,
-      estimatedCostUsd: Number.isFinite(estimatedCostUsd) && estimatedCostUsd > 0 ? estimatedCostUsd : 0,
       group: typeof group === 'string' && group.length > 0 ? group : null,
     });
     this.metrics.writes += 1;

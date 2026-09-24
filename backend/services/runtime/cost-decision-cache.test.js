@@ -38,16 +38,28 @@ test('evicts the oldest entry when capacity is reached', () => {
   assert.equal(cache.snapshotMetrics().evictions, 1);
 });
 
-test('tracks cache hits and avoided estimated external cost without storing prompts', () => {
+test('tracks cache hits and exposes only honest cache metrics', () => {
   const cache = new CostDecisionCache();
-  cache.set('safe-hash', { level: 'small_model' }, { estimatedCostUsd: 0.0125 });
+  cache.set('safe-hash', { level: 'small_model' });
   assert.deepEqual(cache.get('safe-hash'), { level: 'small_model' });
   assert.deepEqual(cache.get('safe-hash'), { level: 'small_model' });
+  assert.equal(cache.get('missing'), null);
   const metrics = cache.snapshotMetrics();
+  assert.deepEqual(Object.keys(metrics).sort(), ['evictions', 'hits', 'invalidations', 'misses', 'size', 'writes']);
   assert.equal(metrics.hits, 2);
+  assert.equal(metrics.misses, 1);
   assert.equal(metrics.writes, 1);
-  assert.equal(metrics.avoidedEstimatedCostUsd, 0.025);
   assert.equal(metrics.size, 1);
+});
+
+test('set neither accepts nor stores a cost for cached entries', () => {
+  const cache = new CostDecisionCache();
+  cache.set('k', { level: 'small_model' }, { estimatedCostUsd: 0.0125, group: 'ctx' });
+  const entry = cache.entries.get('k');
+  assert.deepEqual(Object.keys(entry).sort(), ['expiresAt', 'group', 'value']);
+  cache.get('k');
+  assert.equal(Object.hasOwn(cache.snapshotMetrics(), 'avoidedEstimatedCostUsd'), false);
+  assert.equal(JSON.stringify(cache.snapshotMetrics()).includes('0.0125'), false);
 });
 
 test('supports explicit invalidation and clear for policy or context changes', () => {

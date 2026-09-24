@@ -31,7 +31,7 @@ test('selects the minimum execution pattern together with the cost level', () =>
   assert.equal(sensitive.executionPattern.reason, 'verification_required');
 });
 
-test('reuses compatible cached decisions and derives avoided cost from controlled catalog', () => {
+test('reuses compatible cached decisions without accumulating a cost metric', () => {
   let nowMs = 1000;
   const cache = new CostDecisionCache({ now: () => nowMs });
   const catalog = {
@@ -58,10 +58,11 @@ test('reuses compatible cached decisions and derives avoided cost from controlle
   assert.equal(second.executionPattern.pattern, first.executionPattern.pattern);
   assert.equal(second.evidence.evidenceHash, first.evidence.evidenceHash);
   assert.equal(controller.metrics().hits, 1);
-  assert.equal(controller.metrics().avoidedEstimatedCostUsd, 0.01);
+  assert.equal(Object.hasOwn(controller.metrics(), 'avoidedEstimatedCostUsd'), false);
+  assert.deepEqual(second.costEstimate, { status: 'estimated', estimatedCostUsd: 0.01, modelId: 'test_small', pricingVersion: 'test-v1' });
 });
 
-test('ignores caller-declared savings and fails closed for unknown catalog model', () => {
+test('ignores caller-declared USD and fails closed for unknown catalog model', () => {
   const controller = new CostController();
   const request = {
     mission: { missionId: 'm-3', deterministicAvailable: true },
@@ -70,9 +71,57 @@ test('ignores caller-declared savings and fails closed for unknown catalog model
     estimatedAvoidedCostUsd: 999999,
   };
   controller.decide(request);
-  controller.decide(request);
+  const hit = controller.decide(request);
   assert.equal(controller.metrics().hits, 1);
-  assert.equal(controller.metrics().avoidedEstimatedCostUsd, 0);
+  assert.equal(hit.costEstimate.status, 'unknown_model');
+  assert.equal(hit.costEstimate.estimatedCostUsd, null);
+  assert.equal(JSON.stringify(controller.metrics()).includes('999999'), false);
+  assert.equal(JSON.stringify(hit).includes('999999'), false);
+});
+
+test('cache hits always report the costEstimate of the current request', () => {
+  const catalog = {
+    paid: {
+      provider: 'test', tier: 'small', inputUsdPerMillion: 1, outputUsdPerMillion: 2,
+      residency: 'eu', privacy: 'internal', pricingVersion: 'paid-v1',
+      pricingSource: 'https://example.invalid/pricing', reviewedAt: '2026-09-21',
+    },
+    local_deterministic: {
+      provider: 'local', inputUsdPerMillion: 0, outputUsdPerMillion: 0,
+      pricingVersion: 'builtin-zero-v1', pricingSource: 'internal', reviewedAt: '2026-09-21',
+    },
+  };
+  const controller = new CostController({ catalog });
+  const request = (costBasis) => controller.decide({
+    mission: { smallModelEstimatedCostUsd: 0.01 },
+    cacheContext: { inputFingerprint: 'safe-fingerprint', policyVersion: 1 },
+    costBasis,
+  });
+
+  const first = request({ modelId: 'paid', inputTokens: 10 });
+  assert.equal(first.source, 'policy');
+  assert.equal(first.costEstimate.estimatedCostUsd, 0.00001);
+
+  const cases = [
+    [{ modelId: 'paid', inputTokens: 1000000 }, 'estimated', 1],
+    [{ modelId: 'paid', inputTokens: 1000, outputTokens: 500 }, 'estimated', 0.002],
+    [{ modelId: 'local_deterministic', inputTokens: 1000000 }, 'estimated', 0],
+    [{ modelId: 'missing', inputTokens: 1000 }, 'unknown_model', null],
+    [{}, 'not_requested', null],
+    [{ modelId: 'paid', inputTokens: 10, estimatedCostUsd: 999999 }, 'estimated', 0.00001],
+  ];
+  for (const [costBasis, status, estimatedCostUsd] of cases) {
+    const hit = request(costBasis);
+    assert.equal(hit.source, 'cache');
+    assert.equal(hit.cacheKey, first.cacheKey);
+    assert.deepEqual(hit.decision, first.decision);
+    assert.equal(hit.costEstimate.status, status);
+    assert.equal(hit.costEstimate.estimatedCostUsd, estimatedCostUsd);
+  }
+
+  const metrics = controller.metrics();
+  assert.equal(metrics.hits, cases.length);
+  assert.deepEqual(Object.keys(metrics).sort(), ['evictions', 'hits', 'invalidations', 'misses', 'size', 'writes']);
 });
 
 test('does not cache when no privacy-safe input fingerprint is supplied', () => {

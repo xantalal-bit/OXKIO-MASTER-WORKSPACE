@@ -2,7 +2,7 @@
 
 // Vendor-neutral pricing/capability catalog. Values are policy inputs, not
 // provider billing truth. Non-local entries must carry reviewed provenance
-// before they can participate in cost routing or savings accounting.
+// before they can participate in cost routing or per-request cost estimates.
 const DEFAULT_CATALOG = Object.freeze({
   local_deterministic: Object.freeze({
     provider: 'local',
