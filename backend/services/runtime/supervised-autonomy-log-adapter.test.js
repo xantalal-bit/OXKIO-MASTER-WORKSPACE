@@ -52,3 +52,30 @@ test('rejects invented completion states instead of logging them as evidence', (
   assert.throws(() => adapter.record({ outcome: 'pretend_done' }), /unsupported supervised autonomy outcome/);
   assert.equal(logEngine.getLogs().length, 0);
 });
+
+test('does not double count a retried terminal event for the same mission', () => {
+  const logEngine = quietLogEngine();
+  const adapter = new SupervisedAutonomyLogAdapter({ logEngine });
+
+  const first = adapter.record({ missionId: 'mission-retry', outcome: 'completed', actualCostUsd: 0.01 });
+  const retried = adapter.record({ missionId: 'mission-retry', outcome: 'completed', actualCostUsd: 0.01 });
+
+  assert.equal(first.records, 1);
+  assert.equal(retried.records, 1);
+  assert.equal(retried.productivity.completed, 1);
+  assert.equal(retried.actualCostUsd, 0.01);
+  assert.equal(logEngine.getLogsByType('supervised_autonomy').length, 1);
+});
+
+test('rejects conflicting terminal outcomes for the same mission', () => {
+  const logEngine = quietLogEngine();
+  const adapter = new SupervisedAutonomyLogAdapter({ logEngine });
+
+  adapter.record({ missionId: 'mission-conflict', outcome: 'blocked' });
+
+  assert.throws(
+    () => adapter.record({ missionId: 'mission-conflict', outcome: 'completed' }),
+    /conflicting terminal outcome for mission/
+  );
+  assert.equal(logEngine.getLogsByType('supervised_autonomy').length, 1);
+});
