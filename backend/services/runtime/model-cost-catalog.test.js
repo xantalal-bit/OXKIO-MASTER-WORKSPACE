@@ -44,3 +44,10 @@ test('external pricing without provenance is excluded fail closed', () => {
   assert.deepEqual(normalized, {});
   assert.equal(estimateCatalogCostUsd({ unreviewed: { provider: 'x', inputUsdPerMillion: 1, outputUsdPerMillion: 1 } }, 'unreviewed', { inputTokens: 1000 }), null);
 });
+
+test('inherited object keys are never treated as catalog models', () => {
+  for (const modelId of ['toString', '__proto__', 'constructor', 'hasOwnProperty']) {
+    assert.equal(estimateCatalogCostUsd(DEFAULT_CATALOG, modelId, { inputTokens: 1000 }), null);
+  }
+  assert.equal(estimateCatalogCostUsd(DEFAULT_CATALOG, null, { inputTokens: 1000 }), null);
+});

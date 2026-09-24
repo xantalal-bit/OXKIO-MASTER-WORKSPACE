@@ -53,8 +53,10 @@ function normalizeCatalog(catalog = DEFAULT_CATALOG) {
 }
 
 function estimateCatalogCostUsd(catalog, modelId, { inputTokens = 0, outputTokens = 0 } = {}) {
-  const entry = normalizeCatalog(catalog)[modelId];
-  if (!entry) return null;
+  const normalized = normalizeCatalog(catalog);
+  // Own-property lookup only: inherited names such as "toString" are not models.
+  if (typeof modelId !== 'string' || !Object.hasOwn(normalized, modelId)) return null;
+  const entry = normalized[modelId];
   const input = finiteNonNegative(inputTokens, 0);
   const output = finiteNonNegative(outputTokens, 0);
   return Number(((input * entry.inputUsdPerMillion + output * entry.outputUsdPerMillion) / 1_000_000).toFixed(8));

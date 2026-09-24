@@ -61,3 +61,17 @@ test('supports explicit invalidation and clear for policy or context changes', (
   assert.equal(metrics.invalidations, 2);
   assert.equal(metrics.size, 0);
 });
+
+test('invalidateGroup removes only entries written under that group', () => {
+  const cache = new CostDecisionCache();
+  cache.set('a1', 1, { group: 'ctx-a' });
+  cache.set('a2', 2, { group: 'ctx-a' });
+  cache.set('b1', 3, { group: 'ctx-b' });
+  cache.set('loose', 4);
+  assert.equal(cache.invalidateGroup('ctx-a'), 2);
+  assert.equal(cache.get('a1'), null);
+  assert.equal(cache.get('b1'), 3);
+  assert.equal(cache.get('loose'), 4);
+  assert.equal(cache.invalidateGroup(''), 0);
+  assert.equal(cache.snapshotMetrics().invalidations, 2);
+});
