@@ -129,10 +129,9 @@ class CostController {
     const evidence = this.buildEvidence(mission, decision);
 
     if (cacheKey) {
-      // avoidedEstimatedCostUsd stays nominal: only an estimated cost counts,
-      // unknown or unrequested estimates contribute zero to the metric.
-      const avoided = costEstimate.status === COST_ESTIMATE_STATUS.ESTIMATED ? costEstimate.estimatedCostUsd : 0;
-      this.cache.set(cacheKey, frozenCopy({ decision, executionPattern }), { estimatedCostUsd: avoided, group: contextKey });
+      // The cache holds no cost: costEstimate is always computed for the
+      // current request, and a cache hit avoids no model call.
+      this.cache.set(cacheKey, frozenCopy({ decision, executionPattern }), { group: contextKey });
     }
 
     return frozenCopy({ decision, executionPattern, evidence, source: 'policy', cacheKey, costEstimate });
