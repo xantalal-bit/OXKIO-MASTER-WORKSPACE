@@ -89,9 +89,28 @@ function createCancellationBlockerId(options, mission, taskId) {
 }
 
 class MissionService {
-  constructor({ repository } = {}) {
+  constructor({ repository, missionOutcomeTelemetry = null } = {}) {
     this.repository = assertMissionRepository(repository);
+    if (missionOutcomeTelemetry !== null
+      && (!missionOutcomeTelemetry || typeof missionOutcomeTelemetry.recordMissionState !== 'function')) {
+      serviceFail(
+        'invalid_mission_outcome_telemetry',
+        'missionOutcomeTelemetry must expose recordMissionState.',
+      );
+    }
+    this.missionOutcomeTelemetry = missionOutcomeTelemetry;
     Object.freeze(this);
+  }
+
+  #recordMissionStateSafely(mission) {
+    if (!this.missionOutcomeTelemetry) return;
+    try {
+      const pending = this.missionOutcomeTelemetry.recordMissionState({ mission });
+      if (pending && typeof pending.catch === 'function') pending.catch(() => {});
+    } catch {
+      // Observability is best-effort after persistence. It must never turn a
+      // successful Mission mutation into a retryable application failure.
+    }
   }
 
   async createMission(scope, payload, rawOptions = {}) {
@@ -155,8 +174,10 @@ class MissionService {
       outcome.mission,
       expectedVersion,
     );
+    const validatedSaved = validateRepositoryMission(saved, normalizedScope);
+    this.#recordMissionStateSafely(validatedSaved);
     return freezeMissionResult(
-      validateRepositoryMission(saved, normalizedScope),
+      validatedSaved,
       outcome.events,
     );
   }
