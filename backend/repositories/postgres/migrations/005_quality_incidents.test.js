@@ -56,6 +56,15 @@ test('RLS is forced and uses the hardened NULLIF scope form from 004', () => {
   assert.match(executable, /CHECK \(btrim\(client_id\) <> ''\)/);
 });
 
+test('005 is non-destructive: a single CREATE POLICY, no DROP/TRUNCATE/DELETE of any kind', () => {
+  assert.doesNotMatch(executable, /\bDROP\b/i);
+  assert.doesNotMatch(executable, /\bTRUNCATE\b/i);
+  assert.doesNotMatch(executable, /\bDELETE\b/i);
+  const policies = executable.match(/CREATE POLICY\s+(\w+)\s+ON\s+([\w.]+)/g) || [];
+  assert.deepEqual(policies, ['CREATE POLICY quality_incidents_scope_isolation ON oxkio.quality_incidents']);
+  assert.match(executable, /CREATE TABLE IF NOT EXISTS oxkio\.quality_incidents \(/);
+});
+
 test('runtime grants are minimal: no DELETE/TRUNCATE, UPDATE only on mutable columns used by the upsert', () => {
   assert.match(executable, /REVOKE ALL ON TABLE oxkio\.quality_incidents FROM PUBLIC;/);
   assert.match(executable, /GRANT SELECT, INSERT ON TABLE oxkio\.quality_incidents TO oxkio_approval_runtime;/);
