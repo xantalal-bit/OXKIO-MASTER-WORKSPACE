@@ -442,6 +442,59 @@ function logTelemetryFailure(error) {
     ? error.code
     : 'TELEMETRY_ERROR';
   console.error('[telemetry]', code);
+  return code;
+}
+
+// Quality Incident Registry callers. Only fixed wording and fixed codes ever
+// reach an incident: never the query, identity, private context or the
+// original error message. *_unauthorized / *_not_connected are expected
+// states (the user has not connected or consented), not incidents.
+const CONTEXT_FAILURE_INCIDENTS = Object.freeze({
+  gmail_unavailable: Object.freeze({
+    component: 'executive-chat.context.gmail',
+    summary: 'Contexto de Gmail no disponible en Executive Chat.',
+  }),
+  calendar_unavailable: Object.freeze({
+    component: 'executive-chat.context.calendar',
+    summary: 'Contexto de Calendar no disponible en Executive Chat.',
+  }),
+  dashboard_unavailable: Object.freeze({
+    component: 'executive-chat.context.dashboard',
+    summary: 'Contexto de dashboard no disponible en Executive Chat.',
+  }),
+  approvals_unavailable: Object.freeze({
+    component: 'executive-chat.context.approvals',
+    summary: 'Cola de aprobaciones no disponible en Executive Chat.',
+  }),
+  memory_unavailable: Object.freeze({
+    component: 'executive-chat.context.memory',
+    summary: 'Memoria no disponible en Executive Chat.',
+  }),
+});
+
+// Best-effort, like telemetry: a registry failure never reaches the user and
+// is logged only as a fixed code.
+function reportQualityIncident(registry, incident) {
+  if (!registry || typeof registry.report !== 'function') return;
+  try {
+    registry.report(incident);
+  } catch (error) {
+    const code = error && typeof error.code === 'string' && TELEMETRY_ERROR_CODE_PATTERN.test(error.code)
+      ? error.code
+      : 'QUALITY_ERROR';
+    console.error('[quality]', code);
+  }
+}
+
+function reportContextFailureIncidents(registry, contextFailures) {
+  const failures = Array.isArray(contextFailures) ? contextFailures : [];
+  for (const code of new Set(failures)) {
+    if (!Object.hasOwn(CONTEXT_FAILURE_INCIDENTS, code)) continue;
+    const { component, summary } = CONTEXT_FAILURE_INCIDENTS[code];
+    reportQualityIncident(registry, {
+      type: 'INTEGRATION_FAILURE', priority: 'P2', component, errorCode: code, summary,
+    });
+  }
 }
 
 function hasTelemetryDependencies(dependencies) {
@@ -461,6 +514,17 @@ async function handleExecutiveChatRequest(req, res, options) {
   // response, the conversation store or the executionLogger.
   let costDecision = null;
   let telemetryRecorded = false;
+  const qualityIncidents = dependencies.qualityIncidentRegistry;
+  const handleTelemetryFailure = (error) => {
+    const code = logTelemetryFailure(error);
+    reportQualityIncident(qualityIncidents, {
+      type: 'RUNTIME_FAILURE',
+      priority: 'P2',
+      component: 'executive-chat.telemetry',
+      errorCode: code,
+      summary: 'Fallo best-effort de telemetría en Executive Chat.',
+    });
+  };
   const recordTelemetryOnce = ({ outcome, approvalGated }) => {
     if (!costDecision || telemetryRecorded) return;
     // Marked before record(): one attempt per turn, even if record() or a
@@ -469,7 +533,7 @@ async function handleExecutiveChatRequest(req, res, options) {
     try {
       dependencies.supervisedAutonomyTelemetry.record({ outcome, costDecision, approvalGated });
     } catch (error) {
-      logTelemetryFailure(error);
+      handleTelemetryFailure(error);
     }
   };
   try {
@@ -502,7 +566,7 @@ async function handleExecutiveChatRequest(req, res, options) {
           mission: { deterministicAvailable: true },
         });
       } catch (error) {
-        logTelemetryFailure(error);
+        handleTelemetryFailure(error);
       }
     }
     const shouldCheckSupervisedGmail = selectedContext.gmail === true
@@ -589,6 +653,7 @@ async function handleExecutiveChatRequest(req, res, options) {
         ? 'partial'
         : 'ok',
     });
+    reportContextFailureIncidents(qualityIncidents, orchestratorOptions.contextFailures);
     // Recorded before writing the response, so a failed HTTP write cannot
     // trigger a second attempt from the catch below.
     recordTelemetryOnce({

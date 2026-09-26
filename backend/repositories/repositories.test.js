@@ -18,12 +18,13 @@ const {
   createIdempotencyRecord,
 } = require('./idempotency-contract');
 
-test('declares six provider-neutral repository contracts', () => {
+test('declares seven provider-neutral repository contracts', () => {
   assert.deepEqual(Object.keys(CONTRACTS), [
     'ApprovalRepository',
     'MemoryRepository',
     'OperationRepository',
     'AuditRepository',
+    'QualityIncidentRepository',
     'OAuthTokenRepository',
     'ApprovalRepositoryV2',
   ]);

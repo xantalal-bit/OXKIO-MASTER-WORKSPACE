@@ -5,6 +5,10 @@ const CONTRACTS = Object.freeze({
   MemoryRepository: Object.freeze(['loadSnapshot', 'saveSnapshot']),
   OperationRepository: Object.freeze(['loadSnapshot', 'saveSnapshot']),
   AuditRepository: Object.freeze(['append', 'list']),
+  // Quality Incident Registry: same snapshot shape as the other local
+  // repositories, so durable storage can be plugged in later without
+  // changing any caller.
+  QualityIncidentRepository: Object.freeze(['loadSnapshot', 'saveSnapshot']),
   OAuthTokenRepository: Object.freeze(['loadForSubject', 'saveForSubject', 'deleteForSubject']),
   // V2: item-level, async, CAS por versión. Coexiste con ApprovalRepository (snapshot,
   // V1) sin sustituirlo. ApprovalQueue sigue usando V1 hasta que una autorización
