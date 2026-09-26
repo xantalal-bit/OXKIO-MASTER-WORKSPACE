@@ -13,6 +13,7 @@ const { recommendSupervisedOperation } = require('../../services/executive-brain
 const { planOperations } = require('../../services/executive-brain/operation-planner');
 const { safeDiagnostic } = require('../../security/secret-runtime');
 const { createConversationContextStore } = require('../../services/executive-brain/conversation-context-store');
+const { OUTCOMES } = require('../../services/runtime/agent-productivity-metrics');
 
 // V0.5: process-wide, in-memory, ephemeral store — see
 // conversation-context-store.js for why this is intentionally not a new
@@ -407,9 +408,70 @@ function logExecutiveChatTurn(executionLogger, {
   }
 }
 
+// Supervised Autonomy Telemetry V2: outcome of one routed chat turn.
+// FAILED takes precedence over BLOCKED, and BLOCKED over COMPLETED. A
+// policy-required approval is still COMPLETED (counted via approvalGated).
+// HUMAN_INTERVENTION is never emitted here: today there is no reliable
+// productive signal that distinguishes a real human correction.
+const UNAVAILABLE_CONTEXT_SUFFIX = '_unavailable';
+const BLOCKED_CONTEXT_FAILURES = new Set([
+  'private_context_unauthorized',
+  'approvals_unauthorized',
+  'memory_unauthorized',
+  'gmail_not_connected',
+  'gmail_insufficient_scope',
+]);
+
+function classifyTelemetryOutcome({ contextFailures, diagnostics } = {}) {
+  const failures = Array.isArray(contextFailures) ? contextFailures : [];
+  const signals = diagnostics && typeof diagnostics === 'object' ? diagnostics : {};
+  const failed = failures.some((code) => typeof code === 'string' && code.endsWith(UNAVAILABLE_CONTEXT_SUFFIX))
+    || (signals.proposalAttempted === true && signals.proposalSucceeded === false)
+    || (signals.approvalAttempted === true && signals.approvalSucceeded === false);
+  if (failed) return OUTCOMES.FAILED;
+  if (failures.some((code) => BLOCKED_CONTEXT_FAILURES.has(code))) return OUTCOMES.BLOCKED;
+  return OUTCOMES.COMPLETED;
+}
+
+// Telemetry is best-effort: a failure never reaches the user and is logged
+// only as a fixed error code, never with query, payload or decision content.
+const TELEMETRY_ERROR_CODE_PATTERN = /^[A-Z][A-Z0-9_]{0,63}$/;
+
+function logTelemetryFailure(error) {
+  const code = error && typeof error.code === 'string' && TELEMETRY_ERROR_CODE_PATTERN.test(error.code)
+    ? error.code
+    : 'TELEMETRY_ERROR';
+  console.error('[telemetry]', code);
+}
+
+function hasTelemetryDependencies(dependencies) {
+  return Boolean(
+    dependencies.costController && typeof dependencies.costController.decide === 'function'
+      && dependencies.supervisedAutonomyTelemetry
+      && typeof dependencies.supervisedAutonomyTelemetry.record === 'function',
+  );
+}
+
 async function handleExecutiveChatRequest(req, res, options) {
   const dependencies = options && options.dependencies ? options.dependencies : {};
   const orchestrator = dependencies.orchestrateExecutiveQuery || orchestrateExecutiveQuery;
+  // Without both injected dependencies the chat behaves exactly as before.
+  const telemetryEnabled = hasTelemetryDependencies(dependencies);
+  // costDecision never leaves this handler: not in the payload, the
+  // response, the conversation store or the executionLogger.
+  let costDecision = null;
+  let telemetryRecorded = false;
+  const recordTelemetryOnce = ({ outcome, approvalGated }) => {
+    if (!costDecision || telemetryRecorded) return;
+    // Marked before record(): one attempt per turn, even if record() or a
+    // later HTTP write throws. V2's duplicate guard is the second defense.
+    telemetryRecorded = true;
+    try {
+      dependencies.supervisedAutonomyTelemetry.record({ outcome, costDecision, approvalGated });
+    } catch (error) {
+      logTelemetryFailure(error);
+    }
+  };
   try {
     const body = await readJsonBody(req);
     const query = typeof body.query === 'string' ? body.query.trim() : '';
@@ -430,6 +492,19 @@ async function handleExecutiveChatRequest(req, res, options) {
     const decisionEngine = dependencies.recommendSupervisedOperation || recommendSupervisedOperation;
     const selectedContext = (dependencies.selectExecutiveContext || selectExecutiveContext)(query);
     const emailActionRequest = isEmailActionRequest(query);
+    if (telemetryEnabled) {
+      try {
+        // deterministicAvailable=true is factual today: this path makes no
+        // LLM call. REVISAR esta señal cuando entre un LLM u otro routing no
+        // determinista en Executive Chat. No cacheContext (no safe input
+        // fingerprint exists yet) and no costBasis (no model, no tokens).
+        costDecision = dependencies.costController.decide({
+          mission: { deterministicAvailable: true },
+        });
+      } catch (error) {
+        logTelemetryFailure(error);
+      }
+    }
     const shouldCheckSupervisedGmail = selectedContext.gmail === true
       && !emailActionRequest;
     const shouldCheckSupervisedCalendar = selectedContext.calendar === true;
@@ -458,6 +533,10 @@ async function handleExecutiveChatRequest(req, res, options) {
       selectedContext,
       conversationContext,
     });
+    // Per-turn signals written by the orchestrator through its existing
+    // options.diagnostics contract; read only for the telemetry outcome.
+    const diagnostics = {};
+    if (telemetryEnabled) orchestratorOptions.diagnostics = diagnostics;
     const rawResult = await orchestrator(query, orchestratorOptions);
     const conversationUpdate = rawResult && rawResult.conversationUpdate ? rawResult.conversationUpdate : null;
     if (rawResult && typeof rawResult === 'object') delete rawResult.conversationUpdate;
@@ -510,8 +589,18 @@ async function handleExecutiveChatRequest(req, res, options) {
         ? 'partial'
         : 'ok',
     });
+    // Recorded before writing the response, so a failed HTTP write cannot
+    // trigger a second attempt from the catch below.
+    recordTelemetryOnce({
+      outcome: classifyTelemetryOutcome({
+        contextFailures: orchestratorOptions.contextFailures,
+        diagnostics,
+      }),
+      approvalGated: Boolean(payload.approval),
+    });
     return sendJson(res, 200, payload);
   } catch (error) {
+    recordTelemetryOnce({ outcome: OUTCOMES.FAILED, approvalGated: false });
     return sendSafeError(res, error);
   }
 }
@@ -520,6 +609,7 @@ module.exports = {
   buildCapabilityComposition,
   buildOrchestratorOptions,
   classifyGmailContextFailure,
+  classifyTelemetryOutcome,
   getInternalOrchestratorDependencies,
   handleExecutiveChatRequest,
   isExecutiveChatRoute,

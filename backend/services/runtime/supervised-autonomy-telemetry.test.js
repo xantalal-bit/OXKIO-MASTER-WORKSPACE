@@ -241,14 +241,24 @@ test('snapshot retains no mission data, identifiers or cost provenance', () => {
   for (const value of forbidden) assert.equal(serialized.includes(value), false, `snapshot leaks ${value}`);
 });
 
-test('telemetry, metrics, CostController and pattern router have no productive callers', () => {
+test('telemetry, metrics, CostController and pattern router are used productively only by the approved Executive Chat owner', () => {
   const root = path.resolve(__dirname, '..', '..', '..');
   const runtimeDir = __dirname;
   const modules = ['agent-productivity-metrics', 'supervised-autonomy-telemetry', 'cost-controller', 'execution-pattern-router'];
-  // Only runtime-internal composition is allowed outside tests.
+  // Explicit file list, never directories or patterns. Besides runtime-internal
+  // composition, the only productive references allowed are:
+  // - backend/api/server.js: composition/injection only (one instance each);
+  // - backend/api/routes/executive-chat.js: the single functional owner that
+  //   calls decide() and record() (handleExecutiveChatRequest).
+  // Any other caller (Mission Queue, Approval Queue, another endpoint,
+  // orchestrator, supervisor, dashboard, worker, scheduler...) must fail here.
+  const serverFile = path.join(root, 'backend', 'api', 'server.js');
+  const ownerFile = path.join(root, 'backend', 'api', 'routes', 'executive-chat.js');
   const allowed = new Set([
     path.join(runtimeDir, 'cost-controller.js'),
     path.join(runtimeDir, 'supervised-autonomy-telemetry.js'),
+    serverFile,
+    ownerFile,
   ]);
   const offenders = [];
   const walk = (dir) => {
@@ -266,4 +276,13 @@ test('telemetry, metrics, CostController and pattern router have no productive c
     if (fs.existsSync(full)) walk(full);
   }
   assert.deepEqual(offenders, []);
+
+  // server.js composes and injects; it never decides or records itself.
+  const serverSource = fs.readFileSync(serverFile, 'utf8');
+  assert.doesNotMatch(serverSource, /\.decide\(|\.record\(/);
+  // The owner is the only place that calls decide() and record().
+  const ownerSource = fs.readFileSync(ownerFile, 'utf8');
+  assert.equal(ownerSource.match(/costController\.decide\(/g).length, 1);
+  assert.equal(ownerSource.match(/supervisedAutonomyTelemetry\.record\(/g).length, 1);
+  assert.doesNotMatch(ownerSource, /execution-pattern-router/);
 });
