@@ -56,6 +56,7 @@ const { safeDiagnostic } = require("../security/secret-runtime");
 const { createExecutiveRuntime } = require("../services/runtime/executive-runtime-factory");
 const { CostController } = require("../services/runtime/cost-controller");
 const { SupervisedAutonomyTelemetry } = require("../services/runtime/supervised-autonomy-telemetry");
+const { QualityIncidentRegistry } = require("../services/runtime/quality-incident-registry");
 const {
   createRuntimeReadiness,
   createShutdownController,
@@ -143,6 +144,11 @@ const executionLogger = new ExecutionLogger();
 // handleExecutiveChatRequest, its single productive caller.
 const costController = new CostController();
 const supervisedAutonomyTelemetry = new SupervisedAutonomyTelemetry();
+// Quality Incident Registry: single owner of important failures. In-memory
+// only for now (no repository injected): it does not survive a restart and
+// is per Cloud Run instance. Durable storage plugs in via the
+// QualityIncidentRepository contract without changing callers.
+const qualityIncidentRegistry = new QualityIncidentRegistry();
 const knowledgeReadonlyService = createKnowledgeReadonlyService();
 const memoryReadonlyService = createMemoryReadonlyService({ memoryEngine: executiveRuntime.memory });
 const gmailReadonlyService = createGmailReadonlyService();
@@ -340,7 +346,8 @@ if (isExecutiveChatRoute(pathname, req.method)) {
       // proposal type/approval state), nunca contenido privado.
       executionLogger,
       costController,
-      supervisedAutonomyTelemetry
+      supervisedAutonomyTelemetry,
+      qualityIncidentRegistry
     }
   });
 }
