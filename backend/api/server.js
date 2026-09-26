@@ -54,6 +54,8 @@ const { isAuthorizedExecutiveIdentity } = require("./routes/executive-approval")
 const { isApiRouteDeniedForIdentity } = require("../security/api-route-policy");
 const { safeDiagnostic } = require("../security/secret-runtime");
 const { createExecutiveRuntime } = require("../services/runtime/executive-runtime-factory");
+const { CostController } = require("../services/runtime/cost-controller");
+const { SupervisedAutonomyTelemetry } = require("../services/runtime/supervised-autonomy-telemetry");
 const {
   createRuntimeReadiness,
   createShutdownController,
@@ -136,6 +138,11 @@ const executionAdapter = new ExecutionAdapter({
 const executionService = new ExecutionService({ approvalQueue, executionAdapter });
 const universalKnowledgeSupervisor = new UniversalKnowledgeSupervisor({ approvalQueue });
 const executionLogger = new ExecutionLogger();
+// Supervised Autonomy Telemetry V2: one instance of each per process,
+// in-memory only (no persistence, no endpoint). Injected only into
+// handleExecutiveChatRequest, its single productive caller.
+const costController = new CostController();
+const supervisedAutonomyTelemetry = new SupervisedAutonomyTelemetry();
 const knowledgeReadonlyService = createKnowledgeReadonlyService();
 const memoryReadonlyService = createMemoryReadonlyService({ memoryEngine: executiveRuntime.memory });
 const gmailReadonlyService = createGmailReadonlyService();
@@ -331,7 +338,9 @@ if (isExecutiveChatRoute(pathname, req.method)) {
       // OXKIO CANONICAL RUNTIME CONSOLIDATION (22/09/2026), FASE 8: metadata
       // segura por turno (interactionId/capability/supervisor decision/
       // proposal type/approval state), nunca contenido privado.
-      executionLogger
+      executionLogger,
+      costController,
+      supervisedAutonomyTelemetry
     }
   });
 }
