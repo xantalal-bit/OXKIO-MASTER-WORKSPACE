@@ -114,6 +114,76 @@ function appendMetadataGroup(exchange, title, items) {
   exchange.appendChild(details);
 }
 
+// Quality Loop: a discreet "Esto no está bien" control under each answer.
+// The user only picks a plain-language reason (and optionally a short
+// comment); no priority, component or technical code is ever asked or shown.
+// The query and the answer text are never sent.
+const QUALITY_FEEDBACK_OPTIONS = [
+  ['wrong', 'Esto está mal'],
+  ['not_working', 'No funciona'],
+  ['should_be_able', 'Sí deberías poder hacerlo'],
+  ['misunderstood', 'No me entendiste'],
+  ['incorrect_result', 'Resultado incorrecto'],
+  ['other', 'Otro problema'],
+];
+
+function appendQualityFeedback(exchange, data) {
+  const details = createElement('details', 'message-details quality-feedback');
+  details.appendChild(createElement('summary', null, 'Esto no está bien'));
+  const form = createElement('form', 'quality-feedback-form');
+  const reason = createElement('select');
+  reason.setAttribute('aria-label', 'Qué ha fallado');
+  QUALITY_FEEDBACK_OPTIONS.forEach(([value, label]) => {
+    const option = createElement('option', null, label);
+    option.value = value;
+    reason.appendChild(option);
+  });
+  const comment = createElement('input');
+  comment.type = 'text';
+  comment.maxLength = 160;
+  comment.placeholder = 'Comentario breve (opcional, sin datos personales)';
+  comment.setAttribute('aria-label', 'Comentario breve');
+  const send = createElement('button', 'quality-feedback-send', 'Enviar');
+  send.type = 'submit';
+  const status = createElement('p', 'message-meta');
+  form.appendChild(reason);
+  form.appendChild(comment);
+  form.appendChild(send);
+  details.appendChild(form);
+  details.appendChild(status);
+
+  const composition = data && data.capabilityComposition;
+  const relatedCapability = composition && typeof composition.primaryCapability === 'string'
+    ? composition.primaryCapability
+    : undefined;
+
+  form.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    send.disabled = true;
+    status.textContent = 'Enviando...';
+    try {
+      const shortSummary = comment.value.trim();
+      const response = await window.oxkioAuthenticatedFetch('/api/quality/feedback', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          category: reason.value,
+          ...(relatedCapability ? { relatedCapability } : {}),
+          ...(shortSummary ? { shortSummary } : {}),
+        }),
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(result.message || 'No se pudo enviar el aviso.');
+      status.textContent = result.message || 'Gracias. Lo hemos registrado.';
+      form.remove();
+    } catch (error) {
+      status.textContent = error.message || 'No se pudo enviar el aviso.';
+      send.disabled = false;
+    }
+  });
+  exchange.appendChild(details);
+}
+
 function renderExchange(query, data) {
   clearEmptyState();
 
@@ -138,6 +208,7 @@ function renderExchange(query, data) {
   exchange.appendChild(assistantMessage);
   appendMetadataGroup(exchange, 'Fuentes', data.sources);
   appendMetadataGroup(exchange, 'Limitaciones', data.limitations);
+  appendQualityFeedback(exchange, data);
 
   conversation.appendChild(exchange);
   scrollToLatestMessage(exchange);

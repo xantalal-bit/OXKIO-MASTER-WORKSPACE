@@ -57,6 +57,15 @@ const { createExecutiveRuntime } = require("../services/runtime/executive-runtim
 const { CostController } = require("../services/runtime/cost-controller");
 const { SupervisedAutonomyTelemetry } = require("../services/runtime/supervised-autonomy-telemetry");
 const { QualityIncidentRegistry } = require("../services/runtime/quality-incident-registry");
+const { createQualityFeedbackService } = require("../services/runtime/quality-feedback");
+const { PostgresQualityIncidentRepository } = require("../repositories/postgres-quality-incident-repository");
+const { DEFAULT_APPROVAL_SCOPE } = require("../repositories/postgres-approval-factory");
+const {
+  handleQualityFeedbackRequest,
+  handleQualitySummaryRequest,
+  isQualityFeedbackRoute,
+  isQualitySummaryRoute
+} = require("./routes/quality");
 const {
   createRuntimeReadiness,
   createShutdownController,
@@ -144,11 +153,20 @@ const executionLogger = new ExecutionLogger();
 // handleExecutiveChatRequest, its single productive caller.
 const costController = new CostController();
 const supervisedAutonomyTelemetry = new SupervisedAutonomyTelemetry();
-// Quality Incident Registry: single owner of important failures. In-memory
-// only for now (no repository injected): it does not survive a restart and
-// is per Cloud Run instance. Durable storage plugs in via the
-// QualityIncidentRepository contract without changing callers.
-const qualityIncidentRegistry = new QualityIncidentRegistry();
+// Quality Incident Registry: single owner of important failures. Durable
+// only when the Approval PostgreSQL backend is active: it reuses that same
+// pool/secret/role (oxkio.quality_incidents, migration 005). Otherwise it is
+// in-memory and diagnosed as QUALITY_PERSISTENCE_EPHEMERAL, never presented
+// as durable. load() runs before the server starts listening.
+const qualityIncidentRegistry = new QualityIncidentRegistry({
+  repository: approvalPersistence.postgresPool
+    ? new PostgresQualityIncidentRepository({
+      pool: approvalPersistence.postgresPool,
+      scope: DEFAULT_APPROVAL_SCOPE
+    })
+    : null
+});
+const qualityFeedbackService = createQualityFeedbackService({ registry: qualityIncidentRegistry });
 const knowledgeReadonlyService = createKnowledgeReadonlyService();
 const memoryReadonlyService = createMemoryReadonlyService({ memoryEngine: executiveRuntime.memory });
 const gmailReadonlyService = createGmailReadonlyService();
@@ -349,6 +367,22 @@ if (isExecutiveChatRoute(pathname, req.method)) {
       supervisedAutonomyTelemetry,
       qualityIncidentRegistry
     }
+  });
+}
+
+if (isQualitySummaryRoute(pathname, req.method)) {
+  return handleQualitySummaryRequest(req, res, {
+    registry: qualityIncidentRegistry,
+    getIdentity: () => requestPrivateIdentity
+  });
+}
+
+if (isQualityFeedbackRoute(pathname, req.method)) {
+  return handleQualityFeedbackRequest(req, res, {
+    feedbackService: qualityFeedbackService,
+    getReporterId: () => (req.oxkioIdentity && typeof req.oxkioIdentity.uid === "string"
+      ? req.oxkioIdentity.uid
+      : null)
   });
 }
 
@@ -1325,7 +1359,9 @@ const shutdownController = createShutdownController({
 });
 shutdownController.install();
 
-server.listen(PORT, HOST, () => {
+// load() never rejects: on failure the registry stays ephemeral and the
+// server still starts.
+qualityIncidentRegistry.load().then(() => server.listen(PORT, HOST, () => {
   runtimeReadiness.markReady();
   console.log("=================================");
   console.log("OXKIO API SERVER RUNNING");
@@ -1336,4 +1372,4 @@ server.listen(PORT, HOST, () => {
   console.log("Safe Mode:", systemConfig.security.safeMode);
   console.log("Gmail Mode:", systemConfig.gmail.mode);
   console.log("=================================");
-});
+}));

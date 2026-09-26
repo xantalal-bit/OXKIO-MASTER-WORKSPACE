@@ -1222,6 +1222,25 @@
           </div>
         </details>
 
+        <details class="panel span-4 collapsed-section dashboard-secondary" data-quality-panel>
+          <summary>
+            <span>
+              <h2>Calidad / Incidencias</h2>
+              <p class="meta" data-quality-counts>P0: – · P1: – · P2: – · P3: –</p>
+            </span>
+            <span class="badge ok" data-quality-badge>Solo lectura</span>
+          </summary>
+          <div class="collapsed-content">
+            <p class="meta" data-quality-persistence></p>
+            <h3 class="meta">Top recurrentes</h3>
+            <ul class="list" data-quality-recurring></ul>
+            <h3 class="meta">Pendientes de decisión</h3>
+            <ul class="list" data-quality-pending></ul>
+            <h3 class="meta">Reparadas recientemente</h3>
+            <ul class="list" data-quality-resolved></ul>
+          </div>
+        </details>
+
         <details class="panel span-4 collapsed-section dashboard-secondary" data-ecosystem-widget="businessHunter">
           <summary>
             <span>
@@ -3427,6 +3446,62 @@
       };
     }
 
+    // Quality Loop — read-only Manager view. Only compact incident metadata
+    // from GET /api/quality/summary (Cliente Cero only); no repair actions.
+    function renderQualityList(listElement, incidents, emptyText, withResolution) {
+      listElement.replaceChildren();
+      if (!Array.isArray(incidents) || incidents.length === 0) {
+        const empty = document.createElement("li");
+        empty.className = "item";
+        empty.textContent = emptyText;
+        listElement.appendChild(empty);
+        return;
+      }
+      incidents.forEach((incident) => {
+        const item = document.createElement("li");
+        item.className = "item";
+        const title = document.createElement("span");
+        title.className = "item-title";
+        title.textContent = `${incident.id} · ${incident.priority} · ${incident.status} · x${incident.occurrenceCount}${incident.requiresHumanDecision ? " · decisión humana" : ""}`;
+        const text = document.createElement("p");
+        text.className = "item-text";
+        text.textContent = `${incident.summary} (${incident.type}, ${incident.component}, última: ${incident.lastSeenAt})`;
+        item.appendChild(title);
+        item.appendChild(text);
+        if (withResolution && incident.resolution) {
+          const audit = document.createElement("p");
+          audit.className = "item-text";
+          audit.textContent = `Resolución: ${incident.resolution} · Prevención: ${incident.prevention || "—"}`;
+          item.appendChild(audit);
+        }
+        listElement.appendChild(item);
+      });
+    }
+
+    async function loadQualitySummary() {
+      const panel = document.querySelector("[data-quality-panel]");
+      if (!panel) return;
+      const counts = panel.querySelector("[data-quality-counts]");
+      const badge = panel.querySelector("[data-quality-badge]");
+      const persistence = panel.querySelector("[data-quality-persistence]");
+      try {
+        const response = await window.oxkioAuthenticatedFetch("/api/quality/summary", { cache: "no-store" });
+        if (!response.ok) throw new Error("Quality summary unavailable");
+        const data = await response.json();
+        const c = data.counts || {};
+        counts.textContent = `P0: ${c.P0 ?? 0} · P1: ${c.P1 ?? 0} · P2: ${c.P2 ?? 0} · P3: ${c.P3 ?? 0}`;
+        badge.className = (c.P0 || 0) > 0 ? "badge danger" : ((c.P1 || 0) > 0 ? "badge warn" : "badge ok");
+        persistence.textContent = data.persistence === "durable"
+          ? "Registro persistente."
+          : `Registro no persistente (${data.persistence}).`;
+        renderQualityList(panel.querySelector("[data-quality-recurring]"), data.topRecurring, "Nada registrado.", false);
+        renderQualityList(panel.querySelector("[data-quality-pending]"), data.pendingHumanDecision, "Nada pendiente de decisión.", false);
+        renderQualityList(panel.querySelector("[data-quality-resolved]"), data.recentlyResolved, "Sin reparaciones recientes.", true);
+      } catch (error) {
+        counts.textContent = "No disponible.";
+      }
+    }
+
     async function loadDashboardState() {
       try {
         const response = await window.oxkioAuthenticatedFetch("/api/dashboard", {
@@ -3446,6 +3521,7 @@
 
     document.addEventListener("DOMContentLoaded", () => {
       loadDashboardState();
+      loadQualitySummary();
       initializeExecutiveChat();
       initializeBusinessHunterOperation();
       initializeExecutiveActionPreparation();

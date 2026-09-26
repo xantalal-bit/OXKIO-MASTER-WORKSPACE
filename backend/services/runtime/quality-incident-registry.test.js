@@ -58,7 +58,7 @@ test('create: a report produces one compact OPEN incident with the minimal schem
   assert.equal(incident.resolvedBy, null);
   assert.equal(incident.requiresHumanDecision, false);
   assert.ok(Object.isFrozen(incident));
-  assert.equal(registry.persistence, 'memory_only');
+  assert.equal(registry.persistence, 'QUALITY_PERSISTENCE_EPHEMERAL');
 });
 
 test('types and priorities: exactly the canonical enums; defaults never above what the type implies', () => {
@@ -292,7 +292,12 @@ test('summary: P0-P3 open lists, top recurrence, recently repaired and pending h
   registry.resolve(fixed.id, { resolvedBy: 'human', resolution: 'Se ajustó el CSS.', prevention: 'Test visual añadido.' });
 
   const summary = registry.summary();
-  assert.equal(summary.persistence, 'memory_only');
+  assert.equal(summary.persistence, 'QUALITY_PERSISTENCE_EPHEMERAL');
+  assert.deepEqual(summary.counts, { P0: 1, P1: 1, P2: 1, P3: 0 });
+  assert.deepEqual(summary.incidents.map((item) => item.id), [critical.id, 'QI-3', gmail.id]);
+  assert.deepEqual(Object.keys(summary.incidents[0]).sort(), [
+    'component', 'id', 'lastSeenAt', 'occurrenceCount', 'priority', 'requiresHumanDecision', 'status', 'summary', 'type',
+  ]);
   assert.deepEqual(summary.totals, { total: 4, active: 3, resolved: 1, wontFix: 0 });
   assert.deepEqual(summary.openByPriority.P0.map((item) => item.id), [critical.id]);
   assert.equal(summary.openByPriority.P1.length, 1);
@@ -307,25 +312,151 @@ test('summary: P0-P3 open lists, top recurrence, recently repaired and pending h
   assert.match(text, /Reparadas recientemente:\n {2}QI-4 P3 RESOLVED x1 — Texto cortado\. \| Se ajustó el CSS\. \| Prevención: Test visual añadido\./);
 });
 
-test('persistence: an injected snapshot repository round-trips incidents and ids without changing callers', () => {
-  let stored = null;
+function createMemoryRepository({ async = true } = {}) {
+  const rows = new Map();
+  const calls = { load: 0, save: 0 };
+  let failSaves = false;
+  let failLoad = false;
+  const copy = (value) => JSON.parse(JSON.stringify(value));
   const repository = {
-    loadSnapshot: () => (stored ? JSON.parse(JSON.stringify(stored)) : { incidents: [] }),
-    saveSnapshot: (snapshot) => { stored = JSON.parse(JSON.stringify(snapshot)); },
+    loadSnapshot() {
+      calls.load += 1;
+      if (failLoad) return Promise.reject(new Error('secret db detail'));
+      const snapshot = { incidents: [...rows.values()].map(copy) };
+      return async ? Promise.resolve(snapshot) : snapshot;
+    },
+    saveSnapshot(snapshot) {
+      calls.save += 1;
+      if (failSaves) return Promise.reject(new Error('secret db detail'));
+      for (const incident of snapshot.incidents) rows.set(incident.id, copy(incident));
+      return async ? Promise.resolve() : undefined;
+    },
   };
-  const first = createRegistry({ repository });
-  assert.equal(first.persistence, 'repository');
+  return {
+    repository,
+    rows,
+    calls,
+    setFailSaves(value) { failSaves = value; },
+    setFailLoad(value) { failLoad = value; },
+  };
+}
+
+test('persistence: save and reload keep incidents, ids and counts across a restart', async (t) => {
+  t.mock.method(console, 'error', () => {});
+  const store = createMemoryRepository();
+  const first = createRegistry({ repository: store.repository });
+  assert.equal(first.persistence, 'QUALITY_PERSISTENCE_EPHEMERAL');
+  assert.equal(await first.load(), 'durable');
   const { id } = first.report(GMAIL_FAILURE);
   first.report(GMAIL_FAILURE);
+  assert.equal(await first.flush(), 'durable');
+  assert.equal(store.rows.get(id).occurrenceCount, 2);
 
-  const second = createRegistry({ repository });
+  const second = createRegistry({ repository: store.repository });
+  await second.load();
   assert.equal(second.get(id).occurrenceCount, 2);
-  assert.equal(second.report(GMAIL_FAILURE).occurrenceCount, 3);
+  // Dedupe after restart: same cause, same incident.
+  assert.equal(second.report(GMAIL_FAILURE).id, id);
+  assert.equal(second.get(id).occurrenceCount, 3);
+  // New causes continue the id sequence instead of overwriting QI-1.
   assert.equal(second.report({ ...GMAIL_FAILURE, errorCode: 'other' }).id, 'QI-2');
+  await second.flush();
+  assert.equal(store.rows.size, 2);
+  assert.equal(store.rows.get(id).occurrenceCount, 3);
+});
 
+test('persistence: resolve and recurrence survive a restart', async (t) => {
+  t.mock.method(console, 'error', () => {});
+  const store = createMemoryRepository();
+  const first = createRegistry({ repository: store.repository });
+  await first.load();
+  const { id } = first.report(GMAIL_FAILURE);
+  first.resolve(id, { resolvedBy: 'human', resolution: 'Arreglado.', prevention: 'Test añadido.' });
+  await first.flush();
+
+  const second = createRegistry({ repository: store.repository });
+  await second.load();
+  const resolved = second.get(id);
+  assert.equal(resolved.status, 'RESOLVED');
+  assert.equal(resolved.prevention, 'Test añadido.');
+  second.report(GMAIL_FAILURE);
+  await second.flush();
+
+  const third = createRegistry({ repository: store.repository });
+  await third.load();
+  assert.equal(third.get(id).status, 'OPEN');
+  assert.equal(third.get(id).reopenCount, 1);
+  assert.equal(third.get(id).occurrenceCount, 2);
+  assert.equal(third.get(id).resolution, 'Arreglado.');
+});
+
+test('persistence: incidents reported before load() are merged by cause, never overwrite stored ids', async (t) => {
+  t.mock.method(console, 'error', () => {});
+  const store = createMemoryRepository();
+  const seed = createRegistry({ repository: store.repository });
+  await seed.load();
+  seed.report(GMAIL_FAILURE);
+  await seed.flush();
+
+  const restarted = createRegistry({ repository: store.repository });
+  restarted.report(GMAIL_FAILURE);
+  restarted.report({ ...GMAIL_FAILURE, errorCode: 'early' });
+  assert.equal(store.calls.save, 1, 'no write before load');
+  await restarted.load();
+  await restarted.flush();
+  assert.equal(restarted.get('QI-1').occurrenceCount, 2);
+  const early = restarted.findByCause({ type: GMAIL_FAILURE.type, component: GMAIL_FAILURE.component, errorCode: 'early' });
+  assert.equal(early.id, 'QI-2');
+  assert.equal(store.rows.get('QI-1').occurrenceCount, 2);
+});
+
+test('persistence fail-safe: a failed load stays ephemeral, never writes, and never breaks reporting', async (t) => {
+  const errors = t.mock.method(console, 'error', () => {});
+  const store = createMemoryRepository();
+  store.setFailLoad(true);
+  const registry = createRegistry({ repository: store.repository });
+  assert.equal(await registry.load(), 'QUALITY_PERSISTENCE_EPHEMERAL');
+  registry.report(GMAIL_FAILURE);
+  await registry.flush();
+  assert.equal(store.calls.save, 0);
+  assert.equal(registry.summary().persistence, 'QUALITY_PERSISTENCE_EPHEMERAL');
+  assert.deepEqual(errors.mock.calls.map((call) => call.arguments), [['[quality]', 'QUALITY_PERSISTENCE_EPHEMERAL']]);
+
+  const hanging = createRegistry({ repository: { loadSnapshot: () => new Promise(() => {}), saveSnapshot() {} } });
+  assert.equal(await hanging.load({ timeoutMs: 10 }), 'QUALITY_PERSISTENCE_EPHEMERAL');
+
+  const none = createRegistry();
+  assert.equal(await none.load(), 'QUALITY_PERSISTENCE_EPHEMERAL');
   assert.throws(() => new QualityIncidentRegistry({ repository: { loadSnapshot() {} } }), /QualityIncidentRepository/);
-  const failing = createRegistry({ repository: { loadSnapshot: () => ({}), saveSnapshot() { throw new Error('disk secret'); } } });
-  assert.equal(codeOf(() => failing.report(GMAIL_FAILURE)), 'QUALITY_PERSISTENCE_FAILED');
+});
+
+test('persistence fail-safe: a failed write is diagnosed as degraded and retried with the next change', async (t) => {
+  const errors = t.mock.method(console, 'error', () => {});
+  const store = createMemoryRepository();
+  const registry = createRegistry({ repository: store.repository });
+  await registry.load();
+  store.setFailSaves(true);
+  const { id } = registry.report(GMAIL_FAILURE);
+  assert.equal(await registry.flush(), 'QUALITY_PERSISTENCE_DEGRADED');
+  assert.equal(registry.summary().persistence, 'QUALITY_PERSISTENCE_DEGRADED');
+  assert.equal(registry.get(id).occurrenceCount, 1, 'memory state is kept');
+  assert.deepEqual(errors.mock.calls.map((call) => call.arguments), [['[quality]', 'QUALITY_PERSISTENCE_DEGRADED']]);
+
+  store.setFailSaves(false);
+  registry.report({ ...GMAIL_FAILURE, errorCode: 'second' });
+  assert.equal(await registry.flush(), 'durable');
+  assert.equal(store.rows.get(id).occurrenceCount, 1, 'the earlier failed write was retried');
+  assert.equal(store.rows.size, 2);
+});
+
+test('persistence: stored rows that are not valid incidents are ignored on load', async (t) => {
+  t.mock.method(console, 'error', () => {});
+  const registry = createRegistry({ repository: {
+    loadSnapshot: () => ({ incidents: [{ id: 'QI-9', type: 'NOPE' }, null, 'x', { id: 'bad' }] }),
+    saveSnapshot() {},
+  } });
+  await registry.load();
+  assert.equal(registry.list().length, 0);
 });
 
 test('bounded: a full registry evicts the oldest closed incident, and refuses rather than dropping open ones', () => {
@@ -343,8 +474,8 @@ test('no action and no policy change: the registry only records; it cannot execu
   const registry = createRegistry();
   const methods = Object.getOwnPropertyNames(QualityIncidentRegistry.prototype).sort();
   assert.deepEqual(methods, [
-    'commit', 'constructor', 'evictOneClosed', 'get', 'getActive', 'list', 'load', 'markInProgress',
-    'markWontFix', 'persistence', 'report', 'resolve', 'summary',
+    'absorb', 'commit', 'constructor', 'evictOneClosed', 'findByCause', 'flush', 'get', 'getActive', 'list',
+    'load', 'markInProgress', 'markWontFix', 'persistence', 'report', 'resolve', 'scheduleWrite', 'summary',
   ]);
   const source = fs.readFileSync(path.join(__dirname, 'quality-incident-registry.js'), 'utf8');
   const requires = [...source.matchAll(/require\(['"]([^'"]+)['"]\)/g)].map((match) => match[1]);

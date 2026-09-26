@@ -21,8 +21,8 @@ function getClienteCeroIdentity() {
   };
 }
 
-test('only /api/executive/identity and /api/executive/chat are family-safe', () => {
-  assert.deepEqual([...FAMILY_SAFE_API_ROUTES].sort(), ['/api/executive/chat', '/api/executive/identity']);
+test('only identity, chat and quality feedback are family-safe', () => {
+  assert.deepEqual([...FAMILY_SAFE_API_ROUTES].sort(), ['/api/executive/chat', '/api/executive/identity', '/api/quality/feedback']);
   assert.equal(isFamilySafeApiRoute('/api/executive/identity'), true);
   assert.equal(isFamilySafeApiRoute('/api/executive/chat'), true);
   assert.equal(isFamilySafeApiRoute('/api/dashboard'), false);
@@ -36,7 +36,7 @@ test('every other /api/* legacy route defaults to private (Cliente-Cero-only)', 
     '/api/knowledge-supervisor/github-releases/discover', '/api/execution-logs',
     '/api/simulator-executive-export', '/api/projects', '/api/process-email',
     '/api/approve', '/api/execute-approved', '/api/executive/security-context',
-    '/oauth/google',
+    '/api/quality/summary', '/oauth/google',
   ]) {
     assert.equal(isPrivateApiRoute(pathname), true, `${pathname} should be private by default`);
   }
@@ -52,7 +52,7 @@ test('end-to-end: a family member is denied every legacy /api/* route Gmail/memo
   for (const pathname of [
     '/api/gmail/inbox', '/api/gmail/analyze', '/api/search-memory', '/api/memory',
     '/api/logs', '/api/add-rule', '/api/execute', '/api/pending-approvals',
-    '/api/approval-history', '/api/chat', '/api/dashboard',
+    '/api/approval-history', '/api/chat', '/api/dashboard', '/api/quality/summary',
   ]) {
     assert.equal(
       isApiRouteDeniedForIdentity(pathname, isAuthorizedExecutiveIdentity, familyIdentity),
@@ -69,8 +69,9 @@ test('end-to-end: Cliente Cero keeps access to legacy routes (no regression)', (
   }
 });
 
-test('a family member keeps access to the two family-safe routes', () => {
+test('a family member keeps access to the three family-safe routes', () => {
   const familyIdentity = buildPrivateIdentity(familyFirebaseIdentity, { getClienteCeroIdentity });
   assert.equal(isApiRouteDeniedForIdentity('/api/executive/identity', isAuthorizedExecutiveIdentity, familyIdentity), false);
   assert.equal(isApiRouteDeniedForIdentity('/api/executive/chat', isAuthorizedExecutiveIdentity, familyIdentity), false);
+  assert.equal(isApiRouteDeniedForIdentity('/api/quality/feedback', isAuthorizedExecutiveIdentity, familyIdentity), false);
 });

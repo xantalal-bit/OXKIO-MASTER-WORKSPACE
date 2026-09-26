@@ -55,6 +55,9 @@ function createApprovalRuntimeComposition({
   return Object.freeze({
     backend,
     approvalQueue,
+    // Exposed only so QualityIncidentRegistry can reuse this same pool
+    // (same database, secret and runtime role) instead of opening another.
+    postgresPool: postgres.pool,
     cleanup,
   });
 }
