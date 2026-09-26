@@ -56,7 +56,8 @@ ALTER TABLE oxkio.quality_incidents ENABLE ROW LEVEL SECURITY;
 ALTER TABLE oxkio.quality_incidents FORCE ROW LEVEL SECURITY;
 
 -- Misma forma endurecida que 004 (NULLIF): sin scope explicito no hay acceso.
-DROP POLICY IF EXISTS quality_incidents_scope_isolation ON oxkio.quality_incidents;
+-- Primera creacion, sin DROP previo: si la policy ya existiera, CREATE POLICY
+-- falla y ON_ERROR_STOP aborta toda la transaccion (fail-closed).
 CREATE POLICY quality_incidents_scope_isolation ON oxkio.quality_incidents
   USING (client_id = NULLIF(current_setting('app.client_id', true), ''))
   WITH CHECK (client_id = NULLIF(current_setting('app.client_id', true), ''));
