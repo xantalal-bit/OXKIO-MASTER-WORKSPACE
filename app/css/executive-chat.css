@@ -233,6 +233,30 @@ body {
   margin-top: 8px;
 }
 
+.quality-feedback-form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.quality-feedback-form select,
+.quality-feedback-form input {
+  flex: 1 1 180px;
+  min-height: 36px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 0 10px;
+  font: inherit;
+  color: var(--text);
+  background: var(--surface-soft);
+}
+
+.quality-feedback-form .quality-feedback-send {
+  min-height: 36px;
+  padding: 0 14px;
+}
+
 .label {
   margin: 0 0 4px;
   color: var(--muted);

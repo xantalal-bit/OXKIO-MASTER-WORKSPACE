@@ -133,3 +133,17 @@ test('JSON cleanup is safe and performs no PostgreSQL work', async () => {
   await result.cleanup();
   await result.cleanup();
 });
+
+test('only postgres mode exposes its pool, for reuse by the Quality Incident repository', () => {
+  const json = createApprovalRuntimeComposition({ createApprovalQueue: () => ({}) });
+  assert.equal(json.postgresPool, undefined);
+
+  const pool = { kind: 'pool' };
+  const postgres = createApprovalRuntimeComposition({
+    backend: APPROVAL_BACKEND_POSTGRES,
+    runtimeUrl: 'postgresql://synthetic:synthetic@example.invalid/neondb',
+    createPostgresComposition: () => ({ repository: {}, pool, async cleanup() {} }),
+    createApprovalQueue: () => ({}),
+  });
+  assert.equal(postgres.postgresPool, pool);
+});

@@ -83,6 +83,14 @@ const MAX_TEXT_LENGTH = 160;
 // credential-looking assignments.
 const SENSITIVE_TEXT_PATTERN = /(?:[A-Za-z]:\\|\/Users\/|\/home\/|-----BEGIN|bearer\s+|private[_-]?key|api[_-]?key|password|secret\s*[:=]|token\s*[:=]|[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}|\b\+?\d[\d .()-]{7,}\d\b|\bat\s+\S+\s*\(|https?:\/\/)/i;
 const DEFAULT_MAX_INCIDENTS = 500;
+const DEFAULT_LOAD_TIMEOUT_MS = 5000;
+
+// Honest durability state, visible in summary().persistence.
+const PERSISTENCE = Object.freeze({
+  DURABLE: 'durable',
+  EPHEMERAL: 'QUALITY_PERSISTENCE_EPHEMERAL',
+  DEGRADED: 'QUALITY_PERSISTENCE_DEGRADED',
+});
 const SUMMARY_LIST_LIMIT = 5;
 
 function fail(code) {
@@ -164,9 +172,13 @@ function byUrgency(left, right) {
 }
 
 class QualityIncidentRegistry {
-  // repository: optional { loadSnapshot, saveSnapshot } (same snapshot shape
-  // as the other local repositories). Without it the registry is in-memory
-  // only and does not survive a restart.
+  // repository: optional { loadSnapshot, saveSnapshot } (sync or async, same
+  // snapshot shape as the other repositories). The registry never writes to
+  // it until load() succeeded, so a failed load can never overwrite durable
+  // incidents; until then (or without a repository) it is honestly
+  // QUALITY_PERSISTENCE_EPHEMERAL. report()/resolve() stay synchronous for
+  // callers: durable writes are serialized in the background and a failed
+  // write is diagnosed as QUALITY_PERSISTENCE_DEGRADED, never hidden.
   constructor({ repository = null, now = () => new Date().toISOString(), maxIncidents = DEFAULT_MAX_INCIDENTS } = {}) {
     this.repository = repository ? assertRepository(repository, 'QualityIncidentRepository') : null;
     this.now = now;
@@ -174,11 +186,27 @@ class QualityIncidentRegistry {
     this.incidents = new Map();
     this.byFingerprint = new Map();
     this.sequence = 0;
-    this.load();
+    this.persistenceStatus = PERSISTENCE.EPHEMERAL;
+    this.dirtyIds = new Set();
+    this.writeChain = Promise.resolve();
   }
 
   get persistence() {
-    return this.repository ? 'repository' : 'memory_only';
+    return this.persistenceStatus;
+  }
+
+  // Read-only lookup by stable cause, for callers that need the current count
+  // (e.g. objective escalation) without creating or changing anything.
+  findByCause({ type, component, errorCode = null, relatedCapability = null } = {}) {
+    const id = this.byFingerprint.get(fingerprintOf({ type, component, errorCode, relatedCapability }));
+    return id ? this.get(id) : null;
+  }
+
+  // Resolves once every write queued so far has settled; returns the
+  // resulting persistence status. Never rejects.
+  async flush() {
+    await this.writeChain;
+    return this.persistenceStatus;
   }
 
   report(input) {
@@ -334,6 +362,8 @@ class QualityIncidentRegistry {
     ]));
     return Object.freeze({
       persistence: this.persistence,
+      counts: Object.freeze(Object.fromEntries(PRIORITIES.map((priority) => [priority, openByPriority[priority].length]))),
+      incidents: Object.freeze(active.slice().sort(byUrgency).map(compactIncident)),
       totals: Object.freeze({
         total: all.length,
         active: active.length,
@@ -380,37 +410,118 @@ class QualityIncidentRegistry {
     for (const incident of changes) {
       this.incidents.set(incident.id, Object.freeze(incident));
       this.byFingerprint.set(incident.fingerprint, incident.id);
+      this.dirtyIds.add(incident.id);
     }
-    if (!this.repository) return;
-    try {
-      this.repository.saveSnapshot({ sequence: this.sequence, incidents: [...this.incidents.values()] });
-    } catch (error) {
-      // In-memory state is kept; the caller learns only a fixed code.
-      fail('QUALITY_PERSISTENCE_FAILED');
-    }
+    this.scheduleWrite();
   }
 
-  load() {
-    if (!this.repository) return;
-    let snapshot;
-    try {
-      snapshot = this.repository.loadSnapshot();
-    } catch (error) {
-      fail('QUALITY_PERSISTENCE_FAILED');
+  // Serialized write-through of every incident changed since the last
+  // successful write. Only after a successful load(); never throws to the
+  // caller. A failed write keeps the incidents dirty for the next attempt.
+  scheduleWrite() {
+    if (!this.repository || this.persistenceStatus === PERSISTENCE.EPHEMERAL || this.dirtyIds.size === 0) return;
+    const ids = [...this.dirtyIds];
+    const snapshot = {
+      sequence: this.sequence,
+      incidents: ids.map((id) => this.incidents.get(id)).filter(Boolean),
+    };
+    this.dirtyIds.clear();
+    this.writeChain = this.writeChain
+      .then(() => this.repository.saveSnapshot(snapshot))
+      .then(() => {
+        this.persistenceStatus = PERSISTENCE.DURABLE;
+      }, () => {
+        for (const id of ids) this.dirtyIds.add(id);
+        if (this.persistenceStatus !== PERSISTENCE.DEGRADED) console.error('[quality]', PERSISTENCE.DEGRADED);
+        this.persistenceStatus = PERSISTENCE.DEGRADED;
+      });
+  }
+
+  // Hydrates from the repository. On failure or timeout the registry stays
+  // QUALITY_PERSISTENCE_EPHEMERAL (memory only, no writes) and the chat keeps
+  // working. Incidents reported before load() are merged by stable cause.
+  async load({ timeoutMs = DEFAULT_LOAD_TIMEOUT_MS } = {}) {
+    if (!this.repository) {
+      console.error('[quality]', PERSISTENCE.EPHEMERAL);
+      return this.persistenceStatus;
     }
+    let snapshot;
+    let timer = null;
+    try {
+      snapshot = await Promise.race([
+        Promise.resolve().then(() => this.repository.loadSnapshot()),
+        new Promise((resolve, reject) => {
+          timer = setTimeout(() => reject(new Error('timeout')), timeoutMs);
+          if (typeof timer.unref === 'function') timer.unref();
+        }),
+      ]);
+    } catch (error) {
+      console.error('[quality]', PERSISTENCE.EPHEMERAL);
+      return this.persistenceStatus;
+    } finally {
+      clearTimeout(timer);
+    }
+
+    const earlier = [...this.incidents.values()];
+    this.incidents = new Map();
+    this.byFingerprint = new Map();
+    // Ids handed out before load() were provisional; stored ids win.
+    this.sequence = 0;
     const stored = snapshot && Array.isArray(snapshot.incidents) ? snapshot.incidents : [];
-    for (const incident of stored) {
-      if (!isPlainObject(incident) || typeof incident.id !== 'string' || !INCIDENT_ID_PATTERN.test(incident.id)
-        || !Object.hasOwn(INCIDENT_TYPES, incident.type) || !PRIORITIES.includes(incident.priority)
-        || !Object.hasOwn(STATUSES, incident.status) || typeof incident.fingerprint !== 'string') {
-        continue;
-      }
+    for (const incident of stored.filter(isStoredIncident)
+      .sort((left, right) => String(left.lastSeenAt).localeCompare(String(right.lastSeenAt)))) {
       this.incidents.set(incident.id, Object.freeze({ ...incident }));
       this.byFingerprint.set(incident.fingerprint, incident.id);
       this.sequence = Math.max(this.sequence, Number(incident.id.slice(3)));
     }
     if (snapshot && Number.isSafeInteger(snapshot.sequence)) this.sequence = Math.max(this.sequence, snapshot.sequence);
+    while (this.incidents.size > this.maxIncidents && this.evictOneClosed());
+    this.dirtyIds.clear();
+    for (const incident of earlier) this.absorb(incident);
+    this.persistenceStatus = PERSISTENCE.DURABLE;
+    this.scheduleWrite();
+    return this.persistenceStatus;
   }
+
+  absorb(incident) {
+    const existingId = this.byFingerprint.get(incident.fingerprint);
+    const existing = existingId ? this.incidents.get(existingId) : null;
+    if (!existing) {
+      this.sequence += 1;
+      const renumbered = { ...incident, id: `QI-${this.sequence}` };
+      this.incidents.set(renumbered.id, Object.freeze(renumbered));
+      this.byFingerprint.set(renumbered.fingerprint, renumbered.id);
+      this.dirtyIds.add(renumbered.id);
+      return;
+    }
+    const merged = {
+      ...existing,
+      occurrenceCount: existing.occurrenceCount + incident.occurrenceCount,
+      lastSeenAt: String(incident.lastSeenAt) > String(existing.lastSeenAt) ? incident.lastSeenAt : existing.lastSeenAt,
+      priority: priorityRank(incident.priority) < priorityRank(existing.priority) ? incident.priority : existing.priority,
+      requiresHumanDecision: existing.requiresHumanDecision || incident.requiresHumanDecision,
+    };
+    if (existing.status === STATUSES.RESOLVED) {
+      merged.status = STATUSES.OPEN;
+      merged.reopenCount = existing.reopenCount + 1;
+    }
+    this.incidents.set(merged.id, Object.freeze(merged));
+    this.dirtyIds.add(merged.id);
+  }
+}
+
+function isStoredIncident(incident) {
+  return isPlainObject(incident)
+    && typeof incident.id === 'string' && INCIDENT_ID_PATTERN.test(incident.id)
+    && Object.hasOwn(INCIDENT_TYPES, incident.type)
+    && PRIORITIES.includes(incident.priority)
+    && Object.hasOwn(STATUSES, incident.status)
+    && typeof incident.fingerprint === 'string'
+    && typeof incident.summary === 'string'
+    && typeof incident.component === 'string'
+    && Number.isSafeInteger(incident.occurrenceCount) && incident.occurrenceCount > 0
+    && Number.isSafeInteger(incident.reopenCount) && incident.reopenCount >= 0
+    && typeof incident.requiresHumanDecision === 'boolean';
 }
 
 // One-line rendering for direction: "QI-3 P1 OPEN x8 — summary".
@@ -437,6 +548,7 @@ module.exports = {
   AUTO_REPAIR_KINDS,
   DEFAULT_PRIORITY,
   INCIDENT_TYPES,
+  PERSISTENCE,
   PRIORITIES,
   STATUSES,
   QualityIncidentRegistry,

@@ -15,6 +15,9 @@
 const FAMILY_SAFE_API_ROUTES = new Set([
   '/api/executive/identity',
   '/api/executive/chat',
+  // Quality Loop: any authenticated user may report a problem. The route
+  // only records a compact incident and never reveals internal metrics.
+  '/api/quality/feedback',
 ]);
 
 function isFamilySafeApiRoute(pathname) {
