@@ -212,6 +212,109 @@ test('P2 email request naming the sender of a fetched message creates the normal
   assert.ok(preparation.body.trim());
 });
 
+function senderSearchHarness(t, { searchResults = {}, failSearch = false } = {}) {
+  const gmailRequests = [];
+  const recentInbox = [1, 2, 3, 4, 5].map((index) => ({
+    id: `recent-${index}`, threadId: `recent-thread-${index}`, from: `Reciente ${index} <reciente${index}@example.com>`,
+    subject: `Reciente ${index}`, date: '2026-09-27T08:00:00.000Z', snippet: 'secret-recent-snippet',
+  }));
+  const harness = createHarness(t, {
+    async buildGmailPrivateContext(input) {
+      gmailRequests.push({ senderAddress: input.senderAddress || null, maxMessages: input.maxMessages });
+      if (input.senderAddress && failSearch) {
+        const error = new Error('secret upstream detail');
+        error.code = 'gmail_unavailable';
+        throw error;
+      }
+      const messages = input.senderAddress ? (searchResults[input.senderAddress] || []) : recentInbox;
+      return privateContext('gmail', { source: 'gmail', messages });
+    },
+  });
+  return { ...harness, gmailRequests };
+}
+
+function lucushostMessage(index, subject) {
+  return {
+    id: `lucus-${index}`, threadId: `lucus-thread-${index}`, from: `LucusHost <contacto@lucushost.com>`,
+    subject, date: `2026-0${index}-10T09:00:00.000Z`, snippet: 'secret-lucus-snippet',
+  };
+}
+
+test('A sender outside the latest 5 is found by readonly Gmail search and gets the normal approval', async (t) => {
+  const { dependencies, runtime, gmailRequests } = senderSearchHarness(t, {
+    searchResults: { 'contacto@lucushost.com': [lucushostMessage(3, 'Renovación de dominio')] },
+  });
+  const payload = (await requestChat('Prepara una respuesta al correo de contacto@lucushost.com', dependencies)).getJson();
+
+  assert.deepEqual(gmailRequests, [{ senderAddress: 'contacto@lucushost.com', maxMessages: 5 }]);
+  assert.equal(payload.approval.status, 'pending');
+  const pending = await runtime.approvalQueue.listPending();
+  assert.equal(pending.length, 1);
+  const preparation = pending[0].publicProposal || pending[0].proposal;
+  assert.equal(preparation.recipient, 'contacto@lucushost.com');
+  assert.equal(preparation.subject, 'Re: Renovación de dominio');
+  assert.ok(preparation.body.trim());
+});
+
+test('B unknown sender: no proposal, no approval, specific not-found answer', async (t) => {
+  const { dependencies, runtime, gmailRequests } = senderSearchHarness(t);
+  const payload = (await requestChat('Prepara una respuesta al correo de nadie@example.com', dependencies)).getJson();
+
+  assert.deepEqual(gmailRequests, [{ senderAddress: 'nadie@example.com', maxMessages: 5 }]);
+  assert.equal(payload.proposal, null);
+  assert.equal(payload.approval, null);
+  assert.equal(payload.response, 'No encuentro ningún correo reciente o accesible de nadie@example.com.');
+  assert.equal((await runtime.approvalQueue.listPending()).length, 0);
+});
+
+test('C several matches: no approval, sanitized options, and the suggested follow-up picks from the same list', async (t) => {
+  const results = {
+    'contacto@lucushost.com': [
+      lucushostMessage(3, 'Factura septiembre'),
+      lucushostMessage(2, 'Renovación de dominio'),
+      lucushostMessage(1, 'Bienvenida'),
+    ],
+  };
+  const { dependencies, runtime } = senderSearchHarness(t, { searchResults: results });
+  const payload = (await requestChat('Prepara una respuesta al correo de contacto@lucushost.com', dependencies)).getJson();
+
+  assert.equal(payload.proposal, null);
+  assert.equal(payload.approval, null);
+  assert.equal((await runtime.approvalQueue.listPending()).length, 0);
+  assert.match(payload.response, /^Hay varios correos de contacto@lucushost\.com: /);
+  assert.match(payload.response, /1\) LucusHost — "Factura septiembre", 2026-03-10T09:00:00\.000Z/);
+  assert.match(payload.response, /2\) LucusHost — "Renovación de dominio"/);
+  assert.match(payload.response, /¿Cuál quieres responder\?/);
+  ['secret-lucus-snippet', 'lucus-1', 'lucus-thread'].forEach((value) => {
+    assert.equal(JSON.stringify(payload).includes(value), false);
+  });
+
+  const choice = (await requestChat('Prepara una respuesta al segundo correo de contacto@lucushost.com', dependencies)).getJson();
+  assert.equal(choice.approval.status, 'pending');
+  const [pending] = await runtime.approvalQueue.listPending();
+  assert.equal((pending.publicProposal || pending.proposal).subject, 'Re: Renovación de dominio');
+});
+
+test('D Gmail search failure: no proposal, no approval, safe error without upstream detail', async (t) => {
+  const { dependencies, runtime } = senderSearchHarness(t, { failSearch: true });
+  const payload = (await requestChat('Prepara una respuesta al correo de contacto@lucushost.com', dependencies)).getJson();
+
+  assert.equal(payload.proposal, null);
+  assert.equal(payload.approval, null);
+  assert.equal(payload.response, 'No he podido consultar Gmail en este momento. No se ha preparado ningún borrador.');
+  assert.equal(JSON.stringify(payload).includes('secret upstream detail'), false);
+  assert.equal((await runtime.approvalQueue.listPending()).length, 0);
+});
+
+test('explicit recipient/subject/body preparation does not trigger a sender search', async (t) => {
+  const { dependencies, gmailRequests } = senderSearchHarness(t);
+  await requestChat(
+    'Prepara un correo para pilot@example.com con asunto: Prueba y cuerpo: Texto de prueba.',
+    dependencies,
+  );
+  assert.equal(gmailRequests.some((request) => request.senderAddress), false);
+});
+
 test('K negations create no proposal, approval, execution, or private context', async (t) => {
   for (const query of ['No prepares un borrador.', 'No programes una reunión.', 'No crees una tarea.']) {
     await t.test(query, async (subtest) => {

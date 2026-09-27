@@ -380,6 +380,36 @@ function extractSenderName(from) {
 }
 
 const EMAIL_CONTEXT_MISSING_QUESTION = 'Indícame qué correo o remitente quieres responder.';
+const EMAIL_SENDER_SEARCH_FAILED = 'No he podido consultar Gmail en este momento. No se ha preparado ningún borrador.';
+const ORDINAL_WORDS = ['primero', 'segundo', 'tercero', 'cuarto', 'quinto'];
+
+// Sender search (readonly Gmail `from:` query) outcome for an email request
+// that named an address: 0 matches -> not found, several -> sanitized
+// options (sender, subject, date; never body or ids) and a question. The
+// suggested follow-up repeats the address so the same search runs again and
+// the ordinal points into the same list the user is looking at.
+function buildEmailSenderAnswer(senderSearch, matches) {
+  if (senderSearch && senderSearch.status === 'failed') return EMAIL_SENDER_SEARCH_FAILED;
+  const list = Array.isArray(matches) ? matches : [];
+  const address = senderSearch && typeof senderSearch.address === 'string' ? senderSearch.address : null;
+  if (list.length > 1) {
+    const options = list.slice(0, ORDINAL_WORDS.length).map((message, index) => {
+      const subject = typeof message.subject === 'string' && message.subject.trim()
+        ? message.subject.trim() : 'sin asunto';
+      const date = typeof message.date === 'string' && message.date.trim() ? `, ${message.date.trim()}` : '';
+      return `${index + 1}) ${extractSenderName(message.from)} — "${subject}"${date}`;
+    }).join('; ');
+    return address
+      ? `Hay varios correos de ${address}: ${options}. ¿Cuál quieres responder? `
+        + `Indícalo así: «Prepara una respuesta al segundo correo de ${address}».`
+      : `Hay varios correos que encajan: ${options}. `
+        + '¿Cuál quieres responder? Indícame la dirección de correo del remitente.';
+  }
+  if (address && list.length === 0) {
+    return `No encuentro ningún correo reciente o accesible de ${address}.`;
+  }
+  return EMAIL_CONTEXT_MISSING_QUESTION;
+}
 
 // FULL RUNTIME REVEAL FASE 18: "no fallback generico, no inventar" — when a
 // conversational reference cannot be resolved cleanly, ask which candidate
@@ -763,9 +793,14 @@ function resolveReferencedMessage(query, conversationContext, authorizedPrivateC
 // Ana", "el correo de ana@example.com") identifies the message only when it
 // matches exactly one candidate; zero or several matches identify nothing.
 function findMessageNamedInQuery(query, candidates) {
+  const matches = findMessagesNamedInQuery(query, candidates);
+  return matches.length === 1 ? matches[0] : null;
+}
+
+function findMessagesNamedInQuery(query, candidates) {
   const normalizedQuery = normalizeQueryText(query);
   const queryWords = new Set(normalizedQuery.split(/[^a-z0-9@._-]+/).filter(Boolean));
-  const matches = (Array.isArray(candidates) ? candidates : []).filter((message) => {
+  return (Array.isArray(candidates) ? candidates : []).filter((message) => {
     if (!message || typeof message !== 'object') return false;
     const from = normalizeQueryText(message.from);
     const address = (from.match(/[a-z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-z0-9.-]+\.[a-z]{2,}/) || [])[0];
@@ -774,7 +809,6 @@ function findMessageNamedInQuery(query, candidates) {
     const nameWords = senderName.split(/\s+/).filter((word) => word.length >= 3 && !word.includes('@'));
     return nameWords.some((word) => queryWords.has(word));
   });
-  return matches.length === 1 ? matches[0] : null;
 }
 
 // P2 (27/09/2026): only a message the user actually identified — through a
@@ -1096,7 +1130,10 @@ async function orchestrateExecutiveQuery(query, options) {
     && !emailDraftReadyAnswer
     && !proposalBundle
     && diagnostics.proposalMissingEmailContext === true
-  ) ? EMAIL_CONTEXT_MISSING_QUESTION : null;
+  ) ? buildEmailSenderAnswer(
+      options && options.emailSenderSearch,
+      findMessagesNamedInQuery(query, emailReferenceResolution && emailReferenceResolution.candidates),
+    ) : null;
   let knowledgeQueryResult = null;
 
   if (shouldUseKnowledgeQuery(analysis)) {
@@ -1210,6 +1247,7 @@ async function orchestrateExecutiveQuery(query, options) {
 }
 
 module.exports = {
+  emailPreparationFromQuery,
   orchestrateExecutiveQuery,
   prepareAuthorizedPrivateContexts,
   sanitizeExecutiveSources,

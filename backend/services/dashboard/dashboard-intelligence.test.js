@@ -846,7 +846,7 @@ function loadPreparationRegeneration({ savedQuery, chatResponse }) {
     'setDraftSupervisorState',
     'setExecutiveChatState',
     'renderExecutiveChatResult',
-    'getExecutiveChatError',
+    'EXECUTIVE_CHAT_FAILED',
     'selectExecutiveDraftApproval',
     'renderPreparation',
     `"use strict";
@@ -866,7 +866,7 @@ function loadPreparationRegeneration({ savedQuery, chatResponse }) {
     (value) => supervisor.push(value),
     () => {},
     () => {},
-    () => 'error',
+    'No se pudo completar la consulta.',
     (pending) => pending[0] || null,
     (item, options) => rendered.push({ item, options }),
   );

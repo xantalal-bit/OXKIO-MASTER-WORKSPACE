@@ -18,6 +18,7 @@ function normalize(value) {
 
 const ORDINAL_INDEX = Object.freeze({
   primero: 0, primera: 0, segundo: 1, segunda: 1, tercero: 2, tercera: 2,
+  cuarto: 3, cuarta: 3, quinto: 4, quinta: 4,
 });
 
 function resolveOrdinal(normalizedQuery, list) {
@@ -57,7 +58,7 @@ function resolveDemonstrative(normalizedQuery, selection, list) {
   return Array.isArray(list) && list.length > 0 ? list[0] : null;
 }
 
-const REFERENCE_LANGUAGE_PATTERN = /\bese\b|\besa\b|\beste\b|\besta\b|\beso\b|\bprimero\b|\bprimera\b|\bsegundo\b|\bsegunda\b|\btercero\b|\btercera\b|\bultimo\b|\bultima\b|\banterior\b|\bmas importante\b|\brespondele\b|\bcontestale\b|\bhazlo\b/;
+const REFERENCE_LANGUAGE_PATTERN = /\bese\b|\besa\b|\beste\b|\besta\b|\beso\b|\bprimero\b|\bprimera\b|\bsegundo\b|\bsegunda\b|\btercero\b|\btercera\b|\bcuarto\b|\bcuarta\b|\bquinto\b|\bquinta\b|\bultimo\b|\bultima\b|\banterior\b|\bmas importante\b|\brespondele\b|\bcontestale\b|\bhazlo\b/;
 
 // entities: the conversation context's entities[listKey] array (e.g.
 // entities.messages), each item shaped { ref, ...safe fields }.

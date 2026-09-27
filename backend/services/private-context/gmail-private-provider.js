@@ -86,15 +86,35 @@ function normalizeGmailMessage(message = {}) {
   };
 }
 
+// Strict address shape: the value is interpolated into a Gmail search
+// operator, so anything beyond a plain address (spaces, quotes, operators)
+// is rejected instead of escaped.
+const SENDER_ADDRESS_PATTERN = /^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$/;
+
+function normalizeSenderAddress(value) {
+  if (typeof value === 'undefined' || value === null) return null;
+  const address = typeof value === 'string' ? value.trim().toLowerCase() : '';
+  if (!SENDER_ADDRESS_PATTERN.test(address) || address.length > 254) {
+    throw buildProviderError('invalid_sender_address', 'senderAddress must be a plain email address.');
+  }
+  return address;
+}
+
+// Same readonly messages.list call (gmail.readonly already allows `q`). With
+// a sender it searches that sender across the mailbox (spam/trash excluded
+// by Gmail's default) instead of only the latest INBOX messages.
 async function listReadonlyGmailMessages(options = {}, dependencies = {}) {
+  const maxMessages = clampMaxMessages(options.maxMessages);
+  const senderAddress = normalizeSenderAddress(options.senderAddress);
   const gmailClientFactory = dependencies.getGmailClient || getGmailClient;
   const gmail = await gmailClientFactory();
-  const maxMessages = clampMaxMessages(options.maxMessages);
-  const listResponse = await gmail.users.messages.list({
-    userId: 'me',
-    maxResults: maxMessages,
-    labelIds: Array.isArray(options.labelIds) ? options.labelIds : ['INBOX'],
-  });
+  const listResponse = await gmail.users.messages.list(senderAddress
+    ? { userId: 'me', maxResults: maxMessages, q: `from:${senderAddress}` }
+    : {
+      userId: 'me',
+      maxResults: maxMessages,
+      labelIds: Array.isArray(options.labelIds) ? options.labelIds : ['INBOX'],
+    });
   const messages = listResponse && listResponse.data && Array.isArray(listResponse.data.messages)
     ? listResponse.data.messages
     : [];
@@ -119,6 +139,7 @@ async function buildGmailPrivateContext(input = {}, dependencies = {}) {
   const oauthGuard = dependencies.assertGoogleOAuthConfigured || assertGoogleOAuthConfigured;
   assertGmailPrivateIdentity(input);
   const maxMessages = clampMaxMessages(input.maxMessages);
+  const senderAddress = normalizeSenderAddress(input.senderAddress);
 
   if (!dependencies.listReadonlyGmailMessages) {
     oauthGuard();
@@ -127,6 +148,7 @@ async function buildGmailPrivateContext(input = {}, dependencies = {}) {
   const messages = await gmailReader({
     maxMessages,
     labelIds: input.labelIds,
+    ...(senderAddress ? { senderAddress } : {}),
   });
   const normalizedMessages = Array.isArray(messages)
     ? messages.slice(0, maxMessages).map(normalizeGmailMessage)

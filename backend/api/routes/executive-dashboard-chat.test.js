@@ -50,8 +50,84 @@ test('blocks empty and duplicate submissions before fetch and restores the butto
   assert.ok(duplicateGuard >= 0 && duplicateGuard < fetchCall);
   assert.match(source, /executiveChatSending\s*=\s*true/);
   assert.match(source, /button\.disabled\s*=\s*true/);
-  assert.match(source, /Procesando…/);
+  assert.match(source, /Consultando…/);
   assert.match(source, /finally\s*\{[\s\S]*executiveChatSending\s*=\s*false[\s\S]*button\.disabled\s*=\s*false/);
+});
+
+function loadChatSubmit({ fetchImpl }) {
+  const html = readDashboard();
+  const start = html.indexOf('async function submitExecutiveChat');
+  const end = html.indexOf('function initializeExecutiveChat', start);
+  const states = [];
+  const input = { value: 'Prepara una respuesta al correo de contacto@example.com' };
+  const button = { disabled: false };
+  const document = {
+    querySelector(selector) {
+      if (selector === '[data-executive-chat-input]') return input;
+      if (selector === '[data-executive-chat-submit]') return button;
+      return null;
+    },
+  };
+  const submit = Function(
+    'document',
+    'window',
+    'setExecutiveChatState',
+    'renderExecutiveChatResult',
+    'loadExecutiveDraftApproval',
+    'reportNoNewPreparation',
+    `"use strict";
+      const EXECUTIVE_CHAT_FAILED = "No se pudo completar la consulta.";
+      let executiveChatSending = false;
+      let lastEmailPreparationQuery = "";
+      ${html.slice(start, end)}
+      return submitExecutiveChat;`,
+  )(
+    document,
+    { oxkioAuthenticatedFetch: fetchImpl },
+    (message, state) => states.push({ message, state, disabled: button.disabled }),
+    () => {},
+    async () => {},
+    () => {},
+  );
+  return { submit, states, button };
+}
+
+test('E-F chat shows "Consultando…" with Send locked, then a final state, and one click is one POST', async () => {
+  let posts = 0;
+  let release;
+  const { submit, states, button } = loadChatSubmit({
+    fetchImpl: () => {
+      posts += 1;
+      return new Promise((resolve) => {
+        release = () => resolve({ ok: true, status: 200, json: async () => ({ response: 'ok' }) });
+      });
+    },
+  });
+
+  const first = submit();
+  const second = submit();
+  await second;
+  assert.equal(posts, 1);
+  assert.deepEqual(states, [{ message: 'Consultando…', state: 'sending', disabled: true }]);
+  assert.equal(button.disabled, true);
+
+  release();
+  await first;
+  assert.deepEqual(states.at(-1), { message: 'Consulta completada.', state: 'success', disabled: true });
+  assert.equal(button.disabled, false);
+  assert.equal(posts, 1);
+});
+
+test('E-F chat failures end in "No se pudo completar la consulta." and unlock Send', async () => {
+  for (const fetchImpl of [
+    async () => ({ ok: false, status: 503, json: async () => ({}) }),
+    async () => { throw new Error('network'); },
+  ]) {
+    const { submit, states, button } = loadChatSubmit({ fetchImpl });
+    await submit();
+    assert.deepEqual(states.map((entry) => entry.message), ['Consultando…', 'No se pudo completar la consulta.']);
+    assert.equal(button.disabled, false);
+  }
 });
 
 test('renders a clean executive response and keeps technical metadata out of the conversation', () => {
@@ -153,11 +229,10 @@ test('handles HTTP, network, invalid JSON, and absent optional fields safely', (
   const source = getChatScript(readDashboard());
 
   assert.match(source, /if \(!response\.ok\)/);
-  assert.match(source, /status === 400/);
-  assert.match(source, /status === 503/);
   assert.match(source, /await response\.json\(\)/);
   assert.match(source, /catch \(error\)/);
-  assert.match(source, /No se pudo conectar con el servicio ejecutivo/);
+  assert.match(source, /const EXECUTIVE_CHAT_FAILED = "No se pudo completar la consulta\."/);
+  assert.equal(source.match(/setExecutiveChatState\(EXECUTIVE_CHAT_FAILED, "error"\)/g).length, 2);
   assert.doesNotMatch(source, /error\.message|error\.stack|JSON\.stringify\(data\)/);
 });
 
