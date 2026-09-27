@@ -1430,8 +1430,10 @@
         emailDraftReady
           ? "Borrador preparado"
           : isEmailPreparation
-          ? ["No se pudo preparar el borrador porque falta identificar el correo.", backendAnswer]
-            .filter(Boolean).join(" ")
+          // The backend states why no draft exists (clarification needed,
+          // reasoning not connected, draft rejected...); the generic
+          // sentence is only the fallback when it says nothing.
+          ? (backendAnswer || "No se pudo preparar el borrador porque falta identificar el correo.")
           : actionDecision
           ? (plan.length > 0 ? "He preparado un plan de trabajo." : "He revisado tu petición.")
           : (data && typeof data.response === "string" ? data.response : null),

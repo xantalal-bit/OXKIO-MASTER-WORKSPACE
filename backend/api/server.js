@@ -55,6 +55,11 @@ const { isApiRouteDeniedForIdentity } = require("../security/api-route-policy");
 const { safeDiagnostic } = require("../security/secret-runtime");
 const { createExecutiveRuntime } = require("../services/runtime/executive-runtime-factory");
 const { CostController } = require("../services/runtime/cost-controller");
+const {
+  buildReasoningCostCatalog,
+  createExecutiveReasoningProvider
+} = require("../services/executive-brain/executive-reasoning-provider");
+const { createEmailReplySupervisor } = require("../services/executive-brain/email-reply-supervisor");
 const { SupervisedAutonomyTelemetry } = require("../services/runtime/supervised-autonomy-telemetry");
 const { QualityIncidentRegistry } = require("../services/runtime/quality-incident-registry");
 const { createQualityFeedbackService } = require("../services/runtime/quality-feedback");
@@ -151,7 +156,18 @@ const executionLogger = new ExecutionLogger();
 // Supervised Autonomy Telemetry V2: one instance of each per process,
 // in-memory only (no persistence, no endpoint). Injected only into
 // handleExecutiveChatRequest, its single productive caller.
-const costController = new CostController();
+// Executive Reasoning (Supervisor V1): configured only from the runtime
+// environment contract; NOT_CONFIGURED (no model call, no template) until
+// the operator connects a provider. Its reviewed pricing joins the
+// CostController catalog so every model call is cost-routed.
+const executiveReasoningProvider = createExecutiveReasoningProvider();
+const costController = new CostController({
+  catalog: buildReasoningCostCatalog(executiveReasoningProvider)
+});
+const emailReplySupervisor = createEmailReplySupervisor({
+  provider: executiveReasoningProvider,
+  costController
+});
 const supervisedAutonomyTelemetry = new SupervisedAutonomyTelemetry();
 // Quality Incident Registry: single owner of important failures. Durable
 // only when the Approval PostgreSQL backend is active: it reuses that same
@@ -365,7 +381,9 @@ if (isExecutiveChatRoute(pathname, req.method)) {
       executionLogger,
       costController,
       supervisedAutonomyTelemetry,
-      qualityIncidentRegistry
+      qualityIncidentRegistry,
+      executiveReasoningProvider,
+      emailReplySupervisor
     }
   });
 }
@@ -1371,5 +1389,9 @@ qualityIncidentRegistry.load().then(() => server.listen(PORT, HOST, () => {
   console.log("Version:", systemConfig.app.version);
   console.log("Safe Mode:", systemConfig.security.safeMode);
   console.log("Gmail Mode:", systemConfig.gmail.mode);
+  // Names only, never values: tells the operator what is still missing.
+  console.log("Executive Reasoning:", executiveReasoningProvider.status === "ready"
+    ? `ready (${executiveReasoningProvider.modelId})`
+    : `CONNECTION_NEEDED (missing: ${executiveReasoningProvider.missing.join(", ")})`);
   console.log("=================================");
 }));

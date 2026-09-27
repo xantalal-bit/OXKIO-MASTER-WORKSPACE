@@ -1301,6 +1301,7 @@ test('does not expose private context through safe proposal metadata', async () 
   let queuedProposal = null;
   let queuedExecutionPayload = null;
   let queuedContext = null;
+  const reasonerMessages = [];
   const result = await orchestrateExecutiveQuery('Prepara un borrador de respuesta a Ana', {
     privateContextMetadata: buildPrivateContext({
       sourceType: 'gmail',
@@ -1308,6 +1309,12 @@ test('does not expose private context through safe proposal metadata', async () 
     }),
     expectedClientId: 'client-alpha',
     privatePayload,
+    // Supervisor V1: the reply body comes only from the reasoner (here a
+    // test stub standing in for the verified Email Reply Supervisor).
+    async emailReplyReasoner({ message }) {
+      reasonerMessages.push(message);
+      return { status: 'draft', body: 'Cuerpo razonado a partir del correo.', warnings: [] };
+    },
     dependencies: {
       proposalEngine: {
         generate() {
@@ -1354,7 +1361,7 @@ test('does not expose private context through safe proposal metadata', async () 
   assert.deepEqual(queuedExecutionPayload, {
     to: 'ana.private@example.com',
     subject: 'Re: private-subject',
-    body: 'Cuerpo de plantilla.',
+    body: 'Cuerpo razonado a partir del correo.',
     replyMessageId: 'message-private',
     threadId: 'thread-private',
   });

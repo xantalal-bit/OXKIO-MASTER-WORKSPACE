@@ -8,6 +8,7 @@ const {
   buildGmailPrivateContext,
   listReadonlyGmailMessages,
   normalizeGmailMessage,
+  readReadonlyGmailMessageText,
 } = require('./gmail-private-provider');
 const { preparePrivateContextAdapter } = require('./private-context-adapter');
 
@@ -318,4 +319,42 @@ test('private context passes the sender address to the reader only when given', 
     { maxMessages: 5, labelIds: undefined },
     { maxMessages: 5, labelIds: undefined, senderAddress: 'contacto@example.com' },
   ]);
+});
+
+test('reads the text of one selected message with the readonly client (plain part preferred, html fallback)', async () => {
+  const encode = (text) => Buffer.from(text, 'utf8').toString('base64').replace(/\+/g, '-').replace(/\//g, '_');
+  const calls = [];
+  const clientFor = (payload) => ({
+    users: {
+      messages: {
+        async get(options) { calls.push(options); return { data: { payload } }; },
+        async send() { throw new Error('send must never be called'); },
+      },
+    },
+  });
+  const plain = await readReadonlyGmailMessageText({ messageId: 'msg_1-A' }, {
+    getGmailClient: () => clientFor({
+      mimeType: 'multipart/alternative',
+      parts: [
+        { mimeType: 'text/plain', body: { data: encode('Hola José,\r\n\r\n\r\nTu plan vence.') } },
+        { mimeType: 'text/html', body: { data: encode('<p>ignored</p>') } },
+      ],
+    }),
+  });
+  assert.equal(plain, 'Hola José,\n\nTu plan vence.');
+  assert.deepEqual(calls[0], { userId: 'me', id: 'msg_1-A', format: 'full' });
+
+  const html = await readReadonlyGmailMessageText({ messageId: 'msg2', maxChars: 12 }, {
+    getGmailClient: () => clientFor({ mimeType: 'text/html', body: { data: encode('<div>Ticket &amp; plan</div><script>x()</script>') } }),
+  });
+  assert.equal(html, 'Ticket & pla');
+});
+
+test('message text reader rejects anything that is not a Gmail message id before calling Gmail', async () => {
+  for (const messageId of ['', '../x', 'a b', undefined]) {
+    await assert.rejects(
+      readReadonlyGmailMessageText({ messageId }, { getGmailClient() { throw new Error('reached Gmail'); } }),
+      (error) => error.code === 'invalid_message_id',
+    );
+  }
 });

@@ -7,6 +7,64 @@ const ProposalEngine = require('../../core/proposalEngine');
 const { createExecutiveRuntime, SANDBOX_MODE } = require('../../services/runtime/executive-runtime-factory');
 const { createConversationContextStore } = require('../../services/executive-brain/conversation-context-store');
 const { handleExecutiveChatRequest, isExecutiveChatRoute } = require('./executive-chat');
+const { CostController } = require('../../services/runtime/cost-controller');
+const { DEFAULT_CATALOG } = require('../../services/runtime/model-cost-catalog');
+const { createEmailReplySupervisor } = require('../../services/executive-brain/email-reply-supervisor');
+
+// Test-only reasoning provider: answers from the source text it is given,
+// so drafts pass the real Supervisor + Verifier. Never wired in runtime.
+const TEST_MODEL_ID = 'test:grounded';
+const TEST_MESSAGE_TEXT = 'Necesitamos que confirmes los datos del plan Hosting SSD Senior. El ticket sigue abierto.';
+
+function testCostController() {
+  return new CostController({
+    catalog: {
+      ...DEFAULT_CATALOG,
+      [TEST_MODEL_ID]: {
+        provider: 'test', tier: 'small_model', inputUsdPerMillion: 1, outputUsdPerMillion: 2,
+        residency: 'external', privacy: 'provider_api', pricingVersion: 'test', pricingSource: 'test',
+        reviewedAt: '2026-09-27',
+      },
+    },
+  });
+}
+
+function groundedReasoning({ reason, text = TEST_MESSAGE_TEXT } = {}) {
+  const calls = [];
+  const provider = {
+    status: 'ready', provider: 'test', model: 'grounded', modelId: TEST_MODEL_ID, missing: [], catalog: {},
+    async reason(request) {
+      calls.push(request);
+      if (reason) return reason(request);
+      const source = request.context.correoRecibido;
+      const quote = source.text.split('.')[0].trim();
+      return {
+        status: 'ok',
+        usage: { inputTokens: 200, outputTokens: 120 },
+        content: {
+          needsClarification: false,
+          clarificationQuestion: null,
+          replyBody: `Hola,\n\nSobre tu mensaje "${source.subject}": ${quote.toLowerCase()} lo reviso ahora `
+            + 'y te contesto con el detalle.\n\nUn saludo,',
+          evidence: [quote],
+          uncertainties: [],
+        },
+      };
+    },
+  };
+  const textReads = [];
+  return {
+    calls,
+    textReads,
+    dependencies: {
+      emailReplySupervisor: createEmailReplySupervisor({ provider, costController: testCostController(), logger: () => {} }),
+      async readGmailMessageText(options) {
+        textReads.push(options);
+        return text;
+      },
+    },
+  };
+}
 
 function createRequest(body) {
   const request = new EventEmitter();
@@ -68,6 +126,7 @@ function createHarness(t, overrides = {}) {
       calls.dashboard += 1;
       return { executiveSummary: 'Estado agregado estable.', morningBriefing: 'Dos prioridades requieren atencion.' };
     },
+    ...groundedReasoning().dependencies,
     ...overrides,
   };
   return { calls, dependencies, runtime };
@@ -313,6 +372,123 @@ test('explicit recipient/subject/body preparation does not trigger a sender sear
     dependencies,
   );
   assert.equal(gmailRequests.some((request) => request.senderAddress), false);
+});
+
+const LUCUS_RESULTS = {
+  'contacto@lucushost.com': [
+    lucushostMessage(3, 'Factura septiembre'),
+    lucushostMessage(2, 'Re: [Ticket ID: 162744] plan Hosting SSD Senior'),
+  ],
+};
+const LUCUS_TICKET_TEXT = 'Hola José Antonio, hemos resuelto la incidencia del correo en tu plan Hosting SSD Senior. '
+  + '¿Puedes confirmarnos si ya recibes los mensajes correctamente?';
+const REFERENCE_QUERY = 'Prepara una respuesta al segundo correo de contacto@lucushost.com';
+
+function supervisorHarness(t, reasoningOptions) {
+  const reasoning = groundedReasoning({ text: LUCUS_TICKET_TEXT, ...reasoningOptions });
+  const harness = senderSearchHarness(t, { searchResults: LUCUS_RESULTS });
+  Object.assign(harness.dependencies, reasoning.dependencies);
+  return { ...harness, reasoning };
+}
+
+test('Supervisor V1 reference case: the draft is reasoned from the selected message, pending human approval', async (t) => {
+  const reply = 'Hola,\n\nGracias por resolver la incidencia del correo del plan Hosting SSD Senior (ticket 162744). '
+    + 'Lo compruebo hoy y os confirmo si ya recibo los mensajes correctamente.\n\nUn saludo,';
+  const { dependencies, runtime, reasoning } = supervisorHarness(t, {
+    reason: () => ({
+      status: 'ok',
+      usage: { inputTokens: 300, outputTokens: 150 },
+      content: {
+        needsClarification: false,
+        replyBody: reply,
+        evidence: ['hemos resuelto la incidencia del correo'],
+        uncertainties: ['Comprueba que los mensajes llegan antes de aprobar.'],
+      },
+    }),
+  });
+  const payload = (await requestChat(REFERENCE_QUERY, dependencies)).getJson();
+
+  // Only the second search result's text was read, and only for this mission.
+  assert.deepEqual(reasoning.textReads, [{ messageId: 'lucus-2' }]);
+  assert.equal(reasoning.calls[0].context.correoRecibido.subject, 'Re: [Ticket ID: 162744] plan Hosting SSD Senior');
+  assert.equal(payload.approval.status, 'pending');
+  assert.match(payload.response, /Revisa antes de aprobar: Comprueba que los mensajes llegan/);
+  const [pending] = await runtime.approvalQueue.listPending();
+  const preparation = pending.publicProposal || pending.proposal;
+  assert.equal(preparation.recipient, 'contacto@lucushost.com');
+  assert.equal(preparation.subject, 'Re: [Ticket ID: 162744] plan Hosting SSD Senior');
+  assert.equal(preparation.body, reply);
+  assert.doesNotMatch(preparation.body, /He revisado el asunto|propongo avanzar/);
+  // F/H: human gate intact, nothing executes.
+  assert.equal(preparation.requiresApproval, true);
+  assert.equal(preparation.executionEnabled, false);
+  // Neither the source text nor internal ids reach the chat payload.
+  ['hemos resuelto', 'lucus-2', 'lucus-thread-2'].forEach((value) => {
+    assert.equal(JSON.stringify(payload).includes(value), false);
+  });
+});
+
+test('Supervisor V1: a decision José has not taken becomes a question, with no approval', async (t) => {
+  const { dependencies, runtime } = supervisorHarness(t, {
+    reason: () => ({
+      status: 'ok',
+      content: { needsClarification: true, clarificationQuestion: '¿Renuevas el plan por 12 o por 24 meses?' },
+    }),
+  });
+  const payload = (await requestChat(REFERENCE_QUERY, dependencies)).getJson();
+  assert.equal(payload.proposal, null);
+  assert.equal(payload.approval, null);
+  assert.equal(payload.response, 'Antes de preparar la respuesta necesito que me indiques: ¿Renuevas el plan por 12 o por 24 meses?');
+  assert.equal((await runtime.approvalQueue.listPending()).length, 0);
+});
+
+test('Supervisor V1: the legacy generic template is rejected by the Verifier, with no approval', async (t) => {
+  const { dependencies, runtime, reasoning } = supervisorHarness(t, {
+    reason: () => ({
+      status: 'ok',
+      content: {
+        needsClarification: false,
+        replyBody: 'Hola,\n\nHe revisado el asunto y propongo avanzar con prioridad.\n\nQuedo atento a confirmación.\n\nUn saludo,',
+        evidence: ['hemos resuelto la incidencia del correo'],
+      },
+    }),
+  });
+  const payload = (await requestChat(REFERENCE_QUERY, dependencies)).getJson();
+  assert.equal(payload.approval, null);
+  assert.equal(payload.response, 'No he podido preparar un borrador fiable basado en el contenido del correo. No se ha preparado ningún borrador.');
+  assert.equal(reasoning.calls.length, 2);
+  assert.equal((await runtime.approvalQueue.listPending()).length, 0);
+});
+
+test('Supervisor V1: provider failure or unreadable message is a safe error with no approval', async (t) => {
+  await t.test('provider error', async (subtest) => {
+    const { dependencies, runtime } = supervisorHarness(subtest, {
+      reason: () => ({ status: 'error', errorCode: 'reasoning_upstream_error' }),
+    });
+    const payload = (await requestChat(REFERENCE_QUERY, dependencies)).getJson();
+    assert.equal(payload.approval, null);
+    assert.equal(payload.response, 'No he podido completar el razonamiento en este momento. No se ha preparado ningún borrador.');
+    assert.equal((await runtime.approvalQueue.listPending()).length, 0);
+  });
+  await t.test('message text unreadable', async (subtest) => {
+    const { dependencies, runtime, reasoning } = supervisorHarness(subtest);
+    dependencies.readGmailMessageText = async () => { throw Object.assign(new Error('secret detail'), { code: 'x' }); };
+    const payload = (await requestChat(REFERENCE_QUERY, dependencies)).getJson();
+    assert.equal(payload.approval, null);
+    assert.equal(payload.response, 'No he podido leer el contenido de ese correo. No se ha preparado ningún borrador.');
+    assert.equal(reasoning.calls.length, 0);
+    assert.equal((await runtime.approvalQueue.listPending()).length, 0);
+  });
+});
+
+test('Supervisor V1: without a reasoning provider the chat says CONNECTION_NEEDED and never uses the template', async (t) => {
+  const { dependencies, runtime } = senderSearchHarness(t, { searchResults: LUCUS_RESULTS });
+  delete dependencies.emailReplySupervisor;
+  const payload = (await requestChat(REFERENCE_QUERY, dependencies)).getJson();
+  assert.equal(payload.proposal, null);
+  assert.equal(payload.approval, null);
+  assert.match(payload.response, /necesito un proveedor de razonamiento que todavía no está conectado/);
+  assert.equal((await runtime.approvalQueue.listPending()).length, 0);
 });
 
 test('K negations create no proposal, approval, execution, or private context', async (t) => {

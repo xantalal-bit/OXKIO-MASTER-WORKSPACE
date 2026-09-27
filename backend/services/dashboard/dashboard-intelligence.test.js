@@ -1181,21 +1181,23 @@ test('P2 chat never shows "Borrador preparado" for an email preparation without 
     const rendered = renderChatResultWith(data);
     const text = rendered['[data-chat-response]'].textContent;
     assert.doesNotMatch(text, /Borrador preparado/);
-    assert.match(text, /^No se pudo preparar el borrador porque falta identificar el correo\./);
+    // Supervisor V1: the backend's own explanation wins; the generic
+    // sentence is only the fallback when the backend says nothing.
+    assert.equal(text, data.response || 'No se pudo preparar el borrador porque falta identificar el correo.');
     assert.equal(rendered['[data-chat-proposal]'].hidden, true);
   }
 
-  const withClarification = renderChatResultWith({
-    capabilityComposition: emailCapability,
-    proposal: null,
-    approval: null,
-    response: 'Indícame qué correo o remitente quieres responder.',
-  });
-  assert.equal(
-    withClarification['[data-chat-response]'].textContent,
-    'No se pudo preparar el borrador porque falta identificar el correo. '
-      + 'Indícame qué correo o remitente quieres responder.',
-  );
+  for (const response of [
+    'Indícame qué correo o remitente quieres responder.',
+    'Antes de preparar la respuesta necesito que me indiques: ¿Renuevas por 12 o por 24 meses?',
+    'Para redactar una respuesta basada en el contenido real del correo necesito un proveedor de razonamiento '
+      + 'que todavía no está conectado. No se ha preparado ningún borrador.',
+  ]) {
+    const rendered = renderChatResultWith({
+      capabilityComposition: emailCapability, proposal: null, approval: null, response,
+    });
+    assert.equal(rendered['[data-chat-response]'].textContent, response);
+  }
 
   const ready = renderChatResultWith({
     capabilityComposition: emailCapability,
