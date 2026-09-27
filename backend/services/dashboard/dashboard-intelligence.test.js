@@ -1116,10 +1116,94 @@ test('Executive Dashboard keeps email preparation primary over readonly recommen
 
   assert.match(renderer, /primaryCapability === "prepare-email-draft"/);
   assert.match(renderer, /isEmailPreparation\s*\?\s*null/);
-  assert.match(renderer, /isEmailPreparation\s*\?\s*"Borrador preparado"/);
+  assert.match(renderer, /emailDraftReady\s*\?\s*"Borrador preparado"/);
   assert.match(renderer, /Se ha usado información disponible como contexto\./);
   assert.match(renderer, /El borrador está pendiente de tu aprobación\./);
   assert.doesNotMatch(renderer, /innerHTML/);
+});
+
+function renderChatResultWith(data) {
+  const html = fs.readFileSync(
+    path.join(__dirname, '..', '..', '..', 'app', 'executive-dashboard.html'),
+    'utf8',
+  );
+  const start = html.indexOf('function renderExecutiveChatResult');
+  const end = html.indexOf('function dismissDecisionRecommendation', start);
+  const element = () => ({
+    hidden: true,
+    textContent: '',
+    dataset: {},
+    querySelector(selector) { return this.children[selector] || null; },
+    replaceChildren() {},
+    appendChild() {},
+    children: {},
+  });
+  const decision = element();
+  ['[data-chat-plan]', '.operations-actions', '[data-chat-decision-message]',
+    '[data-chat-decision-safety]', '[data-chat-decision-confirm]']
+    .forEach((selector) => { decision.children[selector] = element(); });
+  const result = element();
+  ['[data-chat-response]', '[data-chat-proposal]', '[data-chat-approval]', '[data-chat-followup]']
+    .forEach((selector) => { result.children[selector] = element(); });
+  result.children['[data-chat-decision]'] = decision;
+  const document = {
+    querySelector(selector) { return selector === '[data-executive-chat-result]' ? result : null; },
+    createElement: () => element(),
+  };
+  const setText = (target, value, fallback) => {
+    if (target) target.textContent = value || fallback;
+  };
+  Function(
+    'document',
+    'setText',
+    `"use strict"; let pendingPlanSteps = []; ${html.slice(start, end)}; return renderExecutiveChatResult;`,
+  )(document, setText)(data);
+  return result.children;
+}
+
+test('P2 chat never shows "Borrador preparado" for an email preparation without a complete draft', () => {
+  const emailCapability = { primaryCapability: 'prepare-email-draft' };
+  for (const data of [
+    // Marked as preparation, no approval: nothing was queued.
+    {
+      capabilityComposition: emailCapability,
+      proposal: { actionType: 'prepare-email-draft', summary: 'Borrador de email preparado para revision.' },
+      approval: null,
+      response: 'Indícame qué correo o remitente quieres responder.',
+    },
+    // Marked as preparation with empty draft fields.
+    {
+      capabilityComposition: emailCapability,
+      proposal: { actionType: 'prepare-email-draft', recipient: '', subject: '', body: '' },
+      approval: { id: 'approval-x', status: 'pending', createdAt: '2026-09-27T08:00:00.000Z' },
+    },
+  ]) {
+    const rendered = renderChatResultWith(data);
+    const text = rendered['[data-chat-response]'].textContent;
+    assert.doesNotMatch(text, /Borrador preparado/);
+    assert.match(text, /^No se pudo preparar el borrador porque falta identificar el correo\./);
+    assert.equal(rendered['[data-chat-proposal]'].hidden, true);
+  }
+
+  const withClarification = renderChatResultWith({
+    capabilityComposition: emailCapability,
+    proposal: null,
+    approval: null,
+    response: 'Indícame qué correo o remitente quieres responder.',
+  });
+  assert.equal(
+    withClarification['[data-chat-response]'].textContent,
+    'No se pudo preparar el borrador porque falta identificar el correo. '
+      + 'Indícame qué correo o remitente quieres responder.',
+  );
+
+  const ready = renderChatResultWith({
+    capabilityComposition: emailCapability,
+    proposal: { actionType: 'prepare-email-draft' },
+    approval: { id: 'approval-ok', status: 'pending', createdAt: '2026-09-27T08:00:00.000Z' },
+  });
+  assert.equal(ready['[data-chat-response]'].textContent, 'Borrador preparado');
+  assert.equal(ready['[data-chat-proposal]'].hidden, false);
 });
 
 test('frontend renders only the three ecosystem widgets with safe DOM operations', () => {

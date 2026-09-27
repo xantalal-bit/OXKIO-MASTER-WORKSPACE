@@ -157,7 +157,8 @@ test('F-G read safe memory only when selected and keep general query privateCont
 
 test('H-J preserve supervised proposals in sandbox without real execution', async (t) => {
   const cases = [
-    ['Prepara un borrador de respuesta.', 'email_draft', 0, 0, false],
+    // P2 (27/09/2026): no identified message -> no orphan proposal either.
+    ['Prepara un borrador de respuesta.', null, 0, 0, false],
     ['Prepara una respuesta al último correo.', 'email_draft', 1, 0, true],
     ['Programa una reunión.', 'meeting_proposal', 0, 0, true],
   ];
@@ -166,7 +167,7 @@ test('H-J preserve supervised proposals in sandbox without real execution', asyn
       const { calls, dependencies } = createHarness(subtest);
       const response = await requestChat(query, dependencies);
       const payload = response.getJson();
-      assert.equal(payload.proposal.type, type);
+      assert.equal(payload.proposal ? payload.proposal.type : null, type);
       assert.equal(
         approvalExpected ? payload.approval.status : payload.approval,
         approvalExpected ? 'pending' : null,
@@ -175,6 +176,40 @@ test('H-J preserve supervised proposals in sandbox without real execution', asyn
       assert.equal(JSON.stringify(payload).includes('executionPayload'), false);
     });
   }
+});
+
+test('P2 email request without an identified message asks for it and creates no approval', async (t) => {
+  await t.test('qué correo quieres preparar?', async (subtest) => {
+    const { dependencies, runtime } = createHarness(subtest);
+    const payload = (await requestChat('qué correo quieres preparar?', dependencies)).getJson();
+    assert.equal(payload.proposal, null);
+    assert.equal(payload.approval, null);
+    assert.equal(payload.response, 'Indícame qué correo o remitente quieres responder.');
+    assert.equal((await runtime.approvalQueue.listPending()).length, 0);
+  });
+
+  await t.test('respóndele without previous conversation', async (subtest) => {
+    const { dependencies, runtime } = createHarness(subtest);
+    const payload = (await requestChat('respóndele', dependencies)).getJson();
+    assert.equal(payload.proposal, null);
+    assert.equal(payload.approval, null);
+    assert.match(payload.response, /correo|remitente/);
+    assert.match(payload.response, /\?$/);
+    assert.equal((await runtime.approvalQueue.listPending()).length, 0);
+  });
+});
+
+test('P2 email request naming the sender of a fetched message creates the normal approval', async (t) => {
+  const { dependencies, runtime } = createHarness(t);
+  const payload = (await requestChat('Prepara una respuesta al correo de Equipo', dependencies)).getJson();
+  assert.equal(payload.proposal.actionType, 'prepare-email-draft');
+  assert.equal(payload.approval.status, 'pending');
+  const pending = await runtime.approvalQueue.listPending();
+  assert.equal(pending.length, 1);
+  const preparation = pending[0].publicProposal || pending[0].proposal;
+  assert.equal(preparation.recipient, 'pilot@example.com');
+  assert.equal(preparation.subject, 'Re: Seguimiento');
+  assert.ok(preparation.body.trim());
 });
 
 test('K negations create no proposal, approval, execution, or private context', async (t) => {

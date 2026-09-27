@@ -1416,18 +1416,30 @@
       const actionDecision = isEmailPreparation
         ? null
         : (firstPlannedStep || (supportedDecision ? recommendation.decision : null));
+      // P2 (27/09/2026): "Borrador preparado" only when an approval exists
+      // (the queue only accepts a complete draft) and no draft field the
+      // response does carry is empty.
+      const emailDraftReady = isEmailPreparation
+        && Boolean(approval)
+        && ["recipient", "subject", "body"].every((field) => !proposal
+          || !Object.hasOwn(proposal, field)
+          || (typeof proposal[field] === "string" && proposal[field].trim() !== ""));
+      const backendAnswer = data && typeof data.response === "string" ? data.response : "";
       setText(
         result.querySelector("[data-chat-response]"),
-        isEmailPreparation
+        emailDraftReady
           ? "Borrador preparado"
+          : isEmailPreparation
+          ? ["No se pudo preparar el borrador porque falta identificar el correo.", backendAnswer]
+            .filter(Boolean).join(" ")
           : actionDecision
           ? (plan.length > 0 ? "He preparado un plan de trabajo." : "He revisado tu petición.")
           : (data && typeof data.response === "string" ? data.response : null),
         "Respuesta no disponible."
       );
       const proposalElement = result.querySelector("[data-chat-proposal]");
-      proposalElement.hidden = !proposal;
-      if (proposal) {
+      proposalElement.hidden = !proposal || (isEmailPreparation && !emailDraftReady);
+      if (!proposalElement.hidden) {
         proposalElement.textContent = isEmailPreparation
           ? "Revisa el destinatario, el asunto y el cuerpo antes de aprobar."
           : "Hay una propuesta preparada para tu revisión.";
