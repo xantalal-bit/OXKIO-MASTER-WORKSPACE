@@ -248,3 +248,74 @@ test('real Gmail readonly reader uses metadata-only Gmail API calls', async () =
   assert.equal(messages.length, 2);
   assert.deepEqual(Object.keys(messages[0]), ['id', 'threadId', 'from', 'subject', 'date', 'snippet', 'unread', 'important']);
 });
+
+test('sender search reuses the readonly list call with a from: query and metadata-only gets', async () => {
+  const calls = [];
+  const client = {
+    users: {
+      messages: {
+        async list(options) {
+          calls.push({ fn: 'list', options });
+          return { data: { messages: [{ id: 'message-9' }] } };
+        },
+        async get(options) {
+          calls.push({ fn: 'get', options });
+          return { data: buildGmailMessage({ id: options.id, threadId: 'thread-9' }) };
+        },
+        async send() {
+          throw new Error('send must never be called');
+        },
+      },
+    },
+  };
+  const messages = await listReadonlyGmailMessages(
+    { maxMessages: 5, senderAddress: ' Contacto@Example.com ' },
+    { getGmailClient: () => client },
+  );
+
+  assert.deepEqual(calls[0], {
+    fn: 'list',
+    options: { userId: 'me', maxResults: 5, q: 'from:contacto@example.com' },
+  });
+  assert.deepEqual(calls[1].options, {
+    userId: 'me',
+    id: 'message-9',
+    format: 'metadata',
+    metadataHeaders: ['From', 'Subject', 'Date'],
+  });
+  assert.equal(messages.length, 1);
+});
+
+test('sender search rejects anything that is not a plain address before calling Gmail', async () => {
+  for (const senderAddress of ['contacto@example.com OR from:x', 'in:sent', '"a"@example.com', '']) {
+    await assert.rejects(
+      listReadonlyGmailMessages({ senderAddress }, {
+        getGmailClient() { throw new Error('Gmail must not be reached'); },
+      }).catch((error) => {
+        if (error.message === 'Gmail must not be reached') throw new Error('reached Gmail');
+        throw error;
+      }),
+      (error) => error.code === 'invalid_sender_address',
+    );
+  }
+});
+
+test('private context passes the sender address to the reader only when given', async () => {
+  const seen = [];
+  const reader = async (options) => { seen.push(options); return []; };
+  const identity = {
+    clientId: 'client-alpha',
+    userId: 'user-alpha',
+    expectedClientId: 'client-alpha',
+    authorization: { status: 'granted', provider: 'google-oauth' },
+  };
+  await buildGmailPrivateContext({ ...identity, maxMessages: 5 }, { listReadonlyGmailMessages: reader });
+  await buildGmailPrivateContext(
+    { ...identity, maxMessages: 5, senderAddress: 'contacto@example.com' },
+    { listReadonlyGmailMessages: reader },
+  );
+  assert.deepEqual(seen, [
+    { maxMessages: 5, labelIds: undefined },
+    { maxMessages: 5, labelIds: undefined, senderAddress: 'contacto@example.com' },
+  ]);
+});

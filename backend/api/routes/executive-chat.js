@@ -1,6 +1,7 @@
 'use strict';
 
 const {
+  emailPreparationFromQuery,
   orchestrateExecutiveQuery,
   sanitizeExecutiveSources,
 } = require('../../services/executive-brain/executive-orchestrator');
@@ -236,22 +237,28 @@ async function buildOrchestratorOptions(query, dependencies = {}, controls = {})
     contextFailures: [],
   };
   const privateContexts = [];
-  const requiresAuthorizedPrivateSource = selection.gmail || selection.calendar || selection.dashboard;
+  const senderAddress = controls.skipGmail === true ? null : extractNamedSenderAddress(query);
+  const requiresAuthorizedPrivateSource = selection.gmail || selection.calendar || selection.dashboard
+    || Boolean(senderAddress);
 
   if (requiresAuthorizedPrivateSource && !isInternallyAuthorized(identity)) {
     options.contextFailures.push('private_context_unauthorized');
+    if (senderAddress) options.emailSenderSearch = { address: senderAddress, status: 'failed' };
   } else {
-    if (selection.gmail) {
+    if (selection.gmail || senderAddress) {
       try {
         const context = await (dependencies.buildGmailPrivateContext || buildGmailPrivateContext)({
           ...identity,
           maxMessages: 5,
+          ...(senderAddress ? { senderAddress } : {}),
         });
         const sanitized = sanitizeGmailContext(context);
         privateContexts.push(sanitized);
         conversationEntities.messages = (sanitized.privatePayload.messages || [])
           .map((message, index) => ({ ref: String(index + 1), ...message }));
+        if (senderAddress) options.emailSenderSearch = { address: senderAddress, status: 'completed' };
       } catch (error) {
+        if (senderAddress) options.emailSenderSearch = { address: senderAddress, status: 'failed' };
         // Internal-only diagnostic: never surfaced to the user, never
         // includes token values (the error codes here are a fixed enum,
         // not free-text derived from any credential).
@@ -337,6 +344,16 @@ async function buildOrchestratorOptions(query, dependencies = {}, controls = {})
     options.privateContextRequiredPurpose = 'executive-briefing';
   }
   return { options, conversationEntities };
+}
+
+// An email action that names a sender address (and is not a fully explicit
+// "para X con asunto: ... y cuerpo: ..." preparation, where the address is
+// the recipient) resolves against a readonly Gmail search for that sender,
+// not only against the latest INBOX messages.
+function extractNamedSenderAddress(query) {
+  if (!isEmailActionRequest(query) || emailPreparationFromQuery(query)) return null;
+  const match = String(query || '').match(/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/);
+  return match ? match[0].toLowerCase() : null;
 }
 
 function isEmailActionRequest(query) {

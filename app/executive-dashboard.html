@@ -1585,11 +1585,9 @@
       }
     }
 
-    function getExecutiveChatError(status) {
-      if (status === 400) return "La consulta no es válida.";
-      if (status === 503) return "El servicio ejecutivo no está disponible temporalmente.";
-      return "No se pudo completar la consulta.";
-    }
+    // One visible state per request: "Consultando…" while the POST is in
+    // flight (Send disabled, duplicate submits ignored), then a final state.
+    const EXECUTIVE_CHAT_FAILED = "No se pudo completar la consulta.";
 
     // `options` is only passed by recoverExpiredPreparation; as a click
     // handler this receives the DOM event, which never carries the flag.
@@ -1606,7 +1604,7 @@
 
       executiveChatSending = true;
       if (button) button.disabled = true;
-      setExecutiveChatState("Procesando…", "sending");
+      setExecutiveChatState("Consultando…", "sending");
 
       try {
         const response = await window.oxkioAuthenticatedFetch("/api/executive/chat", {
@@ -1616,7 +1614,7 @@
         });
         if (!response.ok) {
           if (regenerating) reportNoNewPreparation();
-          setExecutiveChatState(getExecutiveChatError(response.status), "error");
+          setExecutiveChatState(EXECUTIVE_CHAT_FAILED, "error");
           return;
         }
         const data = await response.json();
@@ -1635,7 +1633,7 @@
         setExecutiveChatState("Consulta completada.", "success");
       } catch (error) {
         if (regenerating) reportNoNewPreparation();
-        setExecutiveChatState("No se pudo conectar con el servicio ejecutivo.", "error");
+        setExecutiveChatState(EXECUTIVE_CHAT_FAILED, "error");
       } finally {
         executiveChatSending = false;
         if (button) button.disabled = false;
