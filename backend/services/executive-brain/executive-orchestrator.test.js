@@ -550,10 +550,19 @@ test('does not generate proposals for informational email, calendar, briefing, o
 test('generates safe proposals for explicit email, meeting, and task actions', async () => {
   const cases = [
     {
-      query: 'Prepara un borrador',
+      // P2 (27/09/2026): an email proposal needs an identified message; a
+      // bare "Prepara un borrador" is covered by the no-context tests below.
+      query: 'Prepara un correo para pilot@example.com con asunto: Seguimiento y cuerpo: Contenido interno seguro',
       intent: 'email',
       actionType: 'prepare-email-draft',
       proposalType: 'email_draft',
+      executionPayload: {
+        to: 'pilot@example.com',
+        subject: 'Seguimiento',
+        body: 'Contenido interno seguro',
+        replyMessageId: null,
+        threadId: null,
+      },
     },
     {
       query: 'Programa una reunion',
@@ -674,13 +683,7 @@ test('generates safe proposals for explicit email, meeting, and task actions', a
       interactionId: result.interactionId,
     });
     assert.deepEqual(queuedProposal, result.proposal);
-    assert.deepEqual(queuedExecutionPayload, testCase.intent === 'email' ? {
-      to: null,
-      subject: 'Respuesta pendiente',
-      body: 'Contenido interno seguro',
-      replyMessageId: null,
-      threadId: null,
-    } : null);
+    assert.deepEqual(queuedExecutionPayload, testCase.executionPayload || null);
     assert.equal(Object.hasOwn(result.proposal, 'executionPayload'), false);
     assert.deepEqual(queuedContext, {
       interactionId: result.interactionId,
@@ -917,7 +920,8 @@ test('writes only safe completed metadata after proposal, response, and approval
   const calls = [];
   let savedEntry = null;
   let approvalContext = null;
-  const sensitiveQuery = 'Prepara un borrador de respuesta para asunto privado 123';
+  const sensitiveQuery = 'Prepara un correo para privado@example.com con asunto: asunto privado 123 '
+    + 'y cuerpo: cuerpo privado 123';
   const result = await orchestrateExecutiveQuery(sensitiveQuery, {
     dependencies: {
       memory: {
@@ -1286,12 +1290,18 @@ test('generates one unique non-sensitive UUID interactionId per operation', asyn
 
 test('does not expose private context through safe proposal metadata', async () => {
   const privatePayload = {
-    messages: [{ subject: 'private-subject', snippet: 'private-snippet' }],
+    messages: [{
+      id: 'message-private',
+      threadId: 'thread-private',
+      from: 'Ana Private <ana.private@example.com>',
+      subject: 'private-subject',
+      snippet: 'private-snippet',
+    }],
   };
   let queuedProposal = null;
   let queuedExecutionPayload = null;
   let queuedContext = null;
-  const result = await orchestrateExecutiveQuery('Prepara un borrador de respuesta', {
+  const result = await orchestrateExecutiveQuery('Prepara un borrador de respuesta a Ana', {
     privateContextMetadata: buildPrivateContext({
       sourceType: 'gmail',
       sourceId: 'gmail-private-source',
@@ -1306,6 +1316,7 @@ test('does not expose private context through safe proposal metadata', async () 
             requiresApproval: true,
             body: privatePayload.messages[0].snippet,
             subject: privatePayload.messages[0].subject,
+            executionPayload: { to: null, subject: 'Respuesta pendiente', body: 'Cuerpo de plantilla.' },
           };
         },
       },
@@ -1338,7 +1349,15 @@ test('does not expose private context through safe proposal metadata', async () 
   assert.equal(JSON.stringify(result.proposal).includes('private-subject'), false);
   assert.equal(JSON.stringify(result.proposal).includes('private-snippet'), false);
   assert.deepEqual(queuedProposal, result.proposal);
-  assert.equal(queuedExecutionPayload, null);
+  // The internal payload targets the identified message; it never reaches
+  // the public proposal, the approval metadata or the approval context.
+  assert.deepEqual(queuedExecutionPayload, {
+    to: 'ana.private@example.com',
+    subject: 'Re: private-subject',
+    body: 'Cuerpo de plantilla.',
+    replyMessageId: 'message-private',
+    threadId: 'thread-private',
+  });
   assert.equal(queuedContext.interactionId, result.interactionId);
   assert.equal(queuedContext.privateContextUsed, true);
   assert.equal(typeof queuedContext.privateContextUsed, 'boolean');

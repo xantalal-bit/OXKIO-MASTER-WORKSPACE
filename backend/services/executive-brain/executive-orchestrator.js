@@ -379,6 +379,8 @@ function extractSenderName(from) {
   return match ? match[1].trim() : String(from || 'remitente desconocido').trim();
 }
 
+const EMAIL_CONTEXT_MISSING_QUESTION = 'Indícame qué correo o remitente quieres responder.';
+
 // FULL RUNTIME REVEAL FASE 18: "no fallback generico, no inventar" — when a
 // conversational reference cannot be resolved cleanly, ask which candidate
 // the user meant instead of silently drafting against a guess.
@@ -757,14 +759,28 @@ function resolveReferencedMessage(query, conversationContext, authorizedPrivateC
   };
 }
 
-function emailPreparationFromPrivateContext(generatedProposal, authorizedPrivateContext, preferredMessage) {
-  const messages = authorizedPrivateContext
-    && authorizedPrivateContext.sourceType === 'gmail'
-    && authorizedPrivateContext.payload
-    && Array.isArray(authorizedPrivateContext.payload.messages)
-    ? authorizedPrivateContext.payload.messages
-    : [];
-  const message = (preferredMessage && typeof preferredMessage === 'object') ? preferredMessage : messages[0];
+// P2 (27/09/2026): a sender explicitly named in the query ("respondele a
+// Ana", "el correo de ana@example.com") identifies the message only when it
+// matches exactly one candidate; zero or several matches identify nothing.
+function findMessageNamedInQuery(query, candidates) {
+  const normalizedQuery = normalizeQueryText(query);
+  const queryWords = new Set(normalizedQuery.split(/[^a-z0-9@._-]+/).filter(Boolean));
+  const matches = (Array.isArray(candidates) ? candidates : []).filter((message) => {
+    if (!message || typeof message !== 'object') return false;
+    const from = normalizeQueryText(message.from);
+    const address = (from.match(/[a-z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-z0-9.-]+\.[a-z]{2,}/) || [])[0];
+    if (address && normalizedQuery.includes(address)) return true;
+    const senderName = normalizeQueryText(extractSenderName(message.from)).replace(/["']/g, '');
+    const nameWords = senderName.split(/\s+/).filter((word) => word.length >= 3 && !word.includes('@'));
+    return nameWords.some((word) => queryWords.has(word));
+  });
+  return matches.length === 1 ? matches[0] : null;
+}
+
+// P2 (27/09/2026): only a message the user actually identified — through a
+// resolved conversational reference or a sender named in the query — can be
+// the target of a draft. Never default to the first message of the inbox.
+function emailPreparationFromPrivateContext(generatedProposal, message) {
   if (!message || typeof message !== 'object') return null;
   const addressMatch = String(message.from || '').match(/[A-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i);
   const generated = generatedProposal && generatedProposal.executionPayload;
@@ -808,10 +824,23 @@ function generateProposalSafely(
   // user a draft is ready. This returns null before touching the (legacy,
   // template-based) proposal engine at all, so the caller's own answer text
   // (see buildAmbiguousReferenceQuestion) is what the user actually sees.
-  if (actionableIntent.proposalType === 'email_draft' && !emailPreparationFromQuery(query)) {
+  const explicitEmailPreparation = actionableIntent.proposalType === 'email_draft'
+    ? emailPreparationFromQuery(query)
+    : null;
+  let targetMessage = null;
+  if (actionableIntent.proposalType === 'email_draft' && !explicitEmailPreparation) {
     const referenceResolution = resolveReferencedMessage(query, conversationContext, authorizedPrivateContext);
     if (referenceResolution.ambiguous) {
       diagnostics.proposalAmbiguousReference = true;
+      return null;
+    }
+    targetMessage = referenceResolution.item
+      || findMessageNamedInQuery(query, referenceResolution.candidates);
+    // P2 (27/09/2026): no identified message means no verifiable recipient,
+    // subject or body. The legacy template (to: null, generic follow-up
+    // text) must never become a proposal or an approval.
+    if (!targetMessage) {
+      diagnostics.proposalMissingEmailContext = true;
       return null;
     }
   }
@@ -824,16 +853,13 @@ function generateProposalSafely(
     const generatedProposal = proposalEngine.generate(proposalInput);
     const publicProposal = buildSafeProposalMetadata(actionableIntent, generatedProposal, interactionId);
     const executionPayload = actionableIntent.proposalType === 'email_draft'
-      ? (
-        emailPreparationFromQuery(query)
-        || emailPreparationFromPrivateContext(
-          generatedProposal,
-          authorizedPrivateContext,
-          resolveReferencedMessage(query, conversationContext, authorizedPrivateContext).item,
-        )
-        || buildExecutionPayload(actionableIntent, generatedProposal)
-      )
+      ? (explicitEmailPreparation || emailPreparationFromPrivateContext(generatedProposal, targetMessage))
       : buildExecutionPayload(actionableIntent, generatedProposal);
+    if (actionableIntent.proposalType === 'email_draft' && !executionPayload) {
+      diagnostics.proposalMissingEmailContext = true;
+      diagnostics.proposalSucceeded = false;
+      return null;
+    }
 
     diagnostics.proposalSucceeded = Boolean(publicProposal);
     return publicProposal ? { publicProposal, executionPayload } : null;
@@ -1063,6 +1089,14 @@ async function orchestrateExecutiveQuery(query, options) {
     && emailActionIntent
     && emailActionIntent.proposalType === 'email_draft'
   ) ? buildEmailDraftReadyAnswer(proposalBundle, emailReferenceResolution) : null;
+  // P2 (27/09/2026): an email request without an identified message gets a
+  // clarifying question, never a generic answer that reads like a draft.
+  const emailContextMissingAnswer = (
+    !isAmbiguousEmailReference
+    && !emailDraftReadyAnswer
+    && !proposalBundle
+    && diagnostics.proposalMissingEmailContext === true
+  ) ? EMAIL_CONTEXT_MISSING_QUESTION : null;
   let knowledgeQueryResult = null;
 
   if (shouldUseKnowledgeQuery(analysis)) {
@@ -1102,6 +1136,8 @@ async function orchestrateExecutiveQuery(query, options) {
       ? buildAmbiguousReferenceQuestion(emailReferenceResolution.candidates)
       : (emailDraftReadyAnswer
       ? emailDraftReadyAnswer
+      : (emailContextMissingAnswer
+      ? emailContextMissingAnswer
       : (isGovernanceQuery
       ? describeGovernanceAnswer(
         options && options.contextualData && options.contextualData.dashboard
@@ -1120,7 +1156,7 @@ async function orchestrateExecutiveQuery(query, options) {
             ? 'Puedo ayudarte a revisar tu correo, organizar tareas y trabajar contigo sobre las funciones que tengas conectadas.'
             : (privateContextSummary
               ? `${response.answer} ${privateContextSummary}`
-              : response.answer))))))),
+              : response.answer)))))))),
     confidence: responseConfidence,
     sources: responseSources,
     reasoningSummary: response.reasoningSummary,
