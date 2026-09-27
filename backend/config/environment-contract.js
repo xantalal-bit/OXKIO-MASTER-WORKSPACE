@@ -46,6 +46,9 @@ const ENVIRONMENT_VARIABLES = Object.freeze({
   // reports CONNECTION_NEEDED; it never falls back to a template.
   OXKIO_REASONING_PROVIDER: Object.freeze({ kind: 'config', classifications: ['optional'], scope: 'reasoning' }),
   OXKIO_REASONING_MODEL: Object.freeze({ kind: 'config', classifications: ['optional'], scope: 'reasoning' }),
+  // Explicit endpoint, checked against a per-provider allowlist (EU data
+  // routing, 27/09/2026). Missing -> CONNECTION_NEEDED; never defaults to global.
+  OXKIO_REASONING_BASE_URL: Object.freeze({ kind: 'config', classifications: ['optional'], scope: 'reasoning' }),
   OXKIO_REASONING_INPUT_USD_PER_MILLION: Object.freeze({ kind: 'config', classifications: ['optional'], scope: 'reasoning' }),
   OXKIO_REASONING_OUTPUT_USD_PER_MILLION: Object.freeze({ kind: 'config', classifications: ['optional'], scope: 'reasoning' }),
   OXKIO_REASONING_PRICING_REVIEWED_AT: Object.freeze({ kind: 'config', classifications: ['optional'], scope: 'reasoning' }),

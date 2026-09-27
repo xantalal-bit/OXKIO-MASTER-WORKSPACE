@@ -187,6 +187,7 @@ test('E without a configured provider the result is CONNECTION_NEEDED and no mod
   assert.deepEqual(notConfigured.missing, [
     'OXKIO_REASONING_PROVIDER',
     'OXKIO_REASONING_MODEL',
+    'OXKIO_REASONING_BASE_URL',
     'OXKIO_REASONING_INPUT_USD_PER_MILLION',
     'OXKIO_REASONING_OUTPUT_USD_PER_MILLION',
     'OXKIO_REASONING_PRICING_REVIEWED_AT',
@@ -224,7 +225,7 @@ test('telemetry carries only safe metadata: no email text, no draft body', async
   assert.equal(logs.length, 1);
   assert.deepEqual(Object.keys(logs[0]).sort(), [
     'attempts', 'costLevel', 'durationMs', 'errorCode', 'executionPattern', 'mission', 'model',
-    'needsClarification', 'provider', 'verdict',
+    'needsClarification', 'provider', 'reasoningRegion', 'verdict',
   ]);
   const serialized = JSON.stringify(logs[0]);
   assert.equal(serialized.includes('incidencia'), false);
@@ -237,6 +238,7 @@ test('configured provider: operator-reviewed pricing joins the cost catalog and 
     env: {
       OXKIO_REASONING_PROVIDER: 'openai',
       OXKIO_REASONING_MODEL: 'some-model',
+      OXKIO_REASONING_BASE_URL: 'https://api.openai.com/v1',
       OXKIO_REASONING_INPUT_USD_PER_MILLION: '0.5',
       OXKIO_REASONING_OUTPUT_USD_PER_MILLION: '2',
       OXKIO_REASONING_PRICING_REVIEWED_AT: '2026-09-27',
@@ -271,7 +273,7 @@ test('configured provider: operator-reviewed pricing joins the cost catalog and 
 test('configured provider maps SDK failures and invalid JSON to fixed sanitized codes', async () => {
   const build = (complete) => createExecutiveReasoningProvider({
     env: {
-      OXKIO_REASONING_PROVIDER: 'openai', OXKIO_REASONING_MODEL: 'm',
+      OXKIO_REASONING_PROVIDER: 'openai', OXKIO_REASONING_MODEL: 'm', OXKIO_REASONING_BASE_URL: 'https://eu.api.openai.com/v1',
       OXKIO_REASONING_INPUT_USD_PER_MILLION: '1', OXKIO_REASONING_OUTPUT_USD_PER_MILLION: '1',
       OXKIO_REASONING_PRICING_REVIEWED_AT: '2026-09-27',
     },
@@ -299,4 +301,128 @@ test('F-G-H the reasoning circuit never executes, never sends and never approves
   const oauth = fs.readFileSync(path.join(__dirname, '..', '..', 'integrations', 'googleOAuth.js'), 'utf8');
   const scopes = oauth.slice(oauth.indexOf('GOOGLE_OAUTH_SCOPES = '), oauth.indexOf(']);', oauth.indexOf('GOOGLE_OAUTH_SCOPES = ')));
   assert.doesNotMatch(scopes, /GMAIL_SEND_SCOPE|gmail\.send/);
+});
+
+// ---------------------------------------------------------------------------
+// EU data routing (27/09/2026): explicit, allowlisted OpenAI endpoint.
+// ---------------------------------------------------------------------------
+
+const DIRECTION_ENV = Object.freeze({
+  OXKIO_REASONING_PROVIDER: 'openai',
+  OXKIO_REASONING_MODEL: 'gpt-5.6-terra',
+  OXKIO_REASONING_INPUT_USD_PER_MILLION: '2.00',
+  OXKIO_REASONING_OUTPUT_USD_PER_MILLION: '12.00',
+  OXKIO_REASONING_PRICING_REVIEWED_AT: '2026-09-27',
+});
+
+function syntheticKeyRuntime() {
+  return createSecretRuntime({ provider: createSyntheticSecretProvider({ OXKIO_REASONING_API_KEY: 'sk-synthetic' }) });
+}
+
+// Intercepts global fetch (used by the real openai SDK) for one test.
+async function withInterceptedFetch(t, run) {
+  const original = globalThis.fetch;
+  const requests = [];
+  globalThis.fetch = async (url, init) => {
+    requests.push({ url: String(url), body: init && init.body ? JSON.parse(init.body) : null });
+    return new Response(JSON.stringify({
+      id: 'x', object: 'chat.completion', created: 0, model: 'gpt-5.6-terra',
+      choices: [{ index: 0, finish_reason: 'stop', message: { role: 'assistant', content: '{"needsClarification":false}' } }],
+      usage: { prompt_tokens: 10, completion_tokens: 5, total_tokens: 15 },
+    }), { status: 200, headers: { 'content-type': 'application/json' } });
+  };
+  t.after(() => { globalThis.fetch = original; });
+  await run(requests);
+}
+
+test('EU-A without OXKIO_REASONING_BASE_URL: CONNECTION_NEEDED and no external call', async (t) => {
+  await withInterceptedFetch(t, async (requests) => {
+    const reasoning = createExecutiveReasoningProvider({ env: DIRECTION_ENV, secretRuntime: syntheticKeyRuntime() });
+    assert.equal(reasoning.status, PROVIDER_STATUS.NOT_CONFIGURED);
+    assert.deepEqual(reasoning.missing, ['OXKIO_REASONING_BASE_URL']);
+    assert.deepEqual(reasoning.invalid, []);
+    const { supervisor } = supervisorWith(reasoning);
+    const result = await supervisor.supervise({ message: LUCUS_SUPPORT, instruction: 'Prepara una respuesta' });
+    assert.equal(result.status, SUPERVISION_STATUS.CONNECTION_NEEDED);
+    assert.deepEqual(requests, []);
+  });
+});
+
+test('EU-B allowlisted global base URL: the real client calls exactly api.openai.com', async (t) => {
+  await withInterceptedFetch(t, async (requests) => {
+    const reasoning = createExecutiveReasoningProvider({
+      env: { ...DIRECTION_ENV, OXKIO_REASONING_BASE_URL: 'https://api.openai.com/v1' },
+      secretRuntime: syntheticKeyRuntime(),
+    });
+    assert.equal(reasoning.status, PROVIDER_STATUS.READY);
+    assert.equal(reasoning.region, 'global');
+    await reasoning.reason({ mission: 'M', context: {}, constraints: [], output: {} });
+    assert.equal(requests.length, 1);
+    assert.equal(new URL(requests[0].url).host, 'api.openai.com');
+    assert.equal(requests[0].url, 'https://api.openai.com/v1/chat/completions');
+    assert.equal(requests[0].body.model, 'gpt-5.6-terra');
+  });
+});
+
+test('EU-C EU base URL: the real client calls exactly eu.api.openai.com, priced with the 10% EU surcharge', async (t) => {
+  await withInterceptedFetch(t, async (requests) => {
+    const reasoning = createExecutiveReasoningProvider({
+      env: { ...DIRECTION_ENV, OXKIO_REASONING_BASE_URL: 'https://eu.api.openai.com/v1/' },
+      secretRuntime: syntheticKeyRuntime(),
+    });
+    assert.equal(reasoning.status, PROVIDER_STATUS.READY);
+    assert.equal(reasoning.region, 'eu');
+    await reasoning.reason({ mission: 'M', context: {}, constraints: [], output: {} });
+    assert.equal(requests.length, 1);
+    assert.equal(new URL(requests[0].url).host, 'eu.api.openai.com');
+    assert.equal(requests[0].url, 'https://eu.api.openai.com/v1/chat/completions');
+
+    const entry = reasoning.catalog['openai:gpt-5.6-terra'];
+    assert.equal(entry.inputUsdPerMillion, 2.2);
+    assert.equal(entry.outputUsdPerMillion, 13.2);
+    assert.equal(entry.reviewedAt, '2026-09-27');
+    assert.equal(entry.residency, 'eu');
+    const controller = new CostController({ catalog: buildReasoningCostCatalog(reasoning) });
+    const estimate = controller.estimateCost({ modelId: 'openai:gpt-5.6-terra', inputTokens: 1_000_000, outputTokens: 1_000_000 });
+    assert.equal(estimate.status, 'estimated');
+    assert.equal(estimate.estimatedCostUsd, 15.4);
+  });
+});
+
+test('EU-D a base URL outside the allowlist is an invalid configuration and never called', async (t) => {
+  await withInterceptedFetch(t, async (requests) => {
+    for (const baseUrl of [
+      'https://evil.example.com/v1',
+      'http://eu.api.openai.com/v1',
+      'https://eu.api.openai.com/v2',
+      'https://eu.api.openai.com.attacker.net/v1',
+      'https://api.openai.com/v1?x=1',
+    ]) {
+      const reasoning = createExecutiveReasoningProvider({
+        env: { ...DIRECTION_ENV, OXKIO_REASONING_BASE_URL: baseUrl },
+        secretRuntime: syntheticKeyRuntime(),
+      });
+      assert.equal(reasoning.status, PROVIDER_STATUS.NOT_CONFIGURED, baseUrl);
+      assert.deepEqual(reasoning.invalid, ['OXKIO_REASONING_BASE_URL']);
+      assert.deepEqual(reasoning.missing, []);
+      const { supervisor } = supervisorWith(reasoning);
+      const result = await supervisor.supervise({ message: LUCUS_SUPPORT, instruction: 'Prepara una respuesta' });
+      assert.equal(result.status, SUPERVISION_STATUS.CONNECTION_NEEDED);
+    }
+    assert.deepEqual(requests, []);
+  });
+});
+
+test('EU-E telemetry records only the configured region, never email or draft content', async () => {
+  for (const [region, expected] of [['eu', 'eu'], ['global', 'global']]) {
+    const stub = provider(() => ok(GROUNDED_REPLY), { region });
+    const { supervisor, logs } = supervisorWith(stub.value);
+    const result = await supervisor.supervise({ message: LUCUS_SUPPORT, instruction: 'Prepara una respuesta' });
+    assert.equal(result.status, SUPERVISION_STATUS.DRAFT);
+    assert.equal(logs[0].reasoningRegion, expected);
+    const serialized = JSON.stringify(logs[0]);
+    for (const fragment of ['incidencia', 'Hosting SSD', 'Gracias por resolver', '162744', 'contacto@lucushost.com']) {
+      assert.equal(serialized.includes(fragment), false, fragment);
+    }
+  }
 });

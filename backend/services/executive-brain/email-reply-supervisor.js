@@ -189,6 +189,8 @@ function createEmailReplySupervisor({
       mission: 'email_reply',
       provider: provider && provider.provider ? provider.provider : null,
       model: provider && provider.model ? provider.model : null,
+      // Derived from configuration only (allowlisted base URL), never content.
+      reasoningRegion: provider && (provider.region === 'eu' || provider.region === 'global') ? provider.region : null,
       attempts: 0,
       verdict: null,
       needsClarification: false,

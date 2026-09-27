@@ -1391,7 +1391,8 @@ qualityIncidentRegistry.load().then(() => server.listen(PORT, HOST, () => {
   console.log("Gmail Mode:", systemConfig.gmail.mode);
   // Names only, never values: tells the operator what is still missing.
   console.log("Executive Reasoning:", executiveReasoningProvider.status === "ready"
-    ? `ready (${executiveReasoningProvider.modelId})`
-    : `CONNECTION_NEEDED (missing: ${executiveReasoningProvider.missing.join(", ")})`);
+    ? `ready (${executiveReasoningProvider.modelId}, region ${executiveReasoningProvider.region})`
+    : `CONNECTION_NEEDED (missing: ${executiveReasoningProvider.missing.join(", ") || "none"}; `
+      + `invalid: ${executiveReasoningProvider.invalid.join(", ") || "none"})`);
   console.log("=================================");
 }));
