@@ -730,10 +730,12 @@ test('expired preparation exposes only safe recovery and a new preparation can c
   const recoverStart = html.indexOf('function recoverExpiredPreparation');
   const recoverEnd = html.indexOf('function initializeExecutiveActionPreparation', recoverStart);
   const recoverSource = html.slice(recoverStart, recoverEnd);
+  const submitCalls = [];
   const recover = Function(
     'document',
     'setDraftFeedback',
     'setDraftSupervisorState',
+    'submitExecutiveChat',
     `"use strict";
       let currentDraftApprovalId = "expired-approval";
       let currentDraftPreparationId = "expired-preparation";
@@ -744,18 +746,23 @@ test('expired preparation exposes only safe recovery and a new preparation can c
         run: recoverExpiredPreparation,
         state: () => [currentDraftApprovalId, currentDraftPreparationId, currentDraftApprovalStatus]
       };`,
-  )(document, (value) => feedback.push(value), (value) => supervisor.push(value));
+  )(
+    document,
+    (value) => feedback.push(value),
+    (value) => supervisor.push(value),
+    (options) => submitCalls.push(options),
+  );
 
   recover.run();
   assert.equal(container.hidden, true);
   assert.equal(input.value, 'Prepara un borrador original');
-  assert.equal(input.focused, true);
   assert.deepEqual(recover.state(), ['', '', '']);
-  assert.match(feedback.at(-1), /Genera una nueva preparación para continuar/);
+  assert.deepEqual(submitCalls, [{ regeneratePreparation: true }]);
+  assert.equal(feedback.at(-1), 'Generando nueva preparación…');
   assert.match(html, /data-executive-action-regenerate hidden>Generar nueva preparación</);
 });
 
-test('conversational recovery remains session-only and never submits automatically', () => {
+test('conversational recovery remains session-only and only re-sends the saved query', () => {
   const html = fs.readFileSync(
     path.join(__dirname, '..', '..', '..', 'app', 'executive-dashboard.html'),
     'utf8',
@@ -769,13 +776,174 @@ test('conversational recovery remains session-only and never submits automatical
 
   assert.match(html, /let lastEmailPreparationQuery = ""/);
   assert.match(submit, /lastEmailPreparationQuery = query/);
-  assert.match(recover, /input\.value = lastEmailPreparationQuery/);
-  assert.doesNotMatch(recover, /submitExecutiveChat|postExecutiveApproval|fetch\(/);
+  assert.match(recover, /const query = lastEmailPreparationQuery/);
+  assert.match(recover, /return submitExecutiveChat\(\{ regeneratePreparation: true \}\)/);
+  assert.doesNotMatch(recover, /postExecutiveApproval|fetch\(/);
   assert.match(html, /pagehide", clearLastEmailPreparationQuery/);
   assert.match(html, /oxkio-identity-change", clearLastEmailPreparationQuery/);
   assert.match(html, /clearLastEmailPreparationQuery\(\)[\s\S]*Preparación rechazada/);
   assert.match(html, /if \(response\.ok\) \{\s*clearLastEmailPreparationQuery\(\);\s*await loadExecutiveDraftApproval/);
   assert.doesNotMatch(html, /localStorage|sessionStorage/);
+});
+
+function loadPreparationRegeneration({ savedQuery, chatResponse }) {
+  const html = fs.readFileSync(
+    path.join(__dirname, '..', '..', '..', 'app', 'executive-dashboard.html'),
+    'utf8',
+  );
+  const submitStart = html.indexOf('async function submitExecutiveChat');
+  const submitEnd = html.indexOf('function initializeExecutiveChat', submitStart);
+  const recoverStart = html.indexOf('function reportNoNewPreparation');
+  const recoverEnd = html.indexOf('function initializeExecutiveActionPreparation', recoverStart);
+  const container = { hidden: false };
+  const input = {
+    value: '',
+    focused: false,
+    focus() { this.focused = true; },
+    scrollIntoView() {},
+  };
+  const submitButton = { disabled: false };
+  const card = {
+    querySelector(selector) {
+      return selector === '[data-executive-action-preparation]' ? container : null;
+    },
+  };
+  const document = {
+    getElementById(id) { return id === 'morning-briefing-card' ? card : null; },
+    querySelector(selector) {
+      if (selector === '[data-executive-chat-input]') return input;
+      if (selector === '[data-executive-chat-submit]') return submitButton;
+      return null;
+    },
+  };
+  const calls = [];
+  const feedback = [];
+  const supervisor = [];
+  const newApproval = { id: 'approval-2', status: 'pending' };
+  const rendered = [];
+  const window = {
+    oxkioAuthenticatedFetch: async (url, options) => {
+      calls.push({ url, method: (options && options.method) || 'GET', body: options && options.body });
+      if (url === '/api/pending-approvals') {
+        return { ok: true, status: 200, json: async () => ({ pending: [newApproval] }) };
+      }
+      if (url === '/api/approval-history') {
+        return { ok: true, status: 200, json: async () => ({ history: [] }) };
+      }
+      return {
+        ok: chatResponse.status === 200,
+        status: chatResponse.status,
+        json: async () => chatResponse.body,
+      };
+    },
+  };
+  const loadStart = html.indexOf('async function loadExecutiveDraftApproval');
+  const loadEnd = html.indexOf('async function refreshExecutiveApprovalCsrf', loadStart);
+  const api = Function(
+    'document',
+    'window',
+    'setDraftFeedback',
+    'setDraftSupervisorState',
+    'setExecutiveChatState',
+    'renderExecutiveChatResult',
+    'getExecutiveChatError',
+    'selectExecutiveDraftApproval',
+    'renderPreparation',
+    `"use strict";
+      ${html.slice(loadStart, loadEnd)}
+      let executiveChatSending = false;
+      let currentDraftApprovalId = "expired-approval";
+      let currentDraftPreparationId = "expired-preparation";
+      let currentDraftApprovalStatus = "expired";
+      let lastEmailPreparationQuery = ${JSON.stringify(savedQuery)};
+      ${html.slice(submitStart, submitEnd)}
+      ${html.slice(recoverStart, recoverEnd)}
+      return { recoverExpiredPreparation };`,
+  )(
+    document,
+    window,
+    (value) => feedback.push(value),
+    (value) => supervisor.push(value),
+    () => {},
+    () => {},
+    () => 'error',
+    (pending) => pending[0] || null,
+    (item, options) => rendered.push({ item, options }),
+  );
+  return { api, calls, feedback, supervisor, input, container, rendered, newApproval };
+}
+
+test('regenerate with a saved email query re-sends it to POST /api/executive/chat', async () => {
+  const harness = loadPreparationRegeneration({
+    savedQuery: 'Prepara un borrador de respuesta a Ana',
+    chatResponse: { status: 200, body: { capabilityComposition: { primaryCapability: 'prepare-email-draft' } } },
+  });
+
+  await harness.api.recoverExpiredPreparation();
+
+  assert.equal(harness.calls[0].url, '/api/executive/chat');
+  assert.equal(harness.calls[0].method, 'POST');
+  assert.deepEqual(JSON.parse(harness.calls[0].body), { query: 'Prepara un borrador de respuesta a Ana' });
+  assert.equal(harness.feedback[0], 'Generando nueva preparación…');
+  assert.equal(harness.container.hidden, true);
+});
+
+test('regenerate without a saved query sends nothing and asks for the email in the chat', async () => {
+  const harness = loadPreparationRegeneration({
+    savedQuery: '',
+    chatResponse: { status: 200, body: {} },
+  });
+
+  await harness.api.recoverExpiredPreparation();
+
+  assert.deepEqual(harness.calls, []);
+  assert.equal(harness.feedback.at(-1), 'Escribe en el chat qué correo quieres preparar.');
+  assert.equal(harness.supervisor.at(-1), 'Escribe en el chat qué correo quieres preparar.');
+  assert.equal(harness.input.value, '');
+  assert.equal(harness.input.focused, true);
+  assert.doesNotMatch(harness.supervisor.join('\n'), /Solicita una nueva preparación/);
+});
+
+test('regenerate answered 200 without approval reports that no new preparation was generated', async () => {
+  for (const body of [
+    { capabilityComposition: { primaryCapability: 'prepare-email-draft' } },
+    { capabilityComposition: { primaryCapability: 'knowledge-review-readonly' } },
+  ]) {
+    const harness = loadPreparationRegeneration({
+      savedQuery: 'Prepara un borrador de respuesta a Ana',
+      chatResponse: { status: 200, body },
+    });
+
+    await harness.api.recoverExpiredPreparation();
+
+    assert.equal(harness.calls.length, 1);
+    assert.equal(harness.feedback.at(-1), 'No se generó una preparación nueva.');
+    assert.equal(harness.supervisor.at(-1), 'No se generó una preparación nueva.');
+    assert.doesNotMatch(harness.supervisor.join('\n'), /Solicita una nueva preparación/);
+  }
+});
+
+test('regenerate answered with an approval reloads pending and history and shows it', async () => {
+  const harness = loadPreparationRegeneration({
+    savedQuery: 'Prepara un borrador de respuesta a Ana',
+    chatResponse: {
+      status: 200,
+      body: {
+        capabilityComposition: { primaryCapability: 'prepare-email-draft' },
+        approval: { id: 'approval-2', status: 'pending' },
+      },
+    },
+  });
+
+  await harness.api.recoverExpiredPreparation();
+
+  assert.deepEqual(harness.calls.map((call) => `${call.method} ${call.url}`), [
+    'POST /api/executive/chat',
+    'GET /api/pending-approvals',
+    'GET /api/approval-history',
+  ]);
+  assert.deepEqual(harness.rendered, [{ item: harness.newApproval, options: { focus: true } }]);
+  assert.doesNotMatch(harness.feedback.join('\n'), /No se generó una preparación nueva/);
 });
 
 test('Dashboard distinguishes failed execution from verified draft completion', () => {
