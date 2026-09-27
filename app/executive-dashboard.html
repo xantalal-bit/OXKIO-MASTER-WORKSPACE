@@ -1579,7 +1579,10 @@
       return "No se pudo completar la consulta.";
     }
 
-    async function submitExecutiveChat() {
+    // `options` is only passed by recoverExpiredPreparation; as a click
+    // handler this receives the DOM event, which never carries the flag.
+    async function submitExecutiveChat(options) {
+      const regenerating = Boolean(options && options.regeneratePreparation === true);
       const input = document.querySelector("[data-executive-chat-input]");
       const button = document.querySelector("[data-executive-chat-submit]");
       const query = input && typeof input.value === "string" ? input.value.trim() : "";
@@ -1600,6 +1603,7 @@
           body: JSON.stringify({ query })
         });
         if (!response.ok) {
+          if (regenerating) reportNoNewPreparation();
           setExecutiveChatState(getExecutiveChatError(response.status), "error");
           return;
         }
@@ -1613,9 +1617,12 @@
         if (isEmailPreparation && data.approval) {
           lastEmailPreparationQuery = query;
           await loadExecutiveDraftApproval({ focus: true });
+        } else if (isEmailPreparation || regenerating) {
+          reportNoNewPreparation();
         }
         setExecutiveChatState("Consulta completada.", "success");
       } catch (error) {
+        if (regenerating) reportNoNewPreparation();
         setExecutiveChatState("No se pudo conectar con el servicio ejecutivo.", "error");
       } finally {
         executiveChatSending = false;
@@ -3209,6 +3216,14 @@
       reviewButton.setAttribute("aria-expanded", String(willExpand));
     }
 
+    function reportNoNewPreparation() {
+      setDraftFeedback("No se generó una preparación nueva.");
+      setDraftSupervisorState("No se generó una preparación nueva.");
+    }
+
+    // Re-sends only the query this page session already used for an email
+    // preparation. Without one nothing is invented: the user is sent to the
+    // chat to say which email to prepare.
     function recoverExpiredPreparation() {
       const card = document.getElementById("morning-briefing-card");
       const container = card && card.querySelector("[data-executive-action-preparation]");
@@ -3217,15 +3232,22 @@
       currentDraftApprovalId = "";
       currentDraftPreparationId = "";
       currentDraftApprovalStatus = "";
-      setDraftFeedback("Genera una nueva preparación para continuar.");
-      setDraftSupervisorState("Solicita una nueva preparación para continuar.");
-      if (input) {
-        input.value = lastEmailPreparationQuery;
-        input.focus();
-        if (typeof input.scrollIntoView === "function") {
-          input.scrollIntoView({ behavior: "smooth", block: "center" });
+      const query = lastEmailPreparationQuery;
+      if (!query) {
+        setDraftFeedback("Escribe en el chat qué correo quieres preparar.");
+        setDraftSupervisorState("Escribe en el chat qué correo quieres preparar.");
+        if (input) {
+          input.focus();
+          if (typeof input.scrollIntoView === "function") {
+            input.scrollIntoView({ behavior: "smooth", block: "center" });
+          }
         }
+        return Promise.resolve();
       }
+      if (input) input.value = query;
+      setDraftFeedback("Generando nueva preparación…");
+      setDraftSupervisorState("Generando nueva preparación…");
+      return submitExecutiveChat({ regeneratePreparation: true });
     }
 
     function initializeExecutiveActionPreparation() {
