@@ -8,7 +8,11 @@ const {
 const { selectExecutiveContext } = require('../../services/executive-brain/context-intent-router');
 const { getClienteCeroIdentity } = require('../../services/private-context/client-identity-resolver');
 const { buildCalendarPrivateContext } = require('../../services/private-context/calendar-private-provider');
-const { buildGmailPrivateContext } = require('../../services/private-context/gmail-private-provider');
+const {
+  buildGmailPrivateContext,
+  readReadonlyGmailMessageText,
+} = require('../../services/private-context/gmail-private-provider');
+const { createEmailReplySupervisor } = require('../../services/executive-brain/email-reply-supervisor');
 const { getDashboardState } = require('../../services/dashboard/dashboard-intelligence');
 const { recommendSupervisedOperation } = require('../../services/executive-brain/supervised-decision-engine');
 const { planOperations } = require('../../services/executive-brain/operation-planner');
@@ -257,6 +261,14 @@ async function buildOrchestratorOptions(query, dependencies = {}, controls = {})
         conversationEntities.messages = (sanitized.privatePayload.messages || [])
           .map((message, index) => ({ ref: String(index + 1), ...message }));
         if (senderAddress) options.emailSenderSearch = { address: senderAddress, status: 'completed' };
+        if (isEmailActionRequest(query)) {
+          options.emailReplyReasoner = createEmailReplyReasoner(
+            dependencies,
+            context && context.privatePayload && Array.isArray(context.privatePayload.messages)
+              ? context.privatePayload.messages
+              : [],
+          );
+        }
       } catch (error) {
         if (senderAddress) options.emailSenderSearch = { address: senderAddress, status: 'failed' };
         // Internal-only diagnostic: never surfaced to the user, never
@@ -344,6 +356,40 @@ async function buildOrchestratorOptions(query, dependencies = {}, controls = {})
     options.privateContextRequiredPurpose = 'executive-briefing';
   }
   return { options, conversationEntities };
+}
+
+// Supervisor V1 (27/09/2026): the orchestrator only ever sees sanitized
+// messages (no ids, no body). This closure keeps the raw ids of THIS turn's
+// Gmail context server-side; for the message the orchestrator identified it
+// re-checks sender/subject/date against that same list, reads only that
+// message's text (readonly) and hands it to the Email Reply Supervisor.
+function createEmailReplyReasoner(dependencies, rawMessages) {
+  const supervisor = dependencies.emailReplySupervisor || createEmailReplySupervisor({
+    provider: dependencies.executiveReasoningProvider || null,
+    costController: dependencies.costController || null,
+  });
+  const readText = dependencies.readGmailMessageText || readReadonlyGmailMessageText;
+  return async function emailReplyReasoner({ message, instruction }) {
+    const index = Number(message && message.ref) - 1;
+    const raw = Number.isInteger(index) && index >= 0 ? rawMessages[index] : null;
+    if (
+      !raw || typeof raw.id !== 'string' || !raw.id
+      || raw.from !== message.from || raw.subject !== message.subject || raw.date !== message.date
+    ) {
+      return { status: 'insufficient_context' };
+    }
+    let text = '';
+    try {
+      text = await readText({ messageId: raw.id });
+    } catch (error) {
+      console.error('[executive-reasoning] message text unavailable:', safeDiagnostic(error, 'gmail_unavailable'));
+      return { status: 'insufficient_context' };
+    }
+    return supervisor.supervise({
+      message: { from: raw.from, subject: raw.subject, date: raw.date, text },
+      instruction,
+    });
+  };
 }
 
 // An email action that names a sender address (and is not a fully explicit

@@ -433,7 +433,28 @@ function buildAmbiguousReferenceQuestion(candidates) {
 // whenever there is no usable executionPayload (proposal generation failed,
 // or executionPayload.to could not be resolved) so the caller can fall back
 // to its normal answer instead of describing a draft that was not created.
-function buildEmailDraftReadyAnswer(proposalBundle, emailReferenceResolution) {
+const EMAIL_REASONING_ANSWERS = Object.freeze({
+  connection_needed: 'Para redactar una respuesta basada en el contenido real del correo necesito un proveedor de '
+    + 'razonamiento que todavía no está conectado. No se ha preparado ningún borrador.',
+  rejected: 'No he podido preparar un borrador fiable basado en el contenido del correo. '
+    + 'No se ha preparado ningún borrador.',
+  provider_error: 'No he podido completar el razonamiento en este momento. No se ha preparado ningún borrador.',
+  budget_blocked: 'Preparar esta respuesta supera el presupuesto de razonamiento configurado. '
+    + 'No se ha preparado ningún borrador.',
+  insufficient_context: 'No he podido leer el contenido de ese correo. No se ha preparado ningún borrador.',
+});
+
+function buildEmailReasoningAnswer(status, reasoning) {
+  if (status === 'needs_clarification') {
+    const question = reasoning && typeof reasoning.question === 'string' ? reasoning.question.trim() : '';
+    return question
+      ? `Antes de preparar la respuesta necesito que me indiques: ${question}`
+      : 'Antes de preparar la respuesta necesito que me indiques qué quieres responder.';
+  }
+  return EMAIL_REASONING_ANSWERS[status] || EMAIL_REASONING_ANSWERS.provider_error;
+}
+
+function buildEmailDraftReadyAnswer(proposalBundle, emailReferenceResolution, warnings = []) {
   const executionPayload = proposalBundle && proposalBundle.executionPayload;
   if (!executionPayload || !executionPayload.to) return null;
   const resolvedMessage = emailReferenceResolution && emailReferenceResolution.item;
@@ -442,8 +463,9 @@ function buildEmailDraftReadyAnswer(proposalBundle, emailReferenceResolution) {
     ? resolvedMessage.subject.trim()
     : (typeof executionPayload.subject === 'string' ? executionPayload.subject.replace(/^Re:\s*/i, '').trim() : '');
   const subjectLabel = resolvedSubject || 'tu mensaje';
+  const review = Array.isArray(warnings) && warnings.length > 0 ? ` Revisa antes de aprobar: ${warnings.join('; ')}.` : '';
   return `He preparado un borrador para ${recipientLabel} sobre "${subjectLabel}". `
-    + 'Esta pendiente de tu aprobacion y no se enviara automaticamente.';
+    + `Esta pendiente de tu aprobacion y no se enviara automaticamente.${review}`;
 }
 
 // V0.5 FASE 6, turn 2: "cual deberia responder primero" never triggers its
@@ -814,18 +836,21 @@ function findMessagesNamedInQuery(query, candidates) {
 // P2 (27/09/2026): only a message the user actually identified — through a
 // resolved conversational reference or a sender named in the query — can be
 // the target of a draft. Never default to the first message of the inbox.
-function emailPreparationFromPrivateContext(generatedProposal, message) {
+// Supervisor V1 (27/09/2026): recipient and subject come from the
+// identified message; the body is left empty on purpose. Only the Email
+// Reply Supervisor may fill it, from the message's real content — the
+// legacy proposal-engine template is never used for a reply.
+function emailPreparationFromPrivateContext(message) {
   if (!message || typeof message !== 'object') return null;
   const addressMatch = String(message.from || '').match(/[A-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i);
-  const generated = generatedProposal && generatedProposal.executionPayload;
-  const subject = typeof message.subject === 'string' && message.subject.trim()
-    ? `Re: ${message.subject.trim()}` : '';
-  const body = generated && typeof generated.body === 'string' ? generated.body.trim() : '';
-  if (!addressMatch || !subject || !body) return null;
+  const originalSubject = typeof message.subject === 'string' ? message.subject.trim() : '';
+  const subject = originalSubject && /^re:/i.test(originalSubject) ? originalSubject
+    : (originalSubject ? `Re: ${originalSubject}` : '');
+  if (!addressMatch || !subject) return null;
   return {
     to: addressMatch[0],
     subject,
-    body,
+    body: '',
     replyMessageId: typeof message.id === 'string' ? message.id : null,
     threadId: typeof message.threadId === 'string' ? message.threadId : null,
   };
@@ -887,7 +912,7 @@ function generateProposalSafely(
     const generatedProposal = proposalEngine.generate(proposalInput);
     const publicProposal = buildSafeProposalMetadata(actionableIntent, generatedProposal, interactionId);
     const executionPayload = actionableIntent.proposalType === 'email_draft'
-      ? (explicitEmailPreparation || emailPreparationFromPrivateContext(generatedProposal, targetMessage))
+      ? (explicitEmailPreparation || emailPreparationFromPrivateContext(targetMessage))
       : buildExecutionPayload(actionableIntent, generatedProposal);
     if (actionableIntent.proposalType === 'email_draft' && !executionPayload) {
       diagnostics.proposalMissingEmailContext = true;
@@ -896,7 +921,11 @@ function generateProposalSafely(
     }
 
     diagnostics.proposalSucceeded = Boolean(publicProposal);
-    return publicProposal ? { publicProposal, executionPayload } : null;
+    // replyTarget is internal: it tells the orchestrator the body must come
+    // from the Email Reply Supervisor. It never reaches the public result.
+    return publicProposal
+      ? { publicProposal, executionPayload, replyTarget: explicitEmailPreparation ? null : targetMessage }
+      : null;
   } catch (error) {
     diagnostics.proposalSucceeded = false;
     return null;
@@ -1106,7 +1135,7 @@ async function orchestrateExecutiveQuery(query, options) {
   // is passed as null: core/proposalEngine.js's generateEmailProposal never
   // reads it (its executionPayload is a fixed template), so this has no
   // effect on the generated draft, only on the timing of when it runs.
-  const proposalBundle = isAmbiguousEmailReference
+  let proposalBundle = isAmbiguousEmailReference
     ? null
     : generateProposalSafely(
       proposalEngine,
@@ -1118,16 +1147,48 @@ async function orchestrateExecutiveQuery(query, options) {
       conversationContext,
       interactionId,
     );
+  // Supervisor V1 (27/09/2026): a reply to an identified message only
+  // becomes a proposal when the Email Reply Supervisor returns a verified
+  // draft grounded in that message. Without a reasoner (no provider
+  // connected) the result is CONNECTION_NEEDED, never a template.
+  let emailReasoningAnswer = null;
+  let emailReasoningWarnings = [];
+  if (proposalBundle && proposalBundle.replyTarget) {
+    const reasoner = options && typeof options.emailReplyReasoner === 'function' ? options.emailReplyReasoner : null;
+    let reasoning;
+    try {
+      reasoning = reasoner
+        ? await reasoner({ message: proposalBundle.replyTarget, instruction: query })
+        : { status: 'connection_needed' };
+    } catch (error) {
+      reasoning = { status: 'provider_error' };
+    }
+    const status = reasoning && typeof reasoning.status === 'string' ? reasoning.status : 'provider_error';
+    diagnostics.emailReasoningStatus = status;
+    if (status === 'draft' && typeof reasoning.body === 'string' && reasoning.body.trim()) {
+      proposalBundle = {
+        publicProposal: proposalBundle.publicProposal,
+        executionPayload: { ...proposalBundle.executionPayload, body: reasoning.body.trim() },
+      };
+      emailReasoningWarnings = Array.isArray(reasoning.warnings) ? reasoning.warnings : [];
+    } else {
+      proposalBundle = null;
+      diagnostics.proposalSucceeded = false;
+      emailReasoningAnswer = buildEmailReasoningAnswer(status === 'draft' ? 'provider_error' : status, reasoning);
+    }
+  }
   const emailDraftReadyAnswer = (
     !isAmbiguousEmailReference
+    && !emailReasoningAnswer
     && emailActionIntent
     && emailActionIntent.proposalType === 'email_draft'
-  ) ? buildEmailDraftReadyAnswer(proposalBundle, emailReferenceResolution) : null;
+  ) ? buildEmailDraftReadyAnswer(proposalBundle, emailReferenceResolution, emailReasoningWarnings) : null;
   // P2 (27/09/2026): an email request without an identified message gets a
   // clarifying question, never a generic answer that reads like a draft.
   const emailContextMissingAnswer = (
     !isAmbiguousEmailReference
     && !emailDraftReadyAnswer
+    && !emailReasoningAnswer
     && !proposalBundle
     && diagnostics.proposalMissingEmailContext === true
   ) ? buildEmailSenderAnswer(
@@ -1171,6 +1232,8 @@ async function orchestrateExecutiveQuery(query, options) {
   const executiveResponse = responseBuilder({
     answer: isAmbiguousEmailReference
       ? buildAmbiguousReferenceQuestion(emailReferenceResolution.candidates)
+      : (emailReasoningAnswer
+      ? emailReasoningAnswer
       : (emailDraftReadyAnswer
       ? emailDraftReadyAnswer
       : (emailContextMissingAnswer
@@ -1193,7 +1256,7 @@ async function orchestrateExecutiveQuery(query, options) {
             ? 'Puedo ayudarte a revisar tu correo, organizar tareas y trabajar contigo sobre las funciones que tengas conectadas.'
             : (privateContextSummary
               ? `${response.answer} ${privateContextSummary}`
-              : response.answer)))))))),
+              : response.answer))))))))),
     confidence: responseConfidence,
     sources: responseSources,
     reasoningSummary: response.reasoningSummary,

@@ -134,6 +134,56 @@ async function listReadonlyGmailMessages(options = {}, dependencies = {}) {
   return details.map(normalizeGmailMessage);
 }
 
+const MESSAGE_ID_PATTERN = /^[A-Za-z0-9_-]{1,128}$/;
+const DEFAULT_MESSAGE_TEXT_CHARS = 6000;
+
+function decodeBase64Url(data) {
+  if (typeof data !== 'string' || !data) return '';
+  return Buffer.from(data.replace(/-/g, '+').replace(/_/g, '/'), 'base64').toString('utf8');
+}
+
+function collectParts(part, found) {
+  if (!part || typeof part !== 'object') return found;
+  const mimeType = typeof part.mimeType === 'string' ? part.mimeType.toLowerCase() : '';
+  if (mimeType === 'text/plain' && part.body) found.plain.push(decodeBase64Url(part.body.data));
+  if (mimeType === 'text/html' && part.body) found.html.push(decodeBase64Url(part.body.data));
+  if (Array.isArray(part.parts)) part.parts.forEach((child) => collectParts(child, found));
+  return found;
+}
+
+function htmlToText(html) {
+  return String(html)
+    .replace(/<(script|style)[\s\S]*?<\/\1>/gi, ' ')
+    .replace(/<br\s*\/?>|<\/p>|<\/div>/gi, '\n')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'");
+}
+
+// Supervisor V1 (27/09/2026): text of ONE message already selected by the
+// user, for the reasoning mission only. Same readonly client and scope
+// (gmail.readonly); the text is returned to the caller, never logged or
+// stored here, and capped to maxChars.
+async function readReadonlyGmailMessageText(options = {}, dependencies = {}) {
+  const messageId = typeof options.messageId === 'string' ? options.messageId.trim() : '';
+  if (!MESSAGE_ID_PATTERN.test(messageId)) {
+    throw buildProviderError('invalid_message_id', 'messageId must be a Gmail message id.');
+  }
+  const maxChars = Number.isInteger(options.maxChars) && options.maxChars > 0
+    ? options.maxChars
+    : DEFAULT_MESSAGE_TEXT_CHARS;
+  const gmailClientFactory = dependencies.getGmailClient || getGmailClient;
+  const gmail = await gmailClientFactory();
+  const response = await gmail.users.messages.get({ userId: 'me', id: messageId, format: 'full' });
+  const found = collectParts(response && response.data && response.data.payload, { plain: [], html: [] });
+  const raw = found.plain.join('\n').trim() || htmlToText(found.html.join('\n'));
+  return raw.replace(/\r/g, '').replace(/[ \t]+/g, ' ').replace(/\n{3,}/g, '\n\n').trim().slice(0, maxChars);
+}
+
 async function buildGmailPrivateContext(input = {}, dependencies = {}) {
   const gmailReader = dependencies.listReadonlyGmailMessages || listReadonlyGmailMessages;
   const oauthGuard = dependencies.assertGoogleOAuthConfigured || assertGoogleOAuthConfigured;
@@ -183,4 +233,5 @@ module.exports = {
   buildGmailPrivateContext,
   listReadonlyGmailMessages,
   normalizeGmailMessage,
+  readReadonlyGmailMessageText,
 };

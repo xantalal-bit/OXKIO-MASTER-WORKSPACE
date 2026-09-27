@@ -41,6 +41,18 @@ const ENVIRONMENT_VARIABLES = Object.freeze({
   OXKIO_ADMIN_FIREBASE_UIDS: Object.freeze({ kind: 'sensitive_config', classifications: ['required'], scope: 'authorization' }),
   OXKIO_ADMIN_FIREBASE_EMAILS: Object.freeze({ kind: 'sensitive_config', classifications: ['optional'], scope: 'authorization' }),
   OPENAI_API_KEY: Object.freeze({ kind: 'secret', classifications: ['optional', 'local_only', 'secret'], scope: 'simulator' }),
+  // Executive Reasoning (Supervisor V1, 27/09/2026): runtime model provider
+  // for grounded email replies. Without all of them the reasoning path
+  // reports CONNECTION_NEEDED; it never falls back to a template.
+  OXKIO_REASONING_PROVIDER: Object.freeze({ kind: 'config', classifications: ['optional'], scope: 'reasoning' }),
+  OXKIO_REASONING_MODEL: Object.freeze({ kind: 'config', classifications: ['optional'], scope: 'reasoning' }),
+  // Explicit endpoint, checked against a per-provider allowlist (EU data
+  // routing, 27/09/2026). Missing -> CONNECTION_NEEDED; never defaults to global.
+  OXKIO_REASONING_BASE_URL: Object.freeze({ kind: 'config', classifications: ['optional'], scope: 'reasoning' }),
+  OXKIO_REASONING_INPUT_USD_PER_MILLION: Object.freeze({ kind: 'config', classifications: ['optional'], scope: 'reasoning' }),
+  OXKIO_REASONING_OUTPUT_USD_PER_MILLION: Object.freeze({ kind: 'config', classifications: ['optional'], scope: 'reasoning' }),
+  OXKIO_REASONING_PRICING_REVIEWED_AT: Object.freeze({ kind: 'config', classifications: ['optional'], scope: 'reasoning' }),
+  OXKIO_REASONING_API_KEY: Object.freeze({ kind: 'secret', classifications: ['optional', 'secret'], scope: 'reasoning' }),
   OXKIO_MISSION_PG_RUNTIME_URL: Object.freeze({ kind: 'secret', classifications: ['optional', 'secret'], scope: 'postgres' }),
   OXKIO_MISSION_PG_ADMIN_URL: Object.freeze({ kind: 'secret', classifications: ['optional', 'secret'], scope: 'postgres' }),
   // Approval (5C.7B.3F): variable propia, distinta de OXKIO_MISSION_PG_RUNTIME_URL
