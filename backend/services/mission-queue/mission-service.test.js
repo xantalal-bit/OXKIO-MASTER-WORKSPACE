@@ -453,3 +453,52 @@ test('objects returned by the service cannot mutate repository state by referenc
     'Attempted external mutation',
   );
 });
+
+
+test('MissionService rejects an invalid missionOutcomeTelemetry dependency', () => {
+  const repository = new FakeMissionRepository();
+  assert.throws(
+    () => new MissionService({ repository, missionOutcomeTelemetry: {} }),
+    { code: 'invalid_mission_outcome_telemetry' },
+  );
+});
+
+test('mission outcome telemetry runs only after the mutation is persisted', async () => {
+  const repository = new FakeMissionRepository();
+  const observations = [];
+  const originalSave = repository.saveIfVersion.bind(repository);
+  repository.saveIfVersion = async (...args) => {
+    const saved = await originalSave(...args);
+    observations.push('persisted');
+    return saved;
+  };
+  const missionOutcomeTelemetry = {
+    recordMissionState({ mission }) {
+      observations.push('telemetry');
+      assert.equal(mission.version, 2);
+    },
+  };
+  const service = new MissionService({ repository, missionOutcomeTelemetry });
+  await createStoredMission(service);
+  await service.addTask(SCOPE, 'mission-service-alpha', taskPayload(), operationOptions(1));
+  assert.deepEqual(observations, ['persisted', 'telemetry']);
+});
+
+test('telemetry failure cannot turn an already persisted mutation into an application failure', async () => {
+  const repository = new FakeMissionRepository();
+  const missionOutcomeTelemetry = {
+    recordMissionState() {
+      throw new Error('synthetic telemetry failure');
+    },
+  };
+  const service = new MissionService({ repository, missionOutcomeTelemetry });
+  await createStoredMission(service);
+  const result = await service.addTask(
+    SCOPE,
+    'mission-service-alpha',
+    taskPayload(),
+    operationOptions(1),
+  );
+  assert.equal(result.mission.version, 2);
+  assert.equal((await service.getMission(SCOPE, 'mission-service-alpha')).version, 2);
+});
