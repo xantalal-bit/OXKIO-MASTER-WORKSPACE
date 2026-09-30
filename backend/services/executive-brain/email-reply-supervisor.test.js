@@ -224,8 +224,8 @@ test('telemetry carries only safe metadata: no email text, no draft body', async
   await supervisor.supervise({ message: LUCUS_SUPPORT, instruction: 'Prepara una respuesta' });
   assert.equal(logs.length, 1);
   assert.deepEqual(Object.keys(logs[0]).sort(), [
-    'attempts', 'costLevel', 'durationMs', 'errorCode', 'executionPattern', 'mission', 'model',
-    'needsClarification', 'provider', 'reasoningRegion', 'verdict',
+    'attempts', 'convergenceAction', 'costLevel', 'durationMs', 'errorCode', 'executionPattern', 'mission', 'model',
+    'needsClarification', 'provider', 'reasoningRegion', 'supervisorDecision', 'verdict', 'verification',
   ]);
   const serialized = JSON.stringify(logs[0]);
   assert.equal(serialized.includes('incidencia'), false);
@@ -425,4 +425,76 @@ test('EU-E telemetry records only the configured region, never email or draft co
       assert.equal(serialized.includes(fragment), false, fragment);
     }
   }
+});
+
+// XATAI CORE V1 integration: every outcome carries a structured Supervisor
+// Decision, the Verifier Contract verdict and the Convergence Sentinel action.
+test('XATAI a verified draft is NEEDS_APPROVAL (A1, human gate), never CAN_EXECUTE', async () => {
+  const stub = provider(() => ok(GROUNDED_REPLY));
+  const { supervisor, logs } = supervisorWith(stub.value);
+  const result = await supervisor.supervise({ message: LUCUS_SUPPORT, instruction: 'Prepara una respuesta' });
+  assert.equal(result.status, SUPERVISION_STATUS.DRAFT);
+  assert.equal(result.decision.decision, 'NEEDS_APPROVAL');
+  assert.equal(result.decision.capabilityId, 'gmail.draft');
+  assert.equal(logs[0].verification, 'PASS');
+  assert.equal(logs[0].supervisorDecision, 'NEEDS_APPROVAL');
+  assert.equal(logs[0].convergenceAction, null);
+});
+
+test('XATAI verifier rejection retries with CHANGE_HYPOTHESIS, then escalates to a human and blocks', async () => {
+  const stub = provider(() => ok({ needsClarification: false, replyBody: GENERIC_TEMPLATE, evidence: ['hemos resuelto la incidencia del correo'] }));
+  const { supervisor, logs } = supervisorWith(stub.value);
+  const result = await supervisor.supervise({ message: LUCUS_SUPPORT, instruction: 'Prepara una respuesta' });
+  assert.equal(result.status, SUPERVISION_STATUS.REJECTED);
+  assert.equal(stub.calls.length, 2);
+  // The retry changed the attempt (corrective feedback), it never repeated it.
+  assert.equal(stub.calls[0].context.correccionDelSupervisor, undefined);
+  assert.ok(stub.calls[1].context.correccionDelSupervisor);
+  assert.equal(logs[0].verification, 'FAIL');
+  assert.equal(logs[0].convergenceAction, 'ESCALATE_HUMAN');
+  assert.equal(result.decision.decision, 'BLOCKED');
+  assert.equal(result.decision.reason, 'verification_failed');
+});
+
+test('XATAI invalid JSON is corrected with REFINE_PROMPT before escalating', async () => {
+  const stub = provider((request, attempt) => (attempt === 1
+    ? { status: 'error', errorCode: 'reasoning_invalid_output' }
+    : ok(GROUNDED_REPLY)));
+  const { supervisor, logs } = supervisorWith(stub.value);
+  const result = await supervisor.supervise({ message: LUCUS_SUPPORT, instruction: 'Prepara una respuesta' });
+  assert.equal(result.status, SUPERVISION_STATUS.DRAFT);
+  assert.equal(stub.calls.length, 2);
+  assert.equal(logs[0].convergenceAction, 'REFINE_PROMPT');
+});
+
+test('XATAI provider auth failure is NEEDS_CONNECTION with ESCALATE_HUMAN and no retry', async () => {
+  const stub = provider(() => ({ status: 'error', errorCode: 'reasoning_auth_failed' }));
+  const { supervisor, logs } = supervisorWith(stub.value);
+  const result = await supervisor.supervise({ message: LUCUS_SUPPORT, instruction: 'Prepara una respuesta' });
+  assert.equal(result.status, SUPERVISION_STATUS.PROVIDER_ERROR);
+  assert.equal(stub.calls.length, 1);
+  assert.equal(result.decision.decision, 'NEEDS_CONNECTION');
+  assert.equal(logs[0].convergenceAction, 'ESCALATE_HUMAN');
+});
+
+test('XATAI clarification, missing context, missing provider and budget map to structured decisions', async () => {
+  const clarify = provider(() => ok({
+    needsClarification: true, clarificationQuestion: '¿Renuevo por 12 o por 24 meses?', replyBody: null, evidence: [], uncertainties: [],
+  }));
+  const clarification = await supervisorWith(clarify.value).supervisor
+    .supervise({ message: LUCUS_DECISION, instruction: 'Prepara una respuesta' });
+  assert.equal(clarification.decision.decision, 'NEEDS_INFORMATION');
+
+  const empty = await supervisorWith(provider(() => ok(GROUNDED_REPLY)).value).supervisor
+    .supervise({ message: { ...LUCUS_SUPPORT, text: '' }, instruction: 'x' });
+  assert.equal(empty.decision.decision, 'NEEDS_INFORMATION');
+
+  const unconfigured = await supervisorWith({ status: PROVIDER_STATUS.NOT_CONFIGURED, missing: ['OXKIO_REASONING_API_KEY'] })
+    .supervisor.supervise({ message: LUCUS_SUPPORT, instruction: 'x' });
+  assert.equal(unconfigured.decision.decision, 'NEEDS_CONNECTION');
+
+  const budget = await supervisorWith(provider(() => ok(GROUNDED_REPLY)).value, { costController: new CostController() })
+    .supervisor.supervise({ message: LUCUS_SUPPORT, instruction: 'x' });
+  assert.equal(budget.decision.decision, 'BLOCKED');
+  assert.equal(budget.decision.reason, 'budget_blocked');
 });

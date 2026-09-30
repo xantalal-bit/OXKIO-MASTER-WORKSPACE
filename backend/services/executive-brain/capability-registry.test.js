@@ -106,3 +106,44 @@ test('no unavailableReason exposes internal function or file names to the user',
     );
   }
 });
+
+// XATAI CORE V1: governance profile derived from the same entries.
+const {
+  CAPABILITY_STATUS, capabilityStatus, describeCapability, listCapabilityProfiles,
+} = require('./capability-registry');
+const { LEVELS } = require('../runtime/cost-policy');
+
+test('every capability has a complete governance profile', () => {
+  const profiles = listCapabilityProfiles();
+  assert.equal(profiles.length, listCapabilities().length);
+  for (const profile of profiles) {
+    assert.ok(Object.values(CAPABILITY_STATUS).includes(profile.status), `${profile.id} status`);
+    assert.ok(Object.values(LEVELS).includes(profile.costClass), `${profile.id} costClass`);
+    assert.equal(typeof profile.requiresApproval, 'boolean');
+    assert.equal(typeof profile.requiresExternalConnection, 'boolean', `${profile.id} external connection`);
+    assert.ok(Array.isArray(profile.tools));
+    assert.equal(typeof profile.risk, 'string');
+    assert.ok(Object.isFrozen(profile));
+  }
+});
+
+test('status is derived, never stored twice: available/partial/blocked/not implemented', () => {
+  assert.equal(describeCapability('gmail.read').status, CAPABILITY_STATUS.AVAILABLE);
+  assert.equal(describeCapability('gmail.prioritize').status, CAPABILITY_STATUS.PARTIAL);
+  // Real code, deliberately disabled or not provisioned.
+  assert.equal(describeCapability('gmail.send').status, CAPABILITY_STATUS.BLOCKED);
+  assert.equal(describeCapability('mission.create').status, CAPABILITY_STATUS.BLOCKED);
+  // No code behind it yet.
+  assert.equal(describeCapability('calendar.create').status, CAPABILITY_STATUS.NOT_IMPLEMENTED);
+  assert.equal(describeCapability('unknown.capability'), null);
+  for (const capability of listCapabilities()) {
+    assert.equal(describeCapability(capability.id).status, capabilityStatus(capability));
+  }
+});
+
+test('gmail.draft is priced as a small model with an external connection and human approval', () => {
+  const draft = describeCapability('gmail.draft');
+  assert.equal(draft.costClass, LEVELS.SMALL_MODEL);
+  assert.equal(draft.requiresExternalConnection, true);
+  assert.equal(draft.requiresApproval, true);
+});

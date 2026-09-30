@@ -1,6 +1,15 @@
 'use strict';
 
 const { REASONING_RESULT, PROVIDER_STATUS } = require('./executive-reasoning-provider');
+const {
+  CONVERGENCE_ACTIONS,
+  VERIFICATION_VERDICTS,
+  createMissionContract,
+  createVerificationRequest,
+  decideSupervision,
+  evaluateConvergence,
+  runVerification,
+} = require('./xatai-core');
 
 // Supervisor V1 (27/09/2026) for one mission: reply to the email José
 // selected. Circuit: validate authorized context -> cost gate (CostController)
@@ -47,6 +56,52 @@ const OUTPUT_SHAPE = Object.freeze({
   evidence: ['cita literal del correo'],
   uncertainties: ['dudas o datos que faltan'],
 });
+
+// XATAI CORE V1: the governance contract of this mission. A1 (reason and
+// prepare) with read + draft only; sending and every baseline prohibition
+// stay out of reach, and the draft always goes to the human approval queue.
+const EMAIL_REPLY_CONTRACT = createMissionContract({
+  objective: MISSION,
+  constraints: CONSTRAINTS,
+  knownContext: ['Correo seleccionado por José (remitente, asunto, fecha y texto).', 'Instrucción de José.'],
+  autonomyLevel: 'A1',
+  authorizedTools: ['gmail.read', 'gmail.draft'],
+  passCriteria: ['El verificador independiente aprueba el borrador con evidencia literal del correo.'],
+  stopCriteria: [
+    'Falta una decisión o dato de José: se pide aclaración.',
+    'El proveedor falla o el presupuesto lo bloquea.',
+    'Se agotan los intentos sin pasar la verificación.',
+  ],
+  requiredEvidence: ['Citas literales del correo recibido.'],
+});
+const VERIFIER_ID = 'email-reply-verifier';
+// Provider error codes whose fix is a human connection (credential, access,
+// quota) rather than another attempt.
+const CONNECTION_ERROR_CODES = new Set(['reasoning_auth_failed', 'reasoning_rate_limited']);
+const FAILURE_KIND_BY_ERROR = Object.freeze({
+  reasoning_invalid_output: 'invalid_output',
+  reasoning_auth_failed: 'auth',
+  reasoning_rate_limited: 'budget',
+  reasoning_timeout: 'timeout',
+});
+// Corrective actions this supervisor can apply by itself inside the loop.
+const APPLICABLE_ACTIONS = new Set([CONVERGENCE_ACTIONS.REFINE_PROMPT, CONVERGENCE_ACTIONS.CHANGE_HYPOTHESIS]);
+
+function supervisorDecisionFor(result, telemetry, verification) {
+  const decide = (signals) => decideSupervision({ contract: EMAIL_REPLY_CONTRACT, capabilityId: 'gmail.draft', ...signals });
+  switch (result.status) {
+    case SUPERVISION_STATUS.DRAFT: return decide({ verification });
+    case SUPERVISION_STATUS.NEEDS_CLARIFICATION:
+    case SUPERVISION_STATUS.INSUFFICIENT_CONTEXT: return decide({ missingInformation: [result.status] });
+    case SUPERVISION_STATUS.CONNECTION_NEEDED: return decide({ connectionAvailable: false });
+    case SUPERVISION_STATUS.PROVIDER_ERROR:
+      return CONNECTION_ERROR_CODES.has(telemetry.errorCode)
+        ? decide({ connectionAvailable: false })
+        : decide({ blockedReason: telemetry.errorCode || 'provider_error' });
+    case SUPERVISION_STATUS.REJECTED: return decide({ verification });
+    default: return decide({ blockedReason: result.status });
+  }
+}
 
 const GENERIC_PHRASES = Object.freeze([
   'he revisado el asunto', 'propongo avanzar', 'con prioridad', 'quedo atento', 'quedo atenta',
@@ -197,12 +252,19 @@ function createEmailReplySupervisor({
       errorCode: null,
       costLevel: null,
       executionPattern: null,
+      // XATAI CORE V1: enums only (never content).
+      verification: null,
+      convergenceAction: null,
+      supervisorDecision: null,
     };
+    let independentVerification = null;
     const finish = (result) => {
       telemetry.verdict = result.status;
+      const decision = supervisorDecisionFor(result, telemetry, independentVerification);
+      telemetry.supervisorDecision = decision.decision;
       telemetry.durationMs = Math.max(0, now() - startedAt);
       try { logger({ ...telemetry }); } catch (error) { /* telemetry is best-effort */ }
-      return Object.freeze({ ...result, telemetry: Object.freeze({ ...telemetry }) });
+      return Object.freeze({ ...result, decision, telemetry: Object.freeze({ ...telemetry }) });
     };
 
     const text = message && typeof message.text === 'string' ? message.text.trim().slice(0, MAX_SOURCE_CHARS) : '';
@@ -248,8 +310,20 @@ function createEmailReplySupervisor({
       return finish({ status: SUPERVISION_STATUS.BUDGET_BLOCKED });
     }
 
+    // Convergence Sentinel: every retry must apply a corrective action the
+    // sentinel chose (never the same attempt again); anything it cannot fix
+    // in-loop ends the mission with the recommended action recorded.
     let feedback = null;
     let lastReasons = [];
+    const attempts = [];
+    const nextCorrection = (failureKind, correctiveFeedback) => {
+      attempts.push({ prompt: feedback, outcome: 'fail', failureKind, correctiveAction: telemetry.convergenceAction });
+      const convergence = evaluateConvergence({ attempts, maxAttempts });
+      telemetry.convergenceAction = convergence.action;
+      if (!APPLICABLE_ACTIONS.has(convergence.action)) return false;
+      feedback = correctiveFeedback;
+      return true;
+    };
     for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
       telemetry.attempts = attempt;
       const result = await provider.reason({
@@ -262,10 +336,12 @@ function createEmailReplySupervisor({
       recordSpend(provider.modelId, result && result.usage);
       if (!result || result.status !== REASONING_RESULT.OK) {
         telemetry.errorCode = result && result.errorCode ? result.errorCode : 'reasoning_unavailable';
-        if (result && result.errorCode === 'reasoning_invalid_output' && attempt < maxAttempts) {
-          feedback = 'La salida anterior no era un objeto JSON válido con la forma pedida.';
+        const failureKind = FAILURE_KIND_BY_ERROR[telemetry.errorCode] || 'tool_error';
+        if (failureKind === 'invalid_output'
+          && nextCorrection(failureKind, 'La salida anterior no era un objeto JSON válido con la forma pedida.')) {
           continue;
         }
+        if (failureKind !== 'invalid_output') nextCorrection(failureKind, null);
         return finish({ status: SUPERVISION_STATUS.PROVIDER_ERROR });
       }
       const verification = verifyEmailReplyDraft({ content: result.content, source, instruction });
@@ -276,16 +352,31 @@ function createEmailReplySupervisor({
           question: result.content.clarificationQuestion.replace(/\s+/g, ' ').trim(),
         });
       }
-      if (verification.verdict === 'pass') {
+      // Verifier Contract: the deterministic checks run as an independent
+      // verifier over the model's claim; the model never certifies itself.
+      independentVerification = runVerification(createVerificationRequest({
+        claimedResult: 'email_reply_draft',
+        evidence: Array.isArray(result.content.evidence) ? result.content.evidence : [],
+        constraints: CONSTRAINTS,
+        checks: [{
+          id: 'email_reply_grounding',
+          run: () => ({
+            verdict: verification.verdict === 'pass' ? VERIFICATION_VERDICTS.PASS : VERIFICATION_VERDICTS.FAIL,
+            reasons: verification.reasons,
+          }),
+        }],
+      }), { verifierId: VERIFIER_ID, executorId: provider.modelId || 'reasoning-provider' });
+      telemetry.verification = independentVerification.verdict;
+      if (independentVerification.verdict === VERIFICATION_VERDICTS.PASS) {
         return finish({
           status: SUPERVISION_STATUS.DRAFT,
           body: result.content.replyBody.trim(),
           warnings: sanitizeList(result.content.uncertainties),
         });
       }
-      lastReasons = verification.reasons;
-      feedback = `El verificador rechazó el borrador por: ${verification.reasons.join(', ')}. `
-        + 'Corrígelo respetando todas las restricciones o pide aclaración.';
+      lastReasons = verification.reasons.length > 0 ? verification.reasons : [...independentVerification.reasons];
+      if (!nextCorrection('verification_failed', `El verificador rechazó el borrador por: ${lastReasons.join(', ')}. `
+        + 'Corrígelo respetando todas las restricciones o pide aclaración.')) break;
     }
     telemetry.errorCode = lastReasons.join(',') || 'verification_failed';
     return finish({ status: SUPERVISION_STATUS.REJECTED, reasons: lastReasons });
