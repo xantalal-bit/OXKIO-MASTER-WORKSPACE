@@ -1,5 +1,7 @@
 'use strict';
 
+const { LEVELS: COST_LEVELS } = require('../runtime/cost-policy');
+
 // V0.4 FASE 2: a real, data-driven inventory of what OXKIO can and cannot do,
 // so "que puedes hacer"/"que no puedes hacer todavia" answer from this table
 // instead of a hardcoded string that can silently go stale. Each entry
@@ -205,14 +207,81 @@ const CAPABILITIES = Object.freeze([
   }),
 ]);
 
+// XATAI CORE V1 (30/09/2026): governance view of the same entries, so the
+// Supervisor can reason about status, cost and external dependencies without
+// a second registry. status is derived from available/partial/source (never
+// stored twice); cost class reuses the CostController levels; external
+// connection marks what needs a credential, OAuth or database that OXKIO
+// does not own. gmail.draft is small_model because Supervisor V1 drafts the
+// body with the configured reasoning provider.
+const CAPABILITY_STATUS = Object.freeze({
+  AVAILABLE: 'AVAILABLE',
+  PARTIAL: 'PARTIAL',
+  BLOCKED: 'BLOCKED',
+  NOT_IMPLEMENTED: 'NOT_IMPLEMENTED',
+});
+const GOVERNANCE_PROFILE = Object.freeze({
+  'gmail.read': { costClass: COST_LEVELS.DETERMINISTIC, requiresExternalConnection: true },
+  'gmail.draft': { costClass: COST_LEVELS.SMALL_MODEL, requiresExternalConnection: true },
+  'gmail.send': { costClass: COST_LEVELS.DETERMINISTIC, requiresExternalConnection: true },
+  'gmail.prioritize': { costClass: COST_LEVELS.DETERMINISTIC, requiresExternalConnection: true },
+  'calendar.read': { costClass: COST_LEVELS.DETERMINISTIC, requiresExternalConnection: true },
+  'calendar.create': { costClass: COST_LEVELS.DETERMINISTIC, requiresExternalConnection: true },
+  'tasks.read': { costClass: COST_LEVELS.DETERMINISTIC, requiresExternalConnection: false },
+  'documents.read': { costClass: COST_LEVELS.DETERMINISTIC, requiresExternalConnection: false },
+  'drive.search': { costClass: COST_LEVELS.DETERMINISTIC, requiresExternalConnection: true },
+  'memory.search': { costClass: COST_LEVELS.DETERMINISTIC, requiresExternalConnection: false },
+  'approvals.read': { costClass: COST_LEVELS.DETERMINISTIC, requiresExternalConnection: false },
+  'dashboard.read': { costClass: COST_LEVELS.DETERMINISTIC, requiresExternalConnection: true },
+  'governance.read': { costClass: COST_LEVELS.DETERMINISTIC, requiresExternalConnection: false },
+  'executive.summary': { costClass: COST_LEVELS.DETERMINISTIC, requiresExternalConnection: true },
+  'executive.prioritize': { costClass: COST_LEVELS.DETERMINISTIC, requiresExternalConnection: true },
+  'mission.create': { costClass: COST_LEVELS.DETERMINISTIC, requiresExternalConnection: true },
+  'mission.track': { costClass: COST_LEVELS.DETERMINISTIC, requiresExternalConnection: true },
+  'mission.resume': { costClass: COST_LEVELS.DETERMINISTIC, requiresExternalConnection: true },
+  'mission.close': { costClass: COST_LEVELS.DETERMINISTIC, requiresExternalConnection: true },
+});
+
 function listCapabilities() { return CAPABILITIES; }
 function getCapability(id) { return CAPABILITIES.find((capability) => capability.id === id) || null; }
 function listAvailable() { return CAPABILITIES.filter((capability) => capability.available); }
 function listUnavailable() { return CAPABILITIES.filter((capability) => !capability.available); }
 
+// Unavailable with real code behind it (disabled by safety or not
+// provisioned) is BLOCKED; unavailable with no source is NOT_IMPLEMENTED.
+function capabilityStatus(capability) {
+  if (capability.available) return capability.partial ? CAPABILITY_STATUS.PARTIAL : CAPABILITY_STATUS.AVAILABLE;
+  return capability.source ? CAPABILITY_STATUS.BLOCKED : CAPABILITY_STATUS.NOT_IMPLEMENTED;
+}
+
+function describeCapability(id) {
+  const capability = getCapability(id);
+  if (!capability) return null;
+  const profile = GOVERNANCE_PROFILE[id];
+  return Object.freeze({
+    id: capability.id,
+    mode: capability.mode,
+    status: capabilityStatus(capability),
+    risk: capability.risk,
+    costClass: profile.costClass,
+    tools: Object.freeze([capability.owner, capability.source].filter(Boolean)),
+    requiresApproval: capability.requiresApproval,
+    requiresExternalConnection: profile.requiresExternalConnection,
+    reason: capability.unavailableReason,
+  });
+}
+
+function listCapabilityProfiles() {
+  return CAPABILITIES.map((capability) => describeCapability(capability.id));
+}
+
 module.exports = {
+  CAPABILITY_STATUS,
   MODES,
+  capabilityStatus,
+  describeCapability,
   listCapabilities,
+  listCapabilityProfiles,
   getCapability,
   listAvailable,
   listUnavailable,
