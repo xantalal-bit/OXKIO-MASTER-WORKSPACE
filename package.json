@@ -2,7 +2,8 @@
   "scripts": {
     "start": "node backend/api/server.js",
     "start:windows": "powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File ./scripts/Start-Oxkio.ps1",
-    "simulador": "node simulador-ia/src/server.js"
+    "simulador": "node simulador-ia/src/server.js",
+    "test": "node --test backend/**/*.test.js"
   },
   "dependencies": {
     "@google-cloud/secret-manager": "^7.1.0",
