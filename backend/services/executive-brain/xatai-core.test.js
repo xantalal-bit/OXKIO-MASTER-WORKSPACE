@@ -212,3 +212,56 @@ test('executionEnabled stays false: switching it on never yields CAN_EXECUTE in 
   assert.equal(decision.decision, SUPERVISOR_DECISIONS.SAFE_DRAFT_ONLY);
   assert.equal(decision.reason, 'execution_disabled');
 });
+
+// ---------------------------------------------------------------- XATAI CORE V2
+
+const {
+  MISSION_VERDICTS, detectAgentCycle, evaluateTaskConvergence, verifyMission,
+} = require('./xatai-core');
+
+test('V2 sentinel: an agent path that returns to a tried agent is a cycle', () => {
+  assert.equal(detectAgentCycle(['a', 'b', 'a']), true);
+  assert.equal(detectAgentCycle(['a', 'a', 'b']), false);
+  assert.equal(detectAgentCycle(['a', 'b', 'c']), false);
+  const verdict = evaluateTaskConvergence({
+    attempts: [{ outcome: 'fail', failureKind: 'agent_error' }], agentPath: ['a', 'b', 'a'],
+  });
+  assert.deepEqual([verdict.action, verdict.reason], ['ESCALATE_HUMAN', 'agent_cycle_detected']);
+});
+
+test('V2 sentinel: task budget and mission budget both stop retries', () => {
+  const fail1 = { outcome: 'fail', failureKind: 'invalid_output' };
+  assert.equal(evaluateTaskConvergence({ attempts: [fail1] }).action, 'REFINE_PROMPT');
+  assert.equal(evaluateTaskConvergence({ attempts: [fail1, fail1], maxTaskAttempts: 2 }).reason, 'attempt_budget_exhausted');
+  const mission = evaluateTaskConvergence({ attempts: [fail1], missionRetriesUsed: 4, missionRetryBudget: 4 });
+  assert.deepEqual([mission.action, mission.reason], ['ESCALATE_HUMAN', 'mission_retry_budget_exhausted']);
+  // Human-authority failures escalate even with budget left.
+  assert.equal(evaluateTaskConvergence({ attempts: [{ outcome: 'fail', failureKind: 'budget' }] }).reason, 'human_authority_required');
+  assert.equal(evaluateTaskConvergence({ attempts: [{ outcome: 'pass' }] }).converged, true);
+});
+
+test('V2 verifier: mission verdicts PASS, PARTIAL_PASS, FAIL and NEEDS_REVIEW', () => {
+  const pass = (taskId, executorId = 'memory-agent') => ({ taskId, executorId, verdict: 'PASS', evidenceRefs: [`ev:${taskId}`] });
+  assert.equal(verifyMission({ tasks: [pass('t1'), pass('t2')], verifierId: 'verifier-agent', passCriteriaDemonstrated: true }).verdict, MISSION_VERDICTS.PASS);
+  assert.equal(verifyMission({ tasks: [pass('t1')], verifierId: 'verifier-agent' }).verdict, 'NEEDS_REVIEW');
+  const partial = verifyMission({ tasks: [pass('t1'), { taskId: 't2', verdict: null }], verifierId: 'verifier-agent' });
+  assert.deepEqual([partial.verdict, partial.pendingTaskIds], ['PARTIAL_PASS', ['t2']]);
+  assert.equal(verifyMission({ tasks: [pass('t1'), { taskId: 't2', verdict: 'FAIL' }], verifierId: 'verifier-agent' }).verdict, 'FAIL');
+  assert.equal(verifyMission({ tasks: [pass('t1')], verifierId: 'verifier-agent', constraintViolations: ['x'], passCriteriaDemonstrated: true }).verdict, 'FAIL');
+  assert.equal(verifyMission({ tasks: [{ taskId: 't1', verdict: null }], verifierId: 'verifier-agent' }).verdict, 'NEEDS_REVIEW');
+  assert.equal(verifyMission({ tasks: [{ taskId: 't1', verdict: 'PASS', evidenceRefs: [] }], verifierId: 'verifier-agent', passCriteriaDemonstrated: true }).verdict, 'NEEDS_REVIEW');
+  const selfCertified = verifyMission({ tasks: [pass('t1', 'verifier-agent')], verifierId: 'verifier-agent', passCriteriaDemonstrated: true });
+  assert.deepEqual([selfCertified.verdict, selfCertified.reasons], ['NEEDS_REVIEW', ['verifier_not_independent']]);
+  assert.equal(verifyMission({ tasks: [pass('t1')], passCriteriaDemonstrated: true }).verdict, 'NEEDS_REVIEW');
+});
+
+test('V2: capability lookup is injectable for controlled simulation, canonical by default', () => {
+  const input = { ...BASE_CONTRACT, authorizedTools: ['research.web'] };
+  const canonical = createMissionContract(input);
+  assert.equal(decideSupervision({ contract: canonical, capabilityId: 'research.web' }).reason, 'capability_unavailable');
+  const simulated = (id) => (id === 'research.web'
+    ? { id, mode: 'read', status: 'AVAILABLE', requiresApproval: false, requiresExternalConnection: false } : null);
+  const contractSim = createMissionContract(input, { describeCapability: simulated });
+  assert.equal(decideSupervision({ contract: contractSim, capabilityId: 'research.web', describeCapability: simulated }).decision, 'CAN_EXECUTE');
+  assert.equal(errorCode(() => createMissionContract({ ...BASE_CONTRACT, authorizedTools: ['ghost.capability'] })), 'unknown_authorized_tool');
+});
