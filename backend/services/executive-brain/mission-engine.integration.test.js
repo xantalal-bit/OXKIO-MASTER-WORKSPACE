@@ -13,6 +13,11 @@ const { handleMissionRequest } = require('./mission-chat');
 const { EXECUTION_POLICY, createMissionEngine } = require('./mission-engine');
 const { DEFAULT_CATALOG } = require('../runtime/model-cost-catalog');
 const { QualityIncidentRegistry } = require('../runtime/quality-incident-registry');
+const { createEvidenceRegistry } = require('./evidence-registry');
+
+const EVIDENCE = createEvidenceRegistry({ trustedRegistrars: ['tool:sim'] });
+const TOOL = EVIDENCE.registrar('tool:sim');
+let evidenceCounter = 0;
 
 // XATAI CORE V2 multi-agent simulation. The capabilities below do not exist
 // yet (NOT_IMPLEMENTED in the canonical registry); the simulation stands
@@ -25,8 +30,11 @@ const simulatedDescribe = (id) => {
 };
 const NOW = '2026-10-03T10:00:00.000Z';
 
+let engineCounter = 0;
 function simulationEngine(qualityRegistry = null) {
   let counter = 0;
+  engineCounter += 1;
+  const prefix = `e${engineCounter}`;
   return createMissionEngine({
     describeCapability: simulatedDescribe,
     costCatalog: {
@@ -41,19 +49,20 @@ function simulationEngine(qualityRegistry = null) {
     providerAssignment: { providerId: 'sim', region: 'eu' },
     connections: { 'research.company': true, 'research.web': true, 'gmail.draft': true },
     qualityRegistry,
+    evidenceRegistry: EVIDENCE,
     now: () => NOW,
-    idFactory: (kind = 'id') => { counter += 1; return `${kind}-${counter}`; },
+    idFactory: (kind = 'id') => { counter += 1; return `${kind}-${prefix}-${counter}`; },
   });
 }
 
 function recordingExecutors(calls) {
   return Object.fromEntries(AGENT_DECLARATIONS.map((agent) => [agent.id, async (contract) => {
     calls.push({ agent: agent.id, taskId: contract.taskId });
-    return {
-      summary: `Resultado simulado de ${contract.taskId}`,
-      evidenceRefs: [`ev:${contract.taskId}`],
-      criteriaMet: contract.passCriteria.map((criterion) => criterion.criterionId),
-    };
+    // The simulated tool behind the agent records the evidence.
+    evidenceCounter += 1;
+    const ref = `ev:${contract.taskId}:${evidenceCounter}`;
+    TOOL.record({ ref, missionId: contract.missionId, taskId: contract.taskId, supports: contract.passCriteria.map((criterion) => criterion.criterionId) });
+    return { summary: `Resultado simulado de ${contract.taskId}`, evidenceRefs: [ref] };
   }]));
 }
 
@@ -187,7 +196,7 @@ test('zero material execution: a result claiming a material effect fails verific
 
 test('no sends, deploys, IAM or secret access: Mission Engine modules never load providers, credentials or I/O', () => {
   const files = ['mission-engine.js', 'mission-engine-states.js', 'mission-blueprints.js', 'mission-observability.js',
-    'mission-chat.js', 'agent-registry.js', 'agent-router.js', 'privacy-gate.js', 'xatai-core.js'];
+    'mission-chat.js', 'agent-registry.js', 'agent-router.js', 'privacy-gate.js', 'xatai-core.js', 'evidence-registry.js'];
   const forbidden = /require\((['"])(?:[^'"]*(?:gmail-draft-provider|gmail-private-provider|calendar-private-provider|actionExecutor|executionLogger|approvalQueue|secret-runtime|executive-reasoning-provider|postgres|firebase)[^'"]*|node:(?:child_process|fs|http|https|net)|child_process|fs|http|https|net|openai|googleapis|pg|@google-cloud\/secret-manager)\1\)/;
   for (const file of files) {
     const source = fs.readFileSync(path.join(__dirname, file), 'utf8');

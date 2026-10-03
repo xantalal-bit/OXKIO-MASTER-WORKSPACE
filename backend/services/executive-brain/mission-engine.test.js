@@ -16,6 +16,7 @@ const {
 const { DEFAULT_CATALOG } = require('../runtime/model-cost-catalog');
 const { QualityIncidentRegistry } = require('../runtime/quality-incident-registry');
 const { MISSION_STATES, TASK_STATES } = require('../mission-queue/mission-contract');
+const { createEvidenceRegistry } = require('./evidence-registry');
 
 // Controlled simulation: these capabilities are NOT_IMPLEMENTED in the
 // canonical registry; tests stand them in as AVAILABLE to exercise the
@@ -41,9 +42,24 @@ const SIM_PRIVACY = Object.freeze({
 const NOW = '2026-10-03T10:00:00.000Z';
 const SCOPE = Object.freeze({ tenantId: 'tenant-1', userId: 'user-1', clientId: 'client-1' });
 
+// Globally unique ids across tests, so evidence recorded in one test can
+// never be in scope for a mission of another test.
+let idCounter = 0;
 function idFactory() {
-  let counter = 0;
-  return (kind = 'id') => { counter += 1; return `${kind}-${counter}`; };
+  return (kind = 'id') => { idCounter += 1; return `${kind}-${idCounter}`; };
+}
+
+// Evidence is recorded only by a trusted tool registrar. The executor doubles
+// below stand for an agent whose tool call produced evidence: the tool (not
+// the agent) records it, then the agent reports the reference.
+const EVIDENCE = createEvidenceRegistry({ trustedRegistrars: ['tool:sim'] });
+const TOOL = EVIDENCE.registrar('tool:sim');
+let evidenceCounter = 0;
+function toolEvidence(contract, supports = contract.passCriteria.map((criterion) => criterion.criterionId)) {
+  evidenceCounter += 1;
+  const ref = `ev:${contract.taskId}:${evidenceCounter}`;
+  TOOL.record({ ref, missionId: contract.missionId, taskId: contract.taskId, supports });
+  return ref;
 }
 
 function simEngine(overrides = {}) {
@@ -55,7 +71,7 @@ function simEngine(overrides = {}) {
     providerAssignment: { providerId: 'sim', region: 'eu' },
     connections: { 'research.company': true, 'research.web': true, 'gmail.draft': true, 'gmail.read': true },
     now: () => NOW,
-    idFactory: idFactory(),
+    idFactory: idFactory(), evidenceRegistry: EVIDENCE,
     ...overrides,
   });
 }
@@ -78,11 +94,7 @@ function missionInput(blueprint, overrides = {}) {
 function passingExecutor(calls, summary = 'ok') {
   return async (contract) => {
     calls.push(contract.taskId);
-    return {
-      summary,
-      evidenceRefs: [`ev:${contract.taskId}`],
-      criteriaMet: contract.passCriteria.map((criterion) => criterion.criterionId),
-    };
+    return { summary, evidenceRefs: [toolEvidence(contract)] };
   };
 }
 
@@ -173,7 +185,7 @@ test('plan: missing information defers planning and asks; information then lets 
 });
 
 test('plan: canonical registry is honest — not implemented agents block, nothing is faked', () => {
-  const engine = createMissionEngine({ now: () => NOW, idFactory: idFactory() });
+  const engine = createMissionEngine({ now: () => NOW, idFactory: idFactory(), evidenceRegistry: EVIDENCE });
   const planned = engine.planMission(engine.createMission(missionInput(BLUEPRINTS.REPOSITORY_REPAIR)));
   assert.equal(planned.engine.state, ENGINE_STATES.BLOCKED);
   assert.ok(planned.tasks.every((task) => task.gate.reason === 'agent_not_implemented' && task.assignedAgent === null));
@@ -243,7 +255,7 @@ test('cost gate: reviewed catalog price is estimated; deterministic work costs t
   assert.equal(research.cost.estimatedCostUsd, 0.0008);
   assert.equal(research.cost.costClass, 'small_model');
   assert.ok(research.cost.budgetRemainingUsd > 0);
-  const deterministic = createMissionEngine({ now: () => NOW, idFactory: idFactory() });
+  const deterministic = createMissionEngine({ now: () => NOW, idFactory: idFactory(), evidenceRegistry: EVIDENCE });
   const internal = deterministic.planMission(twoStepMission(deterministic), { blueprint: TWO_STEP });
   assert.equal(internal.tasks[0].cost.estimateStatus, 'ESTIMATED');
   assert.equal(internal.tasks[0].cost.estimatedCostUsd, 0);
@@ -258,7 +270,7 @@ test('cost gate: a task above the remaining mission budget is blocked', () => {
 });
 
 test('human gate: A2-A5 missions are plannable but never executable (SAFE_DRAFT_ONLY)', async () => {
-  const engine = createMissionEngine({ now: () => NOW, idFactory: idFactory() });
+  const engine = createMissionEngine({ now: () => NOW, idFactory: idFactory(), evidenceRegistry: EVIDENCE });
   const planned = engine.planMission(twoStepMission(engine, { autonomyLevel: 'A3' }), { blueprint: TWO_STEP });
   assert.ok(planned.tasks.every((task) => task.gate.decision === 'SAFE_DRAFT_ONLY'));
   assert.equal(planned.engine.state, ENGINE_STATES.NEEDS_APPROVAL);
@@ -284,7 +296,7 @@ test('human gate: only humans decide; agents can never approve or close', () => 
 // ------------------------------------------------------------ execution + sentinel
 
 test('run: A1 read tasks execute through injected executors and verify independently -> PASS', async () => {
-  const engine = createMissionEngine({ now: () => NOW, idFactory: idFactory() });
+  const engine = createMissionEngine({ now: () => NOW, idFactory: idFactory(), evidenceRegistry: EVIDENCE });
   const planned = engine.planMission(twoStepMission(engine), { blueprint: TWO_STEP });
   assert.equal(planned.engine.state, ENGINE_STATES.READY);
   const calls = [];
@@ -299,14 +311,14 @@ test('run: A1 read tasks execute through injected executors and verify independe
 });
 
 test('run: executor cannot certify itself and cannot mutate its contract', async () => {
-  const engine = createMissionEngine({ now: () => NOW, idFactory: idFactory() });
+  const engine = createMissionEngine({ now: () => NOW, idFactory: idFactory(), evidenceRegistry: EVIDENCE });
   const planned = engine.planMission(twoStepMission(engine), { blueprint: TWO_STEP });
   let mutated = false;
   const ran = await engine.runMission(planned, {
     executors: {
       'memory-agent': async (contract) => {
         try { contract.authorizedCapabilities.push('gmail.send'); } catch (error) { mutated = false; }
-        return { evidenceRefs: ['ev:1'], criteriaMet: ['criterion-1'] };
+        return { evidenceRefs: [toolEvidence(contract)] };
       },
       'workflow-agent': passingExecutor([]),
     },
@@ -317,7 +329,7 @@ test('run: executor cannot certify itself and cannot mutate its contract', async
 });
 
 test('retry: a failed verification replans with a different attempt, keeps the objective, then passes', async () => {
-  const engine = createMissionEngine({ now: () => NOW, idFactory: idFactory() });
+  const engine = createMissionEngine({ now: () => NOW, idFactory: idFactory(), evidenceRegistry: EVIDENCE });
   const planned = engine.planMission(twoStepMission(engine), { blueprint: TWO_STEP });
   const seen = [];
   const ran = await engine.runMission(planned, {
@@ -325,8 +337,8 @@ test('retry: a failed verification replans with a different attempt, keeps the o
       'memory-agent': async (contract) => {
         seen.push(contract.attempt);
         return seen.length === 1
-          ? { evidenceRefs: ['ev:1'], criteriaMet: [] }
-          : { evidenceRefs: ['ev:2'], criteriaMet: ['criterion-1'] };
+          ? { evidenceRefs: ['ev:invented'], criteriaMet: ['criterion-1'] }
+          : { evidenceRefs: [toolEvidence(contract)] };
       },
       'workflow-agent': passingExecutor([]),
     },
@@ -344,7 +356,7 @@ test('retry: a failed verification replans with a different attempt, keeps the o
 
 test('retry: task attempt budget exhausted escalates to a human and reports a repeated failure', async () => {
   const quality = new QualityIncidentRegistry({ now: () => NOW });
-  const engine = createMissionEngine({ now: () => NOW, idFactory: idFactory(), qualityRegistry: quality });
+  const engine = createMissionEngine({ now: () => NOW, idFactory: idFactory(), evidenceRegistry: EVIDENCE, qualityRegistry: quality });
   const planned = engine.planMission(twoStepMission(engine), { blueprint: TWO_STEP });
   let calls = 0;
   const ran = await engine.runMission(planned, {
@@ -358,7 +370,7 @@ test('retry: task attempt budget exhausted escalates to a human and reports a re
 });
 
 test('retry: mission-wide retry budget stops retries across tasks', async () => {
-  const engine = createMissionEngine({ now: () => NOW, idFactory: idFactory(), limits: { missionRetryBudget: 1 } });
+  const engine = createMissionEngine({ now: () => NOW, idFactory: idFactory(), evidenceRegistry: EVIDENCE, limits: { missionRetryBudget: 1 } });
   const planned = engine.planMission(twoStepMission(engine), { blueprint: TWO_STEP });
   let calls = 0;
   const ran = await engine.runMission(planned, {
@@ -374,7 +386,7 @@ test('change agent: falls back to another capable agent and never cycles back (A
     id: 'memory-agent-b', role: 'memory-b',
   });
   const registry = createAgentRegistry({ declarations: [...AGENT_DECLARATIONS, extra] });
-  const engine = createMissionEngine({ now: () => NOW, idFactory: idFactory(), registry });
+  const engine = createMissionEngine({ now: () => NOW, idFactory: idFactory(), evidenceRegistry: EVIDENCE, registry });
   const planned = engine.planMission(twoStepMission(engine), { blueprint: TWO_STEP });
   assert.equal(planned.tasks[0].assignedAgent, 'memory-agent');
   assert.deepEqual(planned.tasks[0].fallbackAgentIds, ['memory-agent-b']);
@@ -394,7 +406,7 @@ test('change agent: falls back to another capable agent and never cycles back (A
 });
 
 test('replanning: never redefines the approved objective and preserves human decisions', () => {
-  const engine = createMissionEngine({ now: () => NOW, idFactory: idFactory() });
+  const engine = createMissionEngine({ now: () => NOW, idFactory: idFactory(), evidenceRegistry: EVIDENCE });
   const planned = engine.planMission(twoStepMission(engine), { blueprint: TWO_STEP });
   const approved = engine.recordHumanDecision(planned, { actorId: 'human:jose', decision: 'APPROVE' });
   const taskId = approved.tasks[0].taskId;
@@ -412,7 +424,7 @@ test('replanning: never redefines the approved objective and preserves human dec
 
 test('mission FAIL: a constraint violation is rejected by the verifier and fails the mission', async () => {
   const quality = new QualityIncidentRegistry({ now: () => NOW });
-  const engine = createMissionEngine({ now: () => NOW, idFactory: idFactory(), qualityRegistry: quality });
+  const engine = createMissionEngine({ now: () => NOW, idFactory: idFactory(), evidenceRegistry: EVIDENCE, qualityRegistry: quality });
   const planned = engine.planMission(twoStepMission(engine), { blueprint: TWO_STEP });
   const ran = await engine.runMission(planned, {
     executors: {
@@ -442,7 +454,7 @@ test('mission PARTIAL_PASS: a human closes a mission with work still pending, an
 });
 
 test('mission NEEDS_REVIEW: no verified evidence is never closed as a pass', () => {
-  const engine = createMissionEngine({ now: () => NOW, idFactory: idFactory() });
+  const engine = createMissionEngine({ now: () => NOW, idFactory: idFactory(), evidenceRegistry: EVIDENCE });
   const ready = engine.planMission(twoStepMission(engine), { blueprint: TWO_STEP });
   assert.equal(errorCode(() => engine.closeMission(ready, { actorId: 'human:jose' })), 'mission_not_closable');
   const planned = engine.planMission(engine.createMission(missionInput(BLUEPRINTS.REPOSITORY_REPAIR)));
@@ -466,7 +478,7 @@ test('projection: a plan becomes a valid PROPOSED Mission Queue record without p
 });
 
 test('trace: compact, identifiers only, rejects free text and unknown fields', async () => {
-  const engine = createMissionEngine({ now: () => NOW, idFactory: idFactory() });
+  const engine = createMissionEngine({ now: () => NOW, idFactory: idFactory(), evidenceRegistry: EVIDENCE });
   const planned = engine.planMission(twoStepMission(engine), { blueprint: TWO_STEP });
   await engine.runMission(planned, {
     executors: { 'memory-agent': passingExecutor([], 'Texto privado del correo: hola'), 'workflow-agent': passingExecutor([]) },
@@ -483,7 +495,7 @@ test('trace: compact, identifiers only, rejects free text and unknown fields', a
 });
 
 test('memory: stores outcome, decisions and repairs, never the objective or outputs', async () => {
-  const engine = createMissionEngine({ now: () => NOW, idFactory: idFactory() });
+  const engine = createMissionEngine({ now: () => NOW, idFactory: idFactory(), evidenceRegistry: EVIDENCE });
   const planned = engine.planMission(twoStepMission(engine, {
     objective: 'Objetivo con dato sensible jose@example.com', explicitPreferences: [{ key: 'language', value: 'es' }, { key: 'bad key', value: 'x' }],
   }), { blueprint: TWO_STEP });
@@ -500,7 +512,7 @@ test('memory: stores outcome, decisions and repairs, never the objective or outp
 
 test('quality: routing impossible is an incident; a normal human gate is not', () => {
   const quality = new QualityIncidentRegistry({ now: () => NOW });
-  const engine = createMissionEngine({ now: () => NOW, idFactory: idFactory(), qualityRegistry: quality });
+  const engine = createMissionEngine({ now: () => NOW, idFactory: idFactory(), evidenceRegistry: EVIDENCE, qualityRegistry: quality });
   engine.planMission(engine.createMission(missionInput(BLUEPRINTS.REPOSITORY_REPAIR)));
   assert.ok(quality.findByCause({ type: 'CAPABILITY_MISMATCH', component: 'mission-engine', errorCode: 'mission.routing_impossible', relatedCapability: 'repository.analyze' }));
 
@@ -512,7 +524,7 @@ test('quality: routing impossible is an incident; a normal human gate is not', (
 });
 
 test('change agent: with no untried capable agent the task escalates instead of looping', async () => {
-  const engine = createMissionEngine({ now: () => NOW, idFactory: idFactory() });
+  const engine = createMissionEngine({ now: () => NOW, idFactory: idFactory(), evidenceRegistry: EVIDENCE });
   const planned = engine.planMission(twoStepMission(engine), { blueprint: TWO_STEP });
   let calls = 0;
   const ran = await engine.runMission(planned, {
@@ -525,7 +537,7 @@ test('change agent: with no untried capable agent the task escalates instead of 
 });
 
 test('timeout policy: a hanging executor is cut off and handled by the sentinel', async () => {
-  const engine = createMissionEngine({ now: () => NOW, idFactory: idFactory(), limits: { taskTimeoutMs: 20, maxTaskAttempts: 1 } });
+  const engine = createMissionEngine({ now: () => NOW, idFactory: idFactory(), evidenceRegistry: EVIDENCE, limits: { taskTimeoutMs: 20, maxTaskAttempts: 1 } });
   const planned = engine.planMission(twoStepMission(engine), { blueprint: TWO_STEP });
   const ran = await engine.runMission(planned, {
     executors: { 'memory-agent': () => new Promise(() => {}) },
@@ -535,12 +547,12 @@ test('timeout policy: a hanging executor is cut off and handled by the sentinel'
 });
 
 test('waiting: an executor waiting on a tool parks the mission in WAITING_TOOL and it resumes later', async () => {
-  const engine = createMissionEngine({ now: () => NOW, idFactory: idFactory() });
+  const engine = createMissionEngine({ now: () => NOW, idFactory: idFactory(), evidenceRegistry: EVIDENCE });
   const planned = engine.planMission(twoStepMission(engine), { blueprint: TWO_STEP });
   let ready = false;
   const executors = {
     'memory-agent': async (contract) => (ready
-      ? { evidenceRefs: ['ev:1'], criteriaMet: contract.passCriteria.map((criterion) => criterion.criterionId) }
+      ? { evidenceRefs: [toolEvidence(contract)] }
       : { waitingFor: 'tool' }),
     'workflow-agent': passingExecutor([]),
   };
@@ -564,7 +576,7 @@ test('human gate: a human rejection cancels the mission and nothing runs afterwa
 });
 
 test('escalation to a human authority keeps decision and status aligned', async () => {
-  const engine = createMissionEngine({ now: () => NOW, idFactory: idFactory() });
+  const engine = createMissionEngine({ now: () => NOW, idFactory: idFactory(), evidenceRegistry: EVIDENCE });
   const planned = engine.planMission(twoStepMission(engine), { blueprint: TWO_STEP });
   const ran = await engine.runMission(planned, {
     executors: { 'memory-agent': async () => { throw Object.assign(new Error('x'), { failureKind: 'connection' }); } },

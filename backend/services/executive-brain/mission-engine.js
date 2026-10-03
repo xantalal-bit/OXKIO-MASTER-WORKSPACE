@@ -5,8 +5,9 @@ const { describeCapability } = require('./capability-registry');
 const { createAgentRegistry, defaultRegistry, HIERARCHY_LEVELS } = require('./agent-registry');
 const { ROUTE_DECISIONS, routeTask } = require('./agent-router');
 const {
-  DEFAULT_PRIVACY_POLICY, PRIVACY_CLASSES, classifyContext, maxPrivacyClass,
+  DEFAULT_PRIVACY_POLICY, PRIVACY_CLASSES, classifyContext, containsSecretMarker, maxPrivacyClass,
 } = require('./privacy-gate');
+const { EMPTY_EVIDENCE_REGISTRY, digestOutput } = require('./evidence-registry');
 const { getBlueprint } = require('./mission-blueprints');
 const {
   ENGINE_STATES, TASK_STATUS, TERMINAL_ENGINE_STATES, canTransition, transition,
@@ -49,6 +50,12 @@ const DEFAULT_LIMITS = Object.freeze({ maxTaskAttempts: 3, missionRetryBudget: 4
 const RISK_RANK = Object.freeze({ low: 0, medium: 1, high: 2 });
 const EVIDENCE_PATTERN = /^[A-Za-z0-9:_.#-]{1,128}$/;
 const HUMAN_ACTOR_PATTERN = /^human:[A-Za-z0-9_.-]{1,64}$/;
+// Verification failures that mean manipulation, not a bad attempt: the task
+// fails at once instead of being retried.
+const MANIPULATION_REASONS = Object.freeze([
+  'constraint_violated', 'material_effect_detected', 'evidence_scope_mismatch', 'evidence_untrusted_source',
+  'output_not_evidenced',
+]);
 
 // Worst decision wins when several gates speak about one task.
 const DECISION_RANK = Object.freeze({
@@ -183,6 +190,7 @@ function createMissionEngine({
   providerAssignment = null,
   connections = {},
   qualityRegistry = null,
+  evidenceRegistry = EMPTY_EVIDENCE_REGISTRY,
   trace = null,
   now = () => new Date().toISOString(),
   idFactory = () => randomUUID(),
@@ -216,6 +224,12 @@ function createMissionEngine({
     status: extra.status || (task ? task.status : draft.engine.state),
   });
   const missionBudget = (draft) => Math.min(draft.limits.maxCostUsd, costPolicy.missionBudgetUsd);
+  // Engine-scoped record of consumed estimates per mission. The budget check
+  // uses the larger of this and the state's own figure, so re-running an
+  // older state snapshot can never reset what was already spent.
+  const consumedByMission = new Map();
+  const committedUsd = (draft) => Math.max(draft.estimatedSpentUsd, consumedByMission.get(draft.missionId) || 0)
+    + (draft.reservedUsd || 0);
 
   // ---- mission
 
@@ -253,7 +267,13 @@ function createMissionEngine({
       humanDecisions: [],
       attempts: {},
       missionRetriesUsed: 0,
+      // Cost accounting: estimates reserved before each attempt and consumed
+      // once it runs (whatever its outcome). No provider reports real usage
+      // in V2, so actual cost stays unknown (null), never zero.
       estimatedSpentUsd: 0,
+      reservedUsd: 0,
+      actualSpentUsd: null,
+      costLedger: [],
       verification: null,
       result: null,
       executionEnabled: false,
@@ -318,7 +338,7 @@ function createMissionEngine({
   }
 
   function evaluateTaskCost(draft, costClass, task) {
-    const budgetRemainingUsd = remainingBudgetUsd(missionBudget(draft), draft.estimatedSpentUsd);
+    const budgetRemainingUsd = remainingBudgetUsd(missionBudget(draft), committedUsd(draft));
     const result = (estimateStatus, estimatedCostUsd, escalationReason) => ({
       costClass, estimateStatus, estimatedCostUsd, budgetRemainingUsd, escalationReason,
     });
@@ -332,21 +352,27 @@ function createMissionEngine({
     const level = selectExecutionLevel({
       deterministicAvailable: false,
       smallModelEstimatedCostUsd: estimate,
-      missionSpentUsd: draft.estimatedSpentUsd,
+      missionSpentUsd: committedUsd(draft),
     }, costPolicy);
     if (!level.level) return result('ESTIMATED', estimate, 'budget_or_value_gate_failed');
     return result('ESTIMATED', estimate, null);
   }
 
   function buildTask(draft, spec, { excludeAgentIds = [], preferAgentId = null, attempt = null, agentPath = [] } = {}) {
-    // The mission privacy class is a floor for every task in it.
+    // The mission privacy class is a floor for every task in it, and so is
+    // the class of every dependency: a task that receives a CONFIDENTIAL
+    // result is CONFIDENTIAL itself (routing then applies that class).
+    const dependencyClasses = spec.dependsOn
+      .map((key) => draft.tasks.find((item) => item.key === key))
+      .filter(Boolean)
+      .map((item) => item.privacyClass);
     const privacy = classifyContext({
-      declaredClass: maxPrivacyClass(spec.privacyClass, draft.privacyClass),
+      declaredClass: [spec.privacyClass, ...dependencyClasses].reduce(maxPrivacyClass, draft.privacyClass),
       capabilities: spec.requiredCapabilities,
       texts: draft.contract.knownContext,
     });
     const taskId = `${draft.missionId}:${spec.key}`;
-    const budgetRemainingUsd = remainingBudgetUsd(missionBudget(draft), draft.estimatedSpentUsd);
+    const budgetRemainingUsd = remainingBudgetUsd(missionBudget(draft), committedUsd(draft));
     const route = routeTask({
       task: { ...spec, privacyClass: privacy.privacyClass, autonomyLevel: draft.contract.autonomyLevel },
       contract: draft.contract,
@@ -470,9 +496,15 @@ function createMissionEngine({
         record(draft, null, 'plan_deferred', { decision: SUPERVISOR_DECISIONS.NEEDS_INFORMATION });
         return;
       }
-      draft.tasks = source.tasks.map((spec) => buildTask(draft, {
-        ...spec, dependsOn: spec.dependsOn || [], missionCriteria: spec.missionCriteria || [],
-      }));
+      // Built dependencies-first so each task can inherit its dependencies'
+      // privacy class; graph errors are still reported by the canonical
+      // validation in topologicalOrder().
+      draft.tasks = [];
+      specsInDependencyOrder(source.tasks).forEach((spec) => {
+        draft.tasks.push(buildTask(draft, {
+          ...spec, dependsOn: spec.dependsOn || [], missionCriteria: spec.missionCriteria || [],
+        }));
+      });
       draft.order = topologicalOrder(draft.tasks, draft.missionId);
       draft.tasks.sort((left, right) => draft.order.indexOf(left.taskId) - draft.order.indexOf(right.taskId));
       draft.tasks.forEach((item, index) => { item.order = index + 1; });
@@ -553,19 +585,63 @@ function createMissionEngine({
     return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
   }
 
+  // Evidence is only what a trusted source recorded in the Evidence Registry
+  // for THIS mission and THIS task. The executor's own statements (summary,
+  // criteriaMet) never prove anything: each pass criterion must be supported
+  // by resolved, in-scope evidence. Unresolvable references are NEEDS_REVIEW;
+  // foreign or untrusted evidence is a manipulation and fails the task.
+  function resolveEvidence(task, refs) {
+    return refs.map((ref) => {
+      const entry = evidenceRegistry.resolve(ref);
+      if (!entry) return { ref, status: 'unresolved' };
+      if (entry.missionId !== task.contract.missionId || entry.taskId !== task.taskId) return { ref, status: 'out_of_scope' };
+      if (agents.isAgentActor(entry.registrarId)) return { ref, status: 'untrusted_source' };
+      return { ref, status: 'valid', entry };
+    });
+  }
+
   function verifyTask(task, output) {
     const criteria = task.contract.passCriteria.map((criterion) => criterion.criterionId);
+    const claimed = textList(output.evidenceRefs);
+    const refs = claimed.filter((ref) => typeof ref === 'string' && EVIDENCE_PATTERN.test(ref));
+    const resolved = resolveEvidence(task, refs);
+    const supported = new Set(resolved.filter((item) => item.status === 'valid').flatMap((item) => item.entry.supports));
     const request = createVerificationRequest({
       claimedResult: output,
-      evidence: textList(output.evidenceRefs),
+      evidence: refs,
       constraints: task.contract.prohibitedActions,
       checks: [
-        { id: 'evidence_valid', run: (req) => (req.evidence.every((ref) => typeof ref === 'string' && EVIDENCE_PATTERN.test(ref))
+        { id: 'evidence_format', run: () => (refs.length === claimed.length
           ? { verdict: VERIFICATION_VERDICTS.PASS }
           : { verdict: VERIFICATION_VERDICTS.NEEDS_REVIEW, reasons: ['evidence_format'] }) },
-        { id: 'pass_criteria_met', run: () => (criteria.every((id) => textList(output.criteriaMet).includes(id))
+        { id: 'evidence_resolves', run: () => (resolved.every((item) => item.status !== 'unresolved')
           ? { verdict: VERIFICATION_VERDICTS.PASS }
-          : { verdict: VERIFICATION_VERDICTS.FAIL, reasons: ['pass_criteria_not_demonstrated'] }) },
+          : { verdict: VERIFICATION_VERDICTS.NEEDS_REVIEW, reasons: ['evidence_unresolved'] }) },
+        { id: 'evidence_in_scope', run: () => (resolved.some((item) => item.status === 'out_of_scope')
+          ? { verdict: VERIFICATION_VERDICTS.FAIL, reasons: ['evidence_scope_mismatch'] }
+          : { verdict: VERIFICATION_VERDICTS.PASS }) },
+        { id: 'evidence_trusted', run: () => (resolved.some((item) => item.status === 'untrusted_source')
+          ? { verdict: VERIFICATION_VERDICTS.FAIL, reasons: ['evidence_untrusted_source'] }
+          : { verdict: VERIFICATION_VERDICTS.PASS }) },
+        // Unresolvable evidence proves nothing either way (NEEDS_REVIEW);
+        // resolved evidence that does not cover a criterion is a FAIL.
+        { id: 'pass_criteria_evidenced', run: () => {
+          if (criteria.every((id) => supported.has(id))) return { verdict: VERIFICATION_VERDICTS.PASS };
+          const undetermined = refs.length === 0 || resolved.some((item) => item.status === 'unresolved');
+          return {
+            verdict: undetermined ? VERIFICATION_VERDICTS.NEEDS_REVIEW : VERIFICATION_VERDICTS.FAIL,
+            reasons: ['pass_criteria_not_evidenced'],
+          };
+        } },
+        // When a tool bound its evidence to the exact output it produced,
+        // the result reported by the executor must be that output.
+        { id: 'output_bound', run: () => {
+          const digests = resolved.filter((item) => item.status === 'valid' && item.entry.outputDigest)
+            .map((item) => item.entry.outputDigest);
+          return digests.length === 0 || digests.includes(digestOutput(output.summary))
+            ? { verdict: VERIFICATION_VERDICTS.PASS }
+            : { verdict: VERIFICATION_VERDICTS.FAIL, reasons: ['output_not_evidenced'] };
+        } },
         { id: 'constraints_respected', run: () => (textList(output.constraintViolations).length === 0
           ? { verdict: VERIFICATION_VERDICTS.PASS }
           : { verdict: VERIFICATION_VERDICTS.FAIL, reasons: ['constraint_violated'] }) },
@@ -577,32 +653,115 @@ function createMissionEngine({
     return runVerification(request, { verifierId: MISSION_VERIFIER_ID, executorId: task.assignedAgent });
   }
 
+  // Cost Gate at execution time: every attempt is priced against what is
+  // already consumed or reserved, and is refused (fail closed) when its
+  // reservation would exceed the mission budget or its price is unknown.
+  function reserveAttempt(draft, task) {
+    const agent = agents.getAgent(task.assignedAgent);
+    const cost = evaluateTaskCost(draft, agent ? agent.costClass : COST_LEVELS.DETERMINISTIC, {
+      ...BLUEPRINT_SPEC(task), taskId: task.taskId,
+    });
+    task.cost = cost;
+    if (cost.estimateStatus !== 'ESTIMATED' || cost.escalationReason) {
+      const blocked = ['budget_exceeded', 'budget_or_value_gate_failed'].includes(cost.escalationReason);
+      task.status = blocked ? TASK_STATUS.BLOCKED : TASK_STATUS.NEEDS_APPROVAL;
+      task.gate = {
+        decision: blocked ? SUPERVISOR_DECISIONS.BLOCKED : SUPERVISOR_DECISIONS.NEEDS_APPROVAL,
+        reason: cost.escalationReason || 'unknown_cost',
+      };
+      record(draft, task, 'attempt_refused_by_cost');
+      return null;
+    }
+    const entry = {
+      taskId: task.taskId,
+      attempt: (draft.attempts[task.taskId] || []).length + 1,
+      estimatedUsd: cost.estimatedCostUsd,
+      actualUsd: null,
+      status: 'RESERVED',
+    };
+    draft.costLedger.push(entry);
+    draft.reservedUsd = cost.estimatedCostUsd;
+    return entry;
+  }
+
+  // Called once per attempt that actually ran, whatever its outcome, so a
+  // failed or timed-out attempt still counts and nothing is counted twice.
+  function consumeAttempt(draft, entry) {
+    entry.status = 'CONSUMED';
+    draft.reservedUsd = 0;
+    draft.estimatedSpentUsd = Number((Math.max(draft.estimatedSpentUsd, consumedByMission.get(draft.missionId) || 0)
+      + entry.estimatedUsd).toFixed(8));
+    consumedByMission.set(draft.missionId, draft.estimatedSpentUsd);
+  }
+
+  // Execution Context: the least an executor needs, as an immutable copy.
+  // Only completed, declared dependencies contribute their verified output
+  // and evidence; a dependency more sensitive than this task, or an output
+  // that looks like a credential, is withheld. Known context that looks like
+  // a credential is dropped. Human decisions carry no identities.
+  function buildExecutionContext(draft, task, entry) {
+    const dependencies = task.dependencies.map((id) => draft.tasks.find((item) => item.taskId === id))
+      .filter((dependency) => dependency && dependency.status === TASK_STATUS.COMPLETED)
+      .map((dependency) => {
+        let withheld = null;
+        if (maxPrivacyClass(dependency.privacyClass, task.privacyClass) !== task.privacyClass) withheld = 'privacy_class';
+        else if (containsSecretMarker(dependency.output || '')) withheld = 'secret_marker';
+        return withheld
+          ? { taskId: dependency.taskId, withheld, evidenceRefs: [...dependency.evidenceRefs] }
+          : { taskId: dependency.taskId, output: dependency.output, evidenceRefs: [...dependency.evidenceRefs] };
+      });
+    return freezeDomain(cloneDomain({
+      missionId: draft.missionId,
+      taskId: task.taskId,
+      privacyClass: task.privacyClass,
+      knownContext: draft.contract.knownContext.filter((text) => !containsSecretMarker(text)),
+      constraints: draft.contract.constraints,
+      prohibitedActions: task.contract.prohibitedActions,
+      dependencies,
+      humanDecisions: draft.humanDecisions
+        .filter((decision) => !decision.taskId || decision.taskId === task.taskId)
+        .map((decision) => ({ decision: decision.decision, taskId: decision.taskId })),
+      budget: {
+        reservedUsd: entry.estimatedUsd,
+        remainingUsd: remainingBudgetUsd(missionBudget(draft), committedUsd(draft)),
+      },
+    }));
+  }
+
   async function executeTask(draft, task, executors) {
-    task.status = TASK_STATUS.RUNNING;
-    record(draft, task, 'task_started');
     const executor = executors[task.assignedAgent];
     let output = null;
     let failureKind = null;
     if (typeof executor !== 'function') {
+      task.status = TASK_STATUS.RUNNING;
+      record(draft, task, 'task_started');
       failureKind = 'agent_error';
       quality.report('agent_unavailable', { relatedCapability: task.requiredCapabilities[0] });
     } else {
+      const entry = reserveAttempt(draft, task);
+      if (!entry) return;
+      task.status = TASK_STATUS.RUNNING;
+      record(draft, task, 'task_started');
+      // The executor gets frozen copies: it can read its contract and its
+      // context, never widen either.
+      const contract = freezeDomain(cloneDomain(task.contract));
+      const context = buildExecutionContext(draft, task, entry);
       try {
-        // The executor gets a frozen copy: it can read its contract, never
-        // widen it.
-        const contract = freezeDomain(cloneDomain(task.contract));
-        output = await withTimeout(Promise.resolve().then(() => executor(contract)), task.contract.timeoutPolicy.timeoutMs);
-        if (!output || typeof output !== 'object') {
-          failureKind = 'invalid_output';
-          output = null;
-        } else if (output.waitingFor === 'agent' || output.waitingFor === 'tool') {
-          task.status = TASK_STATUS.PLANNED;
-          move(draft, output.waitingFor === 'agent' ? ENGINE_STATES.WAITING_AGENT : ENGINE_STATES.WAITING_TOOL, 'waiting');
-          record(draft, task, 'task_waiting');
-          return;
-        }
+        const raw = await withTimeout(Promise.resolve().then(() => executor(contract, context)), task.contract.timeoutPolicy.timeoutMs);
+        // Snapshot the result once as plain data, so nothing the executor
+        // keeps a reference to can change it after verification.
+        output = raw && typeof raw === 'object' ? cloneDomain(raw) : null;
+        if (!output) failureKind = 'invalid_output';
       } catch (error) {
         failureKind = (error && error.failureKind) || 'tool_error';
+      } finally {
+        consumeAttempt(draft, entry);
+      }
+      if (output && (output.waitingFor === 'agent' || output.waitingFor === 'tool')) {
+        task.status = TASK_STATUS.PLANNED;
+        move(draft, output.waitingFor === 'agent' ? ENGINE_STATES.WAITING_AGENT : ENGINE_STATES.WAITING_TOOL, 'waiting');
+        record(draft, task, 'task_waiting');
+        return;
       }
     }
 
@@ -615,13 +774,12 @@ function createMissionEngine({
         task.status = TASK_STATUS.COMPLETED;
         task.evidenceRefs = [...output.evidenceRefs];
         task.output = typeof output.summary === 'string' ? output.summary.slice(0, 2000) : null;
-        draft.estimatedSpentUsd += task.cost.estimatedCostUsd || 0;
         record(draft, task, 'task_verified', {
           evidenceRef: task.evidenceRefs[0], verification: verification.verdict,
         });
         return;
       }
-      if (verification.reasons.includes('constraint_violated') || verification.reasons.includes('material_effect_detected')) {
+      if (MANIPULATION_REASONS.some((reason) => verification.reasons.includes(reason))) {
         task.status = TASK_STATUS.FAILED;
         record(draft, task, 'task_rejected', { verification: verification.verdict });
         quality.report('verifier_failure', { relatedCapability: task.requiredCapabilities[0] });
@@ -677,16 +835,30 @@ function createMissionEngine({
     record(draft, task, 'task_escalated', { decision: CONVERGENCE_ACTIONS.ESCALATE_HUMAN });
   }
 
+  // The mission verdict re-resolves every completed task's evidence instead
+  // of trusting a COMPLETED status carried in the state it was handed: a
+  // task whose evidence no longer proves all its criteria is NEEDS_REVIEW.
+  function evidencedTask(item) {
+    const resolved = resolveEvidence(item, item.evidenceRefs).filter((entry) => entry.status === 'valid');
+    const supported = new Set(resolved.flatMap((entry) => entry.entry.supports));
+    return resolved.length > 0 && item.contract.passCriteria.every((criterion) => supported.has(criterion.criterionId));
+  }
+
   function missionVerdict(draft) {
     const active = draft.tasks;
     const criteria = draft.contract.passCriteria.map((criterion) => criterion.criterionId);
-    const passed = active.filter((item) => item.verification && item.verification.verdict === VERIFICATION_VERDICTS.PASS);
+    const verdictOf = (item) => {
+      if (item.status === TASK_STATUS.FAILED) return VERIFICATION_VERDICTS.FAIL;
+      if (item.status !== TASK_STATUS.COMPLETED) return null;
+      return evidencedTask(item) ? VERIFICATION_VERDICTS.PASS : VERIFICATION_VERDICTS.NEEDS_REVIEW;
+    };
+    const verdicts = new Map(active.map((item) => [item.taskId, verdictOf(item)]));
+    const passed = active.filter((item) => verdicts.get(item.taskId) === VERIFICATION_VERDICTS.PASS);
     return verifyMission({
       tasks: active.map((item) => ({
         taskId: item.taskId,
         executorId: item.assignedAgent,
-        verdict: item.status === TASK_STATUS.FAILED ? VERIFICATION_VERDICTS.FAIL
-          : (item.status === TASK_STATUS.COMPLETED ? VERIFICATION_VERDICTS.PASS : null),
+        verdict: verdicts.get(item.taskId),
         evidenceRefs: item.evidenceRefs,
       })),
       verifierId: MISSION_VERIFIER_ID,
@@ -854,6 +1026,25 @@ function createMissionEngine({
     closeMission,
     toMissionQueueDraft,
   });
+}
+
+// Stable dependencies-first order of blueprint specs. Specs that cannot be
+// placed (unknown dependency, cycle) keep their original order at the end so
+// the canonical task-graph validation reports the exact error.
+function specsInDependencyOrder(specs) {
+  const ordered = [];
+  const placed = new Set();
+  let progress = true;
+  while (progress) {
+    progress = false;
+    for (const spec of specs) {
+      if (placed.has(spec.key) || !(spec.dependsOn || []).every((key) => placed.has(key))) continue;
+      placed.add(spec.key);
+      ordered.push(spec);
+      progress = true;
+    }
+  }
+  return [...ordered, ...specs.filter((spec) => !placed.has(spec.key))];
 }
 
 // The spec a task was built from, recovered from the task itself so a
