@@ -107,7 +107,9 @@ async function opportunityAgent({ dependencies, profile }) {
   const candidates = facts.filter((fact) => !contradicted.has(fact.id) && !fact.suspicious);
   const opportunities = [];
   for (const service of profile.services) {
-    const explicit = candidates.filter((fact) => containsAnySignal(fact.excerpt, service.explicitNeedSignals));
+    // An explicit need counts as OBSERVED only when the company states it in
+    // public; internal notes can still support an internal inference.
+    const explicit = candidates.filter((fact) => fact.provenance === 'PUBLIC_WEB' && containsAnySignal(fact.excerpt, service.explicitNeedSignals));
     const inferred = candidates.filter((fact) => containsAnySignal(fact.excerpt, service.inferenceSignals));
     const basis = explicit.length > 0 ? explicit : inferred;
     if (basis.length === 0) continue;
@@ -145,12 +147,12 @@ async function proposalAgent({ dependencies }) {
 async function communicationAgent({ dependencies, target }) {
   const proposal = dependency(dependencies, 'proposal');
   const data = proposal ? proposal.data : { situation: [], opportunities: [], facts: [] };
-  const publicIds = new Set((data.facts || []).filter((fact) => !['memory', 'correspondence'].includes(fact.label)).map((fact) => fact.id));
+  const publicIds = new Set((data.facts || []).filter((fact) => fact.provenance === 'PUBLIC_WEB').map((fact) => fact.id));
   return {
     stage: 'communication',
     greeting: target.contactName ? 'contact' : 'team',
     situationFactIds: data.situation.map((item) => item.factId).filter((id) => publicIds.has(id)).slice(0, 1),
-    selectedOpportunityIds: data.opportunities.map((item) => item.opportunityId).slice(0, 1),
+    selectedOpportunityIds: data.opportunities.filter((item) => item.provenance === 'PUBLIC_WEB').map((item) => item.opportunityId).slice(0, 1),
   };
 }
 

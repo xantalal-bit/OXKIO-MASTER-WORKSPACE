@@ -52,7 +52,15 @@ const FACT_LABELS = Object.freeze({
     category, source: WEB, schemaKey: key, render: (e) => `${prefix}: ${schemaValue(e, key)}`,
   }])),
 });
-const PUBLIC_FACT_SOURCE = WEB;
+// Provenance is a canonical, immutable property of every FACT, assigned
+// here from the kind of source the trusted toolbox recorded (never from
+// anything an agent says). Only PUBLIC_WEB facts may ever be attributed to
+// the company in an external message; internal facts can inform reasoning
+// and internal briefings but are never presented as public evidence.
+const PROVENANCE = Object.freeze({ PUBLIC_WEB: 'PUBLIC_WEB', INTERNAL_MEMORY: 'INTERNAL_MEMORY', GMAIL: 'GMAIL' });
+const PROVENANCE_BY_SOURCE = Object.freeze({
+  [WEB]: PROVENANCE.PUBLIC_WEB, memory: PROVENANCE.INTERNAL_MEMORY, gmail_metadata: PROVENANCE.GMAIL,
+});
 
 // The one way a FACT comes to exist: an id, a closed label, a literal
 // excerpt and the recorded source it was quoted from. Everything else
@@ -72,14 +80,21 @@ function canonicalFact(input, source) {
       excerpt: input.excerpt,
       sourceRef: input.sourceRef,
       sourceUrl: source.url,
+      provenance: PROVENANCE_BY_SOURCE[source.kind],
       suspicious: isSuspicious(input.excerpt),
     }),
   };
 }
 
+// Both the canonical provenance and the label's source must say public web.
 function isPublicFact(fact) {
   const spec = FACT_LABELS[fact.label];
-  return Boolean(spec && spec.source === PUBLIC_FACT_SOURCE);
+  return Boolean(spec && spec.source === WEB && fact.provenance === PROVENANCE.PUBLIC_WEB);
+}
+
+function expectedProvenance(label) {
+  const spec = FACT_LABELS[label];
+  return spec ? PROVENANCE_BY_SOURCE[spec.source] : null;
 }
 
 // ------------------------------------------------------------ uncertainties
@@ -150,6 +165,11 @@ function canonicalOpportunity(input, { service, factsById, contradicted }) {
   if (basis.length === 0 || basis.some((fact) => !fact)) return { error: 'opportunity_basis' };
   if (basis.some((fact) => fact.suspicious)) return { error: 'opportunity_basis' };
   if (basis.some((fact) => contradicted.has(fact.id))) return { error: 'contradicted_basis' };
+  // OBSERVED means "stated by the company in public": every basis fact
+  // must be PUBLIC_WEB. An explicit need found in memory or Gmail is not a
+  // public observation.
+  const allPublic = basis.every(isPublicFact);
+  if (input.level === 'OBSERVED' && !allPublic) return { error: 'observed_requires_public_web' };
   const signals = input.level === 'OBSERVED' ? service.explicitNeedSignals : service.inferenceSignals;
   if (!basis.every((fact) => containsAnySignal(fact.excerpt, signals))) {
     return { error: input.level === 'OBSERVED' ? 'inference_as_fact' : 'unsupported_inference' };
@@ -159,6 +179,9 @@ function canonicalOpportunity(input, { service, factsById, contradicted }) {
       id: input.id,
       serviceId: service.id,
       level: input.level,
+      // PUBLIC_WEB only when every basis fact is public; such an opportunity
+      // may reach an external message. INTERNAL ones stay internal.
+      provenance: allPublic ? PROVENANCE.PUBLIC_WEB : 'INTERNAL',
       need: input.level === 'OBSERVED'
         ? `La empresa lo indica en su web: "${basis[0].excerpt}"`
         : `Posible interés en ${service.needLabel} (inferido de la web, no confirmado por la empresa).`,
@@ -175,7 +198,7 @@ function canonicalOpportunity(input, { service, factsById, contradicted }) {
 // Exact-copy check used wherever an opportunity is carried downstream: every
 // traced field MUST be present AND equal (arrays: same items, same order,
 // no duplicates). Absence is a failure, not a pass.
-const TRACED_FIELDS = Object.freeze(['serviceId', 'level', 'need', 'basisFactIds', 'evidenceRefs', 'solution', 'expectedBenefit']);
+const TRACED_FIELDS = Object.freeze(['serviceId', 'level', 'provenance', 'need', 'basisFactIds', 'evidenceRefs', 'solution', 'expectedBenefit']);
 
 function exactCopyError(item, origin) {
   if (!origin) return 'invented_opportunity';
@@ -199,6 +222,7 @@ function proposalOpportunityCopy(opportunity) {
     opportunityId: opportunity.id,
     serviceId: opportunity.serviceId,
     level: opportunity.level,
+    provenance: opportunity.provenance,
     label: opportunity.level,
     need: opportunity.need,
     text: opportunity.need,
@@ -211,7 +235,8 @@ function proposalOpportunityCopy(opportunity) {
 
 function composeProposal({ selected, situationFacts, facts, profile, upstreamUncertainties, company }) {
   const services = selected.map((item) => profile.services.find((service) => service.id === item.serviceId));
-  const contact = selected.length > 0;
+  // Contact can only rest on an opportunity backed by public evidence.
+  const contact = selected.some((item) => item.provenance === PROVENANCE.PUBLIC_WEB);
   return {
     stage: 'proposal',
     facts,
@@ -234,8 +259,12 @@ function composeProposal({ selected, situationFacts, facts, profile, upstreamUnc
 // (given by a human), a literal PUBLIC excerpt (never memory or Gmail), a
 // selected opportunity's service name and value statement, and the
 // profile's call to action and signature.
-function composeCommunication({ proposal, situationFacts, selected, greeting, target, profile }) {
+function composeCommunication({ proposal, situationFacts: requestedFacts, selected: requested, greeting, target, profile }) {
   const hello = greeting === 'contact' && target.contactName ? `Hola, ${target.contactName}:` : `Hola, equipo de ${target.company}:`;
+  // Defence in depth: whatever was requested, only PUBLIC_WEB opportunities
+  // and facts can be put in front of the company.
+  const selected = requested.filter((item) => item.provenance === PROVENANCE.PUBLIC_WEB);
+  const situationFacts = requestedFacts.filter(isPublicFact);
   if (proposal.recommendation !== 'REVIEW_AND_CONTACT' || selected.length === 0) {
     return {
       stage: 'communication',
@@ -396,6 +425,8 @@ function detectContradictions(usable) {
 const CANONICAL_UNITS = Object.freeze([...new Set(Object.values(UNIT_CANON))]);
 
 module.exports = {
+  PROVENANCE,
+  expectedProvenance,
   CANONICAL_UNITS,
   isFailureParam,
   UNIT_CANON,

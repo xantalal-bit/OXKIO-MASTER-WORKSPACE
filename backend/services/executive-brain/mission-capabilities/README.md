@@ -72,6 +72,15 @@ Reglas que aplica la capa de confianza:
 - **Integridad en la revisión.** El paquete de revisión rechaza cualquier hecho cuyo enunciado no coincida con su etiqueta y su cita, o que no sea idéntico en todas las etapas. También rechaza cualquier copia de oportunidad a la que le falte un campo trazado o lo tenga alterado.
 - **Señales del perfil.** El campo `signals` del perfil se acepta como nombre antiguo de `inferenceSignals`.
 
+## Procedencia y aislamiento
+
+- **Procedencia canónica.** Cada hecho tiene una procedencia que no se puede cambiar: `PUBLIC_WEB`, `INTERNAL_MEMORY` o `GMAIL`. La asigna la capa de confianza según el tipo de fuente que registró el toolbox; el agente nunca la decide. Cada etapa de investigación emite IDs con su propio prefijo (`cr`, `wr`, `mem`, `gm`).
+- **Solo `PUBLIC_WEB` se atribuye a la empresa.**
+  - Una oportunidad OBSERVED exige que todos sus hechos base sean `PUBLIC_WEB`.
+  - Una oportunidad con base interna queda como INTERNAL: sirve para razonar y para el briefing interno, pero no puede justificar un contacto ni aparecer en un mensaje.
+  - Los mensajes solo citan hechos `PUBLIC_WEB`.
+- **Aislamiento.** El agente recibe una copia aislada (`structuredClone`, congelada en profundidad solo como defensa añadida). El toolbox valida contra su propio estado: las dependencias parseadas desde los strings de salida, que están ligados por digest, y un registro de cada hecho y oportunidad canónicos que ha emitido. Lo que no coincide byte a byte con algo emitido se rechaza.
+
 ## Contradicciones: unidades y ámbito
 
 Solo se comparan cifras de la misma unidad canónica, y solo cuando la equivalencia es fuerte:

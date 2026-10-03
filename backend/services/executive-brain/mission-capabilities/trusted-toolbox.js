@@ -5,7 +5,7 @@ const { containsSecretMarker } = require('../privacy-gate');
 const { AGENTS } = require('./company-opportunity-agents');
 const { sameSite } = require('./public-web-fetcher');
 const {
-  CANONICAL_UNITS, canonicalFact, canonicalOpportunity, composeCommunication, composeProposal, detectContradictions,
+  CANONICAL_UNITS, PROVENANCE, canonicalFact, canonicalOpportunity, composeCommunication, composeProposal, detectContradictions,
   exactCopyError, isPublicFact, renderUncertainty, selectAnalysisFacts, sourceUnavailable,
 } = require('./semantic-canon');
 
@@ -55,6 +55,23 @@ const FACT_KEYS = ['id', 'label', 'excerpt', 'sourceRef'];
 const OPPORTUNITY_KEYS = ['id', 'serviceId', 'level', 'basisFactIds'];
 const CONTRADICTION_KEYS = ['unit', 'factIds'];
 const ID_PATTERN = /^[a-z]{1,8}\d{0,3}:\d{1,4}$/;
+// Each origin stage mints ids in its own namespace, so a memory or Gmail
+// fact can never take the id of a public web fact (or the reverse).
+const ORIGIN_ID_PATTERN = Object.freeze({
+  'company-research': /^cr:\d{1,4}$/,
+  'web-research': /^wr\d{1,3}:\d{1,4}$/,
+  'context-recall': /^mem:\d{1,4}$/,
+  'prior-correspondence': /^gm:\d{1,4}$/,
+});
+
+// Defence in depth only: the guarantee is that agents get a separate copy.
+function deepFreeze(value) {
+  if (value && typeof value === 'object' && !Object.isFrozen(value)) {
+    Object.freeze(value);
+    Object.values(value).forEach(deepFreeze);
+  }
+  return value;
+}
 const MAX_TOOL_CALLS_PER_ATTEMPT = 6;
 const MAX_SOURCE_CHARS = 1024 * 1024;
 
@@ -141,6 +158,12 @@ function createTrustedToolbox({
   if (!['live', 'fixture'].includes(sourceOrigin)) throw new TypeError('sourceOrigin must be live or fixture');
   const registrar = evidenceRegistry.registrar(TRUSTED_REGISTRAR);
   const sources = new Map();
+  // Trusted ledger of every canonical fact and opportunity this toolbox
+  // issued, per mission. Anything that arrives through a dependency must be
+  // byte-for-byte one of these, whatever happened to any copy elsewhere.
+  const issued = new Set();
+  const issue = (missionId, kind, value) => issued.add(`${missionId}|${kind}|${JSON.stringify(value)}`);
+  const wasIssued = (missionId, kind, value) => issued.has(`${missionId}|${kind}|${JSON.stringify(value)}`);
   let sequence = 0;
 
   function recordSource(contract, kind, url, text, fetchedAt) {
@@ -224,12 +247,12 @@ function createTrustedToolbox({
 
   // Origin stages: the only place a FACT is born. Each candidate must quote
   // a source recorded in this mission; the canon writes the statement.
-  function originFacts(payload, contract, inherited) {
+  function originFacts(stage, payload, contract, inherited) {
     if (!Array.isArray(payload.facts)) throw invalid('facts');
     const ids = new Set();
     return payload.facts.map((candidate) => {
       closed(candidate, FACT_KEYS, 'fact_shape');
-      if (typeof candidate.id !== 'string' || !ID_PATTERN.test(candidate.id) || ids.has(candidate.id) || inherited.has(candidate.id)) {
+      if (typeof candidate.id !== 'string' || !ORIGIN_ID_PATTERN[stage].test(candidate.id) || ids.has(candidate.id) || inherited.has(candidate.id)) {
         throw invalid('fact_id');
       }
       ids.add(candidate.id);
@@ -240,14 +263,22 @@ function createTrustedToolbox({
       if (containsSecretMarker(candidate.excerpt)) throw invalid('fact_secret');
       const { fact, error } = canonicalFact(candidate, source);
       if (error) throw invalid(error);
+      issue(contract.missionId, 'fact', fact);
       return fact;
     });
   }
 
-  function inheritedFacts(dependencies) {
+  // Facts arriving through dependencies are checked against the trusted
+  // ledger: same id must mean the same canonical fact (incl. provenance).
+  function inheritedFacts(dependencies, missionId) {
     const map = new Map();
     for (const dependency of dependencies) {
-      for (const fact of (dependency.data && Array.isArray(dependency.data.facts) ? dependency.data.facts : [])) map.set(fact.id, fact);
+      for (const fact of (dependency.data && Array.isArray(dependency.data.facts) ? dependency.data.facts : [])) {
+        if (!wasIssued(missionId, 'fact', fact)) throw invalid('unissued_fact');
+        const previous = map.get(fact.id);
+        if (previous && JSON.stringify(previous) !== JSON.stringify(fact)) throw invalid('duplicate_fact_id');
+        map.set(fact.id, fact);
+      }
     }
     return map;
   }
@@ -269,10 +300,16 @@ function createTrustedToolbox({
   function canonicalOutput(stage, payload, { contract, dependencies, target }) {
     if (!isPlainObject(payload) || payload.stage !== stage) throw invalid('stage');
     closed(payload, PAYLOAD_KEYS[stage], 'unknown_field');
-    const inherited = inheritedFacts(dependencies);
+    const inherited = inheritedFacts(dependencies, contract.missionId);
+    for (const dependency of dependencies) {
+      for (const item of (dependency.data && Array.isArray(dependency.data.opportunities) && dependency.data.stage === 'opportunities'
+        ? dependency.data.opportunities : [])) {
+        if (!wasIssued(contract.missionId, 'opportunity', item)) throw invalid('unissued_opportunity');
+      }
+    }
 
     if (ORIGIN_STAGES.has(stage)) {
-      const facts = originFacts(payload, contract, inherited);
+      const facts = originFacts(stage, payload, contract, inherited);
       const output = { stage, facts, uncertainties: renderCodes(payload.uncertaintyCodes) };
       if (stage === 'company-research') {
         if (!Array.isArray(payload.links)) throw invalid('links');
@@ -346,6 +383,7 @@ function createTrustedToolbox({
         const service = sellerProfile.services.find((candidate) => candidate.id === input.serviceId);
         const { opportunity, error } = canonicalOpportunity(input, { service, factsById, contradicted });
         if (error) throw invalid(error);
+        issue(contract.missionId, 'opportunity', opportunity);
         return opportunity;
       });
       return {
@@ -385,6 +423,9 @@ function createTrustedToolbox({
       } catch (error) {
         throw invalid('unselected_opportunity');
       }
+      // Only opportunities resting entirely on public web evidence may be
+      // put in front of the company.
+      if (selected.some((item) => item.provenance !== PROVENANCE.PUBLIC_WEB)) throw invalid('internal_opportunity');
       // Messages may only quote facts of the proposal situation that come
       // from the public website (never memory or Gmail).
       const situationIds = new Set(proposal.situation.map((item) => item.factId));
@@ -400,11 +441,16 @@ function createTrustedToolbox({
     const agent = agentOverrides[stage] || AGENTS[stage];
     return async (contract, context) => {
       const target = parseTarget(context.knownContext);
-      const dependencies = parseDependencies(context.dependencies);
-      const payload = await agent(Object.freeze({
-        target, attempt: contract.attempt, dependencies, profile: sellerProfile, tools: toolsFor(contract, context, target),
+      // Trusted state: parsed by the toolbox from the immutable, digest-bound
+      // dependency output strings, and never handed to the agent.
+      const trustedDependencies = parseDependencies(context.dependencies);
+      // The agent gets an isolated deep copy (frozen as an extra defence):
+      // whatever it does to it can never reach the trusted state.
+      const agentInput = deepFreeze(structuredClone({
+        target, attempt: contract.attempt, dependencies: trustedDependencies, profile: sellerProfile,
       }));
-      const output = canonicalOutput(stage, payload, { contract, dependencies, target });
+      const payload = await agent(Object.freeze({ ...agentInput, tools: toolsFor(contract, context, target) }));
+      const output = canonicalOutput(stage, payload, { contract, dependencies: trustedDependencies, target });
       const summary = JSON.stringify(output);
       const satisfied = SATISFIED[stage] ? SATISFIED[stage](output) : true;
       sequence += 1;

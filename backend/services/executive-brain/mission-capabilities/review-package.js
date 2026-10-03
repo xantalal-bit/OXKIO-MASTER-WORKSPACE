@@ -1,6 +1,6 @@
 'use strict';
 
-const { FACT_LABELS, exactCopyError } = require('./semantic-canon');
+const { FACT_LABELS, exactCopyError, expectedProvenance } = require('./semantic-canon');
 
 // XATAI CORE V2.1: the result a human reviews ("LISTO PARA REVISIÓN"). Built
 // only from tasks the engine verified (COMPLETED, output bound by digest),
@@ -41,7 +41,8 @@ function buildCommercialReview(state, { describeSource = () => null } = {}) {
   for (const data of [research, analysis, opportunities, proposal, communication]) {
     for (const fact of (data && Array.isArray(data.facts) ? data.facts : [])) {
       const spec = FACT_LABELS[fact.label];
-      if (!spec || fact.kind !== 'FACT' || spec.category !== fact.category || spec.render(fact.excerpt) !== fact.statement) {
+      if (!spec || fact.kind !== 'FACT' || spec.category !== fact.category || spec.render(fact.excerpt) !== fact.statement
+        || fact.provenance !== expectedProvenance(fact.label)) {
         integrityErrors.push('altered_fact');
         continue;
       }
@@ -76,7 +77,7 @@ function buildCommercialReview(state, { describeSource = () => null } = {}) {
     questionForHuman,
     company: research ? research.company : null,
     summary: communication ? communication.executiveSummary : null,
-    dossier: facts.map((fact) => ({ label: 'FACT', statement: fact.statement, excerpt: fact.excerpt, source: fact.sourceUrl })),
+    dossier: facts.map((fact) => ({ label: 'FACT', statement: fact.statement, excerpt: fact.excerpt, source: fact.sourceUrl, provenance: fact.provenance })),
     flaggedContent: analysis ? analysis.flaggedFactIds : [],
     contradictions: analysis ? analysis.contradictions : [],
     opportunities: {
