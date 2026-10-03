@@ -242,8 +242,65 @@ const GOVERNANCE_PROFILE = Object.freeze({
   'mission.close': { costClass: COST_LEVELS.DETERMINISTIC, requiresExternalConnection: true },
 });
 
+// XATAI CORE V2 (03/10/2026): capabilities the Mission Engine and the agent
+// hierarchy reason about but that are never offered to the user. They are
+// kept out of CAPABILITIES on purpose, so listCapabilities()/listAvailable()
+// and every chat answer built on them stay exactly as before; only
+// describeCapability() resolves them. The same available/partial/source rule
+// derives their status: governance entries point at the real module that
+// implements them; planned entries have no source and are NOT_IMPLEMENTED,
+// which is how an agent that depends on them is reported honestly.
+const INTERNAL_CAPABILITIES = Object.freeze([
+  Object.freeze({
+    id: 'mission.plan', mode: 'analyze', owner: 'mission-engine', risk: 'low',
+    requiresApproval: false, available: true, partial: false, unavailableReason: null,
+    source: 'backend/services/executive-brain/mission-engine.js',
+    costClass: COST_LEVELS.DETERMINISTIC, requiresExternalConnection: false,
+  }),
+  Object.freeze({
+    id: 'verification.review', mode: 'analyze', owner: 'xatai-core', risk: 'low',
+    requiresApproval: false, available: true, partial: false, unavailableReason: null,
+    source: 'backend/services/executive-brain/xatai-core.js',
+    costClass: COST_LEVELS.DETERMINISTIC, requiresExternalConnection: false,
+  }),
+  Object.freeze({
+    id: 'cost.estimate', mode: 'analyze', owner: 'model-cost-catalog', risk: 'low',
+    requiresApproval: false, available: true, partial: false, unavailableReason: null,
+    source: 'backend/services/runtime/model-cost-catalog.js',
+    costClass: COST_LEVELS.DETERMINISTIC, requiresExternalConnection: false,
+  }),
+  Object.freeze({
+    id: 'quality.record', mode: 'analyze', owner: 'quality-incident-registry', risk: 'low',
+    requiresApproval: false, available: true, partial: false, unavailableReason: null,
+    source: 'backend/services/runtime/quality-incident-registry.js',
+    costClass: COST_LEVELS.DETERMINISTIC, requiresExternalConnection: false,
+  }),
+  Object.freeze({
+    id: 'privacy.classify', mode: 'analyze', owner: 'privacy-gate', risk: 'low',
+    requiresApproval: false, available: true, partial: false, unavailableReason: null,
+    source: 'backend/services/executive-brain/privacy-gate.js',
+    costClass: COST_LEVELS.DETERMINISTIC, requiresExternalConnection: false,
+  }),
+  ...[
+    ['research.company', 'analyze', 'low', true],
+    ['research.web', 'read', 'low', true],
+    ['data.analyze', 'analyze', 'low', false],
+    ['repository.analyze', 'analyze', 'low', false],
+    ['code.propose_patch', 'propose', 'medium', false],
+    ['tests.run', 'execute', 'medium', false],
+  ].map(([id, mode, risk, requiresExternalConnection]) => Object.freeze({
+    id, mode, owner: null, risk,
+    requiresApproval: mode === 'propose' || mode === 'execute',
+    available: false, partial: false, unavailableReason: 'Todavia no esta desarrollado.',
+    source: null,
+    costClass: mode === 'execute' ? COST_LEVELS.DETERMINISTIC : COST_LEVELS.SMALL_MODEL,
+    requiresExternalConnection,
+  })),
+]);
+
 function listCapabilities() { return CAPABILITIES; }
 function getCapability(id) { return CAPABILITIES.find((capability) => capability.id === id) || null; }
+function getInternalCapability(id) { return INTERNAL_CAPABILITIES.find((capability) => capability.id === id) || null; }
 function listAvailable() { return CAPABILITIES.filter((capability) => capability.available); }
 function listUnavailable() { return CAPABILITIES.filter((capability) => !capability.available); }
 
@@ -255,9 +312,9 @@ function capabilityStatus(capability) {
 }
 
 function describeCapability(id) {
-  const capability = getCapability(id);
+  const capability = getCapability(id) || getInternalCapability(id);
   if (!capability) return null;
-  const profile = GOVERNANCE_PROFILE[id];
+  const profile = GOVERNANCE_PROFILE[id] || capability;
   return Object.freeze({
     id: capability.id,
     mode: capability.mode,
@@ -275,6 +332,10 @@ function listCapabilityProfiles() {
   return CAPABILITIES.map((capability) => describeCapability(capability.id));
 }
 
+function listInternalCapabilityIds() {
+  return INTERNAL_CAPABILITIES.map((capability) => capability.id);
+}
+
 module.exports = {
   CAPABILITY_STATUS,
   MODES,
@@ -285,4 +346,5 @@ module.exports = {
   getCapability,
   listAvailable,
   listUnavailable,
+  listInternalCapabilityIds,
 };

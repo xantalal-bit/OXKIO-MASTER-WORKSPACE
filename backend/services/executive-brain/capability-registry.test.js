@@ -147,3 +147,20 @@ test('gmail.draft is priced as a small model with an external connection and hum
   assert.equal(draft.requiresExternalConnection, true);
   assert.equal(draft.requiresApproval, true);
 });
+
+test('XATAI CORE V2: internal capabilities resolve in describeCapability but never reach user-facing lists', () => {
+  const { listInternalCapabilityIds } = require('./capability-registry');
+  const userFacing = new Set(listCapabilities().map((capability) => capability.id));
+  for (const id of listInternalCapabilityIds()) {
+    assert.equal(userFacing.has(id), false, id);
+    assert.equal(getCapability(id), null, id);
+    assert.ok(describeCapability(id), id);
+  }
+  assert.equal(describeCapability('verification.review').status, CAPABILITY_STATUS.AVAILABLE);
+  assert.equal(describeCapability('mission.plan').status, CAPABILITY_STATUS.AVAILABLE);
+  for (const id of ['research.company', 'research.web', 'data.analyze', 'repository.analyze', 'code.propose_patch', 'tests.run']) {
+    assert.equal(describeCapability(id).status, CAPABILITY_STATUS.NOT_IMPLEMENTED, id);
+  }
+  assert.equal(describeCapability('tests.run').requiresApproval, true);
+  assert.equal(describeCapability('unknown.capability'), null);
+});

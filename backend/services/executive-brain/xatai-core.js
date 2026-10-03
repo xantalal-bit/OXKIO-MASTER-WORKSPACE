@@ -78,7 +78,10 @@ function isAutonomyEnabled(level) {
 // Mission Contract: what a mission may and may not do. Authorized tools must
 // exist in the capability registry and can never include a prohibited one;
 // the baseline prohibitions are always present whatever the caller passes.
-function createMissionContract(input = {}) {
+// describeCapability is injectable only so a controlled simulation can stand
+// in for capabilities that do not exist yet; the default is the canonical
+// registry, and nothing in production passes another one.
+function createMissionContract(input = {}, { describeCapability: describe = describeCapability } = {}) {
   if (!input || typeof input !== 'object' || Array.isArray(input)) {
     fail('invalid_contract', 'Mission contract payload is required.');
   }
@@ -90,7 +93,7 @@ function createMissionContract(input = {}) {
   ]);
   const authorizedTools = textList(input.authorizedTools, 'authorizedTools', { required: true, maxLength: 80 });
   authorizedTools.forEach((toolId) => {
-    if (!describeCapability(toolId)) fail('unknown_authorized_tool', `${toolId} is not a registered capability.`);
+    if (!describe(toolId)) fail('unknown_authorized_tool', `${toolId} is not a registered capability.`);
     if (prohibitedActions.includes(toolId)) fail('prohibited_tool_authorized', `${toolId} is a prohibited action.`);
   });
   return Object.freeze({
@@ -152,6 +155,37 @@ function evaluateConvergence({ attempts = [], maxAttempts = 3 } = {}) {
   return Object.freeze({ converged: false, action: CONVERGENCE_ACTIONS[next], reason: last.failureKind });
 }
 
+// XATAI CORE V2 (03/10/2026): the same Sentinel applied per task inside a
+// mission. On top of the per-task attempt budget it enforces a mission-wide
+// retry budget (a mission cannot burn retries across tasks forever) and
+// refuses any agent path that comes back to an agent already tried for the
+// task (A -> B -> A), so CHANGE_AGENT can never loop.
+function detectAgentCycle(agentPath = []) {
+  const path = (Array.isArray(agentPath) ? agentPath : []).filter(Boolean);
+  const seen = new Set();
+  for (let index = 0; index < path.length; index += 1) {
+    if (index > 0 && path[index] === path[index - 1]) continue;
+    if (seen.has(path[index])) return true;
+    seen.add(path[index]);
+  }
+  return false;
+}
+
+function evaluateTaskConvergence({
+  attempts = [],
+  maxTaskAttempts = 3,
+  missionRetriesUsed = 0,
+  missionRetryBudget = 4,
+  agentPath = [],
+} = {}) {
+  const escalate = (reason) => Object.freeze({ converged: false, action: CONVERGENCE_ACTIONS.ESCALATE_HUMAN, reason });
+  if (detectAgentCycle(agentPath)) return escalate('agent_cycle_detected');
+  const verdict = evaluateConvergence({ attempts, maxAttempts: maxTaskAttempts });
+  if (verdict.converged || verdict.action === null || verdict.action === CONVERGENCE_ACTIONS.ESCALATE_HUMAN) return verdict;
+  if (missionRetriesUsed >= missionRetryBudget) return escalate('mission_retry_budget_exhausted');
+  return verdict;
+}
+
 // Verifier Contract: an independent check of a claimed result. The executor
 // never certifies itself (same id -> NEEDS_REVIEW), a claim without evidence
 // is never PASS, and a check that throws is NEEDS_REVIEW, not a silent pass.
@@ -196,6 +230,47 @@ function runVerification(request, { verifierId, executorId } = {}) {
   return verdict(VERIFICATION_VERDICTS.PASS, [], results);
 }
 
+// Mission verification (V2): the verdict over a whole mission, built only
+// from independent task verdicts. A broken constraint or a failed task is
+// FAIL; no evidence or an unproven pass criterion is NEEDS_REVIEW, never a
+// pass; tasks that did not run (waiting on a human, blocked) make an
+// otherwise clean mission PARTIAL_PASS and are listed, never hidden.
+const MISSION_VERDICTS = Object.freeze({
+  PASS: 'PASS', PARTIAL_PASS: 'PARTIAL_PASS', FAIL: 'FAIL', NEEDS_REVIEW: 'NEEDS_REVIEW',
+});
+
+function verifyMission({
+  tasks = [],
+  verifierId = null,
+  constraintViolations = [],
+  passCriteriaDemonstrated = false,
+} = {}) {
+  const result = (verdict, reasons, extra = {}) => Object.freeze({
+    verdict, reasons: Object.freeze(reasons), pendingTaskIds: Object.freeze(extra.pending || []),
+  });
+  const list = Array.isArray(tasks) ? tasks : [];
+  if (!verifierId || list.some((task) => task.executorId && task.executorId === verifierId)) {
+    return result(MISSION_VERDICTS.NEEDS_REVIEW, ['verifier_not_independent']);
+  }
+  if (Array.isArray(constraintViolations) && constraintViolations.length > 0) {
+    return result(MISSION_VERDICTS.FAIL, ['constraint_violated']);
+  }
+  if (list.some((task) => task.verdict === VERIFICATION_VERDICTS.FAIL)) {
+    return result(MISSION_VERDICTS.FAIL, ['task_failed']);
+  }
+  const passed = list.filter((task) => task.verdict === VERIFICATION_VERDICTS.PASS);
+  if (passed.length === 0 || !passed.some((task) => (task.evidenceRefs || []).length > 0)) {
+    return result(MISSION_VERDICTS.NEEDS_REVIEW, ['missing_evidence']);
+  }
+  if (list.some((task) => task.verdict === VERIFICATION_VERDICTS.NEEDS_REVIEW)) {
+    return result(MISSION_VERDICTS.NEEDS_REVIEW, ['task_needs_review']);
+  }
+  const pending = list.filter((task) => task.verdict !== VERIFICATION_VERDICTS.PASS).map((task) => task.taskId);
+  if (pending.length > 0) return result(MISSION_VERDICTS.PARTIAL_PASS, ['tasks_not_completed'], { pending });
+  if (passCriteriaDemonstrated !== true) return result(MISSION_VERDICTS.NEEDS_REVIEW, ['pass_criteria_not_demonstrated']);
+  return result(MISSION_VERDICTS.PASS, []);
+}
+
 // Supervisor Decision: the single structured answer about what may happen
 // next with one capability under one contract. Order matters: prohibitions
 // and missing capabilities block first, then missing information and
@@ -208,6 +283,7 @@ function decideSupervision({
   verification = null,
   blockedReason = null,
   policy = { executionEnabled: false },
+  describeCapability: describe = describeCapability,
 } = {}) {
   const decide = (decision, reason) => Object.freeze({ decision, reason, capabilityId: capabilityId || null });
   if (!contract) return decide(SUPERVISOR_DECISIONS.BLOCKED, 'missing_contract');
@@ -216,7 +292,7 @@ function decideSupervision({
   // A known blocking condition reported by the caller (budget gate, provider
   // failure without a human fix) is never softened into another decision.
   if (blockedReason) return decide(SUPERVISOR_DECISIONS.BLOCKED, String(blockedReason).slice(0, 80));
-  const capability = describeCapability(capabilityId);
+  const capability = describe(capabilityId);
   if (!capability || capability.status === CAPABILITY_STATUS.NOT_IMPLEMENTED
     || capability.status === CAPABILITY_STATUS.BLOCKED) {
     return decide(SUPERVISOR_DECISIONS.BLOCKED, 'capability_unavailable');
@@ -248,13 +324,18 @@ module.exports = {
   BASELINE_PROHIBITED_ACTIONS,
   CONVERGENCE_ACTIONS,
   ENABLED_AUTONOMY_CEILING,
+  MISSION_VERDICTS,
   SUPERVISOR_DECISIONS,
   VERIFICATION_VERDICTS,
+  autonomyRank,
   createMissionContract,
   createVerificationRequest,
   decideSupervision,
+  detectAgentCycle,
   evaluateConvergence,
+  evaluateTaskConvergence,
   isAutonomyEnabled,
   isRepeatedAttempt,
   runVerification,
+  verifyMission,
 };
