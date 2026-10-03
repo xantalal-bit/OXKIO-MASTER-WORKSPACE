@@ -24,16 +24,19 @@ function createScopeSessions({ membershipProvider }) {
 }
 // Adapter contract: keys are arrays encoded without delimiter ambiguities. No caller
 // can choose a tenant namespace. In-memory storage is explicit and restart-ephemeral.
+// Capacity is per owner, so one owner can never exhaust another owner's space.
 function createScopedStore(sessions, { maxRecords = 2000 } = {}) {
-  const rows = new Map();
+  const rows = new Map(); const counts = new Map();
   const key = (handle, kind, id) => JSON.stringify([sessions.key(handle), kind, id]);
   function put(handle, kind, id, value) {
     if (!ID.test(id) || !ID.test(kind)) fail('resource_id_invalid');
-    const k = key(handle, kind, id); if (!rows.has(k) && rows.size >= maxRecords) fail('store_capacity');
+    const owner = sessions.key(handle); const k = key(handle, kind, id);
+    if (!rows.has(k)) { if ((counts.get(owner) || 0) >= maxRecords) fail('store_capacity'); counts.set(owner, (counts.get(owner) || 0) + 1); }
     rows.set(k, freeze(copy(value))); return copy(value);
   }
+  function remove(handle, kind, id) { const k = key(handle, kind, id); if (rows.delete(k)) { const owner = sessions.key(handle); counts.set(owner, counts.get(owner) - 1); } }
   function get(handle, kind, id) { if (!ID.test(id)) fail('resource_id_invalid'); const v = rows.get(key(handle, kind, id)); if (!v) fail('resource_not_found'); return copy(v); }
   function list(handle, kind) { const namespace = sessions.key(handle); return [...rows].filter(([k]) => { const parts = JSON.parse(k); return parts[0] === namespace && parts[1] === kind; }).map(([, v]) => copy(v)); }
-  return Object.freeze({ put, get, list, newId: () => randomUUID(), persistence: 'EPHEMERAL' });
+  return Object.freeze({ put, get, list, remove, newId: () => randomUUID(), persistence: 'EPHEMERAL' });
 }
 module.exports = { createScopeSessions, createScopedStore, copy, freeze, fail };

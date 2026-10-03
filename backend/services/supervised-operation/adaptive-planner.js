@@ -1,34 +1,36 @@
 'use strict';
-const { containsSecretMarker, evaluateProviderRouting } = require('../executive-brain/privacy-gate');
-const { fail, freeze } = require('./scope-session');
-// Optional natural-language reasoning uses the existing provider and CostController.
-// No credentials, new provider or paid call is created here. The operator must
-// explicitly supply a positive approved budget; default is a closed human gate.
-function createAdaptivePlanner({provider,costController,privacyPolicy,approvedBudgetUsd=0,maxAttempts=2}={}){
- const ledger=new Map();
- async function plan(input,{scope}={}){
-  if(!scope||!provider||provider.status!=='ready'||!costController)fail('planning_connection_required');
-  if(containsSecretMarker(input.intention))fail('secret_context');
-  if(!evaluateProviderRouting({privacyClass:'CONFIDENTIAL',provider:{external:true,providerId:provider.provider,region:provider.region},policy:privacyPolicy}).allowed)fail('planning_privacy_gate');
-  const owner=JSON.stringify([scope.tenantId,scope.clientId,scope.userId]);const day=new Date().toISOString().slice(0,10);const key=JSON.stringify([owner,day]);
-  const usage=ledger.get(key)||{reserved:0,estimated:0,actual:null,knownActual:0,calls:0,tokens:0};ledger.set(key,usage);
-  const basis={modelId:provider.modelId,inputTokens:Math.ceil(input.intention.length/3)+500,outputTokens:900};
-  const estimate=costController.estimateCost(basis);
-  if(!Number.isFinite(estimate.estimatedCostUsd)||approvedBudgetUsd<=0)fail('planning_budget_gate');
-  for(let attempt=0;attempt<maxAttempts;attempt++){
-   if(usage.estimated+usage.reserved+estimate.estimatedCostUsd>approvedBudgetUsd)fail('planning_budget_gate');
-   const routed=costController.decide({mission:{deterministicAvailable:false,smallModelSufficient:true,smallModelEstimatedCostUsd:estimate.estimatedCostUsd,missionSpentUsd:usage.estimated+usage.reserved,dailySpentUsd:usage.estimated+usage.reserved,requiresPlanning:true,requiresIndependentVerification:true},costBasis:basis});
-   if(!routed.decision?.level)fail('planning_budget_gate');
-   usage.reserved+=estimate.estimatedCostUsd;usage.calls++;
+const { DEFAULT_PRIVACY_POLICY, PRIVACY_CLASSES } = require('../executive-brain/privacy-gate');
+const { authorizeEgress } = require('./egress-privacy');
+const { fail } = require('./scope-session');
+// Optional natural-language reasoning through the existing Executive
+// Reasoning Provider. No credentials, provider or paid call is created here.
+// Gates, in order: provider ready -> Privacy Gate on the text that would leave
+// (always at least CONFIDENTIAL: it is a person's request) -> reviewed price ->
+// a positive approved daily budget -> the owner's persisted cost ledger. The
+// default budget is 0: a closed human gate, so the deterministic fallback runs.
+function createAdaptivePlanner({ provider, privacyPolicy = DEFAULT_PRIVACY_POLICY, approvedDailyBudgetUsd = 0, maxAttempts = 2 } = {}) {
+ async function plan(input, { spend, missionId } = {}) {
+  if (!provider || provider.status !== 'ready' || !spend || typeof missionId !== 'string') fail('planning_connection_required');
+  const egress = authorizeEgress({ text: input.intention, provider: { providerId: provider.provider, region: provider.region }, policy: privacyPolicy, floor: PRIVACY_CLASSES.CONFIDENTIAL });
+  if (egress.privacyClass === PRIVACY_CLASSES.SECRET) fail('secret_context');
+  if (!egress.allowed) fail('planning_privacy_gate');
+  const basis = { inputTokens: Math.ceil(input.intention.length / 3) + 500, outputTokens: 900 };
+  const estimatedUsd = spend.estimate(provider.modelId, basis);
+  if (estimatedUsd === null || !(approvedDailyBudgetUsd > 0)) fail('planning_budget_gate');
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+   const reservation = spend.reserve({ missionId, modelId: provider.modelId, estimatedUsd, approvedDailyBudgetUsd });
    let result;
-   try{result=await provider.reason({mission:input.intention,context:{capabilities:input.capabilities},constraints:['Select only supplied capabilities. Never invent tools, authority, sources or success. No external actions. Return a bounded acyclic dependency plan.'],output:{plan:[{key:'step-key',capability:'supplied-id',dependsOn:[]}]}});}finally{usage.reserved-=estimate.estimatedCostUsd;usage.estimated+=estimate.estimatedCostUsd;}
-   if(result?.status!=='ok')continue;
-   const tokens=result.usage||{};if(Number.isFinite(tokens.inputTokens)&&Number.isFinite(tokens.outputTokens)){const priced=costController.estimateCost({modelId:provider.modelId,...tokens});if(Number.isFinite(priced.estimatedCostUsd)){usage.knownActual+=priced.estimatedCostUsd;usage.actual=usage.knownActual;usage.estimated=Math.max(usage.estimated,usage.actual);usage.tokens+=tokens.inputTokens+tokens.outputTokens;}}
-   const plan=result.content?.plan;
-   if(Array.isArray(plan)&&plan.length>0&&plan.length<=12&&plan.every(s=>input.capabilities.includes(s.capability)))return plan;
+   try {
+    result = await provider.reason({ mission: input.intention, context: { capabilities: input.capabilities }, constraints: ['Select only supplied capabilities. Never invent tools, authority, sources or success. No external actions. Return a bounded acyclic dependency plan.'], output: { plan: [{ key: 'step-key', capability: 'supplied-id', dependsOn: [] }] } });
+   } finally {
+    spend.settle(reservation, (result && result.usage) || {});
+   }
+   if (!result || result.status !== 'ok') continue;
+   const steps = result.content && result.content.plan;
+   if (Array.isArray(steps) && steps.length > 0 && steps.length <= 12 && steps.every(step => step && input.capabilities.includes(step.capability))) return steps;
   }
   fail('planning_exhausted');
  }
- return Object.freeze({plan,usage:scope=>freeze(structuredClone([...ledger].filter(([k])=>JSON.parse(k)[0]===JSON.stringify([scope.tenantId,scope.clientId,scope.userId])).map(([,v])=>v)))});
+ return Object.freeze({ plan });
 }
-module.exports={createAdaptivePlanner};
+module.exports = { createAdaptivePlanner };

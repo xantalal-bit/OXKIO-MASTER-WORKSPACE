@@ -59,6 +59,17 @@ const ENVIRONMENT_VARIABLES = Object.freeze({
   // (decisión B2, 17/08/2026). Declarada aqui como parte de la regularizacion
   // PRE-B4 (18/08/2026); el secreto real NO se crea en este cambio.
   OXKIO_APPROVAL_PG_RUNTIME_URL: Object.freeze({ kind: 'secret', classifications: ['optional', 'secret'], scope: 'postgres' }),
+
+  // OXKIO V3 supervised operation (03/10/2026): off unless enabled AND the
+  // authenticated uid is listed in the cohort. The integrity key seals V3's
+  // persisted records; without it V3 is not composed. Declared here only: no
+  // real secret is created by this change. The planner budget defaults to 0
+  // (closed spend gate).
+  OXKIO_V3_ENABLED: Object.freeze({ kind: 'governance', classifications: ['optional'], scope: 'supervised_operation' }),
+  OXKIO_V3_COHORT_UIDS: Object.freeze({ kind: 'sensitive_config', classifications: ['optional'], scope: 'supervised_operation' }),
+  OXKIO_V3_MEMORY_ROOT: Object.freeze({ kind: 'config', classifications: ['optional'], scope: 'supervised_operation' }),
+  OXKIO_V3_INTEGRITY_KEY: Object.freeze({ kind: 'secret', classifications: ['optional', 'secret'], scope: 'supervised_operation' }),
+  OXKIO_V3_PLANNER_DAILY_BUDGET_USD: Object.freeze({ kind: 'governance', classifications: ['optional'], scope: 'supervised_operation' }),
 });
 
 function isPresent(env, name) {

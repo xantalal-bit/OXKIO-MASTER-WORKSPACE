@@ -3,23 +3,45 @@ const { createChatGateway } = require('./chat-gateway');
 const { createMemoryStoreFactory } = require('./memory-store');
 const { fail } = require('./scope-session');
 const { createScopedApprovalFactory } = require('./approval-factory');
+const { createHmacIntegrity } = require('./integrity');
+const { createAdaptivePlanner } = require('./adaptive-planner');
+const { createPrivateContextAdapters } = require('./resource-adapters');
 // Opt-in only; installing code never activates a pilot or grants a new service.
 // Identities enter solely from the existing verified Firebase request boundary.
-function createServerComposition({enabled=false,memoryRoot,authorizeIdentity,costController,adapterFactory=null}={}){
+// Routing is per identity: only uids listed in the cohort reach V3; everyone
+// else (Cliente Cero included, unless explicitly listed) keeps the existing
+// Executive Chat. Rollback = remove the uid (or the flag) and restart; V3 data
+// stays sealed in its own root and the existing chat is untouched.
+const parseCohort = value => new Set(String(value || '').split(',').map(v => v.trim()).filter(v => /^[A-Za-z0-9:_-]{3,128}$/.test(v)));
+const STATUS = { membership_not_available: 403, permission_denied: 403, authenticated_identity_required: 403, session_authority_changed: 403, backpressure: 429, mission_capacity: 429, store_capacity: 429, mission_busy: 409, stored_integrity_invalid: 409, stored_scope_invalid: 409 };
+function createServerComposition({enabled=false,cohortUids='',memoryRoot,integrityKey,authorizeIdentity,adapterFactory=null,privateContextReaders=null,reasoning=null}={}){
  if(!enabled)return null;
+ const cohort=parseCohort(cohortUids);
+ if(cohort.size===0)return null;
  if(typeof authorizeIdentity!=='function')fail('authorizer_required');
+ // Fail closed: without a valid integrity key V3 is not composed at all.
+ const integrity=createHmacIntegrity({key:integrityKey});
  const identities=new Map();
- const gateway=createChatGateway({costController,approvalFactory:createScopedApprovalFactory({root:memoryRoot}),storeFactory:createMemoryStoreFactory({root:memoryRoot}),adapterFactory,
+ const planner=reasoning&&reasoning.provider?createAdaptivePlanner({provider:reasoning.provider,privacyPolicy:reasoning.privacyPolicy,approvedDailyBudgetUsd:Number(reasoning.approvedDailyBudgetUsd)||0}).plan:null;
+ const factory=adapterFactory||(typeof privateContextReaders==='function'?async(identity,scope)=>createPrivateContextAdapters({scope,readers:privateContextReaders(identity)}):null);
+ const gateway=createChatGateway({approvalFactory:createScopedApprovalFactory({root:memoryRoot}),storeFactory:createMemoryStoreFactory({root:memoryRoot,integrity}),adapterFactory:factory,planner,
+  catalog:reasoning&&reasoning.catalog||{},privacyPolicy:reasoning&&reasoning.privacyPolicy,
+  // Only Cliente Cero has a connection flow today (its existing Google OAuth).
+  connectable:(scope,provider)=>scope.clientId==='cliente-cero'&&['mail','calendar'].includes(provider),
   membershipProvider:{findMemberships:async({authenticatedUserId})=>{
    const identity=identities.get(authenticatedUserId);if(!identity)return [];
    const current=authorizeIdentity({uid:identity.uid,email:identity.email,email_verified:identity.emailVerified});
-   if(!current.ok||current.identity.clientId!==identity.clientId)return [];
+   if(!current.ok||current.identity.clientId!==identity.clientId||!cohort.has(identity.uid))return [];
+   // 'owner' of the identity's own partition [clientId, clientId, uid] only:
+   // V3 exposes no tenant-wide or global administration to any role.
    return [{tenantId:identity.clientId,userId:identity.uid,clientId:identity.clientId,roles:['owner'],status:'ACTIVE'}];
   }}
  });
+ function accepts(identity){return Boolean(identity&&identity.authorized===true&&['admin','family_member'].includes(identity.role)&&typeof identity.uid==='string'&&cohort.has(identity.uid));}
  async function handle(req,res){
   const identity=req.oxkioIdentity;
   if(!identity?.authorized){res.writeHead(401);res.end();return;}
+  if(!accepts(identity)){res.writeHead(403,{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store'});res.end(JSON.stringify({ok:false,code:'v3_not_enabled_for_identity',executionEnabled:false}));return;}
   identities.set(identity.uid,identity);
   try{
    let text='';for await(const chunk of req){text+=chunk.toString();if(Buffer.byteLength(text)>8192)fail('body_too_large');}
@@ -27,10 +49,10 @@ function createServerComposition({enabled=false,memoryRoot,authorizeIdentity,cos
    res.writeHead(200,{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store'});res.end(JSON.stringify(response));
   }catch(error){
    const code=/^[a-z_]+$/.test(error.code||'')?error.code:'chat_request_invalid';
-   res.writeHead(['membership_not_available','permission_denied','authenticated_identity_required'].includes(code)?403:400,{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store'});
+   res.writeHead(STATUS[code]||400,{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store'});
    res.end(JSON.stringify({ok:false,code,response:'No he ejecutado la petición. Revisa la conexión o el permiso solicitado.',executionEnabled:false}));
   }
  }
- return Object.freeze({handle});
+ return Object.freeze({handle,accepts});
 }
-module.exports={createServerComposition};
+module.exports={createServerComposition,parseCohort};

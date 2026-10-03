@@ -28,13 +28,20 @@ A1 y executionEnabled=false permanecen intactas.
 | memory-store | MemoryEngine existente con repositorio atómico por propietario y fallo cerrado ante corrupción |
 | approval-factory | ApprovalQueue existente, archivo y scope separados por propietario |
 | resource-adapters | Clientes read-only en closures trusted; búsqueda y fetch separados |
-| adaptive-planner | Proveedor de razonamiento y CostController existentes, con gates de privacidad y presupuesto |
+| adaptive-planner | Proveedor de razonamiento existente, Privacy Gate y presupuesto diario aprobado (0 por defecto) |
+| intention-interpreter | Lenguaje natural → objetivo, contexto, restricciones, capacidades, plan y resultado explícito |
+| egress-privacy | Clasificación de todo texto que sale de OXKIO y enrutado por el Privacy Gate existente |
+| cost-ledger | Contabilidad por propietario/misión/modelo/herramienta con cost-policy y catálogo revisado |
+| self-repair | Diagnóstico, clase de fallo, aprendizaje por propietario y cortacircuitos por capacidad |
+| integrity | Sello HMAC de cada registro persistido; la clave la inyecta la composición |
 
 ## Autoridad y aislamiento
 
 El cuerpo del chat admite únicamente query, conversationId, action, missionId e
-includeDetails. Ningún tenant, token, permiso, conexión, proveedor o planner se
-acepta desde él. La identidad procede de req.oxkioIdentity, después del filtro
+includeDetails, más los objetos calendar/gmail que ya envía el cliente web, que se
+ignoran (nunca son identidad ni conexión). Ningún tenant, token, permiso, conexión,
+proveedor o planner se acepta desde él. Sin conversationId cada usuario tiene una
+conversación por defecto, siempre ligada a su uid, para que "continúa" funcione. La identidad procede de req.oxkioIdentity, después del filtro
 Firebase existente. Membership Resolver vuelve a comprobarla en cada operación.
 
 Un handle de sesión se valida mediante WeakMap. Claves de recursos codifican
@@ -46,7 +53,9 @@ telemetría privada pertenecen al propietario completo. Adivinar un ID de misió
 ajena produce mission_not_found. Las conexiones verifican tenant, client y user;
 se comprueban antes y después de una lectura, incluyendo revocación concurrente.
 Viewer puede leer pero no recordar información. Guardar memoria requiere petición
-humana explícita; el planner no puede conceder ese permiso.
+humana explícita; el planner no puede conceder ese permiso. El rol owner que recibe
+un familiar significa propietario de su propia partición [clientId, clientId, uid]:
+V3 no expone ninguna administración de tenant ni global a ningún rol.
 
 La capa trusted toma resultados del conector, valida propietario y tamaño, asigna
 procedencia y genera evidencia ligada al output exacto. Un agente recibe una copia
@@ -69,32 +78,55 @@ estrategia ante fallos y limita hipótesis/reintentos. Las trazas técnicas qued
 fuera de la respuesta normal; includeDetails permite inspección por el propietario.
 No hay agentes certificando su propio éxito ni conversaciones indefinidas.
 
-El reconocedor local ofrece una base sin coste, con límites explícitos de vocabulario.
-Un planner inyectado puede resolver intenciones nuevas componiendo las mismas
-primitivas. El plan es una propuesta no confiable: se rechazan herramientas nuevas,
+El intérprete local convierte la petición en objetivo, contexto, restricciones,
+capacidades, plan y un resultado explícito: CAN_EXECUTE, NEEDS_INFORMATION,
+NEEDS_CONNECTION, NEEDS_CAPABILITY, NEEDS_APPROVAL o BLOCKED. Cada capacidad declara
+el vocabulario de su dominio; el plan se compone, no se busca una frase. Lo que V3
+no implementa (Drive, OneDrive, Outlook, PDF/adjuntos, recordatorios) está declarado
+y produce NEEDS_CAPABILITY, nunca una conjetura. Escrituras externas producen
+NEEDS_APPROVAL; pagos, borrados, credenciales y despliegues, BLOCKED.
+Solo cuando el intérprete no reconoce ninguna capacidad participa el planner, que
+compone las mismas primitivas; cualquier fallo o salida inválida del planner vuelve
+al resultado determinista seguro. El plan es una propuesta no confiable: se rechazan herramientas nuevas,
 ciclos, campos de autoridad y escrituras de memoria no solicitadas. Los workflows
 verificados se reutilizan únicamente dentro del propietario, sin reutilizar sus
 fuentes privadas como conocimiento global.
 
-El adaptador de planner natural reutiliza el proveedor y el CostController. No
-lee credenciales ni crea un proveedor. Requiere proveedor ready, precio revisado,
-política CONFIDENTIAL permitida y presupuesto aprobado positivo. El presupuesto
-por defecto es cero. Cuenta llamadas, tokens y coste conocido por propietario;
-reserva antes de llamar. Multi-AI no se activa: no hay evidencia que justifique
+El adaptador de planner natural reutiliza el proveedor de razonamiento existente.
+No usa el CostController de Executive Chat (canon: un único propietario funcional),
+no lee credenciales ni crea un proveedor. Requiere proveedor ready, Privacy Gate
+(la petición se trata al menos como CONFIDENTIAL), precio revisado en el catálogo y
+presupuesto diario aprobado positivo (OXKIO_V3_PLANNER_DAILY_BUDGET_USD, 0 por
+defecto). El cost-ledger reserva antes de llamar y liquida con el uso real, en el
+store sellado del propietario: un reinicio no reabre el presupuesto y una reserva
+sin liquidar sigue contando. Registra coste por propietario, misión, modelo y
+llamadas por herramienta (sin precio inventado). Multi-AI no se activa: no hay evidencia que justifique
 multiplicar coste en estos escenarios deterministas.
 
 ## Conexiones
 
 Un recurso ausente produce NEEDS_CONNECTION con razón, permiso mínimo, alcance,
-límites y cómo autorizar sin contraseña. Install pertenece exclusivamente a la
+límites y cómo autorizar sin contraseña; si la cuenta no tiene flujo de conexión
+disponible, lo dice. Una autorización caducada, revocada o insuficiente durante la
+misión no se reintenta a ciegas: la tarea espera, se pide reconectar y la misión
+continúa desde ese punto sin repetir los pasos ya verificados. Install pertenece exclusivamente a la
 composición trusted/callback OAuth; nunca al cuerpo del chat. Disconnect invalida
 lecturas en vuelo. Resume mantiene el ID, la intención y los permisos originales.
 
-Gmail/Outlook usan la primitiva mail; Google/Microsoft Calendar usan calendar;
-Drive/OneDrive/documentos usan storage. Los adaptadores deben aportar su cliente
-OAuth ya autorizado para el propietario. Esta implementación no crea tokens,
-clientes OAuth familiares, consentimientos reales ni un proveedor de búsqueda.
-Los escenarios usan fakes controlados que declaran origin=fixture.
+Gmail y Calendar reutilizan los lectores private-context existentes (los mismos
+del dashboard de Executive Chat). Hoy solo existen para la autorización Google de
+Cliente Cero; para cualquier otro usuario V3 responde NEEDS_CONNECTION indicando
+que la conexión aún no está disponible para su cuenta. Drive/OneDrive/Outlook,
+PDF/adjuntos y recordatorios no están implementados: contrato de adaptador listo
+(read → items, scopes, origin, egress), sin integración. Esta implementación no
+crea tokens, clientes OAuth familiares, consentimientos ni proveedor de búsqueda.
+
+Todo texto que sale de OXKIO pasa por egress-privacy y el Privacy Gate: SECRET
+nunca sale; identificadores (email, IBAN, DNI/NIE, teléfono/tarjeta, URL con
+parámetros) o categorías especiales ligadas a una persona son CONFIDENTIAL y solo
+salen hacia un proveedor aprobado para ello; lo demás es PUBLIC según política. La
+búsqueda envía solo los términos del tema, nunca contenido de correo, memoria o
+documentos; el fetch solo lee enlaces descubiertos por la búsqueda pública.
 
 createPublicResearchAdapters usa el fetcher V2.1 para DNS público, HTTPS,
 redirecciones, robots y límites. Search descubre URLs, fetch las vuelve a validar
@@ -113,7 +145,11 @@ Pause se aplica entre tareas; una lectura ya iniciada termina sin publicar el
 resultado hasta resume. Cancel invalida el resultado y no permite reanudar.
 
 MemoryEngine conserva memoria y registros de misión en un repositorio local
-atómico. El estado trusted y las evidencias completadas pueden restaurarse para
+atómico, compactado (una fila por registro) y sellado: cada fila lleva un HMAC sobre
+[propietario, tipo, id, valor] con OXKIO_V3_INTEGRITY_KEY. Una fila editada, movida
+a otro propietario o intercambiada falla cerrada (stored_integrity_invalid) y nunca
+se restaura como evidencia. No detecta la sustitución por una copia anterior
+íntegra del mismo propietario (rollback); queda como deuda. El estado trusted y las evidencias completadas pueden restaurarse para
 reanudar; una ejecución interrumpida no se declara exitosa. Es almacenamiento de
 un proceso, no una garantía transaccional multiinstancia. La fábrica del store es
 sustituible; PostgreSQL/RLS y despliegue multiinstancia quedan fuera de esta entrega.
@@ -123,8 +159,12 @@ restablecer desde autorización trusted después de un reinicio.
 ## Gates y piloto
 
 La integración se alcanza por POST /api/executive/chat tras la autenticación
-existente. OXKIO_V3_ENABLED no se activa en esta entrega. Al habilitarla se requiere
-OXKIO_V3_MEMORY_ROOT absoluto y dedicado. No se cambia la allowlist familiar ni
+existente, solo para los uid de OXKIO_V3_COHORT_UIDS; el resto de identidades,
+Cliente Cero incluido salvo que se liste, siguen en el Executive Chat existente.
+Rollback: quitar el uid (o el flag) y reiniciar; los datos V3 quedan sellados en
+su raíz. OXKIO_V3_ENABLED no se activa en esta entrega. Al habilitarla se requieren
+OXKIO_V3_MEMORY_ROOT absoluto y dedicado y OXKIO_V3_INTEGRITY_KEY (≥32 bytes,
+secreto registrado; sin ella V3 no se compone y todo sigue en el chat existente). No se cambia la allowlist familiar ni
 se abre un endpoint nuevo. La rama contiene código, no un despliegue.
 
 Las facturas producen propuesta de organización y una entrada en la ApprovalQueue
@@ -153,6 +193,16 @@ También se ejercitan revocación, permisos, IDs falsificados, mutación de refe
 procedencia, corrupción, reinicio, cancelación, pausas, backpressure, timeouts,
 fallo de proveedor/verificación, aprendizaje y costes aislados. Todos los archivos
 temporales se eliminan al finalizar.
+
+Autorreparación gobernada: detectar → diagnosticar (código saneado) → clasificar
+(conexión, seguridad, privacidad, timeout, salida inválida, proveedor) → cambiar
+estrategia y reintentar solo lo reintentable (el ámbito reducido limita resultados)
+→ verificar → registrar aprendizaje por propietario y capacidad (solo códigos) →
+continuar. Si una capacidad falla de forma consecutiva entre misiones, se abre un
+cortacircuitos (CAPABILITY_GAP) hasta un enfriamiento; nada modifica código,
+credenciales ni autoridad.
+
+audit-regressions.test.js reproduce cada hallazgo de la auditoría del 03/10/2026.
 
 Limitaciones adicionales: el análisis local es conservador y no equivale a un
 asesor general; no extrae adjuntos/PDF ni metadatos fiscales completos. No hay
