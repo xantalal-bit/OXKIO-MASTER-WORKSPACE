@@ -16,7 +16,7 @@ const {
 const { DEFAULT_CATALOG } = require('../runtime/model-cost-catalog');
 const { QualityIncidentRegistry } = require('../runtime/quality-incident-registry');
 const { MISSION_STATES, TASK_STATES } = require('../mission-queue/mission-contract');
-const { createEvidenceRegistry } = require('./evidence-registry');
+const { createEvidenceRegistry, digestOutput } = require('./evidence-registry');
 
 // Controlled simulation: these capabilities are NOT_IMPLEMENTED in the
 // canonical registry; tests stand them in as AVAILABLE to exercise the
@@ -55,10 +55,11 @@ function idFactory() {
 const EVIDENCE = createEvidenceRegistry({ trustedRegistrars: ['tool:sim'] });
 const TOOL = EVIDENCE.registrar('tool:sim');
 let evidenceCounter = 0;
-function toolEvidence(contract, supports = contract.passCriteria.map((criterion) => criterion.criterionId)) {
+// When the tool produced text, it binds the evidence to that exact text.
+function toolEvidence(contract, output = null, supports = contract.passCriteria.map((criterion) => criterion.criterionId)) {
   evidenceCounter += 1;
   const ref = `ev:${contract.taskId}:${evidenceCounter}`;
-  TOOL.record({ ref, missionId: contract.missionId, taskId: contract.taskId, supports });
+  TOOL.record({ ref, missionId: contract.missionId, taskId: contract.taskId, supports, outputDigest: output === null ? null : digestOutput(output) });
   return ref;
 }
 
@@ -94,7 +95,7 @@ function missionInput(blueprint, overrides = {}) {
 function passingExecutor(calls, summary = 'ok') {
   return async (contract) => {
     calls.push(contract.taskId);
-    return { summary, evidenceRefs: [toolEvidence(contract)] };
+    return { summary, evidenceRefs: [toolEvidence(contract, summary)] };
   };
 }
 

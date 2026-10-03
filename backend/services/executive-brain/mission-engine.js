@@ -49,6 +49,10 @@ const MISSION_VERIFIER_ID = 'verifier-agent';
 const DEFAULT_LIMITS = Object.freeze({ maxTaskAttempts: 3, missionRetryBudget: 4, taskTimeoutMs: 30000 });
 const RISK_RANK = Object.freeze({ low: 0, medium: 1, high: 2 });
 const EVIDENCE_PATTERN = /^[A-Za-z0-9:_.#-]{1,128}$/;
+const MAX_OUTPUT_CHARS = 20000;
+// Only `summary` is an executor output that can be verified and propagated;
+// no other field an executor returns is ever stored or passed on.
+const hasTextualOutput = (output) => output.summary !== undefined && output.summary !== null && output.summary !== '';
 const HUMAN_ACTOR_PATTERN = /^human:[A-Za-z0-9_.-]{1,64}$/;
 // Verification failures that mean manipulation, not a bad attempt: the task
 // fails at once instead of being retried.
@@ -600,6 +604,19 @@ function createMissionEngine({
     });
   }
 
+  function boundDigests(resolved) {
+    return resolved.filter((item) => item.status === 'valid' && item.entry.outputDigest).map((item) => item.entry.outputDigest);
+  }
+
+  // The single rule used at verification, at mission verdict and before
+  // propagating to a dependent: a stored output is trustworthy only while
+  // valid evidence of this task is bound to exactly that text.
+  function outputBound(task) {
+    if (task.output === null || task.output === undefined) return true;
+    return typeof task.output === 'string'
+      && boundDigests(resolveEvidence(task, textList(task.evidenceRefs))).includes(digestOutput(task.output));
+  }
+
   function verifyTask(task, output) {
     const criteria = task.contract.passCriteria.map((criterion) => criterion.criterionId);
     const claimed = textList(output.evidenceRefs);
@@ -633,14 +650,21 @@ function createMissionEngine({
             reasons: ['pass_criteria_not_evidenced'],
           };
         } },
-        // When a tool bound its evidence to the exact output it produced,
-        // the result reported by the executor must be that output.
+        // A textual output is only accepted when valid evidence is bound to
+        // that exact text (outputDigest). Evidence of an external fact with
+        // no digest can prove criteria, never an output: no binding is
+        // undetermined (NEEDS_REVIEW), a binding to other text is a FAIL.
+        // A task without textual output needs no digest at all.
         { id: 'output_bound', run: () => {
-          const digests = resolved.filter((item) => item.status === 'valid' && item.entry.outputDigest)
-            .map((item) => item.entry.outputDigest);
-          return digests.length === 0 || digests.includes(digestOutput(output.summary))
-            ? { verdict: VERIFICATION_VERDICTS.PASS }
-            : { verdict: VERIFICATION_VERDICTS.FAIL, reasons: ['output_not_evidenced'] };
+          if (!hasTextualOutput(output)) return { verdict: VERIFICATION_VERDICTS.PASS };
+          if (typeof output.summary !== 'string' || output.summary.length > MAX_OUTPUT_CHARS) {
+            return { verdict: VERIFICATION_VERDICTS.NEEDS_REVIEW, reasons: ['output_invalid'] };
+          }
+          const digests = boundDigests(resolved);
+          if (digests.includes(digestOutput(output.summary))) return { verdict: VERIFICATION_VERDICTS.PASS };
+          return digests.length > 0
+            ? { verdict: VERIFICATION_VERDICTS.FAIL, reasons: ['output_not_evidenced'] }
+            : { verdict: VERIFICATION_VERDICTS.NEEDS_REVIEW, reasons: ['output_not_bound'] };
         } },
         { id: 'constraints_respected', run: () => (textList(output.constraintViolations).length === 0
           ? { verdict: VERIFICATION_VERDICTS.PASS }
@@ -704,7 +728,8 @@ function createMissionEngine({
       .filter((dependency) => dependency && dependency.status === TASK_STATUS.COMPLETED)
       .map((dependency) => {
         let withheld = null;
-        if (maxPrivacyClass(dependency.privacyClass, task.privacyClass) !== task.privacyClass) withheld = 'privacy_class';
+        if (!outputBound(dependency)) withheld = 'output_not_bound';
+        else if (maxPrivacyClass(dependency.privacyClass, task.privacyClass) !== task.privacyClass) withheld = 'privacy_class';
         else if (containsSecretMarker(dependency.output || '')) withheld = 'secret_marker';
         return withheld
           ? { taskId: dependency.taskId, withheld, evidenceRefs: [...dependency.evidenceRefs] }
@@ -773,7 +798,9 @@ function createMissionEngine({
       if (verification.verdict === VERIFICATION_VERDICTS.PASS) {
         task.status = TASK_STATUS.COMPLETED;
         task.evidenceRefs = [...output.evidenceRefs];
-        task.output = typeof output.summary === 'string' ? output.summary.slice(0, 2000) : null;
+        // Stored exactly as verified (never truncated), so its digest binding
+        // can be re-checked later.
+        task.output = hasTextualOutput(output) ? output.summary : null;
         record(draft, task, 'task_verified', {
           evidenceRef: task.evidenceRefs[0], verification: verification.verdict,
         });
@@ -841,7 +868,8 @@ function createMissionEngine({
   function evidencedTask(item) {
     const resolved = resolveEvidence(item, item.evidenceRefs).filter((entry) => entry.status === 'valid');
     const supported = new Set(resolved.flatMap((entry) => entry.entry.supports));
-    return resolved.length > 0 && item.contract.passCriteria.every((criterion) => supported.has(criterion.criterionId));
+    return resolved.length > 0 && item.contract.passCriteria.every((criterion) => supported.has(criterion.criterionId))
+      && outputBound(item);
   }
 
   function missionVerdict(draft) {

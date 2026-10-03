@@ -49,9 +49,11 @@ function kit() {
   const record = (contract, overrides = {}) => {
     counter += 1;
     const ref = `ev:${contract.taskId}:${counter}`;
+    const { output = null, ...rest } = overrides;
     tool.record({
       ref, missionId: contract.missionId, taskId: contract.taskId,
-      supports: contract.passCriteria.map((criterion) => criterion.criterionId), ...overrides,
+      supports: contract.passCriteria.map((criterion) => criterion.criterionId),
+      outputDigest: output === null ? null : digestOutput(output), ...rest,
     });
     return ref;
   };
@@ -119,7 +121,7 @@ test('defect 1 (P1): evidence recorded by a trusted tool for this task and crite
   const engine = engineWith(evidence);
   const planned = plan(engine, [task('a', 'memory', 'memory.search')]);
   const ran = await engine.runMission(planned, {
-    executors: { 'memory-agent': async (contract) => ({ summary: 'Contexto recogido.', evidenceRefs: [record(contract)] }) },
+    executors: { 'memory-agent': async (contract) => ({ summary: 'Contexto recogido.', evidenceRefs: [record(contract, { output: 'Contexto recogido.' })] }) },
   });
   assert.equal(ran.tasks[0].status, 'COMPLETED');
   assert.equal(ran.verification.verdict, 'PASS');
@@ -301,7 +303,8 @@ test('defect 2 audit: re-running an older state snapshot cannot reset what was a
 function chainExecutors(record, seen, outputs) {
   const make = (agentId, summary) => async (contract, context) => {
     seen[contract.taskId.slice(contract.taskId.lastIndexOf(':') + 1)] = context;
-    return { summary: summary(context), evidenceRefs: [record(contract)] };
+    const text = summary(context);
+    return { summary: text, evidenceRefs: [record(contract, { output: text })] };
   };
   return {
     'research-agent': make('research-agent', () => outputs.a),
@@ -379,7 +382,7 @@ test('defect 3 audit: context is immutable, least-privilege, privacy-bounded and
   const ran = await engine.runMission(clean, {
     executors: {
       'research-agent': async (contract) => ({
-        summary: 'api_key=SHOULD-NOT-FLOW', evidenceRefs: [record(contract)],
+        summary: 'api_key=SHOULD-NOT-FLOW', evidenceRefs: [record(contract, { output: 'api_key=SHOULD-NOT-FLOW' })],
         authorizedCapabilities: ['gmail.send'], prohibitedActions: [],
       }),
       'data-analysis-agent': async (contract, context) => {
@@ -412,4 +415,169 @@ test('defect 3 audit: secrets in known context are dropped and human decisions c
   assert.deepEqual(context.knownContext, ['company: ACME']);
   assert.deepEqual(context.humanDecisions, [{ decision: 'APPROVE', taskId: null }]);
   assert.ok(!JSON.stringify(context).includes('human:jose'));
+});
+
+// =============================================================== DEFECT 4
+// Output evidence binding (final review of 2838971): a textual output is only
+// accepted, used for the mission verdict or propagated when valid evidence is
+// bound to that exact text.
+
+const SINGLE = () => [task('a', 'memory', 'memory.search')];
+
+test('output binding 1: authentic evidence without digest + invented summary is never PASS/COMPLETED', async () => {
+  const { evidence, record } = kit();
+  const engine = engineWith(evidence, { limits: { maxTaskAttempts: 1 } });
+  const ran = await engine.runMission(plan(engine, SINGLE()), {
+    executors: {
+      'memory-agent': async (contract) => ({
+        summary: 'ACME tiene 5000 empleados y comprará nuestro producto.',
+        evidenceRefs: [record(contract)], // authentic, in scope, right criterion, outputDigest = null
+      }),
+    },
+  });
+  assert.notEqual(ran.tasks[0].status, 'COMPLETED');
+  assert.notEqual(ran.engine.state, 'COMPLETED');
+  assert.equal(ran.tasks[0].verification.verdict, 'NEEDS_REVIEW');
+  assert.ok(ran.tasks[0].verification.reasons.includes('output_not_bound'));
+  assert.equal(ran.tasks[0].output, null);
+});
+
+test('output binding 2: authentic evidence bound to other text rejects the reported text', async () => {
+  const { evidence, record } = kit();
+  const engine = engineWith(evidence);
+  const ran = await engine.runMission(plan(engine, SINGLE()), {
+    executors: {
+      'memory-agent': async (contract) => ({
+        summary: 'ACME tiene 5000 empleados.',
+        evidenceRefs: [record(contract, { output: 'ACME tiene 120 empleados.' })],
+      }),
+    },
+  });
+  assert.equal(ran.tasks[0].status, 'FAILED');
+  assert.equal(ran.tasks[0].verification.verdict, 'FAIL');
+  assert.ok(ran.tasks[0].verification.reasons.includes('output_not_evidenced'));
+  assert.notEqual(ran.verification.verdict, 'PASS');
+});
+
+test('output binding 3: authentic evidence bound to the exact text is accepted', async () => {
+  const { evidence, record } = kit();
+  const engine = engineWith(evidence);
+  const text = 'ACME tiene 120 empleados.';
+  const ran = await engine.runMission(plan(engine, SINGLE()), {
+    executors: { 'memory-agent': async (contract) => ({ summary: text, evidenceRefs: [record(contract, { output: text })] }) },
+  });
+  assert.equal(ran.tasks[0].status, 'COMPLETED');
+  assert.equal(ran.tasks[0].output, text);
+  assert.equal(ran.verification.verdict, 'PASS');
+});
+
+test('output binding 4: only a verified, bound output reaches the dependent; an unbound one never does', async () => {
+  const { evidence, record } = kit();
+  const engine = engineWith(evidence, { limits: { maxTaskAttempts: 1 } });
+  const chain = () => [task('a', 'memory', 'memory.search'), task('b', 'workflow', 'mission.plan', ['a'])];
+  const text = 'ACME tiene 120 empleados.';
+  let received = null;
+  const consumer = async (contract, context) => { received = context; return { evidenceRefs: [record(contract)] }; };
+
+  // Bound: B receives exactly the verified text of A.
+  const bound = await engine.runMission(plan(engine, chain()), {
+    executors: { 'memory-agent': async (contract) => ({ summary: text, evidenceRefs: [record(contract, { output: text })] }), 'workflow-agent': consumer },
+  });
+  assert.equal(bound.engine.state, 'COMPLETED');
+  assert.deepEqual(received.dependencies.map((dependency) => dependency.output), [text]);
+
+  // Unbound: A never completes, so B never runs and nothing is propagated.
+  received = null;
+  const unbound = await engine.runMission(plan(engine, chain()), {
+    executors: { 'memory-agent': async (contract) => ({ summary: 'ACME tiene 5000 empleados.', evidenceRefs: [record(contract)] }), 'workflow-agent': consumer },
+  });
+  assert.equal(received, null);
+  assert.notEqual(unbound.tasks.find((item) => item.key === 'a').status, 'COMPLETED');
+
+  // Output altered after verification (tampered snapshot): withheld at propagation.
+  const waiting = await engine.runMission(plan(engine, chain()), {
+    executors: {
+      'memory-agent': async (contract) => ({ summary: text, evidenceRefs: [record(contract, { output: text })] }),
+      'workflow-agent': async () => ({ waitingFor: 'tool' }),
+    },
+  });
+  assert.equal(waiting.engine.state, 'WAITING_TOOL');
+  const tampered = JSON.parse(JSON.stringify(waiting));
+  tampered.tasks.find((item) => item.key === 'a').output = 'ACME tiene 5000 empleados.';
+  await engine.runMission(tampered, { executors: { 'workflow-agent': consumer } });
+  assert.deepEqual(received.dependencies.map((dependency) => [dependency.withheld, dependency.output]), [['output_not_bound', undefined]]);
+  assert.ok(!JSON.stringify(received).includes('5000'));
+});
+
+test('output binding 5: evidence of an external fact needs no digest, but never covers text added later', async () => {
+  const { evidence, record } = kit();
+  const engine = engineWith(evidence);
+  const chain = () => [task('a', 'memory', 'memory.search'), task('b', 'workflow', 'mission.plan', ['a'])];
+  let received = null;
+  const ran = await engine.runMission(plan(engine, chain()), {
+    executors: {
+      // No textual output at all: only evidence of an external fact (no digest).
+      'memory-agent': async (contract) => ({ evidenceRefs: [record(contract, { kind: 'file_exists' })] }),
+      'workflow-agent': async (contract, context) => { received = context; return { evidenceRefs: [record(contract)] }; },
+    },
+  });
+  const a = ran.tasks.find((item) => item.key === 'a');
+  assert.equal(a.status, 'COMPLETED');
+  assert.equal(a.output, null);
+  assert.equal(evidence.resolve(a.evidenceRefs[0]).outputDigest, null);
+  assert.deepEqual(received.dependencies.map((dependency) => dependency.output), [null]);
+  assert.equal(ran.verification.verdict, 'PASS');
+
+  // Text added afterwards to that task is not covered by the external-fact evidence.
+  const tampered = JSON.parse(JSON.stringify(ran));
+  tampered.tasks.find((item) => item.key === 'a').output = 'ACME comprará nuestro producto.';
+  tampered.engine.state = 'NEEDS_APPROVAL';
+  const closed = engine.closeMission(tampered, { actorId: 'human:jose' });
+  assert.notEqual(closed.verification.verdict, 'PASS');
+  assert.notEqual(closed.verification.verdict, 'PARTIAL_PASS');
+});
+
+test('output binding audit: retries re-bind each attempt; the stored output is the bound one', async () => {
+  const { evidence, record } = kit();
+  const engine = engineWith(evidence);
+  const text = 'ACME tiene 120 empleados.';
+  let calls = 0;
+  const ran = await engine.runMission(plan(engine, SINGLE()), {
+    executors: {
+      'memory-agent': async (contract) => {
+        calls += 1;
+        return calls === 1
+          ? { summary: 'ACME tiene 5000 empleados.', evidenceRefs: [record(contract)] }
+          : { summary: text, evidenceRefs: [record(contract, { output: text })] };
+      },
+    },
+  });
+  assert.equal(calls, 2);
+  assert.equal(ran.tasks[0].status, 'COMPLETED');
+  assert.equal(ran.tasks[0].output, text);
+});
+
+test('output binding audit: mutating the returned object after verification changes nothing; non-text output is refused', async () => {
+  const { evidence, record } = kit();
+  const engine = engineWith(evidence, { limits: { maxTaskAttempts: 1 } });
+  const text = 'ACME tiene 120 empleados.';
+  let returned = null;
+  const ran = await engine.runMission(plan(engine, SINGLE()), {
+    executors: {
+      'memory-agent': async (contract) => {
+        returned = { summary: text, evidenceRefs: [record(contract, { output: text })] };
+        return returned;
+      },
+    },
+  });
+  returned.summary = 'ACME tiene 5000 empleados.';
+  returned.evidenceRefs.push('ev:later');
+  assert.equal(ran.tasks[0].output, text);
+  assert.equal(ran.tasks[0].evidenceRefs.length, 1);
+
+  const objectOutput = await engine.runMission(plan(engine, SINGLE()), {
+    executors: { 'memory-agent': async (contract) => ({ summary: { claim: 'x' }, evidenceRefs: [record(contract)] }) },
+  });
+  assert.notEqual(objectOutput.tasks[0].status, 'COMPLETED');
+  assert.ok(objectOutput.tasks[0].verification.reasons.includes('output_invalid'));
 });

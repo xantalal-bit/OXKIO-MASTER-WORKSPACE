@@ -13,7 +13,7 @@ const { handleMissionRequest } = require('./mission-chat');
 const { EXECUTION_POLICY, createMissionEngine } = require('./mission-engine');
 const { DEFAULT_CATALOG } = require('../runtime/model-cost-catalog');
 const { QualityIncidentRegistry } = require('../runtime/quality-incident-registry');
-const { createEvidenceRegistry } = require('./evidence-registry');
+const { createEvidenceRegistry, digestOutput } = require('./evidence-registry');
 
 const EVIDENCE = createEvidenceRegistry({ trustedRegistrars: ['tool:sim'] });
 const TOOL = EVIDENCE.registrar('tool:sim');
@@ -61,8 +61,12 @@ function recordingExecutors(calls) {
     // The simulated tool behind the agent records the evidence.
     evidenceCounter += 1;
     const ref = `ev:${contract.taskId}:${evidenceCounter}`;
-    TOOL.record({ ref, missionId: contract.missionId, taskId: contract.taskId, supports: contract.passCriteria.map((criterion) => criterion.criterionId) });
-    return { summary: `Resultado simulado de ${contract.taskId}`, evidenceRefs: [ref] };
+    const summary = `Resultado simulado de ${contract.taskId}`;
+    TOOL.record({
+      ref, missionId: contract.missionId, taskId: contract.taskId,
+      supports: contract.passCriteria.map((criterion) => criterion.criterionId), outputDigest: digestOutput(summary),
+    });
+    return { summary, evidenceRefs: [ref] };
   }]));
 }
 
