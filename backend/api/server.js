@@ -1,6 +1,7 @@
 require("dotenv").config();
 
 const http = require("http");
+const { createServerComposition } = require("../services/supervised-operation/server-composition");
 const EmailWorkflow = require("../workflows/emailWorkflow");
 const EmailAgent = require("../agents/emailAgent");
 const ProposalEngine = require("../core/proposalEngine");
@@ -52,7 +53,7 @@ const { createExecutiveAuthorizer } = require("../security/executive-authorizati
 const { buildDashboardReaders, buildPrivateIdentity } = require("../security/private-identity-projection");
 const { isAuthorizedExecutiveIdentity } = require("./routes/executive-approval");
 const { isApiRouteDeniedForIdentity } = require("../security/api-route-policy");
-const { safeDiagnostic } = require("../security/secret-runtime");
+const { safeDiagnostic, getSecret } = require("../security/secret-runtime");
 const { createExecutiveRuntime } = require("../services/runtime/executive-runtime-factory");
 const { CostController } = require("../services/runtime/cost-controller");
 const {
@@ -164,6 +165,30 @@ const executiveReasoningProvider = createExecutiveReasoningProvider();
 const costController = new CostController({
   catalog: buildReasoningCostCatalog(executiveReasoningProvider)
 });
+// OXKIO V3: opt-in per identity (OXKIO_V3_COHORT_UIDS). It never receives the
+// Executive Chat CostController (V3 keeps its own per-owner cost ledger on the
+// reviewed catalog). Without a valid integrity key V3 stays off and every
+// request keeps going to the existing Executive Chat.
+let v3Chat = null;
+try {
+  v3Chat = createServerComposition({
+    enabled: process.env.OXKIO_V3_ENABLED === "true",
+    cohortUids: process.env.OXKIO_V3_COHORT_UIDS,
+    memoryRoot: process.env.OXKIO_V3_MEMORY_ROOT,
+    integrityKey: process.env.OXKIO_V3_ENABLED === "true" ? (() => { try { return getSecret("OXKIO_V3_INTEGRITY_KEY"); } catch (error) { return null; } })() : null,
+    authorizeIdentity: authorizeFirebaseIdentity,
+    privateContextReaders: (identity) => createDashboardReaders(identity),
+    reasoning: {
+      provider: executiveReasoningProvider,
+      catalog: buildReasoningCostCatalog(executiveReasoningProvider),
+      approvedDailyBudgetUsd: Number(process.env.OXKIO_V3_PLANNER_DAILY_BUDGET_USD || 0)
+    }
+  });
+} catch (error) {
+  v3Chat = null;
+  // Only a fixed identifier-like code is logged, never a value or a key.
+  console.warn(`[OXKIO V3] not enabled: ${/^[a-z_]+$/.test((error && error.code) || "") ? error.code : "configuration_invalid"}`);
+}
 const emailReplySupervisor = createEmailReplySupervisor({
   provider: executiveReasoningProvider,
   costController
@@ -360,6 +385,7 @@ if (pathname === "/api/executive/security-context") {
   });
 }
 
+if (v3Chat && pathname === "/api/executive/chat" && req.method === "POST" && v3Chat.accepts(req.oxkioIdentity)) return v3Chat.handle(req, res);
 if (isExecutiveChatRoute(pathname, req.method)) {
   return handleExecutiveChatRequest(req, res, {
     dependencies: {
