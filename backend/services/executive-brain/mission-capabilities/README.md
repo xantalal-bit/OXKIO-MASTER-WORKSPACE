@@ -50,6 +50,31 @@ Después liga cada salida por `outputDigest`.
 
 El toolbox vuelve a comprobar el destino final antes de registrar nada.
 
+## Cadena de autoridad
+
+`WEB SOURCE → FACTS → ANALYSIS → OPPORTUNITIES → PROPOSAL → COMMUNICATION → HUMAN REVIEW`
+
+Cada etapa puede seleccionar, ordenar, resumir o redactar, pero no puede crear ni alterar hechos u oportunidades de la etapa anterior.
+
+- **PROPOSAL** solo contiene copias exactas de oportunidades verificadas (mismos `opportunityId`, `serviceId`, `level`, `need`, `basisFactIds`, `evidenceRefs`, `solution` y `expectedBenefit`). Solo puede recomendar contactar (`REVIEW_AND_CONTACT`) si la etapa `opportunities` verificada contiene al menos una oportunidad y la propuesta la selecciona.
+- **COMMUNICATION** solo puede referirse a oportunidades de la propuesta y no puede mencionar servicios que la propuesta no seleccionó.
+- **OPPORTUNITIES** usa un texto `need` fijo: la cita literal si es OBSERVED, o la plantilla del perfil si es INFERENCE.
+
+## Contradicciones: unidades y ámbito
+
+Solo se comparan cifras de la misma unidad canónica, y solo cuando la equivalencia es fuerte:
+
+- `workforce` = empleados, trabajadores, employees, workers, numberOfEmployees.
+- `stores` = tiendas, stores.
+- `countries` = países, countries.
+- `offices` = oficinas, offices.
+- `customers` = clientes, customers.
+- `warehouses` = almacenes, warehouses.
+
+Las unidades cuyo significado depende del contexto (establecimientos, centros, sedes, delegaciones, locations, profesionales) nunca se comparan con otras.
+
+No hay contradicción si las dos citas declaran expresamente lugares distintos («en España» frente a «en Francia»; hay algunos alias prudentes de país) o años distintos. Si el ámbito es desconocido, se mantiene la contradicción por prudencia.
+
 ## Decisión de contacto
 
 Sin ninguna oportunidad respaldada por hechos (incluidas las que solo se apoyan en cifras contradictorias), el resultado es `DO_NOT_CONTACT_YET`. En ese caso no hay email, mensaje ni seguimiento, solo un briefing interno, y la revisión muestra «NO CONTACTAR TODAVÍA». El adaptador de la Approval Queue no encola nada.

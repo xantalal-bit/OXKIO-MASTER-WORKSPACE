@@ -52,23 +52,70 @@ class PublicWebError extends Error {
 
 // ------------------------------------------------------------ addresses
 
-function isPrivateIPv4(address) {
-  const [a, b] = address.split('.').map(Number);
+// Classification works on numbers, never on text prefixes: IPv4 as four
+// octets, IPv6 parsed into eight 16-bit groups (so "::1",
+// "0:0:0:0:0:0:0:1" and "0000::0001" are the same address).
+function isPrivateIPv4Octets([a, b, c]) {
   return a === 0 || a === 10 || a === 127 || (a === 100 && b >= 64 && b <= 127)
     || (a === 169 && b === 254) || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168)
-    || (a === 192 && b === 0) || (a === 198 && (b === 18 || b === 19)) || a >= 224;
+    || (a === 192 && b === 0 && (c === 0 || c === 2)) || (a === 192 && b === 88 && c === 99)
+    || (a === 198 && (b === 18 || b === 19)) || (a === 198 && b === 51 && c === 100)
+    || (a === 203 && b === 0 && c === 113) || a >= 224;
+}
+
+function parseIPv4(address) {
+  if (!net.isIPv4(address)) return null;
+  return address.split('.').map(Number);
+}
+
+// Returns eight 16-bit groups, or null when the text is not a valid IPv6.
+function parseIPv6(address) {
+  let text = String(address).toLowerCase().replace(/^\[|\]$/g, '').replace(/%.*$/, '');
+  if (!net.isIPv6(text)) return null;
+  const tail = /(\d{1,3}(?:\.\d{1,3}){3})$/.exec(text);
+  if (tail) {
+    const octets = parseIPv4(tail[1]);
+    if (!octets) return null;
+    text = `${text.slice(0, -tail[1].length)}${((octets[0] << 8) | octets[1]).toString(16)}:${((octets[2] << 8) | octets[3]).toString(16)}`;
+  }
+  const [head, rest] = text.includes('::') ? text.split('::') : [text, null];
+  const left = head ? head.split(':') : [];
+  const right = rest === null ? [] : (rest ? rest.split(':') : []);
+  const missing = 8 - left.length - right.length;
+  if (rest === null ? left.length !== 8 : missing < 1) return null;
+  const groups = [...left, ...Array(rest === null ? 0 : missing).fill('0'), ...right].map((group) => parseInt(group, 16));
+  return groups.length === 8 && groups.every((group) => Number.isInteger(group) && group >= 0 && group <= 0xffff) ? groups : null;
+}
+
+function embeddedIPv4(groups, from) {
+  return [groups[from] >> 8, groups[from] & 0xff, groups[from + 1] >> 8, groups[from + 1] & 0xff];
+}
+
+function isPrivateIPv6Groups(g) {
+  const zeroUntil = (index) => g.slice(0, index).every((group) => group === 0);
+  if (g.every((group) => group === 0)) return true; // :: unspecified
+  if (zeroUntil(7) && g[7] === 1) return true; // ::1 loopback
+  if (zeroUntil(5) && g[5] === 0xffff) return isPrivateIPv4Octets(embeddedIPv4(g, 6)); // ::ffff:a.b.c.d mapped
+  if (zeroUntil(6)) return true; // ::a.b.c.d (deprecated IPv4-compatible)
+  if (g[0] === 0 && g[1] === 0 && g[2] === 0 && g[3] === 0 && g[4] === 0xffff && g[5] === 0) return true; // ::ffff:0:a.b.c.d translated
+  if (g[0] === 0x64 && g[1] === 0xff9b) return true; // NAT64 64:ff9b::/96 and 64:ff9b:1::/48
+  if (g[0] === 0x100 && g[1] === 0 && g[2] === 0 && g[3] === 0) return true; // 100::/64 discard
+  if (g[0] === 0x2001 && g[1] === 0x0db8) return true; // 2001:db8::/32 documentation
+  if (g[0] === 0x2001 && g[1] < 0x200) return true; // 2001::/23 IETF special purpose (incl. Teredo 2001::/32)
+  if (g[0] === 0x2002) return isPrivateIPv4Octets(embeddedIPv4(g, 1)); // 6to4 embeds an IPv4
+  if ((g[0] & 0xfe00) === 0xfc00) return true; // fc00::/7 unique local
+  if ((g[0] & 0xffc0) === 0xfe80) return true; // fe80::/10 link-local
+  if ((g[0] & 0xffc0) === 0xfec0) return true; // fec0::/10 site-local (deprecated)
+  if ((g[0] & 0xff00) === 0xff00) return true; // ff00::/8 multicast
+  return false;
 }
 
 function isPrivateAddress(address) {
-  if (net.isIPv4(address)) return isPrivateIPv4(address);
-  if (net.isIPv6(address)) {
-    const lower = address.toLowerCase();
-    if (lower.startsWith('::ffff:')) return isPrivateAddress(lower.slice(7));
-    return lower === '::' || lower === '::1' || lower.startsWith('fc') || lower.startsWith('fd')
-      || lower.startsWith('fe8') || lower.startsWith('fe9') || lower.startsWith('fea') || lower.startsWith('feb')
-      || lower.startsWith('ff') || lower.startsWith('64:ff9b:') || lower.startsWith('2001:db8');
-  }
-  return true;
+  const v4 = parseIPv4(address);
+  if (v4) return isPrivateIPv4Octets(v4);
+  const v6 = parseIPv6(address);
+  if (v6) return isPrivateIPv6Groups(v6);
+  return true; // anything unparseable is refused
 }
 
 // ------------------------------------------------------------ site policy
@@ -130,11 +177,46 @@ function parseRobots(text) {
   return groups;
 }
 
+// RFC 9309 §2.2.2: rules and paths are compared after the same
+// percent-encoding normalization, in a single pass (no double decoding):
+// - %XX of an unreserved character (A-Z a-z 0-9 - . _ ~) is decoded,
+//   so "/%70rivado" and "/privado" are the same path;
+// - any other %XX keeps its encoding with upper-case hex, so reserved
+//   characters keep their meaning ("%2F" never becomes "/");
+// - non-ASCII characters are percent-encoded as UTF-8;
+// - a malformed "%" (not followed by two hex digits) is encoded as "%25",
+//   identically in rules and paths, so it can never match a different
+//   resource by accident.
+const UNRESERVED = /[A-Za-z0-9\-._~]/;
+
+function normalizeRobotsPath(value) {
+  let out = '';
+  const text = String(value);
+  for (let index = 0; index < text.length; index += 1) {
+    const char = text[index];
+    if (char === '%') {
+      const hex = text.slice(index + 1, index + 3);
+      if (/^[0-9A-Fa-f]{2}$/.test(hex)) {
+        const decoded = String.fromCharCode(parseInt(hex, 16));
+        out += UNRESERVED.test(decoded) ? decoded : `%${hex.toUpperCase()}`;
+        index += 2;
+      } else {
+        out += '%25';
+      }
+    } else if (char.charCodeAt(0) > 0x7e || char.charCodeAt(0) < 0x21) {
+      out += encodeURIComponent(char);
+    } else {
+      out += char;
+    }
+  }
+  return out;
+}
+
 function patternMatches(pattern, path) {
   const anchored = pattern.endsWith('$');
   const body = (anchored ? pattern.slice(0, -1) : pattern)
-    .split('*').map((part) => part.replace(/[.+?^${}()|[\]\\]/g, '\\$&')).join('.*');
-  return new RegExp(`^${body}${anchored ? '$' : ''}`).test(path);
+    .split('*').map((part) => normalizeRobotsPath(part).replace(/[.+?^${}()|[\]\\]/g, '\\$&')).join('.*');
+  return new RegExp(`^${body}${anchored ? '$' : ''}`).test(normalizeRobotsPath(path));
 }
 
 // RFC 9309: the group naming our product token wins over "*"; among the
@@ -347,6 +429,8 @@ module.exports = {
   createPublicWebFetcher,
   isPrivateAddress,
   normalizePageText,
+  normalizeRobotsPath,
+  parseIPv6,
   parsePublicUrl,
   parseRobots,
   pinnedLookup,

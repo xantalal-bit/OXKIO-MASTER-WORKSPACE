@@ -96,6 +96,43 @@ const SATISFIED = Object.freeze({
     : Boolean(result.email && result.email.subject && result.email.body)),
 });
 
+// Trust chain: a downstream stage may select, order, summarise or word
+// upstream entities, never create or alter them. These helpers check that
+// every opportunity a stage carries exists upstream with identical fields.
+const TRACED_FIELDS = Object.freeze([
+  'serviceId', 'level', 'need', 'basisFactIds', 'evidenceRefs', 'solution', 'expectedBenefit',
+]);
+
+function upstreamOpportunities(dependencies, stage, idOf) {
+  const dependency = dependencies.find((item) => item.data && item.data.stage === stage);
+  const list = dependency && Array.isArray(dependency.data.opportunities) ? dependency.data.opportunities : [];
+  return new Map(list.map((item) => [idOf(item), item]));
+}
+
+function collectOpportunityRefs(value, out = []) {
+  if (Array.isArray(value)) value.forEach((item) => collectOpportunityRefs(item, out));
+  else if (value && typeof value === 'object') {
+    if (Object.hasOwn(value, 'opportunityId')) out.push(value);
+    Object.values(value).forEach((item) => collectOpportunityRefs(item, out));
+  }
+  return out;
+}
+
+function assertTraceable(items, upstream) {
+  const seen = new Set();
+  for (const item of items) {
+    if (!item || typeof item.opportunityId !== 'string' || seen.has(item.opportunityId)) throw invalid('opportunity_shape');
+    seen.add(item.opportunityId);
+    const origin = upstream.get(item.opportunityId);
+    if (!origin) throw invalid('invented_opportunity');
+    for (const field of TRACED_FIELDS) {
+      if (Object.hasOwn(item, field) && JSON.stringify(item[field]) !== JSON.stringify(origin[field])) {
+        throw invalid(`altered_opportunity_${field}`);
+      }
+    }
+  }
+}
+
 function createTrustedToolbox({
   evidenceRegistry,
   sellerProfile,
@@ -234,19 +271,43 @@ function createTrustedToolbox({
         const explicit = basis.some((fact) => service.explicitNeedSignals
           .some((signal) => fact.excerpt.toLowerCase().includes(signal.toLowerCase())));
         if (item.level === 'OBSERVED' && !explicit) throw invalid('inference_as_fact');
+        // The need text is not free prose: it is the fixed wording derived
+        // from the quoted fact (OBSERVED) or the profile (INFERENCE).
+        const expectedNeed = item.level === 'OBSERVED'
+          ? `La empresa lo indica en su web: "${basis[0].excerpt}"`
+          : `Posible interés en ${service.needLabel} (inferido de la web, no confirmado por la empresa).`;
+        if (item.need !== expectedNeed) throw invalid('opportunity_need_text');
         if ((item.evidenceRefs || []).some((ref) => !basis.some((fact) => fact.sourceRef === ref))) throw invalid('opportunity_evidence');
       }
     }
     if (stage === 'proposal') {
-      // The recommendation follows from the opportunities, never the reverse.
-      const expected = (result.opportunities || []).length > 0 ? 'REVIEW_AND_CONTACT' : 'DO_NOT_CONTACT_YET';
+      // Proposal is not an authority on opportunities: each one must be an
+      // exact copy of an opportunity verified upstream (selection only).
+      const upstream = upstreamOpportunities(dependencies, 'opportunities', (item) => item.id);
+      const selected = Array.isArray(result.opportunities) ? result.opportunities : [];
+      assertTraceable(selected, upstream);
+      if (selected.some((item) => item.label !== item.level || item.text !== item.need)) throw invalid('opportunity_relabelled');
+      // REVIEW_AND_CONTACT needs at least one verified opportunity upstream
+      // AND selected here; the proposal cannot justify itself.
+      const expected = upstream.size > 0 && selected.length > 0 ? 'REVIEW_AND_CONTACT' : 'DO_NOT_CONTACT_YET';
       if (result.recommendation !== expected) throw invalid('recommendation_mismatch');
-      const names = new Set(sellerProfile.services.map((service) => service.name));
+      const services = sellerProfile.services.filter((service) => selected.some((item) => item.serviceId === service.id));
+      const names = new Set(services.map((service) => service.name));
       if ((result.solution || []).some((item) => !names.has(item.name))) throw invalid('unknown_solution');
+      const values = new Set(services.map((service) => service.valueStatement));
+      if ((result.value || []).some((value) => !values.has(value))) throw invalid('unknown_value');
       if ((result.situation || []).some((item) => !allFacts.has(item.factId) || item.label !== 'FACT')) throw invalid('situation_fact');
     }
     if (stage === 'communication') {
       if (result.sent !== false) throw invalid('sent_flag');
+      // Any opportunity the communication mentions must come from the
+      // verified proposal, unchanged.
+      const fromProposal = upstreamOpportunities(dependencies, 'proposal', (item) => item.opportunityId);
+      assertTraceable(collectOpportunityRefs(result), fromProposal);
+      // A service the proposal did not select may not appear in any message.
+      const selectedServices = new Set([...fromProposal.values()].map((item) => item.serviceId));
+      const strayNames = sellerProfile.services.filter((service) => !selectedServices.has(service.id)).map((service) => service.name.toLowerCase());
+      if (strings.some((text) => strayNames.some((name) => text.toLowerCase().includes(name)))) throw invalid('unselected_service');
       // DO_NOT_CONTACT_YET means no contact material at all.
       const proposal = dependencies.find((dependency) => dependency.data && dependency.data.stage === 'proposal');
       const decision = proposal && proposal.data.recommendation === 'REVIEW_AND_CONTACT'

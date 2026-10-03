@@ -16,7 +16,10 @@ const MAX_EXCERPT = 280;
 // conclusion and reported, never obeyed.
 const INJECTION_PATTERN = /(ignor\w*|olvid\w*|disregard|override)\b[^.]{0,60}\b(instruc\w*|previous|anterior\w*|prompt|rules|reglas)|system prompt|you are now|eres ahora|act as an?\b|send (an )?e-?mail|env[ií]a\w* (un )?(correo|e-?mail|mensaje)|transfer\w* (money|funds|dinero)|<\s*\/?\s*(system|assistant)\s*>/i;
 
-const SIZE_PATTERN = /\b(\d{1,3}(?:[.,]\d{3})+|\d{1,5})\s+(tiendas|establecimientos|centros|sedes|oficinas|delegaciones|almacenes|empleados|trabajadores|profesionales|clientes|pa[ií]ses|stores|employees|offices|locations|customers|countries)\b/gi;
+const SIZE_PATTERN = /\b(\d{1,3}(?:[.,]\d{3})+|\d{1,5})\s+(tiendas|establecimientos|centros|sedes|oficinas|delegaciones|almacenes|empleados|trabajadores|profesionales|clientes|pa[ií]ses|stores|employees|workers|offices|locations|customers|countries|warehouses)\b/gi;
+// A size fact quotes the figure and the rest of its sentence (up to this
+// many characters), so an explicit scope ("en España", "en 2024") is kept.
+const SIZE_CONTEXT = 120;
 const LINK_KEYWORDS = /(empresa|nosotros|quienes|qui[eé]nes|about|historia|servicios|productos|soluciones|contacto|contact|company|equipo|sectores)/i;
 
 function isSuspicious(text) {
@@ -107,7 +110,12 @@ function extractFacts(page, { prefix, signals = [], broad = false, maxSignalFact
   for (const run of runs) {
     let size;
     SIZE_PATTERN.lastIndex = 0;
-    while ((size = SIZE_PATTERN.exec(run)) !== null) add('size', `La web indica: "${size[0]}"`, size[0]);
+    while ((size = SIZE_PATTERN.exec(run)) !== null) {
+      const rest = run.slice(size.index, size.index + SIZE_CONTEXT);
+      const stop = rest.search(/[.;!?](\s|$)/);
+      const excerpt = (stop === -1 ? rest : rest.slice(0, stop)).trim();
+      add('size', `La web indica: "${excerpt}"`, excerpt);
+    }
   }
 
   const lowered = signals.map((signal) => String(signal).toLowerCase()).filter(Boolean);

@@ -125,6 +125,52 @@ async function priorCorrespondenceAgent({ target, tools }) {
   };
 }
 
+// Canonical units. Only equivalences strong enough to call two different
+// figures a contradiction are merged (workforce, stores, countries,
+// offices, customers, warehouses, in Spanish and English). Units whose
+// meaning depends on context (establecimientos, centros, sedes,
+// delegaciones, locations, profesionales) each stay on their own and are
+// never compared with another unit.
+const UNIT_CANON = Object.freeze({
+  empleados: 'workforce', trabajadores: 'workforce', employees: 'workforce', workers: 'workforce', numberofemployees: 'workforce',
+  tiendas: 'stores', stores: 'stores',
+  'países': 'countries', paises: 'countries', countries: 'countries',
+  oficinas: 'offices', offices: 'offices',
+  clientes: 'customers', customers: 'customers',
+  almacenes: 'warehouses', warehouses: 'warehouses',
+  establecimientos: 'establishments', centros: 'centres', sedes: 'headquarters', delegaciones: 'branches',
+  locations: 'locations', profesionales: 'professionals',
+});
+const UNIT_PATTERN = new RegExp(`(${Object.keys(UNIT_CANON).join('|')})`, 'i');
+
+function canonicalUnit(excerpt) {
+  const match = UNIT_PATTERN.exec(String(excerpt).replace(/"/g, ''));
+  return match ? UNIT_CANON[match[1].toLowerCase()] : null;
+}
+
+// Explicit scopes only: a place after "en"/"in" (with a few prudent country
+// aliases so "España" and "Spain" are the same place) and a year after the
+// figure. Nothing is inferred: no scope in a quote means "unknown".
+const COUNTRY_ALIASES = Object.freeze({
+  espana: 'es', spain: 'es', francia: 'fr', france: 'fr', portugal: 'pt', italia: 'it', italy: 'it',
+  alemania: 'de', germany: 'de', mexico: 'mx', 'reino unido': 'uk', 'united kingdom': 'uk',
+  'estados unidos': 'us', 'united states': 'us', eeuu: 'us', usa: 'us',
+});
+function plain(text) {
+  return String(text).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+}
+function scopeOf(excerpt) {
+  const text = String(excerpt);
+  const afterFigure = text.replace(/^\D*\d[\d.,]*/, '');
+  const place = /\b(?:en|in)\s+(?:(?:el|la|los|las|the)\s+)?([A-ZÁÉÍÓÚÑ][A-Za-zÁÉÍÓÚÑáéíóúñü]+(?:\s+(?:de\s+)?[A-ZÁÉÍÓÚÑ][A-Za-zÁÉÍÓÚÑáéíóúñü]+)*)/.exec(afterFigure);
+  const year = /\b(19\d{2}|20\d{2})\b/.exec(afterFigure);
+  const placeKey = place ? plain(place[1]) : null;
+  return { place: placeKey ? (COUNTRY_ALIASES[placeKey] || placeKey) : null, year: year ? year[1] : null };
+}
+function separateScopes(left, right) {
+  return Boolean((left.place && right.place && left.place !== right.place) || (left.year && right.year && left.year !== right.year));
+}
+
 function numbersIn(text) {
   return (String(text).match(/\d+(?:[.,]\d+)*/g) || []).map((value) => value.replace(/[.,]/g, ''));
 }
@@ -145,20 +191,20 @@ async function analysisAgent({ dependencies }) {
   const flagged = unique.filter((fact) => fact.suspicious).map((fact) => fact.id);
   const categories = {};
   usable.forEach((fact) => { categories[fact.category] = (categories[fact.category] || 0) + 1; });
-  // Same unit (e.g. "empleados") stated with different figures.
+  // Same canonical unit stated with different figures, unless an explicit
+  // place or year in both quotes shows they describe different scopes.
   const contradictions = [];
   const byUnit = new Map();
   for (const fact of usable.filter((item) => item.category === 'size')) {
-    const unit = (/(tiendas|establecimientos|centros|sedes|oficinas|delegaciones|almacenes|empleados|trabajadores|profesionales|clientes|pa[ií]ses|numberOfEmployees|stores|employees|offices|locations|customers|countries)/i
-      .exec(fact.excerpt) || [null, null])[1];
+    const unit = canonicalUnit(fact.excerpt);
     if (!unit) continue;
-    const key = /numberOfEmployees|empleados|trabajadores|employees/i.test(unit) ? 'employees' : unit.toLowerCase();
-    const values = byUnit.get(key) || [];
-    values.push({ id: fact.id, value: numbersIn(fact.excerpt)[0] });
-    byUnit.set(key, values);
+    const values = byUnit.get(unit) || [];
+    values.push({ id: fact.id, value: numbersIn(fact.excerpt)[0], scope: scopeOf(fact.excerpt) });
+    byUnit.set(unit, values);
   }
-  for (const [unit, values] of byUnit) {
-    if (new Set(values.map((item) => item.value)).size > 1) {
+  for (const [unit, all] of byUnit) {
+    const values = all.filter((item) => all.some((other) => other.value !== item.value && !separateScopes(item.scope, other.scope)));
+    if (values.length > 0) {
       // Every fact quoting one of the conflicting figures is contradicted
       // too (e.g. the full sentence that also contains "40 empleados").
       const conflicting = usable.filter((fact) => values.some((item) => {
@@ -235,7 +281,19 @@ async function proposalAgent({ dependencies, profile, target }) {
     stage: 'proposal',
     facts: analysisFacts,
     situation: topFacts(analysisFacts, 4).map((fact) => ({ label: 'FACT', text: fact.statement, factId: fact.id })),
-    opportunities: opportunities.map((item) => ({ label: item.level, text: item.need, solution: item.solution, opportunityId: item.id })),
+    // Exact copies of verified opportunities (selection only, never new ones).
+    opportunities: opportunities.map((item) => ({
+      opportunityId: item.id,
+      serviceId: item.serviceId,
+      level: item.level,
+      label: item.level,
+      need: item.need,
+      text: item.need,
+      basisFactIds: [...item.basisFactIds],
+      evidenceRefs: [...item.evidenceRefs],
+      solution: item.solution,
+      expectedBenefit: item.expectedBenefit,
+    })),
     solution: services.map((service) => ({ label: 'RECOMMENDATION', name: service.name, description: service.description })),
     value: services.map((service) => service.valueStatement),
     scope: profile.scope,
@@ -324,4 +382,4 @@ const AGENTS = Object.freeze({
   communication: communicationAgent,
 });
 
-module.exports = { AGENTS, numbersIn };
+module.exports = { AGENTS, UNIT_CANON, canonicalUnit, numbersIn, scopeOf, separateScopes };
