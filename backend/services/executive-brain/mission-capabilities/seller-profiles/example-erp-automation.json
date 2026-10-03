@@ -1,0 +1,44 @@
+{
+  "id": "example-erp-automation",
+  "name": "Perfil de ejemplo (ERP y automatización)",
+  "offering": "Perfil de EJEMPLO para pruebas: software de gestión y automatización para pymes. Sustituir por el perfil real del vendedor antes de cualquier uso comercial.",
+  "services": [
+    {
+      "id": "stock-management",
+      "name": "Gestión de stock multialmacén",
+      "description": "Control centralizado de existencias entre almacenes, tiendas y venta online.",
+      "needLabel": "centralizar el control de stock entre ubicaciones",
+      "signals": ["stock", "almacén", "almacenes", "inventario", "tiendas", "logística", "distribución"],
+      "explicitNeedSignals": ["buscamos un erp", "buscamos software de gestión"],
+      "valueStatement": "Una única vista de las existencias para todas las ubicaciones.",
+      "qualifyingQuestions": ["¿Qué herramienta usáis hoy para controlar el stock?", "¿Cuántas ubicaciones gestionáis?"]
+    },
+    {
+      "id": "online-orders",
+      "name": "Integración de pedidos online",
+      "description": "Conexión de la tienda online con la gestión de pedidos y facturación.",
+      "needLabel": "integrar los pedidos online con la gestión interna",
+      "signals": ["tienda online", "venta online", "pedidos", "e-commerce", "ecommerce", "compra online"],
+      "explicitNeedSignals": ["integrar nuestra tienda online"],
+      "valueStatement": "Menos trabajo manual al pasar pedidos online a la gestión interna.",
+      "qualifyingQuestions": ["¿Cómo pasáis hoy los pedidos online a vuestra gestión?"]
+    },
+    {
+      "id": "process-automation",
+      "name": "Automatización de procesos administrativos",
+      "description": "Automatización de tareas repetitivas de administración y atención al cliente.",
+      "needLabel": "automatizar tareas administrativas repetitivas",
+      "signals": ["automatización", "procesos", "administración", "atención al cliente", "presupuestos", "facturación"],
+      "explicitNeedSignals": ["queremos automatizar"],
+      "valueStatement": "Más tiempo del equipo para tareas de valor en lugar de tareas repetitivas.",
+      "qualifyingQuestions": ["¿Qué tareas administrativas os consumen más tiempo?"]
+    }
+  ],
+  "sectors": ["distribución", "comercio", "servicios"],
+  "allowedClaims": ["Implantación por fases", "Diagnóstico inicial"],
+  "prohibitedClaims": ["ahorro garantizado", "roi garantizado", "resultados garantizados", "líder del mercado"],
+  "scope": "Diagnóstico inicial de procesos y propuesta de implantación por fases.",
+  "callToAction": "Si os parece interesante, ¿os encajaría una llamada breve para conocer cómo trabajáis hoy?",
+  "nextAction": "Revisar dossier y borrador; si se aprueba, buscar la persona de contacto adecuada antes de escribir.",
+  "signature": "Equipo comercial (perfil de ejemplo)"
+}

@@ -256,12 +256,12 @@ test('V2 verifier: mission verdicts PASS, PARTIAL_PASS, FAIL and NEEDS_REVIEW', 
 });
 
 test('V2: capability lookup is injectable for controlled simulation, canonical by default', () => {
-  const input = { ...BASE_CONTRACT, authorizedTools: ['research.web'] };
+  const input = { ...BASE_CONTRACT, authorizedTools: ['web.search'] };
   const canonical = createMissionContract(input);
-  assert.equal(decideSupervision({ contract: canonical, capabilityId: 'research.web' }).reason, 'capability_unavailable');
-  const simulated = (id) => (id === 'research.web'
+  assert.equal(decideSupervision({ contract: canonical, capabilityId: 'web.search' }).reason, 'capability_unavailable');
+  const simulated = (id) => (id === 'web.search'
     ? { id, mode: 'read', status: 'AVAILABLE', requiresApproval: false, requiresExternalConnection: false } : null);
   const contractSim = createMissionContract(input, { describeCapability: simulated });
-  assert.equal(decideSupervision({ contract: contractSim, capabilityId: 'research.web', describeCapability: simulated }).decision, 'CAN_EXECUTE');
+  assert.equal(decideSupervision({ contract: contractSim, capabilityId: 'web.search', describeCapability: simulated }).decision, 'CAN_EXECUTE');
   assert.equal(errorCode(() => createMissionContract({ ...BASE_CONTRACT, authorizedTools: ['ghost.capability'] })), 'unknown_authorized_tool');
 });

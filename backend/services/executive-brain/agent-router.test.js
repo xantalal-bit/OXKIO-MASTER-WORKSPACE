@@ -10,7 +10,7 @@ const { createMissionContract } = require('./xatai-core');
 const SIMULATED = new Set(['research.company', 'research.web', 'data.analyze']);
 const simulatedDescribe = (id) => {
   const profile = describeCapability(id);
-  return profile && SIMULATED.has(id) ? { ...profile, status: 'AVAILABLE' } : profile;
+  return profile && SIMULATED.has(id) ? { ...profile, status: 'AVAILABLE', costClass: 'small_model' } : profile;
 };
 
 function contract(authorizedTools, overrides = {}) {
@@ -47,9 +47,9 @@ test('fallbacks are listed and excluded agents are never chosen', () => {
 
 test('blocked and not implemented agents are never used', () => {
   const research = routeTask({
-    task: { agentRole: 'research', requiredCapabilities: ['research.company'], privacyClass: 'PUBLIC' },
+    task: { agentRole: 'web-search', requiredCapabilities: ['web.search'], privacyClass: 'PUBLIC' },
     contract: createMissionContract({
-      objective: 'O.', constraints: ['c'], autonomyLevel: 'A1', authorizedTools: ['research.company'],
+      objective: 'O.', constraints: ['c'], autonomyLevel: 'A1', authorizedTools: ['web.search'],
       passCriteria: ['p'], stopCriteria: ['s'], requiredEvidence: ['e'],
     }),
   });
@@ -81,10 +81,10 @@ test('privacy first: SECRET never reaches a model-backed agent, CONFIDENTIAL nee
   const c = contract(['research.company']);
   const policy = { confidentialProviders: [{ providerId: 'sim', region: 'eu' }], internalProviders: [{ providerId: 'sim' }] };
   const assigned = { providerId: 'sim', region: 'eu' };
-  assert.equal(routeTask({ task: { ...task, privacyClass: 'SECRET' }, contract: c, registry, privacyPolicy: policy, providerAssignment: assigned, budgetRemainingUsd: 1 }).reason, 'privacy_provider_not_allowed');
-  assert.equal(routeTask({ task: { ...task, privacyClass: 'CONFIDENTIAL' }, contract: c, registry, budgetRemainingUsd: 1 }).reason, 'privacy_provider_not_allowed');
-  assert.equal(routeTask({ task: { ...task, privacyClass: 'CONFIDENTIAL' }, contract: c, registry, privacyPolicy: policy, providerAssignment: { providerId: 'sim', region: 'us' }, budgetRemainingUsd: 1 }).reason, 'privacy_provider_not_allowed');
-  assert.equal(routeTask({ task: { ...task, privacyClass: 'CONFIDENTIAL' }, contract: c, registry, privacyPolicy: policy, providerAssignment: assigned, budgetRemainingUsd: 1 }).agentId, 'research-agent');
+  assert.equal(routeTask({ task: { ...task, privacyClass: 'SECRET' }, contract: c, registry, describeCapability: simulatedDescribe, privacyPolicy: policy, providerAssignment: assigned, budgetRemainingUsd: 1 }).reason, 'privacy_provider_not_allowed');
+  assert.equal(routeTask({ task: { ...task, privacyClass: 'CONFIDENTIAL' }, contract: c, registry, describeCapability: simulatedDescribe, budgetRemainingUsd: 1 }).reason, 'privacy_provider_not_allowed');
+  assert.equal(routeTask({ task: { ...task, privacyClass: 'CONFIDENTIAL' }, contract: c, registry, describeCapability: simulatedDescribe, privacyPolicy: policy, providerAssignment: { providerId: 'sim', region: 'us' }, budgetRemainingUsd: 1 }).reason, 'privacy_provider_not_allowed');
+  assert.equal(routeTask({ task: { ...task, privacyClass: 'CONFIDENTIAL' }, contract: c, registry, describeCapability: simulatedDescribe, privacyPolicy: policy, providerAssignment: assigned, budgetRemainingUsd: 1 }).agentId, 'research-agent');
   // Deterministic local agents are fine with SECRET context.
   assert.equal(routeTask({ task: { ...memoryTask, privacyClass: 'SECRET' }, contract: contract(['memory.search']) }).agentId, 'memory-agent');
 });
@@ -92,8 +92,8 @@ test('privacy first: SECRET never reaches a model-backed agent, CONFIDENTIAL nee
 test('cost proportional: model-backed agents need budget, deterministic ones do not', () => {
   const registry = createAgentRegistry({ describeCapability: simulatedDescribe });
   const task = { agentRole: 'research', requiredCapabilities: ['research.company'], risk: 'low', privacyClass: 'PUBLIC' };
-  assert.equal(routeTask({ task, contract: contract(['research.company']), registry, budgetRemainingUsd: 0 }).reason, 'budget_exhausted');
-  assert.equal(routeTask({ task, contract: contract(['research.company']), registry, budgetRemainingUsd: 0.1 }).agentId, 'research-agent');
+  assert.equal(routeTask({ task, contract: contract(['research.company']), registry, describeCapability: simulatedDescribe, budgetRemainingUsd: 0 }).reason, 'budget_exhausted');
+  assert.equal(routeTask({ task, contract: contract(['research.company']), registry, describeCapability: simulatedDescribe, budgetRemainingUsd: 0.1 }).agentId, 'research-agent');
   assert.equal(routeTask({ task: memoryTask, contract: contract(['memory.search']), budgetRemainingUsd: 0 }).agentId, 'memory-agent');
 });
 

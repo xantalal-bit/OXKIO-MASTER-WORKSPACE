@@ -2,7 +2,7 @@
 
 const { randomUUID } = require('node:crypto');
 const { describeCapability } = require('./capability-registry');
-const { createAgentRegistry, defaultRegistry, HIERARCHY_LEVELS } = require('./agent-registry');
+const { COST_RANK, createAgentRegistry, defaultRegistry, HIERARCHY_LEVELS } = require('./agent-registry');
 const { ROUTE_DECISIONS, routeTask } = require('./agent-router');
 const {
   DEFAULT_PRIVACY_POLICY, PRIVACY_CLASSES, classifyContext, containsSecretMarker, maxPrivacyClass,
@@ -99,6 +99,11 @@ function fail(code, message = code) {
 
 function worst(left, right) {
   return DECISION_RANK[right.decision] > DECISION_RANK[left.decision] ? right : left;
+}
+
+// Done for scheduling purposes: verified, or an optional task set aside.
+function isSettled(task) {
+  return task.status === TASK_STATUS.COMPLETED || task.status === TASK_STATUS.SKIPPED;
 }
 
 function textList(value) {
@@ -341,6 +346,18 @@ function createMissionEngine({
     return estimateCatalogCostUsd(catalog, modelId, basis);
   }
 
+  // A task costs what the capabilities it uses cost, not the most
+  // expensive thing its agent could do (reading Gmail metadata is not a
+  // model call even if the same agent can also draft with a model).
+  // Unknown capabilities count as the most expensive class (fail closed).
+  function taskCostClass(capabilityIds) {
+    return capabilityIds.reduce((current, id) => {
+      const profile = describe(id);
+      const candidate = profile && COST_RANK.includes(profile.costClass) ? profile.costClass : COST_LEVELS.MULTI_AGENT;
+      return COST_RANK.indexOf(candidate) > COST_RANK.indexOf(current) ? candidate : current;
+    }, COST_LEVELS.DETERMINISTIC);
+  }
+
   function evaluateTaskCost(draft, costClass, task) {
     const budgetRemainingUsd = remainingBudgetUsd(missionBudget(draft), committedUsd(draft));
     const result = (estimateStatus, estimatedCostUsd, escalationReason) => ({
@@ -388,8 +405,7 @@ function createMissionEngine({
       preferAgentId,
       describeCapability: describe,
     });
-    const agent = route.agentId ? agents.getAgent(route.agentId) : null;
-    const cost = evaluateTaskCost(draft, agent ? agent.costClass : COST_LEVELS.DETERMINISTIC, { ...spec, taskId });
+    const cost = evaluateTaskCost(draft, taskCostClass(spec.requiredCapabilities), { ...spec, taskId });
     const gate = gateTask(draft, spec, route, cost);
     const contract = createTaskContract(draft.contract, {
       taskId,
@@ -443,7 +459,9 @@ function createMissionEngine({
       cost,
       gate,
       contract,
-      status: gate.decision === SUPERVISOR_DECISIONS.CAN_EXECUTE ? TASK_STATUS.PLANNED : DECISION_TO_TASK_STATUS[gate.decision],
+      optional: spec.optional === true,
+      status: gate.decision === SUPERVISOR_DECISIONS.CAN_EXECUTE ? TASK_STATUS.PLANNED
+        : (spec.optional === true ? TASK_STATUS.SKIPPED : DECISION_TO_TASK_STATUS[gate.decision]),
       verification: null,
       evidenceRefs: [],
       output: null,
@@ -471,7 +489,7 @@ function createMissionEngine({
   }
 
   function aggregateWaitingState(tasks) {
-    const open = tasks.filter((item) => item.status !== TASK_STATUS.COMPLETED);
+    const open = tasks.filter((item) => !isSettled(item));
     for (const [status, state] of WAITING_STATE_PRIORITY) {
       if (open.some((item) => item.status === status)) return state;
     }
@@ -681,8 +699,7 @@ function createMissionEngine({
   // already consumed or reserved, and is refused (fail closed) when its
   // reservation would exceed the mission budget or its price is unknown.
   function reserveAttempt(draft, task) {
-    const agent = agents.getAgent(task.assignedAgent);
-    const cost = evaluateTaskCost(draft, agent ? agent.costClass : COST_LEVELS.DETERMINISTIC, {
+    const cost = evaluateTaskCost(draft, taskCostClass(task.requiredCapabilities), {
       ...BLUEPRINT_SPEC(task), taskId: task.taskId,
     });
     task.cost = cost;
@@ -693,6 +710,7 @@ function createMissionEngine({
         decision: blocked ? SUPERVISOR_DECISIONS.BLOCKED : SUPERVISOR_DECISIONS.NEEDS_APPROVAL,
         reason: cost.escalationReason || 'unknown_cost',
       };
+      if (task.optional) task.status = TASK_STATUS.SKIPPED;
       record(draft, task, 'attempt_refused_by_cost');
       return null;
     }
@@ -725,8 +743,9 @@ function createMissionEngine({
   // a credential is dropped. Human decisions carry no identities.
   function buildExecutionContext(draft, task, entry) {
     const dependencies = task.dependencies.map((id) => draft.tasks.find((item) => item.taskId === id))
-      .filter((dependency) => dependency && dependency.status === TASK_STATUS.COMPLETED)
+      .filter((dependency) => dependency && isSettled(dependency))
       .map((dependency) => {
+        if (dependency.status === TASK_STATUS.SKIPPED) return { taskId: dependency.taskId, skipped: dependency.gate.reason };
         let withheld = null;
         if (!outputBound(dependency)) withheld = 'output_not_bound';
         else if (maxPrivacyClass(dependency.privacyClass, task.privacyClass) !== task.privacyClass) withheld = 'privacy_class';
@@ -757,6 +776,7 @@ function createMissionEngine({
     const executor = executors[task.assignedAgent];
     let output = null;
     let failureKind = null;
+    let failureCode = null;
     if (typeof executor !== 'function') {
       task.status = TASK_STATUS.RUNNING;
       record(draft, task, 'task_started');
@@ -779,6 +799,8 @@ function createMissionEngine({
         if (!output) failureKind = 'invalid_output';
       } catch (error) {
         failureKind = (error && error.failureKind) || 'tool_error';
+        // Only a short identifier-like code is kept (never a message or stack).
+        failureCode = error && typeof error.code === 'string' && /^[A-Za-z0-9_:.-]{1,64}$/.test(error.code) ? error.code : null;
       } finally {
         consumeAttempt(draft, entry);
       }
@@ -818,7 +840,7 @@ function createMissionEngine({
     // Sentinel: never retry an identical attempt, respect both budgets and
     // never loop between agents.
     const attempts = draft.attempts[task.taskId] || [];
-    attempts.push({ ...task.contract.attempt, agent: task.assignedAgent, outcome: 'fail', failureKind });
+    attempts.push({ ...task.contract.attempt, agent: task.assignedAgent, outcome: 'fail', failureKind, failureCode });
     draft.attempts[task.taskId] = attempts;
     const convergence = evaluateTaskConvergence({
       attempts,
@@ -853,6 +875,9 @@ function createMissionEngine({
   function escalate(draft, task, failureKind, reason, verification) {
     task.status = HUMAN_FAILURE_STATUS[failureKind] || TASK_STATUS.BLOCKED;
     task.gate = { decision: SUPERVISOR_DECISIONS[task.status], reason };
+    // An optional source that cannot be obtained becomes a declared
+    // uncertainty instead of stopping the mission.
+    if (task.optional) task.status = TASK_STATUS.SKIPPED;
     if (!HUMAN_FAILURE_STATUS[failureKind]) {
       quality.report('repeated_failure', { relatedCapability: task.requiredCapabilities[0] });
       if (verification && verification.verdict === VERIFICATION_VERDICTS.FAIL) {
@@ -873,7 +898,7 @@ function createMissionEngine({
   }
 
   function missionVerdict(draft) {
-    const active = draft.tasks;
+    const active = draft.tasks.filter((item) => item.status !== TASK_STATUS.SKIPPED);
     const criteria = draft.contract.passCriteria.map((criterion) => criterion.criterionId);
     const verdictOf = (item) => {
       if (item.status === TASK_STATUS.FAILED) return VERIFICATION_VERDICTS.FAIL;
@@ -900,7 +925,7 @@ function createMissionEngine({
     if (!startable.includes(state.engine.state)) return state;
     const draft = cloneDomain(state);
     move(draft, ENGINE_STATES.RUNNING, 'run');
-    const completed = (id) => draft.tasks.some((item) => item.taskId === id && item.status === TASK_STATUS.COMPLETED);
+    const completed = (id) => draft.tasks.some((item) => item.taskId === id && isSettled(item));
     for (;;) {
       const task = draft.tasks.find((item) => item.status === TASK_STATUS.PLANNED
         && item.gate.decision === SUPERVISOR_DECISIONS.CAN_EXECUTE
@@ -921,7 +946,7 @@ function createMissionEngine({
       move(draft, ENGINE_STATES.FAILED, verification.reasons[0]);
       draft.result = { verdict: verification.verdict, reasons: verification.reasons };
       quality.report('mission_failed');
-    } else if (draft.tasks.every((item) => item.status === TASK_STATUS.COMPLETED)) {
+    } else if (draft.tasks.every(isSettled)) {
       move(draft, ENGINE_STATES.VERIFYING, 'all_tasks_completed');
       if (verification.verdict === 'PASS') {
         move(draft, ENGINE_STATES.COMPLETED, 'verified');
@@ -1090,6 +1115,7 @@ function BLUEPRINT_SPEC(task) {
     expectedEvidence: task.contract.expectedEvidence,
     passCriteria: task.contract.passCriteria.map((criterion) => criterion.description),
     missionCriteria: task.missionCriteria,
+    optional: task.optional,
   };
 }
 
