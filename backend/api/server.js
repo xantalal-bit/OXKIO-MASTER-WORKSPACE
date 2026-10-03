@@ -1,6 +1,7 @@
 require("dotenv").config();
 
 const http = require("http");
+const { createServerComposition } = require("../services/supervised-operation/server-composition");
 const EmailWorkflow = require("../workflows/emailWorkflow");
 const EmailAgent = require("../agents/emailAgent");
 const ProposalEngine = require("../core/proposalEngine");
@@ -163,6 +164,12 @@ const executionLogger = new ExecutionLogger();
 const executiveReasoningProvider = createExecutiveReasoningProvider();
 const costController = new CostController({
   catalog: buildReasoningCostCatalog(executiveReasoningProvider)
+});
+const v3Chat = createServerComposition({
+  enabled: process.env.OXKIO_V3_ENABLED === "true",
+  memoryRoot: process.env.OXKIO_V3_MEMORY_ROOT,
+  authorizeIdentity: authorizeFirebaseIdentity,
+  costController
 });
 const emailReplySupervisor = createEmailReplySupervisor({
   provider: executiveReasoningProvider,
@@ -360,6 +367,7 @@ if (pathname === "/api/executive/security-context") {
   });
 }
 
+if (v3Chat && pathname === "/api/executive/chat" && req.method === "POST") return v3Chat.handle(req, res);
 if (isExecutiveChatRoute(pathname, req.method)) {
   return handleExecutiveChatRequest(req, res, {
     dependencies: {

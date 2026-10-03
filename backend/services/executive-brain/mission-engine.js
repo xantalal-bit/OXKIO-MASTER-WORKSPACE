@@ -920,7 +920,7 @@ function createMissionEngine({
     });
   }
 
-  async function runMission(state, { executors = {} } = {}) {
+  async function runMission(state, { executors = {}, shouldPause = () => false } = {}) {
     const startable = [ENGINE_STATES.READY, ENGINE_STATES.WAITING_AGENT, ENGINE_STATES.WAITING_TOOL];
     if (!startable.includes(state.engine.state)) return state;
     const draft = cloneDomain(state);
@@ -931,6 +931,8 @@ function createMissionEngine({
         && item.gate.decision === SUPERVISOR_DECISIONS.CAN_EXECUTE
         && item.dependencies.every(completed));
       if (!task) break;
+      // V3 admission control pauses between tasks without burning an attempt.
+      if (shouldPause()) { move(draft, ENGINE_STATES.WAITING_TOOL, 'scheduler_pause'); break; }
       await executeTask(draft, task, executors);
       if (draft.engine.state !== ENGINE_STATES.RUNNING) break;
       if (draft.tasks.some((item) => item.status === TASK_STATUS.FAILED)) break;
