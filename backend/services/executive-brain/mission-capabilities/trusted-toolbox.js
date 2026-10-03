@@ -3,7 +3,8 @@
 const { digestOutput } = require('../evidence-registry');
 const { containsSecretMarker } = require('../privacy-gate');
 const { AGENTS, numbersIn } = require('./company-opportunity-agents');
-const { isSuspicious, sameSite } = require('./company-research-extract');
+const { isSuspicious } = require('./company-research-extract');
+const { sameSite } = require('./public-web-fetcher');
 
 // XATAI CORE V2.1: Trusted Toolbox — the composition-root trust boundary.
 //
@@ -90,7 +91,9 @@ const SATISFIED = Object.freeze({
   'company-research': (result) => result.facts.filter((fact) => !fact.suspicious).length >= 2,
   analysis: (result) => result.facts.length >= 1,
   proposal: (result) => result.situation.length >= 1,
-  communication: (result) => Boolean(result.email && result.email.subject && result.email.body),
+  communication: (result) => (result.contactDecision === 'DO_NOT_CONTACT_YET'
+    ? Boolean(result.internalBriefing && result.internalBriefing.reason)
+    : Boolean(result.email && result.email.subject && result.email.body)),
 });
 
 function createTrustedToolbox({
@@ -138,8 +141,15 @@ function createTrustedToolbox({
         if (context.privacyClass === 'SECRET') throw toolError('secret_context', 'permission');
         let host;
         try { host = new URL(url).hostname; } catch (error) { throw toolError('url_not_allowed', 'permission'); }
-        if (!target.website || !sameSite(host, new URL(target.website).hostname)) throw toolError('off_site_url', 'permission');
-        const page = await fetcher.fetchPage(url);
+        if (!target.website) throw toolError('off_site_url', 'permission');
+        const allowedSite = new URL(target.website).hostname;
+        if (!sameSite(host, allowedSite)) throw toolError('off_site_url', 'permission');
+        // The fetcher enforces the site on every redirect hop; the final
+        // destination is checked again here before anything is recorded.
+        const page = await fetcher.fetchPage(url, { allowedSite });
+        let finalHost = null;
+        try { finalHost = new URL(page.url).hostname; } catch (error) { finalHost = null; }
+        if (!finalHost || !sameSite(finalHost, allowedSite)) throw toolError('off_site_redirect', 'permission');
         const sourceRef = recordSource(contract, 'web_page', page.url, page.text, page.fetchedAt);
         return Object.freeze({ sourceRef, url: page.url, fetchedAt: page.fetchedAt, text: page.text });
       },
@@ -210,7 +220,11 @@ function createTrustedToolbox({
       }
     }
     if (stage === 'opportunities') {
+      // No opportunity may rest on a fact the analysis found contradicted.
+      const analysis = dependencies.find((dependency) => dependency.data && dependency.data.stage === 'analysis');
+      const contradicted = new Set((analysis && analysis.data.contradictions || []).flatMap((entry) => entry.factIds || []));
       for (const item of result.opportunities || []) {
+        if ((item.basisFactIds || []).some((id) => contradicted.has(id))) throw invalid('contradicted_basis');
         const service = sellerProfile.services.find((candidate) => candidate.id === item.serviceId);
         const basis = (item.basisFactIds || []).map((id) => allFacts.get(id));
         if (!service || basis.length === 0 || basis.some((fact) => !fact || fact.suspicious)) throw invalid('opportunity_basis');
@@ -224,12 +238,23 @@ function createTrustedToolbox({
       }
     }
     if (stage === 'proposal') {
+      // The recommendation follows from the opportunities, never the reverse.
+      const expected = (result.opportunities || []).length > 0 ? 'REVIEW_AND_CONTACT' : 'DO_NOT_CONTACT_YET';
+      if (result.recommendation !== expected) throw invalid('recommendation_mismatch');
       const names = new Set(sellerProfile.services.map((service) => service.name));
       if ((result.solution || []).some((item) => !names.has(item.name))) throw invalid('unknown_solution');
       if ((result.situation || []).some((item) => !allFacts.has(item.factId) || item.label !== 'FACT')) throw invalid('situation_fact');
     }
     if (stage === 'communication') {
       if (result.sent !== false) throw invalid('sent_flag');
+      // DO_NOT_CONTACT_YET means no contact material at all.
+      const proposal = dependencies.find((dependency) => dependency.data && dependency.data.stage === 'proposal');
+      const decision = proposal && proposal.data.recommendation === 'REVIEW_AND_CONTACT'
+        && proposal.data.opportunities.length > 0 ? 'REVIEW_AND_CONTACT' : 'DO_NOT_CONTACT_YET';
+      if (result.contactDecision !== decision) throw invalid('contact_decision_mismatch');
+      if (decision === 'DO_NOT_CONTACT_YET' && (result.email !== null || result.shortMessage !== null || result.followUp !== null)) {
+        throw invalid('contact_material_without_opportunity');
+      }
       const allowedHosts = [target.website, ...profileText.match(URL_PATTERN) || []]
         .filter(Boolean).map((url) => { try { return new URL(url).hostname; } catch (error) { return null; } });
       const allowedEmails = profileText.match(EMAIL_PATTERN) || [];

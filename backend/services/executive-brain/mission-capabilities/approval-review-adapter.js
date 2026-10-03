@@ -15,8 +15,12 @@ async function submitCommercialReview({ approvalQueue, review, recipient = null,
   if (!approvalQueue || typeof approvalQueue.addPreparedEmailDraft !== 'function') {
     return Object.freeze({ submitted: false, reason: 'approval_queue_not_connected' });
   }
-  if (!review || review.status !== 'LISTO PARA REVISIÓN' || !review.draft) {
+  if (!review || review.status !== 'LISTO PARA REVISIÓN') {
     return Object.freeze({ submitted: false, reason: 'review_not_ready' });
+  }
+  // No backed opportunity: nothing is ever queued for sending.
+  if (!review.contact || review.contact.decision !== 'CONTACTO PROPUESTO PARA REVISIÓN' || !review.draft) {
+    return Object.freeze({ submitted: false, reason: 'do_not_contact' });
   }
   if (typeof recipient !== 'string' || !EMAIL_PATTERN.test(recipient)) {
     return Object.freeze({ submitted: false, reason: 'recipient_unknown' });

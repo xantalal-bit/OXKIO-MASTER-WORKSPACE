@@ -15,7 +15,7 @@ SUPERVISOR
 
 | Capacidad | Estado | Qué hace de verdad |
 |---|---|---|
-| `research.company` | PARTIAL | GET HTTPS público de la web oficial indicada (SSRF bloqueado, robots.txt, límites). Sin buscador. |
+| `research.company` | PARTIAL | GET HTTPS público de la web oficial indicada. Sin buscador. |
 | `research.web` | PARTIAL | Páginas del mismo dominio oficial enlazadas desde la portada. Sin buscador. |
 | `web.search` | NOT_IMPLEMENTED | No hay proveedor de búsqueda aprobado ni conectado. |
 | `data.analyze`, `opportunity.analyze`, `proposal.compose`, `communication.compose` | AVAILABLE | Código local determinista, sin modelo ni coste externo. |
@@ -34,6 +34,25 @@ SUPERVISOR
 - que una inferencia no se presente como necesidad observada.
 
 Después liga cada salida por `outputDigest`.
+
+## Lector web: confinamiento y SSRF
+
+`fetchPage(url, { allowedSite })` aplica las mismas comprobaciones en la primera petición y en cada redirect:
+
+- **Destino:** HTTPS, puerto 443, sin credenciales y dentro del sitio autorizado. El sitio es el host exacto o su gemelo con o sin `www`, nunca un sufijo. Un redirect fuera del sitio da `off_site_redirect` y no se sigue.
+- **DNS:** se resuelve una vez por salto y todas las direcciones deben ser públicas. La conexión HTTPS se fija a esa IP validada mediante un `lookup` propio, así que una segunda resolución no puede llevarla a localhost, a una red privada o al servicio de metadatos (DNS rebinding). TLS se sigue verificando contra el nombre de host.
+- **robots.txt** (subconjunto de RFC 9309) se comprueba para la URL que realmente se lee, en cada salto y para cada origen:
+  - el grupo propio prevalece sobre `*`;
+  - gana la regla más larga y, en empate, `Allow`;
+  - se admiten `*` y `$`;
+  - 4xx significa permitido;
+  - 5xx, error de red o un redirect de robots fuera del sitio significan prohibido.
+
+El toolbox vuelve a comprobar el destino final antes de registrar nada.
+
+## Decisión de contacto
+
+Sin ninguna oportunidad respaldada por hechos (incluidas las que solo se apoyan en cifras contradictorias), el resultado es `DO_NOT_CONTACT_YET`. En ese caso no hay email, mensaje ni seguimiento, solo un briefing interno, y la revisión muestra «NO CONTACTAR TODAVÍA». El adaptador de la Approval Queue no encola nada.
 
 ## Prueba real controlada
 

@@ -173,7 +173,7 @@ test('retry limit: a site that never answers stops after bounded attempts and as
   const { review, calls, state } = await run({ site: down });
   assert.ok(calls.length <= 3);
   assert.equal(review.status, 'NO LISTO');
-  assert.match(review.questionForHuman, /No he podido leer la web oficial indicada \(http_404\)/);
+  assert.match(review.questionForHuman, /No he podido leer la web oficial indicada: responde con un error HTTP \(http_404\)/);
   assert.notEqual(state.verification.verdict, 'PASS');
 });
 

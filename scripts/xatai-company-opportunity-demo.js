@@ -52,7 +52,8 @@ async function main() {
   console.log('\nOPORTUNIDADES');
   [...review.opportunities.observed, ...review.opportunities.inferred]
     .forEach((item) => console.log(`  [${item.level}] ${item.need}\n         → ${item.solution}`));
-  console.log(`\nRECOMENDACIÓN: ${review.recommendation} — ${review.proposedAction}`);
+  console.log(`\nCONTACTO: ${review.contact.decision}${review.contact.reason ? ` — ${review.contact.reason}` : ''}`);
+  if (review.recommendation) console.log(`RECOMENDACIÓN: ${review.recommendation} — ${review.proposedAction}`);
   console.log('\nINCERTIDUMBRES');
   review.uncertainties.forEach((item) => console.log(`  - ${item}`));
   if (review.draft) console.log(`\nBORRADOR (NO ENVIADO)\n  Asunto: ${review.draft.subject}\n\n${review.draft.body}`);

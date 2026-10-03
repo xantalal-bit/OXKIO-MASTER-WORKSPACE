@@ -159,7 +159,13 @@ async function analysisAgent({ dependencies }) {
   }
   for (const [unit, values] of byUnit) {
     if (new Set(values.map((item) => item.value)).size > 1) {
-      contradictions.push({ unit, factIds: values.map((item) => item.id) });
+      // Every fact quoting one of the conflicting figures is contradicted
+      // too (e.g. the full sentence that also contains "40 empleados").
+      const conflicting = usable.filter((fact) => values.some((item) => {
+        const source = usable.find((candidate) => candidate.id === item.id);
+        return source && fact.excerpt.toLowerCase().includes(source.excerpt.toLowerCase());
+      }));
+      contradictions.push({ unit, factIds: [...new Set([...values.map((item) => item.id), ...conflicting.map((fact) => fact.id)])] });
     }
   }
   const uncertainties = uncertaintiesFrom(dependencies);
@@ -243,9 +249,36 @@ async function proposalAgent({ dependencies, profile, target }) {
   };
 }
 
+// Without an opportunity backed by facts, no contact material exists: only
+// an internal briefing saying why not to contact and what is missing.
+function doNotContactBriefing(target, data) {
+  return {
+    stage: 'communication',
+    facts: data.facts || [],
+    contactDecision: 'DO_NOT_CONTACT_YET',
+    email: null,
+    shortMessage: null,
+    followUp: null,
+    executiveSummary: `Empresa: ${target.company}. No contactar todavía: no hay ninguna oportunidad respaldada por hechos.`,
+    internalBriefing: {
+      reason: 'No se ha identificado ninguna oportunidad respaldada por hechos verificados.',
+      verifiedFacts: (data.situation || []).map((item) => item.text),
+      missingInformation: data.openQuestions || [],
+      nextResearch: [
+        'Confirmar a qué se dedica la empresa y qué procesos podría tener relacionados con nuestros servicios.',
+        'Buscar una necesidad declarada por la propia empresa antes de preparar ningún contacto.',
+      ],
+    },
+    sent: false,
+  };
+}
+
 async function communicationAgent({ dependencies, profile, target }) {
   const proposal = dependencies.find((dependency) => dependency.data && dependency.data.stage === 'proposal');
   const data = proposal ? proposal.data : { situation: [], opportunities: [], solution: [], value: [], openQuestions: [] };
+  if (!proposal || data.recommendation !== 'REVIEW_AND_CONTACT' || data.opportunities.length === 0) {
+    return doNotContactBriefing(target, data);
+  }
   const greeting = target.contactName ? `Hola, ${target.contactName}:` : `Hola, equipo de ${target.company}:`;
   // Quote the company's own words (the fact excerpt), never a paraphrase.
   const lead = data.situation[0] && (data.facts || []).find((fact) => fact.id === data.situation[0].factId);
@@ -261,6 +294,7 @@ async function communicationAgent({ dependencies, profile, target }) {
   return {
     stage: 'communication',
     facts: proposal ? proposal.data.facts : [],
+    contactDecision: 'REVIEW_AND_CONTACT',
     email: { subject: `${profile.name}: una idea para ${target.company}`, body },
     shortMessage: `${greeting} ${ideaLine} ${profile.callToAction}`,
     executiveSummary: [

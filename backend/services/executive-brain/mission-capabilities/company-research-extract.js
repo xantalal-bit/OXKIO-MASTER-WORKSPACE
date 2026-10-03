@@ -1,6 +1,8 @@
 'use strict';
 
 const { containsSecretMarker } = require('../privacy-gate');
+// One strict definition of "same site" for the whole circuit.
+const { sameSite } = require('./public-web-fetcher');
 
 // XATAI CORE V2.1: deterministic fact extraction from a normalized public
 // page (entities decoded, whitespace collapsed, see public-web-fetcher).
@@ -135,10 +137,6 @@ function extractFacts(page, { prefix, signals = [], broad = false, maxSignalFact
     }
   }
   return facts;
-}
-
-function sameSite(left, right) {
-  return left.replace(/^www\./, '') === right.replace(/^www\./, '');
 }
 
 function extractLinks(page, { max = 4 } = {}) {

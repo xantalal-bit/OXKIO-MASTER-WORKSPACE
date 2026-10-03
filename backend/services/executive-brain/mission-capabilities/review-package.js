@@ -7,6 +7,13 @@
 // from a fixture. Nothing here sends, approves or executes.
 
 const REVIEW_DECISIONS = Object.freeze(['APROBAR', 'MODIFICAR', 'DESCARTAR']);
+const FAILURE_TEXT = Object.freeze({
+  network_error: 'no responde', timeout: 'no responde a tiempo', dns_failed: 'el dominio no existe o no resuelve',
+  robots_unavailable: 'no responde (ni siquiera su robots.txt)', robots_disallowed: 'su robots.txt no permite leerla',
+  off_site_redirect: 'redirige fuera del dominio oficial', off_site_url: 'la dirección está fuera del dominio oficial',
+  private_address: 'apunta a una red privada', url_not_allowed: 'la dirección no es una web pública HTTPS válida',
+  unsupported_content_type: 'no devuelve una página web', too_large: 'la página es demasiado grande',
+});
 
 function stageData(state, key) {
   const task = state.tasks.find((item) => item.key === key && item.status === 'COMPLETED' && typeof item.output === 'string');
@@ -36,8 +43,9 @@ function buildCommercialReview(state, { describeSource = () => null } = {}) {
 
   // One concrete question when OXKIO cannot resolve the block by itself.
   const researchBlock = blocking.find((item) => item.task === 'company-research');
+  const code = researchBlock ? researchBlock.lastFailure || researchBlock.reason : null;
   const questionForHuman = researchBlock
-    ? `No he podido leer la web oficial indicada (${researchBlock.lastFailure || researchBlock.reason}). ¿Es correcta la dirección?`
+    ? `No he podido leer la web oficial indicada: ${FAILURE_TEXT[code] || (String(code).startsWith('http_') ? 'responde con un error HTTP' : 'no se ha podido leer')} (${code}). ¿Es correcta la dirección?`
     : null;
 
   return Object.freeze({
@@ -54,10 +62,19 @@ function buildCommercialReview(state, { describeSource = () => null } = {}) {
       inferred: (opportunities ? opportunities.opportunities : []).filter((item) => item.level === 'INFERENCE'),
     },
     proposal,
-    draft: communication ? { ...communication.email, sent: false } : null,
-    otherDrafts: communication ? {
+    // Contact decision first: with no backed opportunity there is no draft
+    // and nothing that could be sent.
+    contact: !communication
+      ? { decision: 'NO CONTACTAR TODAVÍA', reason: 'La misión no ha llegado a la fase de comunicación.' }
+      : (communication.contactDecision === 'REVIEW_AND_CONTACT'
+        ? { decision: 'CONTACTO PROPUESTO PARA REVISIÓN', reason: null }
+        : { decision: 'NO CONTACTAR TODAVÍA', reason: communication.internalBriefing ? communication.internalBriefing.reason : null }),
+    draft: communication && communication.contactDecision === 'REVIEW_AND_CONTACT' && communication.email
+      ? { ...communication.email, sent: false } : null,
+    otherDrafts: communication && communication.contactDecision === 'REVIEW_AND_CONTACT' ? {
       shortMessage: communication.shortMessage, followUp: communication.followUp, salesBriefing: communication.salesBriefing,
     } : null,
+    internalBriefing: communication ? communication.internalBriefing || null : null,
     evidence: sourceRefs.map((ref) => ({ ref, ...(describeSource(ref) || { origin: 'unknown' }) })),
     // Skipped optional sources are already declared by the analysis agent.
     uncertainties: opportunities ? opportunities.uncertainties : [],

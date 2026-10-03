@@ -158,7 +158,10 @@ test('red team: contradictory figures are reported, not chosen', async () => {
   });
   assert.equal(review.contradictions.length, 1);
   assert.ok(review.uncertainties.some((item) => /cifras distintas/.test(item)));
-  assert.ok(!/\b(40|55|120)\b/.test(review.draft.body));
+  // The only stock signal quotes a contested figure: no opportunity, no draft.
+  assert.equal(review.draft, null);
+  assert.equal(review.contact.decision, 'NO CONTACTAR TODAVÍA');
+  assert.ok(!/\b(40|55|120)\b/.test(JSON.stringify(review.otherDrafts)));
 });
 
 test('red team: site down / timeout / ambiguous company — bounded retries, one question, no invention', async () => {
