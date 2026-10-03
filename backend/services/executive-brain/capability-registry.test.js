@@ -158,7 +158,13 @@ test('XATAI CORE V2: internal capabilities resolve in describeCapability but nev
   }
   assert.equal(describeCapability('verification.review').status, CAPABILITY_STATUS.AVAILABLE);
   assert.equal(describeCapability('mission.plan').status, CAPABILITY_STATUS.AVAILABLE);
-  for (const id of ['research.company', 'research.web', 'data.analyze', 'repository.analyze', 'code.propose_patch', 'tests.run']) {
+  assert.equal(describeCapability('research.company').status, CAPABILITY_STATUS.PARTIAL);
+  assert.equal(describeCapability('research.web').status, CAPABILITY_STATUS.PARTIAL);
+  for (const id of ['data.analyze', 'opportunity.analyze', 'proposal.compose', 'communication.compose', 'commercial.handoff']) {
+    assert.equal(describeCapability(id).status, CAPABILITY_STATUS.AVAILABLE, id);
+  }
+  assert.equal(describeCapability('commercial.handoff').requiresApproval, true);
+  for (const id of ['web.search', 'repository.analyze', 'code.propose_patch', 'tests.run']) {
     assert.equal(describeCapability(id).status, CAPABILITY_STATUS.NOT_IMPLEMENTED, id);
   }
   assert.equal(describeCapability('tests.run').requiresApproval, true);

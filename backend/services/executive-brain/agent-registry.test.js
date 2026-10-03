@@ -13,18 +13,19 @@ function errorCode(fn) {
   return null;
 }
 
-test('hierarchy: supervisor -> 7 coordinators -> 16 agents, every agent under a known coordinator', () => {
+test('hierarchy: supervisor -> 7 coordinators -> 20 agents, every agent under a known coordinator', () => {
   assert.deepEqual(Object.keys(HIERARCHY_LEVELS), ['SUPERVISOR', 'COORDINATOR', 'AGENT', 'SUBAGENT']);
   assert.equal(defaultRegistry.listCoordinators().length, 7);
-  assert.equal(defaultRegistry.listAgents().length, 16);
+  assert.equal(defaultRegistry.listAgents().length, 20);
   for (const coordinator of defaultRegistry.listCoordinators()) {
     assert.equal(coordinator.parent, SUPERVISOR_ID);
     assert.equal(coordinator.level, 'COORDINATOR');
   }
   assert.deepEqual(defaultRegistry.hierarchyOf('email-agent'), [SUPERVISOR_ID, 'COMMUNICATION_COORDINATOR', 'email-agent']);
   const roles = defaultRegistry.listAgents().map((agent) => agent.role).sort();
-  assert.deepEqual(roles, ['calendar', 'code', 'cost', 'data-analysis', 'documents', 'drive', 'email', 'memory', 'quality',
-    'repository-analysis', 'research', 'security-privacy', 'test', 'verifier', 'web-research', 'workflow']);
+  assert.deepEqual(roles, ['calendar', 'code', 'communication', 'cost', 'data-analysis', 'documents', 'drive', 'email', 'memory',
+    'opportunity', 'proposal', 'quality', 'repository-analysis', 'research', 'security-privacy', 'test', 'verifier',
+    'web-research', 'web-search', 'workflow']);
 });
 
 test('every agent declares the full governance contract', () => {
@@ -46,8 +47,14 @@ test('status is derived from the capability registry, never faked', () => {
   assert.equal(status('memory-agent'), AGENT_STATUS.AVAILABLE);
   assert.equal(status('verifier-agent'), AGENT_STATUS.AVAILABLE);
   assert.equal(status('workflow-agent'), AGENT_STATUS.PARTIAL);
-  for (const id of ['research-agent', 'web-research-agent', 'repository-analysis-agent', 'code-agent', 'test-agent',
-    'data-analysis-agent', 'documents-agent', 'drive-agent']) {
+  // V2.1: research is real but limited to the official site (PARTIAL);
+  // analysis, opportunity, proposal and communication run locally.
+  assert.equal(status('research-agent'), AGENT_STATUS.PARTIAL);
+  assert.equal(status('web-research-agent'), AGENT_STATUS.PARTIAL);
+  for (const id of ['data-analysis-agent', 'opportunity-agent', 'proposal-agent', 'communication-agent']) {
+    assert.equal(status(id), AGENT_STATUS.AVAILABLE, id);
+  }
+  for (const id of ['web-search-agent', 'repository-analysis-agent', 'code-agent', 'test-agent', 'documents-agent', 'drive-agent']) {
     assert.equal(status(id), AGENT_STATUS.NOT_IMPLEMENTED, id);
   }
   for (const agent of defaultRegistry.listAgents()) {

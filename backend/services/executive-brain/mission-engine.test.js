@@ -25,7 +25,7 @@ const SIMULATED = new Set(['research.company', 'research.web', 'data.analyze', '
 function simulatedDescribe(id) {
   const profile = describeCapability(id);
   if (!profile) return null;
-  return SIMULATED.has(id) ? Object.freeze({ ...profile, status: 'AVAILABLE' }) : profile;
+  return SIMULATED.has(id) ? Object.freeze({ ...profile, status: 'AVAILABLE', costClass: 'small_model' }) : profile;
 }
 const SIM_CATALOG = Object.freeze({
   local_deterministic: DEFAULT_CATALOG.local_deterministic,

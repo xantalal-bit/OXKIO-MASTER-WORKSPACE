@@ -83,6 +83,10 @@ const TASK_STATUS = Object.freeze({
   NEEDS_APPROVAL: 'NEEDS_APPROVAL',
   BLOCKED: 'BLOCKED',
   CANCELLED: 'CANCELLED',
+  // An optional task that could not run (not connected, refused, failed
+  // after retries). It never blocks the mission; its reason is reported as
+  // an uncertainty and nothing it would have produced is assumed.
+  SKIPPED: 'SKIPPED',
 });
 
 function canTransition(from, to) {

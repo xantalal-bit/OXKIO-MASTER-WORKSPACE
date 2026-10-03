@@ -281,10 +281,37 @@ const INTERNAL_CAPABILITIES = Object.freeze([
     source: 'backend/services/executive-brain/privacy-gate.js',
     costClass: COST_LEVELS.DETERMINISTIC, requiresExternalConnection: false,
   }),
+  // XATAI CORE V2.1 (03/10/2026): real capabilities of the company-opportunity
+  // circuit. All run as local deterministic code (no model, no paid API);
+  // research reads public pages with one plain HTTPS GET and is PARTIAL: it
+  // only reads the official site given by the human, it cannot search the web.
   ...[
-    ['research.company', 'analyze', 'low', true],
-    ['research.web', 'read', 'low', true],
-    ['data.analyze', 'analyze', 'low', false],
+    ['research.company', 'read', 'Solo lee la web oficial indicada; no hay buscador web conectado.', true],
+    ['research.web', 'read', 'Solo lee paginas publicas del mismo dominio oficial; no hay buscador web conectado.', true],
+  ].map(([id, mode, limitation, requiresExternalConnection]) => Object.freeze({
+    id, mode, owner: 'public-web-fetcher', risk: 'low',
+    requiresApproval: false, available: true, partial: true, unavailableReason: limitation,
+    source: 'backend/services/executive-brain/mission-capabilities/public-web-fetcher.js',
+    costClass: COST_LEVELS.DETERMINISTIC, requiresExternalConnection,
+  })),
+  ...['data.analyze', 'opportunity.analyze', 'proposal.compose', 'communication.compose'].map((id) => Object.freeze({
+    id, mode: id === 'data.analyze' || id === 'opportunity.analyze' ? 'analyze' : 'propose', owner: 'company-opportunity-agents',
+    risk: 'low',
+    // Drafting text locally is reversible and sends nothing: no approval.
+    requiresApproval: false, available: true, partial: false, unavailableReason: null,
+    source: 'backend/services/executive-brain/mission-capabilities/company-opportunity-agents.js',
+    costClass: COST_LEVELS.DETERMINISTIC, requiresExternalConnection: false,
+  })),
+  // The human review of a commercial result: never executed by an agent,
+  // always a human gate before anything leaves OXKIO.
+  Object.freeze({
+    id: 'commercial.handoff', mode: 'propose', owner: 'approval-review-adapter', risk: 'medium',
+    requiresApproval: true, available: true, partial: false, unavailableReason: null,
+    source: 'backend/services/executive-brain/mission-capabilities/approval-review-adapter.js',
+    costClass: COST_LEVELS.DETERMINISTIC, requiresExternalConnection: false,
+  }),
+  ...[
+    ['web.search', 'read', 'low', true],
     ['repository.analyze', 'analyze', 'low', false],
     ['code.propose_patch', 'propose', 'medium', false],
     ['tests.run', 'execute', 'medium', false],

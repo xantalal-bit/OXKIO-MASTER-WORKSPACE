@@ -65,6 +65,9 @@ function agent(id, role, coordinator, capabilities, options = {}) {
 const AGENT_DECLARATIONS = Object.freeze([
   agent('research-agent', 'research', 'RESEARCH_COORDINATOR', ['research.company'], { canPlan: true, maxSubagents: 3 }),
   agent('web-research-agent', 'web-research', 'RESEARCH_COORDINATOR', ['research.web'], { maxSubagents: 2 }),
+  // V2.1: web.search (finding sources without a known URL) is declared and
+  // NOT_IMPLEMENTED until a search provider is approved and connected.
+  agent('web-search-agent', 'web-search', 'RESEARCH_COORDINATOR', ['web.search']),
   agent('repository-analysis-agent', 'repository-analysis', 'CODE_COORDINATOR', ['repository.analyze'], { canPlan: true, maxSubagents: 2 }),
   agent('code-agent', 'code', 'CODE_COORDINATOR', ['code.propose_patch'], {
     riskClasses: ['low', 'medium'], prohibitedCapabilities: ['deploy', 'production_change'],
@@ -79,6 +82,11 @@ const AGENT_DECLARATIONS = Object.freeze([
   agent('drive-agent', 'drive', 'DOCUMENT_COORDINATOR', ['drive.search']),
   agent('memory-agent', 'memory', 'DATA_COORDINATOR', ['memory.search']),
   agent('data-analysis-agent', 'data-analysis', 'DATA_COORDINATOR', ['data.analyze'], { maxSubagents: 2 }),
+  agent('opportunity-agent', 'opportunity', 'DATA_COORDINATOR', ['opportunity.analyze']),
+  agent('proposal-agent', 'proposal', 'COMMUNICATION_COORDINATOR', ['proposal.compose']),
+  agent('communication-agent', 'communication', 'COMMUNICATION_COORDINATOR', ['communication.compose', 'commercial.handoff'], {
+    riskClasses: ['low', 'medium'], prohibitedCapabilities: ['gmail.send'],
+  }),
   agent('workflow-agent', 'workflow', 'WORKFLOW_COORDINATOR', ['mission.plan', 'mission.track'], { canPlan: true }),
   agent('quality-agent', 'quality', 'EXECUTIVE_COORDINATOR', ['quality.record']),
   agent('cost-agent', 'cost', 'EXECUTIVE_COORDINATOR', ['cost.estimate']),

@@ -26,7 +26,7 @@ let evidenceCounter = 0;
 const SIMULATED = new Set(['research.company', 'research.web', 'data.analyze', 'repository.analyze', 'code.propose_patch', 'tests.run']);
 const simulatedDescribe = (id) => {
   const profile = describeCapability(id);
-  return profile && SIMULATED.has(id) ? Object.freeze({ ...profile, status: 'AVAILABLE' }) : profile;
+  return profile && SIMULATED.has(id) ? Object.freeze({ ...profile, status: 'AVAILABLE', costClass: 'small_model' }) : profile;
 };
 const NOW = '2026-10-03T10:00:00.000Z';
 
@@ -141,19 +141,22 @@ test('simulation: "Analiza este repositorio, encuentra el fallo, propón reparac
   assert.deepEqual(network, []);
 });
 
-test('simulation: canonical registry runs the same request honestly as BLOCKED, with one clear reason', async () => {
+test('simulation: canonical registry runs the same request honestly, gated by connection and privacy', async () => {
   const quality = new QualityIncidentRegistry({ now: () => NOW });
   const engine = createMissionEngine({ now: () => NOW, qualityRegistry: quality });
   const calls = [];
   const answer = await handleMissionRequest(engine, 'Analiza una empresa y prepara una propuesta comercial.', {
-    context: { company: 'ACME Iberia' }, executors: recordingExecutors(calls),
+    context: { company: 'ACME Iberia' }, executors: recordingExecutors(calls), includeDetails: true,
   });
+  const byKey = Object.fromEntries(answer.state.tasks.map((item) => [item.key, item]));
+  // V2.1: research is real but no network connection was granted here.
+  assert.deepEqual([byKey['company-research'].gate.decision, byKey['company-research'].gate.reason], ['NEEDS_CONNECTION', 'connection_unavailable']);
+  // The Gmail draft still cannot use any external model provider (privacy).
+  assert.equal(byKey['proposal-draft'].gate.reason, 'privacy_provider_not_allowed');
   assert.equal(answer.kind, 'BLOCKED');
-  assert.equal(answer.message, 'Todavía no puedo hacer una parte de esta misión: esa función aún no está desarrollada.');
-  assert.equal(answer.details, undefined);
   assert.equal(calls.length, 0);
-  assert.ok(quality.list().length >= 1);
-  assert.ok(quality.list().every((incident) => incident.component === 'mission-engine'));
+  // Gates waiting on a human are not quality incidents.
+  assert.equal(quality.list().length, 0);
 });
 
 test('zero material execution: every task contract keeps the baseline prohibitions and executionEnabled=false', async () => {

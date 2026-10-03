@@ -55,6 +55,15 @@ function routeTask({
     return blocked(ROUTE_DECISIONS.BLOCKED, 'capability_not_authorized');
   }
 
+  // Privacy and cost are judged on what this task uses, not on everything
+  // the agent could do: reading Gmail metadata sends nothing to a model even
+  // if the same agent can also draft with one. Unknown capabilities count as
+  // model-backed (fail closed).
+  const MODEL_CLASSES = [COST_LEVELS.SMALL_MODEL, COST_LEVELS.PREMIUM_MODEL, COST_LEVELS.MULTI_AGENT];
+  const taskUsesModel = required.some((id) => {
+    const profile = describe(id);
+    return !profile || MODEL_CLASSES.includes(profile.costClass);
+  });
   const steps = [
     ['no_agent_for_capability', (agent) => required.every((id) => agent.capabilities.includes(id))
       && !required.some((id) => agent.prohibitedCapabilities.includes(id))],
@@ -64,10 +73,10 @@ function routeTask({
     ['risk_not_accepted', (agent) => agent.riskClasses.includes(task.risk || 'low')],
     ['privacy_provider_not_allowed', (agent) => evaluateProviderRouting({
       privacyClass: task.privacyClass,
-      provider: { external: agent.requiresExternalProvider, ...(providerAssignment || {}) },
+      provider: { external: agent.requiresExternalProvider && taskUsesModel, ...(providerAssignment || {}) },
       policy: privacyPolicy,
     }).allowed],
-    ['budget_exhausted', (agent) => agent.costClass === COST_LEVELS.DETERMINISTIC || budgetRemainingUsd > 0],
+    ['budget_exhausted', () => !taskUsesModel || budgetRemainingUsd > 0],
   ];
   let candidates = registry.listAgents();
   for (const [reason, keep] of steps) {

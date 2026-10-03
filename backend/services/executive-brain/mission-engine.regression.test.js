@@ -26,11 +26,11 @@ const SIMULATED = new Set(['research.company', 'research.web', 'data.analyze']);
 function simulatedDescribe(id) {
   if (id === 'sim.proposal') return SIM_PROPOSAL;
   const profile = describeCapability(id);
-  return profile && SIMULATED.has(id) ? Object.freeze({ ...profile, status: 'AVAILABLE' }) : profile;
+  return profile && SIMULATED.has(id) ? Object.freeze({ ...profile, status: 'AVAILABLE', costClass: 'small_model' }) : profile;
 }
 const PROPOSAL_AGENT = Object.freeze({
   ...AGENT_DECLARATIONS.find((agent) => agent.id === 'email-agent'),
-  id: 'proposal-agent', role: 'proposal', capabilities: Object.freeze(['sim.proposal']), prohibitedCapabilities: Object.freeze([]),
+  id: 'sim-proposal-agent', role: 'sim-proposal', capabilities: Object.freeze(['sim.proposal']), prohibitedCapabilities: Object.freeze([]),
 });
 const CATALOG = Object.freeze({
   local_deterministic: DEFAULT_CATALOG.local_deterministic,
@@ -309,7 +309,7 @@ function chainExecutors(record, seen, outputs) {
   return {
     'research-agent': make('research-agent', () => outputs.a),
     'data-analysis-agent': make('data-analysis-agent', (context) => `Análisis de [${context.dependencies[0].output}]`),
-    'proposal-agent': make('proposal-agent', (context) => `Propuesta basada en [${context.dependencies[0].output}]`),
+    'sim-proposal-agent': make('sim-proposal-agent', (context) => `Propuesta basada en [${context.dependencies[0].output}]`),
     'memory-agent': make('memory-agent', () => 'Independiente.'),
   };
 }
@@ -320,7 +320,7 @@ test('defect 3 (P2): A -> B -> C — each task receives exactly the verified res
   const planned = plan(engine, [
     task('a', 'research', 'research.company', [], { privacyClass: 'PUBLIC' }),
     task('b', 'data-analysis', 'data.analyze', ['a']),
-    task('c', 'proposal', 'sim.proposal', ['b']),
+    task('c', 'sim-proposal', 'sim.proposal', ['b']),
     task('d', 'memory', 'memory.search'),
   ]);
   const seen = {};
@@ -346,7 +346,7 @@ test('defect 3 (P2): a task never receives results from tasks that are not its d
   const planned = plan(engine, [
     task('a', 'research', 'research.company', [], { privacyClass: 'PUBLIC' }),
     task('b', 'data-analysis', 'data.analyze', ['a']),
-    task('c', 'proposal', 'sim.proposal', ['b']),
+    task('c', 'sim-proposal', 'sim.proposal', ['b']),
     task('d', 'memory', 'memory.search'),
   ]);
   const seen = {};
