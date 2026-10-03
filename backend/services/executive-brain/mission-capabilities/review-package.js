@@ -1,5 +1,7 @@
 'use strict';
 
+const { FACT_LABELS, exactCopyError } = require('./semantic-canon');
+
 // XATAI CORE V2.1: the result a human reviews ("LISTO PARA REVISIÓN"). Built
 // only from tasks the engine verified (COMPLETED, output bound by digest),
 // so it can never show an unverified claim. Facts, inferences and
@@ -28,7 +30,27 @@ function buildCommercialReview(state, { describeSource = () => null } = {}) {
   const proposal = stageData(state, 'proposal');
   const communication = stageData(state, 'communication');
   const handoff = state.tasks.find((item) => item.key === 'human-review');
-  const ready = Boolean(analysis && opportunities && proposal && communication)
+  // Integrity of the inputs: every opportunity the proposal carries must be
+  // an exact copy (all traced fields present and equal) of a verified one.
+  const origins = new Map((opportunities ? opportunities.opportunities : []).map((item) => [item.id, item]));
+  const integrityErrors = (proposal ? proposal.opportunities : [])
+    .map((item) => exactCopyError(item, origins.get(item.opportunityId))).filter(Boolean);
+  // Facts: the statement must be exactly what the canon writes for its label
+  // and excerpt, and the same fact id must be identical in every stage.
+  const seenFacts = new Map();
+  for (const data of [research, analysis, opportunities, proposal, communication]) {
+    for (const fact of (data && Array.isArray(data.facts) ? data.facts : [])) {
+      const spec = FACT_LABELS[fact.label];
+      if (!spec || fact.kind !== 'FACT' || spec.category !== fact.category || spec.render(fact.excerpt) !== fact.statement) {
+        integrityErrors.push('altered_fact');
+        continue;
+      }
+      const previous = seenFacts.get(fact.id);
+      if (previous && previous !== JSON.stringify(fact)) integrityErrors.push('altered_fact');
+      seenFacts.set(fact.id, JSON.stringify(fact));
+    }
+  }
+  const ready = integrityErrors.length === 0 && Boolean(analysis && opportunities && proposal && communication)
     && state.engine.state === 'NEEDS_APPROVAL' && handoff && handoff.status === 'NEEDS_APPROVAL';
 
   const facts = analysis ? analysis.facts : [];
@@ -50,7 +72,7 @@ function buildCommercialReview(state, { describeSource = () => null } = {}) {
 
   return Object.freeze({
     status: ready ? 'LISTO PARA REVISIÓN' : 'NO LISTO',
-    blocking,
+    blocking: integrityErrors.length > 0 ? [...blocking, { task: 'proposal', status: 'INTEGRITY', reason: integrityErrors[0], lastFailure: null }] : blocking,
     questionForHuman,
     company: research ? research.company : null,
     summary: communication ? communication.executiveSummary : null,

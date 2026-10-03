@@ -2,23 +2,31 @@
 
 const { digestOutput } = require('../evidence-registry');
 const { containsSecretMarker } = require('../privacy-gate');
-const { AGENTS, numbersIn } = require('./company-opportunity-agents');
-const { isSuspicious } = require('./company-research-extract');
+const { AGENTS } = require('./company-opportunity-agents');
 const { sameSite } = require('./public-web-fetcher');
+const {
+  CANONICAL_UNITS, canonicalFact, canonicalOpportunity, composeCommunication, composeProposal, detectContradictions,
+  exactCopyError, isPublicFact, renderUncertainty, selectAnalysisFacts, sourceUnavailable,
+} = require('./semantic-canon');
 
 // XATAI CORE V2.1: Trusted Toolbox — the composition-root trust boundary.
 //
-//   TOOL  -> real result -> trusted wrapper records the source (digest) ->
-//            agent receives { sourceRef, text }
-//   AGENT -> pure function -> result
-//   WRAPPER -> checks every fact against the recorded source, every figure
-//            against the facts, every claim against the seller profile ->
-//            records the output evidence bound to the exact output text.
+//   TOOL    -> real result -> trusted wrapper records the source (digest) ->
+//              agent receives { sourceRef, text }
+//   AGENT   -> pure function -> a CLOSED payload of selections (ids, closed
+//              labels, literal excerpts, catalogue codes)
+//   TOOLBOX -> validates the payload against the stage schema and the
+//              verified upstream data, BUILDS the canonical stage output
+//              with the semantic canon, records evidence bound to exactly
+//              that output.
 //
-// The registrar is obtained once here and never leaves this closure: agents
-// and executors only ever see `tools` (bounded functions) and plain data.
-// Recorded sources live in a store private to this toolbox, keyed by the
-// evidence reference and the mission that produced them.
+// The agent never chooses the text that certifies anything: statements,
+// needs, proposals and messages are written by semantic-canon.js from
+// verified excerpts and the trusted seller profile. Downstream stages carry
+// ids; the toolbox reconstructs the canonical facts and opportunities from
+// the verified dependency outputs, so a fact or an opportunity can be
+// selected but never rewritten. The registrar is obtained once here and
+// never leaves this closure.
 
 const TRUSTED_REGISTRAR = 'tool:xatai-mission';
 const STAGE_BY_AGENT = Object.freeze({
@@ -31,14 +39,24 @@ const STAGE_BY_AGENT = Object.freeze({
   'proposal-agent': 'proposal',
   'communication-agent': 'communication',
 });
+// Closed schemas (additionalProperties = false) of every agent payload.
+const PAYLOAD_KEYS = Object.freeze({
+  'company-research': ['stage', 'facts', 'links', 'uncertaintyCodes'],
+  'web-research': ['stage', 'facts', 'sourcesVisited', 'uncertaintyCodes'],
+  'context-recall': ['stage', 'facts', 'uncertaintyCodes'],
+  'prior-correspondence': ['stage', 'facts', 'uncertaintyCodes'],
+  analysis: ['stage', 'factIds', 'flaggedFactIds', 'contradictions', 'uncertaintyCodes'],
+  opportunities: ['stage', 'opportunities', 'uncertaintyCodes'],
+  proposal: ['stage', 'selectedOpportunityIds', 'situationFactIds'],
+  communication: ['stage', 'greeting', 'situationFactIds', 'selectedOpportunityIds'],
+});
+const ORIGIN_STAGES = new Set(['company-research', 'web-research', 'context-recall', 'prior-correspondence']);
+const FACT_KEYS = ['id', 'label', 'excerpt', 'sourceRef'];
+const OPPORTUNITY_KEYS = ['id', 'serviceId', 'level', 'basisFactIds'];
+const CONTRADICTION_KEYS = ['unit', 'factIds'];
+const ID_PATTERN = /^[a-z]{1,8}\d{0,3}:\d{1,4}$/;
 const MAX_TOOL_CALLS_PER_ATTEMPT = 6;
 const MAX_SOURCE_CHARS = 1024 * 1024;
-const URL_PATTERN = /https?:\/\/[^\s"'<>)]+/gi;
-const EMAIL_PATTERN = /[\w.+-]+@[\w-]+(?:\.[\w-]+)+/g;
-const NON_PROSE_KEYS = new Set([
-  'facts', 'indicators', 'categories', 'sourcesVisited', 'links', 'company', 'flaggedFactIds', 'basisFactIds', 'factIds',
-  'factId', 'id', 'opportunityId', 'evidenceRefs', 'serviceId', 'stage',
-]);
 
 function toolError(code, failureKind) {
   const error = new Error(code);
@@ -49,6 +67,23 @@ function toolError(code, failureKind) {
 
 function invalid(code) {
   return toolError(`invalid_output:${code}`, 'invalid_output');
+}
+
+function isPlainObject(value) {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value) && Object.getPrototypeOf(value) === Object.prototype;
+}
+
+function closed(value, keys, code, { required = keys } = {}) {
+  if (!isPlainObject(value)) throw invalid(code);
+  if (Object.keys(value).some((key) => !keys.includes(key))) throw invalid(code);
+  if (required.some((key) => !Object.hasOwn(value, key))) throw invalid(code);
+}
+
+function idList(value, code) {
+  if (!Array.isArray(value) || value.some((id) => typeof id !== 'string' || !ID_PATTERN.test(id)) || new Set(value).size !== value.length) {
+    throw invalid(code);
+  }
+  return value;
 }
 
 // "key: value" lines of the mission's known context (built by the
@@ -78,60 +113,19 @@ function parseDependencies(dependencies) {
   }));
 }
 
-function collectStrings(value, out = [], skipKeys = new Set(['facts'])) {
-  if (typeof value === 'string') out.push(value);
-  else if (Array.isArray(value)) value.forEach((item) => collectStrings(item, out, skipKeys));
-  else if (value && typeof value === 'object') {
-    for (const [key, item] of Object.entries(value)) if (!skipKeys.has(key)) collectStrings(item, out, skipKeys);
-  }
-  return out;
+function dependencyData(dependencies, stage) {
+  const found = dependencies.find((item) => item.data && item.data.stage === stage);
+  return found ? found.data : null;
 }
 
 const SATISFIED = Object.freeze({
-  'company-research': (result) => result.facts.filter((fact) => !fact.suspicious).length >= 2,
-  analysis: (result) => result.facts.length >= 1,
-  proposal: (result) => result.situation.length >= 1,
-  communication: (result) => (result.contactDecision === 'DO_NOT_CONTACT_YET'
-    ? Boolean(result.internalBriefing && result.internalBriefing.reason)
-    : Boolean(result.email && result.email.subject && result.email.body)),
+  'company-research': (output) => output.facts.filter((fact) => !fact.suspicious).length >= 2,
+  analysis: (output) => output.facts.length >= 1,
+  proposal: (output) => output.situation.length >= 1,
+  communication: (output) => (output.contactDecision === 'DO_NOT_CONTACT_YET'
+    ? Boolean(output.internalBriefing && output.internalBriefing.reason)
+    : Boolean(output.email && output.email.subject && output.email.body)),
 });
-
-// Trust chain: a downstream stage may select, order, summarise or word
-// upstream entities, never create or alter them. These helpers check that
-// every opportunity a stage carries exists upstream with identical fields.
-const TRACED_FIELDS = Object.freeze([
-  'serviceId', 'level', 'need', 'basisFactIds', 'evidenceRefs', 'solution', 'expectedBenefit',
-]);
-
-function upstreamOpportunities(dependencies, stage, idOf) {
-  const dependency = dependencies.find((item) => item.data && item.data.stage === stage);
-  const list = dependency && Array.isArray(dependency.data.opportunities) ? dependency.data.opportunities : [];
-  return new Map(list.map((item) => [idOf(item), item]));
-}
-
-function collectOpportunityRefs(value, out = []) {
-  if (Array.isArray(value)) value.forEach((item) => collectOpportunityRefs(item, out));
-  else if (value && typeof value === 'object') {
-    if (Object.hasOwn(value, 'opportunityId')) out.push(value);
-    Object.values(value).forEach((item) => collectOpportunityRefs(item, out));
-  }
-  return out;
-}
-
-function assertTraceable(items, upstream) {
-  const seen = new Set();
-  for (const item of items) {
-    if (!item || typeof item.opportunityId !== 'string' || seen.has(item.opportunityId)) throw invalid('opportunity_shape');
-    seen.add(item.opportunityId);
-    const origin = upstream.get(item.opportunityId);
-    if (!origin) throw invalid('invented_opportunity');
-    for (const field of TRACED_FIELDS) {
-      if (Object.hasOwn(item, field) && JSON.stringify(item[field]) !== JSON.stringify(origin[field])) {
-        throw invalid(`altered_opportunity_${field}`);
-      }
-    }
-  }
-}
 
 function createTrustedToolbox({
   evidenceRegistry,
@@ -217,117 +211,188 @@ function createTrustedToolbox({
     });
   }
 
-  // Everything an agent returns is checked here before any evidence exists.
-  function validate(stage, result, { contract, dependencies, target }) {
-    if (!result || typeof result !== 'object' || result.stage !== stage) throw invalid('stage');
-    const inherited = new Map(dependencies.flatMap((dependency) => (dependency.data && Array.isArray(dependency.data.facts)
-      ? dependency.data.facts : [])).map((fact) => [fact.id, fact]));
-    const facts = Array.isArray(result.facts) ? result.facts : [];
+  // ---------------------------------------------------------- canonicalization
+
+  function renderCodes(codes) {
+    if (!Array.isArray(codes)) throw invalid('uncertainty_codes');
+    return codes.map((code) => {
+      const text = renderUncertainty(code);
+      if (!text) throw invalid('uncertainty_code');
+      return text;
+    });
+  }
+
+  // Origin stages: the only place a FACT is born. Each candidate must quote
+  // a source recorded in this mission; the canon writes the statement.
+  function originFacts(payload, contract, inherited) {
+    if (!Array.isArray(payload.facts)) throw invalid('facts');
     const ids = new Set();
-    for (const fact of facts) {
-      const source = sources.get(fact.sourceRef);
-      if (!fact || fact.kind !== 'FACT' || typeof fact.id !== 'string' || ids.has(fact.id)) throw invalid('fact_shape');
-      ids.add(fact.id);
+    return payload.facts.map((candidate) => {
+      closed(candidate, FACT_KEYS, 'fact_shape');
+      if (typeof candidate.id !== 'string' || !ID_PATTERN.test(candidate.id) || ids.has(candidate.id) || inherited.has(candidate.id)) {
+        throw invalid('fact_id');
+      }
+      ids.add(candidate.id);
+      const source = sources.get(candidate.sourceRef);
       if (!source || source.missionId !== contract.missionId) throw invalid('fact_source');
-      if (typeof fact.excerpt !== 'string' || fact.excerpt.length < 2 || fact.excerpt.length > 300
-        || !source.text.includes(fact.excerpt)) throw invalid('fact_not_in_source');
-      if (containsSecretMarker(fact.excerpt) || containsSecretMarker(fact.statement)) throw invalid('fact_secret');
-      if (numbersIn(fact.statement).some((number) => !numbersIn(fact.excerpt).includes(number))) throw invalid('fact_figure');
-      if (fact.suspicious !== isSuspicious(fact.excerpt)) throw invalid('fact_flag');
-      if (fact.sourceUrl !== source.url) throw invalid('fact_url');
-      const previous = inherited.get(fact.id);
-      if (previous && (previous.excerpt !== fact.excerpt || previous.sourceRef !== fact.sourceRef)) throw invalid('fact_altered');
+      if (typeof candidate.excerpt !== 'string' || candidate.excerpt.length < 2 || candidate.excerpt.length > 300
+        || !source.text.includes(candidate.excerpt)) throw invalid('fact_not_in_source');
+      if (containsSecretMarker(candidate.excerpt)) throw invalid('fact_secret');
+      const { fact, error } = canonicalFact(candidate, source);
+      if (error) throw invalid(error);
+      return fact;
+    });
+  }
+
+  function inheritedFacts(dependencies) {
+    const map = new Map();
+    for (const dependency of dependencies) {
+      for (const fact of (dependency.data && Array.isArray(dependency.data.facts) ? dependency.data.facts : [])) map.set(fact.id, fact);
     }
-    const allFacts = new Map([...inherited, ...facts.map((fact) => [fact.id, fact])]);
-    const flaggedExcerpts = [...allFacts.values()].filter((fact) => fact.suspicious).map((fact) => fact.excerpt);
-    const profileText = JSON.stringify(sellerProfile);
-    const allowedNumbers = new Set([
-      ...[...allFacts.values()].flatMap((fact) => numbersIn(fact.excerpt)),
-      ...numbersIn(profileText), ...numbersIn(target.company || ''), ...numbersIn(target.contactName || ''),
-    ]);
-    // Identifiers, references and computed counts are not prose claims.
-    const strings = collectStrings(result, [], NON_PROSE_KEYS);
-    for (const text of strings) {
-      if (numbersIn(text).some((number) => !allowedNumbers.has(number))) throw invalid('invented_figure');
-      if (containsSecretMarker(text)) throw invalid('secret');
-      const lower = text.toLowerCase();
-      if (sellerProfile.prohibitedClaims.some((claim) => lower.includes(claim.toLowerCase()))) throw invalid('prohibited_claim');
-      if (['proposal', 'communication'].includes(stage) && flaggedExcerpts.some((excerpt) => text.includes(excerpt))) {
-        throw invalid('suspicious_content_used');
-      }
-    }
-    if (stage === 'opportunities') {
-      // No opportunity may rest on a fact the analysis found contradicted.
-      const analysis = dependencies.find((dependency) => dependency.data && dependency.data.stage === 'analysis');
-      const contradicted = new Set((analysis && analysis.data.contradictions || []).flatMap((entry) => entry.factIds || []));
-      for (const item of result.opportunities || []) {
-        if ((item.basisFactIds || []).some((id) => contradicted.has(id))) throw invalid('contradicted_basis');
-        const service = sellerProfile.services.find((candidate) => candidate.id === item.serviceId);
-        const basis = (item.basisFactIds || []).map((id) => allFacts.get(id));
-        if (!service || basis.length === 0 || basis.some((fact) => !fact || fact.suspicious)) throw invalid('opportunity_basis');
-        if (item.solution !== service.name || item.expectedBenefit !== service.valueStatement) throw invalid('opportunity_solution');
-        if (!['OBSERVED', 'INFERENCE'].includes(item.level)) throw invalid('opportunity_level');
-        // An inference may never be presented as an observed need.
-        const explicit = basis.some((fact) => service.explicitNeedSignals
-          .some((signal) => fact.excerpt.toLowerCase().includes(signal.toLowerCase())));
-        if (item.level === 'OBSERVED' && !explicit) throw invalid('inference_as_fact');
-        // The need text is not free prose: it is the fixed wording derived
-        // from the quoted fact (OBSERVED) or the profile (INFERENCE).
-        const expectedNeed = item.level === 'OBSERVED'
-          ? `La empresa lo indica en su web: "${basis[0].excerpt}"`
-          : `Posible interés en ${service.needLabel} (inferido de la web, no confirmado por la empresa).`;
-        if (item.need !== expectedNeed) throw invalid('opportunity_need_text');
-        if ((item.evidenceRefs || []).some((ref) => !basis.some((fact) => fact.sourceRef === ref))) throw invalid('opportunity_evidence');
-      }
-    }
-    if (stage === 'proposal') {
-      // Proposal is not an authority on opportunities: each one must be an
-      // exact copy of an opportunity verified upstream (selection only).
-      const upstream = upstreamOpportunities(dependencies, 'opportunities', (item) => item.id);
-      const selected = Array.isArray(result.opportunities) ? result.opportunities : [];
-      assertTraceable(selected, upstream);
-      if (selected.some((item) => item.label !== item.level || item.text !== item.need)) throw invalid('opportunity_relabelled');
-      // REVIEW_AND_CONTACT needs at least one verified opportunity upstream
-      // AND selected here; the proposal cannot justify itself.
-      const expected = upstream.size > 0 && selected.length > 0 ? 'REVIEW_AND_CONTACT' : 'DO_NOT_CONTACT_YET';
-      if (result.recommendation !== expected) throw invalid('recommendation_mismatch');
-      const services = sellerProfile.services.filter((service) => selected.some((item) => item.serviceId === service.id));
-      const names = new Set(services.map((service) => service.name));
-      if ((result.solution || []).some((item) => !names.has(item.name))) throw invalid('unknown_solution');
-      const values = new Set(services.map((service) => service.valueStatement));
-      if ((result.value || []).some((value) => !values.has(value))) throw invalid('unknown_value');
-      if ((result.situation || []).some((item) => !allFacts.has(item.factId) || item.label !== 'FACT')) throw invalid('situation_fact');
-    }
-    if (stage === 'communication') {
-      if (result.sent !== false) throw invalid('sent_flag');
-      // Any opportunity the communication mentions must come from the
-      // verified proposal, unchanged.
-      const fromProposal = upstreamOpportunities(dependencies, 'proposal', (item) => item.opportunityId);
-      assertTraceable(collectOpportunityRefs(result), fromProposal);
-      // A service the proposal did not select may not appear in any message.
-      const selectedServices = new Set([...fromProposal.values()].map((item) => item.serviceId));
-      const strayNames = sellerProfile.services.filter((service) => !selectedServices.has(service.id)).map((service) => service.name.toLowerCase());
-      if (strings.some((text) => strayNames.some((name) => text.toLowerCase().includes(name)))) throw invalid('unselected_service');
-      // DO_NOT_CONTACT_YET means no contact material at all.
-      const proposal = dependencies.find((dependency) => dependency.data && dependency.data.stage === 'proposal');
-      const decision = proposal && proposal.data.recommendation === 'REVIEW_AND_CONTACT'
-        && proposal.data.opportunities.length > 0 ? 'REVIEW_AND_CONTACT' : 'DO_NOT_CONTACT_YET';
-      if (result.contactDecision !== decision) throw invalid('contact_decision_mismatch');
-      if (decision === 'DO_NOT_CONTACT_YET' && (result.email !== null || result.shortMessage !== null || result.followUp !== null)) {
-        throw invalid('contact_material_without_opportunity');
-      }
-      const allowedHosts = [target.website, ...profileText.match(URL_PATTERN) || []]
-        .filter(Boolean).map((url) => { try { return new URL(url).hostname; } catch (error) { return null; } });
-      const allowedEmails = profileText.match(EMAIL_PATTERN) || [];
-      for (const text of strings) {
-        for (const url of text.match(URL_PATTERN) || []) {
+    return map;
+  }
+
+  function inheritedUncertainties(dependencies) {
+    const texts = dependencies.flatMap((item) => (item.data && Array.isArray(item.data.uncertainties) ? item.data.uncertainties : []));
+    const unavailable = dependencies.filter((item) => item.skipped || item.withheld)
+      .map((item) => sourceUnavailable(item.stageKey, item.skipped || item.withheld));
+    return [...texts, ...unavailable];
+  }
+
+  function select(ids, map, code) {
+    return idList(ids, code).map((id) => {
+      if (!map.has(id)) throw invalid(code);
+      return map.get(id);
+    });
+  }
+
+  function canonicalOutput(stage, payload, { contract, dependencies, target }) {
+    if (!isPlainObject(payload) || payload.stage !== stage) throw invalid('stage');
+    closed(payload, PAYLOAD_KEYS[stage], 'unknown_field');
+    const inherited = inheritedFacts(dependencies);
+
+    if (ORIGIN_STAGES.has(stage)) {
+      const facts = originFacts(payload, contract, inherited);
+      const output = { stage, facts, uncertainties: renderCodes(payload.uncertaintyCodes) };
+      if (stage === 'company-research') {
+        if (!Array.isArray(payload.links)) throw invalid('links');
+        output.links = payload.links.map((link) => {
+          closed(link, ['url'], 'link_shape');
           let host = null;
-          try { host = new URL(url).hostname; } catch (error) { host = null; }
-          if (!host || !allowedHosts.some((allowed) => allowed && sameSite(allowed, host))) throw invalid('foreign_url');
-        }
-        if ((text.match(EMAIL_PATTERN) || []).some((email) => !allowedEmails.includes(email))) throw invalid('invented_email');
+          try { host = new URL(link.url).hostname; } catch (error) { host = null; }
+          if (!host || !target.website || !sameSite(host, new URL(target.website).hostname) || !link.url.startsWith('https://')) {
+            throw invalid('link_off_site');
+          }
+          return { url: link.url };
+        });
+        const first = facts[0] ? facts[0].sourceUrl : null;
+        output.company = { name: target.company, website: first };
       }
+      if (stage === 'web-research') {
+        const visited = new Set([...sources.values()].filter((source) => source.taskId === contract.taskId).map((source) => source.url));
+        if (!Array.isArray(payload.sourcesVisited) || payload.sourcesVisited.some((url) => !visited.has(url))) throw invalid('sources_visited');
+        output.sourcesVisited = [...payload.sourcesVisited];
+      }
+      return output;
     }
+
+    if (stage === 'analysis') {
+      const facts = select(payload.factIds, inherited, 'unknown_fact');
+      const flagged = idList(payload.flaggedFactIds, 'flagged_ids');
+      // Analysis has no authority to drop a fact: it keeps every usable
+      // fact (only exact duplicates and suspicious ones are set aside), and
+      // it must declare at least every contradiction the canon detects.
+      const expected = selectAnalysisFacts(dependencies.flatMap((item) => (item.data && Array.isArray(item.data.facts) ? item.data.facts : [])));
+      const sameSet = (left, right) => left.length === right.length && left.every((id) => right.includes(id));
+      if (!sameSet(facts.map((fact) => fact.id), expected.usable.map((fact) => fact.id))) throw invalid('omitted_fact');
+      if (!sameSet(flagged, expected.flagged.map((fact) => fact.id))) throw invalid('flagged_facts');
+      if (!Array.isArray(payload.contradictions)) throw invalid('contradictions');
+      const selected = new Set(facts.map((fact) => fact.id));
+      const contradictions = payload.contradictions.map((item) => {
+        closed(item, CONTRADICTION_KEYS, 'contradiction_shape');
+        if (!CANONICAL_UNITS.includes(item.unit)) throw invalid('contradiction_unit');
+        if (idList(item.factIds, 'contradiction_ids').some((id) => !selected.has(id))) throw invalid('contradiction_ids');
+        return { unit: item.unit, factIds: [...item.factIds] };
+      });
+      for (const required of detectContradictions(facts)) {
+        const declared = new Set(contradictions.filter((item) => item.unit === required.unit).flatMap((item) => item.factIds));
+        if (required.factIds.some((id) => !declared.has(id))) throw invalid('omitted_contradiction');
+      }
+      const categories = {};
+      facts.forEach((fact) => { categories[fact.category] = (categories[fact.category] || 0) + 1; });
+      return {
+        stage,
+        facts,
+        flaggedFactIds: [...flagged],
+        categories,
+        contradictions,
+        indicators: { facts: facts.length, sources: new Set(facts.map((fact) => fact.sourceRef)).size },
+        uncertainties: [...new Set([...inheritedUncertainties(dependencies), ...renderCodes(payload.uncertaintyCodes)])],
+      };
+    }
+
+    if (stage === 'opportunities') {
+      const analysis = dependencyData(dependencies, 'analysis');
+      if (!analysis) throw invalid('missing_analysis');
+      const factsById = new Map(analysis.facts.map((fact) => [fact.id, fact]));
+      const contradicted = new Set(analysis.contradictions.flatMap((item) => item.factIds));
+      if (!Array.isArray(payload.opportunities)) throw invalid('opportunities');
+      const ids = new Set();
+      const opportunities = payload.opportunities.map((input) => {
+        closed(input, OPPORTUNITY_KEYS, 'opportunity_shape');
+        if (typeof input.id !== 'string' || !ID_PATTERN.test(input.id) || ids.has(input.id)) throw invalid('opportunity_id');
+        ids.add(input.id);
+        idList(input.basisFactIds, 'opportunity_basis');
+        const service = sellerProfile.services.find((candidate) => candidate.id === input.serviceId);
+        const { opportunity, error } = canonicalOpportunity(input, { service, factsById, contradicted });
+        if (error) throw invalid(error);
+        return opportunity;
+      });
+      return {
+        stage,
+        facts: analysis.facts,
+        opportunities,
+        uncertainties: [...new Set([...analysis.uncertainties, ...renderCodes(payload.uncertaintyCodes)])],
+      };
+    }
+
+    if (stage === 'proposal') {
+      const upstream = dependencyData(dependencies, 'opportunities');
+      if (!upstream) throw invalid('missing_opportunities');
+      const opportunities = new Map(upstream.opportunities.map((item) => [item.id, item]));
+      let selected;
+      try {
+        selected = select(payload.selectedOpportunityIds, opportunities, 'invented_opportunity');
+      } catch (error) {
+        throw invalid('invented_opportunity');
+      }
+      const factsById = new Map(upstream.facts.map((fact) => [fact.id, fact]));
+      const situationFacts = select(payload.situationFactIds, factsById, 'unknown_fact');
+      return composeProposal({
+        selected, situationFacts, facts: upstream.facts, profile: sellerProfile,
+        upstreamUncertainties: upstream.uncertainties, company: target.company,
+      });
+    }
+
+    if (stage === 'communication') {
+      const proposal = dependencyData(dependencies, 'proposal');
+      if (!proposal) throw invalid('missing_proposal');
+      if (!['contact', 'team'].includes(payload.greeting)) throw invalid('greeting');
+      const proposed = new Map(proposal.opportunities.map((item) => [item.opportunityId, item]));
+      let selected;
+      try {
+        selected = select(payload.selectedOpportunityIds, proposed, 'unselected_opportunity');
+      } catch (error) {
+        throw invalid('unselected_opportunity');
+      }
+      // Messages may only quote facts of the proposal situation that come
+      // from the public website (never memory or Gmail).
+      const situationIds = new Set(proposal.situation.map((item) => item.factId));
+      const quotable = new Map(proposal.facts.filter((fact) => situationIds.has(fact.id) && isPublicFact(fact)).map((fact) => [fact.id, fact]));
+      const situationFacts = select(payload.situationFactIds, quotable, 'unquotable_fact');
+      return composeCommunication({ proposal, situationFacts, selected, greeting: payload.greeting, target, profile: sellerProfile });
+    }
+    throw invalid('stage');
   }
 
   function executorFor(agentId) {
@@ -336,12 +401,12 @@ function createTrustedToolbox({
     return async (contract, context) => {
       const target = parseTarget(context.knownContext);
       const dependencies = parseDependencies(context.dependencies);
-      const result = await agent(Object.freeze({
+      const payload = await agent(Object.freeze({
         target, attempt: contract.attempt, dependencies, profile: sellerProfile, tools: toolsFor(contract, context, target),
       }));
-      validate(stage, result, { contract, dependencies, target });
-      const summary = JSON.stringify(result);
-      const satisfied = SATISFIED[stage] ? SATISFIED[stage](result) : true;
+      const output = canonicalOutput(stage, payload, { contract, dependencies, target });
+      const summary = JSON.stringify(output);
+      const satisfied = SATISFIED[stage] ? SATISFIED[stage](output) : true;
       sequence += 1;
       const ref = `out:${contract.taskId}:${sequence}`;
       // An insufficient result still gets honest evidence, which supports
@@ -368,4 +433,4 @@ function createTrustedToolbox({
   });
 }
 
-module.exports = { STAGE_BY_AGENT, TRUSTED_REGISTRAR, createTrustedToolbox, parseTarget };
+module.exports = { PAYLOAD_KEYS, STAGE_BY_AGENT, TRUSTED_REGISTRAR, createTrustedToolbox, exactCopyError, parseTarget };

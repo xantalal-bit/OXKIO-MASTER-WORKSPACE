@@ -20,6 +20,7 @@ const SIZE_PATTERN = /\b(\d{1,3}(?:[.,]\d{3})+|\d{1,5})\s+(tiendas|establecimien
 // A size fact quotes the figure and the rest of its sentence (up to this
 // many characters), so an explicit scope ("en España", "en 2024") is kept.
 const SIZE_CONTEXT = 120;
+const SIZE_BEFORE = 60;
 const LINK_KEYWORDS = /(empresa|nosotros|quienes|qui[eé]nes|about|historia|servicios|productos|soluciones|contacto|contact|company|equipo|sectores)/i;
 
 function isSuspicious(text) {
@@ -58,63 +59,51 @@ function metaContent(text, key) {
 function extractFacts(page, { prefix, signals = [], broad = false, maxSignalFacts = 8 } = {}) {
   const facts = [];
   const seen = new Set();
-  const add = (category, statement, excerpt) => {
+  // A fact candidate is only an id, a closed label, a literal excerpt and
+  // its source. The statement is written by the trusted semantic canon.
+  const add = (label, excerpt) => {
     const clean = String(excerpt || '').trim().slice(0, MAX_EXCERPT).trim();
     // Never quote something that looks like a credential.
     if (clean.length < 2 || !page.text.includes(clean) || containsSecretMarker(clean)) return;
-    const key = `${category}|${clean.toLowerCase()}`;
+    const key = `${label}|${clean.toLowerCase()}`;
     if (seen.has(key)) return;
     seen.add(key);
-    facts.push({
-      id: `${prefix}:${facts.length + 1}`,
-      kind: 'FACT',
-      category,
-      statement,
-      excerpt: clean,
-      sourceRef: page.sourceRef,
-      sourceUrl: page.url,
-      suspicious: isSuspicious(clean),
-    });
+    facts.push({ id: `${prefix}:${facts.length + 1}`, label, excerpt: clean, sourceRef: page.sourceRef });
   };
 
   const title = /<title[^>]*>([^<]{2,200})<\/title>/i.exec(page.text);
-  if (title) add('identity', `Título de la web: "${title[1].trim()}"`, title[1]);
+  if (title) add('title', title[1]);
   const siteName = metaContent(page.text, 'og:site_name');
-  if (siteName) add('identity', `Nombre declarado en la web: "${siteName}"`, siteName);
+  if (siteName) add('site_name', siteName);
   const description = metaContent(page.text, 'description') || metaContent(page.text, 'og:description');
-  if (description) add('activity', `Descripción publicada: "${description}"`, description);
+  if (description) add('description', description);
 
   const headingPattern = /<h([12])[^>]*>([^<]{2,200})<\/h\1>/gi;
   let heading;
   let headings = 0;
   while ((heading = headingPattern.exec(page.text)) !== null && headings < 8) {
     headings += 1;
-    add(heading[1] === '1' ? 'headline' : 'offering', `Encabezado en la web: "${heading[2].trim()}"`, heading[2]);
+    add(heading[1] === '1' ? 'heading_main' : 'heading', heading[2]);
   }
 
   // schema.org fields quoted with their key, so the excerpt proves the field.
   const schema = /"(legalName|addressLocality|addressRegion|addressCountry|foundingDate|numberOfEmployees)"\s*:\s*("[^"]{1,120}"|\{[^{}]{0,200}\}|\d{1,7})/g;
-  const labels = {
-    legalName: 'Razón social declarada', addressLocality: 'Localidad declarada', addressRegion: 'Región declarada',
-    addressCountry: 'País declarado', foundingDate: 'Fecha de fundación declarada', numberOfEmployees: 'Número de empleados declarado',
-  };
   let field;
-  while ((field = schema.exec(page.text)) !== null) {
-    const raw = field[2];
-    const value = raw.startsWith('"') ? raw.slice(1, -1) : (/"value"\s*:\s*"?(\d{1,7})/.exec(raw) || [null, raw])[1];
-    if (!/^[^<>]{1,120}$/.test(String(value))) continue;
-    add(field[1] === 'numberOfEmployees' ? 'size' : 'identity', `${labels[field[1]]}: ${value}`, field[0]);
-  }
+  while ((field = schema.exec(page.text)) !== null) add(`schema_${field[1]}`, field[0]);
 
   const runs = textRuns(page.text);
   for (const run of runs) {
     let size;
     SIZE_PATTERN.lastIndex = 0;
     while ((size = SIZE_PATTERN.exec(run)) !== null) {
+      // Same sentence only: a bounded window before the figure (scope such
+      // as "En España tenemos", "En 2024") and after it ("en Francia").
+      const head = run.slice(Math.max(0, size.index - SIZE_BEFORE), size.index);
+      const boundary = Math.max(head.lastIndexOf('. '), head.lastIndexOf('; '), head.lastIndexOf('! '), head.lastIndexOf('? '));
+      const before = boundary === -1 ? head : head.slice(boundary + 2);
       const rest = run.slice(size.index, size.index + SIZE_CONTEXT);
       const stop = rest.search(/[.;!?](\s|$)/);
-      const excerpt = (stop === -1 ? rest : rest.slice(0, stop)).trim();
-      add('size', `La web indica: "${excerpt}"`, excerpt);
+      add('size', `${before}${stop === -1 ? rest : rest.slice(0, stop)}`.trim());
     }
   }
 
@@ -127,7 +116,7 @@ function extractFacts(page, { prefix, signals = [], broad = false, maxSignalFact
     if (!signal) continue;
     const excerpt = windowAround(run, lower.indexOf(signal), signal.length);
     const before = facts.length;
-    add('signal', `La web menciona "${signal}": "${excerpt}"`, excerpt);
+    add('signal', excerpt);
     if (facts.length > before) signalFacts += 1;
   }
 
@@ -140,7 +129,7 @@ function extractFacts(page, { prefix, signals = [], broad = false, maxSignalFact
       if (run.length < 40) continue;
       const before = facts.length;
       const excerpt = windowAround(run, 0, 0);
-      add('content', `Texto publicado: "${excerpt}"`, excerpt);
+      add('content', excerpt);
       if (facts.length > before) passages += 1;
     }
   }

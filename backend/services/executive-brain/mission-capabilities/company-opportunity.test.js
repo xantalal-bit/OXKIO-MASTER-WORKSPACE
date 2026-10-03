@@ -282,7 +282,7 @@ test('a ready review is handed to the existing Approval Queue only with a real r
 test('only the public web fetcher may touch the network; nothing in the circuit can send, deploy or read secrets', () => {
   const forbidden = /require\((['"])(?:node:)?(?:http|https|net|dns|child_process|fs)\1\)|require\([^)]*(?:gmail-draft-provider|actionExecutor|secret-runtime|executive-reasoning-provider|firebase|googleapis|openai)|fetch\(/;
   for (const file of ['company-opportunity-agents.js', 'company-research-extract.js', 'trusted-toolbox.js', 'review-package.js',
-    'approval-review-adapter.js', 'company-opportunity.js', 'seller-profile.js']) {
+    'approval-review-adapter.js', 'company-opportunity.js', 'seller-profile.js', 'semantic-canon.js']) {
     assert.doesNotMatch(fs.readFileSync(path.join(__dirname, file), 'utf8'), forbidden, file);
   }
   const fetcher = fs.readFileSync(path.join(__dirname, 'public-web-fetcher.js'), 'utf8');

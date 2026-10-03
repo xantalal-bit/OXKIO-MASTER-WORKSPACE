@@ -227,10 +227,13 @@ function robotsAllows(robotsText, path, token = ROBOTS_TOKEN) {
   const groups = parseRobots(robotsText);
   const own = groups.filter((group) => group.agents.some((agent) => agent !== '*' && token.startsWith(agent)));
   const chosen = own.length > 0 ? own : groups.filter((group) => group.agents.includes('*'));
+  // Specificity is measured on the NORMALIZED pattern ("/%70%72%69" is the
+  // 4-character "/pri", not a 10-character rule); allow wins only on a real tie.
   const matching = chosen.flatMap((group) => group.rules)
-    .filter((rule) => rule.pattern && patternMatches(rule.pattern, path));
+    .filter((rule) => rule.pattern && patternMatches(rule.pattern, path))
+    .map((rule) => ({ ...rule, specificity: normalizeRobotsPath(rule.pattern).length }));
   if (matching.length === 0) return true;
-  matching.sort((l, r) => (r.pattern.length - l.pattern.length) || (Number(r.allow) - Number(l.allow)));
+  matching.sort((l, r) => (r.specificity - l.specificity) || (Number(r.allow) - Number(l.allow)));
   return matching[0].allow;
 }
 

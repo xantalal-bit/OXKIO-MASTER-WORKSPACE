@@ -39,7 +39,11 @@ function validateSellerProfile(input) {
       name: text(service.name, 'service_name', { max: 120 }),
       description: text(service.description, 'service_description'),
       needLabel: text(service.needLabel, 'need_label', { max: 160 }),
-      signals: list(service.signals, 'signals', { min: 1, max: 40, itemMax: 60 }),
+      // inferenceSignals: words whose presence in a quoted fact makes the
+      // service a plausible INFERENCE. explicitNeedSignals: phrases with which
+      // a company states the need itself (OBSERVED). "signals" is accepted as
+      // the former name of inferenceSignals.
+      inferenceSignals: list(service.inferenceSignals || service.signals, 'inference_signals', { min: 1, max: 40, itemMax: 60 }),
       explicitNeedSignals: list(service.explicitNeedSignals, 'explicit_need_signals', { max: 20, itemMax: 120 }),
       valueStatement: text(service.valueStatement, 'value_statement'),
       qualifyingQuestions: list(service.qualifyingQuestions, 'qualifying_questions', { max: 10 }),
@@ -63,7 +67,7 @@ function validateSellerProfile(input) {
 
 // Every signal the research agents should prioritise, across services.
 function profileSignals(profile) {
-  return [...new Set(profile.services.flatMap((service) => [...service.signals, ...service.explicitNeedSignals]))];
+  return [...new Set(profile.services.flatMap((service) => [...service.inferenceSignals, ...service.explicitNeedSignals]))];
 }
 
 module.exports = { profileSignals, validateSellerProfile };

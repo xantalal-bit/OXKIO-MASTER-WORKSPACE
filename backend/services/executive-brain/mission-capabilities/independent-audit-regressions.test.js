@@ -15,6 +15,7 @@ const {
 const { AGENTS, canonicalUnit, scopeOf } = require('./company-opportunity-agents');
 const { runCompanyOpportunity } = require('./company-opportunity');
 const { submitCommercialReview } = require('./approval-review-adapter');
+const { buildCommercialReview } = require('./review-package');
 const ApprovalQueue = require('../../../core/approvalQueue');
 
 const NOW = '2026-10-03T10:00:00.000Z';
@@ -66,29 +67,43 @@ async function assertRejectedEndToEnd(result, label) {
 }
 
 // ============================================================== BLOCKER
+// Since the semantic-trust pass the proposal payload is a closed selection
+// ({ selectedOpportunityIds, situationFactIds }): it cannot carry
+// opportunity objects, texts or a recommendation at all. Each original
+// attack is kept, expressed against that contract.
 
-test('BLOCKER 1+2: opportunities=[] and proposal invents op:invented with REVIEW_AND_CONTACT -> rejected end to end', async () => {
+test('BLOCKER 1+2: opportunities=[] and proposal invents op:invented -> rejected end to end', async () => {
   const result = await mission({
     sellerProfile: NO_MATCH,
-    agentOverrides: proposalWith((real) => ({
-      ...real,
-      opportunities: [{ opportunityId: 'op:invented', serviceId: 'stock', level: 'OBSERVED', label: 'OBSERVED', need: 'Necesitan un ERP.', text: 'Necesitan un ERP.', solution: 'Gestión de stock' }],
-      solution: [{ label: 'RECOMMENDATION', name: 'Gestión de stock', description: 'Control de stock.' }],
-      recommendation: 'REVIEW_AND_CONTACT',
-    })),
+    agentOverrides: proposalWith((real) => ({ ...real, selectedOpportunityIds: ['op:invented'] })),
   });
   assert.equal(JSON.parse(result.byKey.opportunities.output).opportunities.length, 0);
   assert.equal(result.state.attempts[result.byKey.proposal.taskId][0].failureCode, 'invalid_output:invented_opportunity');
   await assertRejectedEndToEnd(result, 'invented');
 });
 
-test('BLOCKER 2: opportunities=[] and proposal only claims REVIEW_AND_CONTACT -> rejected', async () => {
-  const result = await mission({ sellerProfile: NO_MATCH, agentOverrides: proposalWith((real) => ({ ...real, recommendation: 'REVIEW_AND_CONTACT' })) });
-  assert.equal(result.state.attempts[result.byKey.proposal.taskId][0].failureCode, 'invalid_output:recommendation_mismatch');
-  await assertRejectedEndToEnd(result, 'recommendation');
+test('BLOCKER 1+2 (object form): sending its own opportunity objects is refused by the closed schema', async () => {
+  const result = await mission({
+    sellerProfile: NO_MATCH,
+    agentOverrides: proposalWith((real) => ({
+      ...real,
+      opportunities: [{ opportunityId: 'op:invented', serviceId: 'stock', level: 'OBSERVED', need: 'Necesitan un ERP.' }],
+    })),
+  });
+  assert.equal(result.state.attempts[result.byKey.proposal.taskId][0].failureCode, 'invalid_output:unknown_field');
+  await assertRejectedEndToEnd(result, 'object form');
 });
 
-test('BLOCKER 3: a verified opportunity copied exactly -> PASS through communication', async () => {
+test('BLOCKER 2: opportunities=[] and proposal claims REVIEW_AND_CONTACT -> the claim cannot even be expressed', async () => {
+  const result = await mission({ sellerProfile: NO_MATCH, agentOverrides: proposalWith((real) => ({ ...real, recommendation: 'REVIEW_AND_CONTACT' })) });
+  assert.equal(result.state.attempts[result.byKey.proposal.taskId][0].failureCode, 'invalid_output:unknown_field');
+  await assertRejectedEndToEnd(result, 'recommendation');
+  // The recommendation is computed by the canon from verified opportunities.
+  const honest = await mission({ sellerProfile: NO_MATCH });
+  assert.equal(JSON.parse(honest.byKey.proposal.output).recommendation, 'DO_NOT_CONTACT_YET');
+});
+
+test('BLOCKER 3: a verified opportunity selected by id is copied exactly by the toolbox -> PASS', async () => {
   const result = await mission();
   assert.equal(result.byKey.proposal.status, 'COMPLETED');
   const upstream = JSON.parse(result.byKey.opportunities.output).opportunities[0];
@@ -101,49 +116,59 @@ test('BLOCKER 3: a verified opportunity copied exactly -> PASS through communica
   assert.ok(result.review.draft);
 });
 
+test('BLOCKER 4: an unknown opportunityId -> invented_opportunity', async () => {
+  const result = await mission({ agentOverrides: proposalWith((real) => ({ ...real, selectedOpportunityIds: ['op:99'] })) });
+  assert.equal(result.state.attempts[result.byKey.proposal.taskId][0].failureCode, 'invalid_output:invented_opportunity');
+  await assertRejectedEndToEnd(result, 'unknown id');
+});
+
+// 5-8: altered copies. An agent cannot send fields any more, so the copy is
+// attacked where it lives: in the mission state handed to the review. Every
+// traced field must be present AND equal, otherwise the review is NO LISTO
+// and nothing reaches the Approval Queue.
 for (const [label, mutate, code] of [
-  ['4 opportunityId changed', (item) => ({ ...item, opportunityId: 'op:99' }), 'invented_opportunity'],
   ['5 serviceId changed', (item) => ({ ...item, serviceId: 'orders' }), 'altered_opportunity_serviceId'],
   ['6 INFERENCE relabelled OBSERVED', (item) => ({ ...item, level: 'OBSERVED', label: 'OBSERVED' }), 'altered_opportunity_level'],
-  ['6b label alone relabelled', (item) => ({ ...item, label: 'OBSERVED' }), 'opportunity_relabelled'],
   ['7 basisFactIds invented', (item) => ({ ...item, basisFactIds: [...item.basisFactIds, 'cr:999'] }), 'altered_opportunity_basisFactIds'],
   ['8 evidenceRefs altered', (item) => ({ ...item, evidenceRefs: ['src:mission-x:company-research:1'] }), 'altered_opportunity_evidenceRefs'],
   ['8b solution changed', (item) => ({ ...item, solution: 'Pedidos online' }), 'altered_opportunity_solution'],
+  ['12 basisFactIds missing', ({ basisFactIds, ...item }) => item, 'missing_opportunity_basisFactIds'],
+  ['13 evidenceRefs missing', ({ evidenceRefs, ...item }) => item, 'missing_opportunity_evidenceRefs'],
+  ['13b duplicated evidenceRefs', (item) => ({ ...item, evidenceRefs: [...item.evidenceRefs, ...item.evidenceRefs] }), 'altered_opportunity_evidenceRefs'],
 ]) {
-  test(`BLOCKER ${label} -> rejected, no communication, nothing queued`, async () => {
-    const result = await mission({
-      agentOverrides: proposalWith((real) => ({ ...real, opportunities: real.opportunities.map(mutate) })),
-    });
-    assert.equal(result.state.attempts[result.byKey.proposal.taskId][0].failureCode, `invalid_output:${code}`);
-    await assertRejectedEndToEnd(result, label);
+  test(`BLOCKER ${label} in a tampered state -> review NO LISTO, nothing queued`, async () => {
+    const result = await mission();
+    const tampered = JSON.parse(JSON.stringify(result.state));
+    const proposalTask = tampered.tasks.find((task) => task.key === 'proposal');
+    const output = JSON.parse(proposalTask.output);
+    output.opportunities = output.opportunities.map(mutate);
+    proposalTask.output = JSON.stringify(output);
+    const review = buildCommercialReview(tampered);
+    assert.equal(review.status, 'NO LISTO', label);
+    assert.ok(review.blocking.some((item) => item.reason === code), `${label}: ${JSON.stringify(review.blocking)}`);
+    const queued = await submitCommercialReview({ approvalQueue: { addPreparedEmailDraft: async () => { throw new Error('must not be called'); } }, review, recipient: 'compras@empresa.es', missionId: 'm' });
+    assert.equal(queued.submitted, false);
   });
 }
 
-test('BLOCKER 9: an opportunity removed upstream but kept by the proposal -> rejected', async () => {
-  const reference = await mission();
-  const stale = JSON.parse(reference.byKey.proposal.output).opportunities[0];
+test('BLOCKER 9: an opportunity removed upstream but selected by the proposal -> rejected', async () => {
   const result = await mission({
     agentOverrides: {
-      opportunities: async (input) => ({ ...(await AGENTS.opportunities(input)), opportunities: [] }),
-      proposal: async (input) => ({ ...(await AGENTS.proposal(input)), opportunities: [stale], recommendation: 'REVIEW_AND_CONTACT' }),
+      opportunities: async (input) => ({ ...(await AGENTS.opportunities(input)), opportunities: [], uncertaintyCodes: ['no_service_match'] }),
+      proposal: async (input) => ({ ...(await AGENTS.proposal(input)), selectedOpportunityIds: ['op:1'] }),
     },
   });
   assert.equal(result.state.attempts[result.byKey.proposal.taskId][0].failureCode, 'invalid_output:invented_opportunity');
   await assertRejectedEndToEnd(result, 'removed upstream');
 });
 
-test('TRUST CHAIN: communication cannot introduce or alter an opportunity either', async () => {
-  const result = await mission({
-    agentOverrides: {
-      communication: async (input) => {
-        const real = await AGENTS.communication(input);
-        const observed = { ...real.salesBriefing.inferences[0], level: 'OBSERVED', label: 'OBSERVED', opportunityId: 'op:new' };
-        return { ...real, salesBriefing: { ...real.salesBriefing, observed: [observed] } };
-      },
-    },
-  });
-  assert.notEqual(result.byKey.communication.status, 'COMPLETED');
-  assert.equal(result.review.draft, null);
+test('TRUST CHAIN: communication cannot introduce, alter or describe an opportunity itself', async () => {
+  const unknown = await mission({ agentOverrides: { communication: async (input) => ({ ...(await AGENTS.communication(input)), selectedOpportunityIds: ['op:new'] }) } });
+  assert.equal(unknown.state.attempts[unknown.byKey.communication.taskId][0].failureCode, 'invalid_output:unselected_opportunity');
+  assert.equal(unknown.review.draft, null);
+  const nested = await mission({ agentOverrides: { communication: async (input) => ({ ...(await AGENTS.communication(input)), salesBriefing: { observed: [{ opportunityId: 'op:new' }] } }) } });
+  assert.equal(nested.state.attempts[nested.byKey.communication.taskId][0].failureCode, 'invalid_output:unknown_field');
+  assert.equal(nested.review.draft, null);
 });
 
 // ============================================================== P1 robots
@@ -336,11 +361,12 @@ test('SELF-AUDIT: the opportunities stage cannot inflate the need text of an inf
     agentOverrides: {
       opportunities: async (input) => {
         const real = await AGENTS.opportunities(input);
+        // A need text cannot be supplied at all: the canon writes it.
         return { ...real, opportunities: real.opportunities.map((item) => ({ ...item, need: 'La empresa necesita urgentemente un ERP.' })) };
       },
     },
   });
-  assert.equal(result.state.attempts[result.byKey.opportunities.taskId][0].failureCode, 'invalid_output:opportunity_need_text');
+  assert.equal(result.state.attempts[result.byKey.opportunities.taskId][0].failureCode, 'invalid_output:opportunity_shape');
   assert.notEqual(result.byKey.opportunities.status, 'COMPLETED');
   assert.equal(result.review.draft, null);
 });
@@ -350,10 +376,11 @@ test('SELF-AUDIT: the email cannot pitch a service the proposal did not select',
     agentOverrides: {
       communication: async (input) => {
         const real = await AGENTS.communication(input);
-        return { ...real, email: { ...real.email, body: `${real.email.body}\nTambién os ofrecemos Pedidos online.` } };
+        // Messages are composed by the canon: there is no body to write into.
+        return { ...real, email: { subject: 'x', body: 'También os ofrecemos Pedidos online.' } };
       },
     },
   });
-  assert.equal(result.state.attempts[result.byKey.communication.taskId][0].failureCode, 'invalid_output:unselected_service');
+  assert.equal(result.state.attempts[result.byKey.communication.taskId][0].failureCode, 'invalid_output:unknown_field');
   assert.equal(result.review.draft, null);
 });

@@ -54,11 +54,23 @@ El toolbox vuelve a comprobar el destino final antes de registrar nada.
 
 `WEB SOURCE → FACTS → ANALYSIS → OPPORTUNITIES → PROPOSAL → COMMUNICATION → HUMAN REVIEW`
 
-Cada etapa puede seleccionar, ordenar, resumir o redactar, pero no puede crear ni alterar hechos u oportunidades de la etapa anterior.
+Las etapas posteriores no pueden alterar, ampliar ni inventar el significado certificado por las anteriores. Para garantizarlo, los agentes no escriben ninguna frase que certifique algo: solo seleccionan. Ninguna defensa depende de listas de palabras prohibidas.
 
-- **PROPOSAL** solo contiene copias exactas de oportunidades verificadas (mismos `opportunityId`, `serviceId`, `level`, `need`, `basisFactIds`, `evidenceRefs`, `solution` y `expectedBenefit`). Solo puede recomendar contactar (`REVIEW_AND_CONTACT`) si la etapa `opportunities` verificada contiene al menos una oportunidad y la propuesta la selecciona.
-- **COMMUNICATION** solo puede referirse a oportunidades de la propuesta y no puede mencionar servicios que la propuesta no seleccionó.
-- **OPPORTUNITIES** usa un texto `need` fijo: la cita literal si es OBSERVED, o la plantilla del perfil si es INFERENCE.
+| Etapa | El agente entrega (esquema cerrado) | Lo construye `semantic-canon.js` |
+|---|---|---|
+| Investigación (web, memoria, Gmail) | `{ id, label, excerpt, sourceRef }` por hecho, enlaces del mismo sitio y códigos de incertidumbre | Enunciado del hecho a partir de la etiqueta (lista cerrada) y la cita literal de una fuente registrada |
+| Análisis | `factIds`, hechos marcados como sospechosos, contradicciones y códigos | Hechos canónicos reconstruidos desde las etapas anteriores |
+| Oportunidades | `{ id, serviceId, level, basisFactIds }` | Necesidad, evidencia, solución, beneficio y preguntas, desde el perfil |
+| Propuesta | `selectedOpportunityIds`, `situationFactIds` | Propuesta completa y recomendación (copias exactas) |
+| Comunicación | `greeting`, `situationFactIds` (solo hechos públicos de la web) y `selectedOpportunityIds` | Email, mensaje corto, seguimiento y briefing, con plantillas fijas |
+
+Reglas que aplica la capa de confianza:
+
+- **Fundamento de las oportunidades.** Una INFERENCE necesita que cada hecho base cite una `inferenceSignal` del servicio. Una OBSERVED necesita una `explicitNeedSignal`. Ambas señales vienen del perfil, nunca del agente.
+- **El análisis no puede omitir.** Debe conservar todos los hechos utilizables, y solo puede apartar los duplicados exactos y los sospechosos. Debe declarar como mínimo las contradicciones que detecta el canon.
+- **Listas cerradas.** Los parámetros y las unidades vienen de listas cerradas.
+- **Integridad en la revisión.** El paquete de revisión rechaza cualquier hecho cuyo enunciado no coincida con su etiqueta y su cita, o que no sea idéntico en todas las etapas. También rechaza cualquier copia de oportunidad a la que le falte un campo trazado o lo tenga alterado.
+- **Señales del perfil.** El campo `signals` del perfil se acepta como nombre antiguo de `inferenceSignals`.
 
 ## Contradicciones: unidades y ámbito
 
