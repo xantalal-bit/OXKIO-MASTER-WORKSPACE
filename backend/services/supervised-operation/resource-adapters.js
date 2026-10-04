@@ -1,5 +1,6 @@
 'use strict';
 const { createPublicWebFetcher, parsePublicUrl, siteOf } = require('../executive-brain/mission-capabilities/public-web-fetcher');
+const { textRuns } = require('../executive-brain/mission-capabilities/company-research-extract');
 const { copy, freeze, fail } = require('./scope-session');
 // Factories run in the trusted composition root/OAuth callback, not in a prompt.
 // The credential-bearing client stays in a closure and never enters agent input.
@@ -16,14 +17,32 @@ function createReadonlyAdapter({scope,permissions,read,origin='live',egress=null
   return {...owner,items};
  }});
 }
+// The fetcher returns the page markup; a source item carries its readable
+// text (paragraphs first, else every visible run), never the HTML head.
+function readableText(html){
+ const paragraphs=[...String(html).matchAll(/<p\b[^>]*>([\s\S]*?)<\/p\s*>/gi)].map(m=>textRuns(m[1]).join(' ')).filter(t=>t.length>=40);
+ return (paragraphs.length?paragraphs:textRuns(String(html))).join(' ').replace(/\s+/g,' ').trim();
+}
 function createPublicResearchAdapters({scope,search,searchEgress=null,fetcher=createPublicWebFetcher(),origin='live'}){
  const fetch=createReadonlyAdapter({scope,permissions:['public.fetch'],origin,read:async({urls})=>{
-  const items=[];for(const url of urls){parsePublicUrl(url);const page=await fetcher.fetchPage(url,{allowedSite:siteOf(new URL(url).hostname)});items.push({text:page.text.slice(0,2000),url});}return items;
+  const items=[];for(const url of urls){parsePublicUrl(url);const page=await fetcher.fetchPage(url,{allowedSite:siteOf(new URL(url).hostname)});items.push({text:readableText(page.text).slice(0,2000),url});}return items;
  }});
  const discovery=typeof search==='function'?createReadonlyAdapter({scope,permissions:['public.search'],origin,egress:searchEgress,read:async({query})=>{
   const result=await search(query);if(!Array.isArray(result))fail('search_output_invalid');return result.slice(0,5).map(item=>{parsePublicUrl(item.url);return {text:String(item.title||item.snippet||item.url).slice(0,2000),url:item.url};});
  }}):null;
  return Object.freeze({fetch,...(discovery?{search:discovery}:{})});
+}
+// Controlled public discovery: a reviewed catalogue of public references matched
+// locally against the minimized query terms. Nothing leaves OXKIO to search;
+// the pages themselves are then read by the public fetcher. Not a web search.
+const searchTerm=value=>String(value).normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase();
+function createCuratedDiscovery(entries){
+ if(!Array.isArray(entries))fail('catalogue_invalid');
+ const list=entries.map(e=>{
+  if(!e||typeof e.title!=='string'||typeof e.url!=='string'||!Array.isArray(e.keywords)||e.keywords.length===0)fail('catalogue_invalid');
+  parsePublicUrl(e.url);return freeze({title:e.title,url:e.url,keywords:e.keywords.map(searchTerm)});
+ });
+ return async query=>{const terms=searchTerm(query||'').match(/[a-z0-9]+/g)||[];return list.filter(e=>e.keywords.some(k=>terms.includes(k))).map(e=>({title:e.title,url:e.url}));};
 }
 // Reuses the existing OAuth-backed private-context readers (the same ones the
 // Executive Chat dashboard uses). They exist only for Cliente Cero's Google
@@ -39,6 +58,6 @@ function createPrivateContextAdapters({scope,readers,origin='live'}){
  const limit=(limits,list)=>list.slice(0,Math.min(Math.max(Number(limits&&limits.maxItems)||10,1),10));
  const mail=createReadonlyAdapter({scope,permissions:['mail.read'],origin,read:async({limits})=>limit(limits,await payload(readers.gmailReader,'messages')).map(m=>({text:[m.from,m.subject,m.snippet].filter(Boolean).join(' — ').slice(0,2000)||'(sin asunto)'}))});
  const calendar=createReadonlyAdapter({scope,permissions:['calendar.read'],origin,read:async({limits})=>limit(limits,await payload(readers.calendarReader,'events')).map(e=>({text:[e.start,e.title,e.location].filter(Boolean).join(' · ').slice(0,2000)}))});
- return freeze({mail,calendar});
+ return freeze({mail:{...mail,authorizationVerified:false},calendar:{...calendar,authorizationVerified:false}});
 }
-module.exports={createReadonlyAdapter,createPublicResearchAdapters,createPrivateContextAdapters};
+module.exports={createReadonlyAdapter,createPublicResearchAdapters,createPrivateContextAdapters,createCuratedDiscovery,readableText};

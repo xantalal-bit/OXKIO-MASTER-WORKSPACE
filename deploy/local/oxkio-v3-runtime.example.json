@@ -1,0 +1,17 @@
+{
+ "logDirectory": "C:\\Users\\<usuario>\\OXKIO-runtime\\logs",
+ "environment": {
+  "PORT": "3000",
+  "OXKIO_V3_ENABLED": "true",
+  "OXKIO_V3_MEMORY_ROOT": "C:\\Users\\<usuario>\\OXKIO-runtime\\v3-cliente-cero-data-v1",
+  "OXKIO_V3_PLANNER_DAILY_BUDGET_USD": "0.90",
+  "OXKIO_V3_REASONING_INTERNAL_EGRESS": "true",
+  "OXKIO_V3_PUBLIC_RESEARCH": "true",
+  "OXKIO_V3_REASONING_PROVIDER": "openai",
+  "OXKIO_V3_REASONING_MODEL": "gpt-5.6-luna",
+  "OXKIO_V3_REASONING_BASE_URL": "https://api.openai.com/v1",
+  "OXKIO_V3_REASONING_INPUT_USD_PER_MILLION": "0.20",
+  "OXKIO_V3_REASONING_OUTPUT_USD_PER_MILLION": "1.20",
+  "OXKIO_V3_REASONING_PRICING_REVIEWED_AT": "2026-10-04"
+ }
+}

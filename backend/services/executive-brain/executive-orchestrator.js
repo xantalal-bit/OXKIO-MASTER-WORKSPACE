@@ -442,6 +442,8 @@ const EMAIL_REASONING_ANSWERS = Object.freeze({
   budget_blocked: 'Preparar esta respuesta supera el presupuesto de razonamiento configurado. '
     + 'No se ha preparado ningún borrador.',
   insufficient_context: 'No he podido leer el contenido de ese correo. No se ha preparado ningún borrador.',
+  privacy_blocked: 'No puedo enviar el contenido de tu correo a un proveedor de razonamiento externo: la política '
+    + 'de privacidad no lo autoriza. No se ha preparado ningún borrador ni se ha enviado nada.',
 });
 
 function buildEmailReasoningAnswer(status, reasoning) {

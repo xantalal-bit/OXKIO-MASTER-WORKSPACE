@@ -70,6 +70,20 @@ const ENVIRONMENT_VARIABLES = Object.freeze({
   OXKIO_V3_MEMORY_ROOT: Object.freeze({ kind: 'config', classifications: ['optional'], scope: 'supervised_operation' }),
   OXKIO_V3_INTEGRITY_KEY: Object.freeze({ kind: 'secret', classifications: ['optional', 'secret'], scope: 'supervised_operation' }),
   OXKIO_V3_PLANNER_DAILY_BUDGET_USD: Object.freeze({ kind: 'governance', classifications: ['optional'], scope: 'supervised_operation' }),
+  // Authorization B (04/10/2026): "true" lets PUBLIC and non-sensitive INTERNAL
+  // text reach the configured reasoning provider; CONFIDENTIAL never does.
+  OXKIO_V3_REASONING_INTERNAL_EGRESS: Object.freeze({ kind: 'governance', classifications: ['optional'], scope: 'supervised_operation' }),
+  // V3's own reasoning provider instance (same contract as OXKIO_REASONING_*,
+  // same OXKIO_REASONING_API_KEY secret); Executive Chat is not affected.
+  OXKIO_V3_REASONING_PROVIDER: Object.freeze({ kind: 'config', classifications: ['optional'], scope: 'supervised_operation' }),
+  OXKIO_V3_REASONING_MODEL: Object.freeze({ kind: 'config', classifications: ['optional'], scope: 'supervised_operation' }),
+  OXKIO_V3_REASONING_BASE_URL: Object.freeze({ kind: 'config', classifications: ['optional'], scope: 'supervised_operation' }),
+  OXKIO_V3_REASONING_INPUT_USD_PER_MILLION: Object.freeze({ kind: 'config', classifications: ['optional'], scope: 'supervised_operation' }),
+  OXKIO_V3_REASONING_OUTPUT_USD_PER_MILLION: Object.freeze({ kind: 'config', classifications: ['optional'], scope: 'supervised_operation' }),
+  OXKIO_V3_REASONING_PRICING_REVIEWED_AT: Object.freeze({ kind: 'config', classifications: ['optional'], scope: 'supervised_operation' }),
+  // "true" adds controlled public discovery (reviewed catalogue, matched
+  // locally) and the public page fetcher to V3. Not a web search provider.
+  OXKIO_V3_PUBLIC_RESEARCH: Object.freeze({ kind: 'governance', classifications: ['optional'], scope: 'supervised_operation' }),
 });
 
 function isPresent(env, name) {

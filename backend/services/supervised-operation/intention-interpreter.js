@@ -71,6 +71,12 @@ function interpretIntention(text) {
  const tokens = tokensOf(text); const plain = normalize(text);
  const base = { objective: text.trim(), constraints: ['Solo lectura.', 'Sin envíos ni cambios externos.', 'Los datos privados permanecen con su propietario.'] };
  const result = (outcome, fields) => freeze({ ...base, outcome, capabilities: [], missingInformation: [], plan: null, searchTerms: [], ...fields });
+ // Questions about OXKIO's own resources are read-only introspection, not a
+ // request to run the mentioned tools. Resolve them from the scoped catalogue.
+ const selfQuery = plain.trim().replace(/^oxkio[\s,:]+/, '').replace(/^[¿?\s]+/, '').replace(/^dime\s+/, '');
+ if (/^(que (puedes hacer|capacidades tienes|tienes conectad[oa]|necesitas para)|(?:quiero que )?anali[cz](?:a|as|es|e) (?:tu |su )?(?:propio )?estado operativo)\b/.test(selfQuery)) {
+  return result(OUTCOMES.CAN_EXECUTE, { reason: 'operational_state', introspection: true });
+ }
  if (exact(tokens, CREDENTIALS)) return result(OUTCOMES.BLOCKED, { reason: 'credentials', gate: 'HUMAN_GATE' });
  const remember = rememberConsent(text);
  // A note to remember ("recuerda que tengo que comprar pan") is content, not an order.

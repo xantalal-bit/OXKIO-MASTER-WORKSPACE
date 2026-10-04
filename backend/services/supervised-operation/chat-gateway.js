@@ -13,19 +13,24 @@ const IGNORED_CLIENT_HINTS = ['calendar','gmail'];
 const DEFAULT_CONVERSATION = 'executive-default';
 const FOLLOW_UP = /^(contin[uú]a|sigue|adelante|reanuda|reint[eé]ntalo|vuelve a intentarlo|ya est[aá] conectad[oa]|ya lo he conectado|ya he conectado.*|listo|hecho|hazlo)[.!\s]*$/i;
 const PERMISSIONS = { 'mail.read':'leer tu correo','calendar.read':'leer tu agenda','documents.read':'consultar tus documentos','public.search':'buscar información pública','public.fetch':'leer páginas públicas' };
-function createChatGateway({runtime,membershipProvider,adapterFactory=null,storeFactory,approvalFactory,planner,catalog,connectable,privacyPolicy}={}){
- const r=runtime||createSupervisedRuntime({membershipProvider,storeFactory,approvalFactory,planner,catalog,connectable,privacyPolicy});
+function createChatGateway({runtime,membershipProvider,adapterFactory=null,storeFactory,approvalFactory,planner,reasoner,catalog,connectable,privacyPolicy}={}){
+ const r=runtime||createSupervisedRuntime({membershipProvider,storeFactory,approvalFactory,planner,reasoner,catalog,connectable,privacyPolicy});
  const latest=new Map();
  async function handle(identity,body){
   if(!identity||identity.authorized!==true||!['admin','family_member'].includes(identity.role)||typeof identity.uid!=='string')fail('authenticated_identity_required');
   if(!body||typeof body!=='object'||Array.isArray(body)||Object.keys(body).some(k=>!ALLOWED_KEYS.includes(k)&&!IGNORED_CLIENT_HINTS.includes(k)))fail('chat_request_invalid');
   if(IGNORED_CLIENT_HINTS.some(k=>body[k]!==undefined&&(body[k]===null||typeof body[k]!=='object'||Array.isArray(body[k]))))fail('chat_request_invalid');
   const session=await r.openSession(identity.uid);
-  // Trusted composition installs the owner's adapters once; an active
-  // connection is never replaced mid-flight by a concurrent request.
-  if(adapterFactory){const adapters=await adapterFactory(identity,r.scope(session));for(const[provider,adapter]of Object.entries(adapters||{}))if(!r.connections.active(session,provider))r.connections.install(session,provider,adapter);}
   const conversationId=body.conversationId||DEFAULT_CONVERSATION;const key=JSON.stringify([identity.uid,conversationId]);
   let state;const action=body.action||'start';
+  // The human resuming a mission ("continúa", "ya lo he conectado", resume)
+  // is the reconnection signal: only then is an expired or reduced connection
+  // replaced by a fresh adapter (unverified until its first read succeeds).
+  const resuming=action==='resume'||(action==='start'&&typeof body.query==='string'&&latest.has(key)&&FOLLOW_UP.test(body.query.trim()));
+  // Trusted composition installs the owner's adapters once; an active
+  // connection is never replaced mid-flight by a concurrent request, and an
+  // expired one is not silently reinstalled by an ordinary question.
+  if(adapterFactory){const adapters=await adapterFactory(identity,r.scope(session));for(const[provider,adapter]of Object.entries(adapters||{}))if(!r.connections.installed(session,provider)||(resuming&&(adapter.scopes||[]).some(scope=>!r.connections.inspect(session,provider,scope).ready)))r.connections.install(session,provider,adapter);}
   if(action==='onboarding')return freeze({ok:true,response:r.onboarding(session).message,conversationId,executionEnabled:false});
   if(['resume','cancel','pause','status'].includes(action)){const id=body.missionId||latest.get(key);if(!id)fail('mission_not_found');state=await r[action==='status'?'get':action](session,id);}
   else if(action==='start'){
@@ -43,6 +48,8 @@ function createChatGateway({runtime,membershipProvider,adapterFactory=null,store
    if(!state.connectionRequests.length)return 'Necesito que vuelvas a autorizar la conexión para continuar. La misión queda guardada y continuará desde este punto.';
    return state.connectionRequests.map(g=>[g.reason,'Permiso solicitado: '+(PERMISSIONS[g.permission]||'consultar la fuente')+'.',g.canDo,g.cannotDo,g.how].join(' ')).join('\n')+'\nLa misión queda guardada y continuará desde este punto.';
   }
+  if(state.status==='WAITING_RESOURCE')return 'El recurso de razonamiento no está disponible ahora (límite, cuota, presupuesto o fallo del proveedor) y no hay alternativa autorizada. La misión y sus fuentes quedan guardadas en este punto; di "continúa" para reanudarla. No he ejecutado nada externo.';
+  if(state.status==='COMPLETED'&&state.result?.synthesis)return synthesisText(state.result);
   if(state.status==='COMPLETED')return state.result?.capability==='memory.remember'?'He guardado esta información en tu memoria personal.':state.result?.items.length?state.result.items.map(v=>v.text).join('\n'):'No he encontrado resultados en tus fuentes.';
   if(state.status==='NEEDS_APPROVAL')return 'He preparado una propuesta para tu revisión. Necesito que decidas la estructura y autorices los cambios; no he modificado ni enviado nada.';
   if(state.status==='CANCELLED')return 'Misión cancelada.';
@@ -50,6 +57,16 @@ function createChatGateway({runtime,membershipProvider,adapterFactory=null,store
   if(state.diagnosis?.class==='capability_degraded')return 'Esta fuente ha fallado varias veces seguidas. Lo he registrado para revisión y no lo reintento automáticamente ahora; no he ejecutado nada más.';
   if(state.diagnosis?.class==='privacy_gate')return 'No he enviado la búsqueda: contenía datos personales y el proveedor no está autorizado para ellos. Reformúlala sin datos personales si quieres que busque.';
   return 'No puedo dar la misión por completada. El resultado queda pendiente de revisión.';
+ }
+ // Sources are numbered among those the model actually reasoned over (never
+ // internal ids), public ones listed with their link; the resource that
+ // reasoned and any rejected resource are always disclosed.
+ function synthesisText(result){
+  const s=result.synthesis;const used=s.sourceIds||result.items.map(v=>v.id);const position=new Map(used.map((id,i)=>[id,i+1]));
+  const cite=ids=>' [fuente '+ids.map(id=>position.get(id)).filter(Boolean).join(', ')+']';
+  const listed=used.map((id,i)=>{const item=result.items.find(v=>v.id===id);return item&&item.url?(i+1)+') '+item.url:null;}).filter(Boolean);
+  return [s.conclusion,...s.findings.map(f=>'- '+f.claim+cite(f.sourceIds)),...(s.comparison?['Comparación: '+s.comparison]:[]),...(listed.length?['Fuentes: '+listed.join(' · ')]:[]),
+   'Análisis generado por '+s.resource+(s.failover.length?' tras no estar disponible '+s.failover.map(a=>a.resource).join(', '):'')+'; verificado contra '+used.length+' fuentes. No he ejecutado nada externo.'].join('\n');
  }
  return Object.freeze({handle,runtime:r,defaultConversation:DEFAULT_CONVERSATION});
 }

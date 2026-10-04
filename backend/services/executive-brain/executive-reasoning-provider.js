@@ -49,9 +49,13 @@ function createOpenAIChatAdapter({ apiKey, model, timeoutMs, baseURL }) {
     });
     const choice = completion && Array.isArray(completion.choices) ? completion.choices[0] : null;
     const usage = completion && completion.usage ? completion.usage : {};
+    const cached = usage.prompt_tokens_details && Number.isFinite(usage.prompt_tokens_details.cached_tokens) ? usage.prompt_tokens_details.cached_tokens : undefined;
     return {
       text: choice && choice.message && typeof choice.message.content === 'string' ? choice.message.content : '',
-      usage: { inputTokens: usage.prompt_tokens, outputTokens: usage.completion_tokens },
+      usage: { inputTokens: usage.prompt_tokens, outputTokens: usage.completion_tokens, ...(cached !== undefined ? { cachedTokens: cached } : {}) },
+      // Audit evidence of a real call: the provider's response id and the
+      // exact model snapshot that answered (never content or headers).
+      evidence: { responseId: typeof completion.id === 'string' ? completion.id : null, responseModel: typeof completion.model === 'string' ? completion.model : null },
     };
   };
 }
@@ -179,9 +183,13 @@ function createExecutiveReasoningProvider({
       const result = await complete({ system, user: JSON.stringify(context), maxOutputTokens });
       const content = parseJsonObject(result && result.text);
       if (!content) return { status: REASONING_RESULT.ERROR, errorCode: 'reasoning_invalid_output', usage: result && result.usage };
-      return { status: REASONING_RESULT.OK, content, usage: (result && result.usage) || {} };
+      return { status: REASONING_RESULT.OK, content, usage: (result && result.usage) || {}, ...(result && result.evidence ? { evidence: result.evidence } : {}) };
     } catch (error) {
-      return { status: REASONING_RESULT.ERROR, errorCode: classifyProviderError(error) };
+      // OpenAI reports an exhausted plan/credit as 429 with code
+      // "insufficient_quota". The errorCode stays the existing one; the extra
+      // fixed failureType only lets V3 continuity tell it from a rate limit.
+      const quota = error && error.status === 429 && error.code === 'insufficient_quota';
+      return { status: REASONING_RESULT.ERROR, errorCode: classifyProviderError(error), ...(quota ? { failureType: 'QUOTA_EXHAUSTED' } : {}) };
     }
   }
 

@@ -166,6 +166,12 @@ su raíz. OXKIO_V3_ENABLED no se activa en esta entrega. Al habilitarla se requi
 OXKIO_V3_MEMORY_ROOT absoluto y dedicado y OXKIO_V3_INTEGRITY_KEY (≥32 bytes,
 secreto registrado; sin ella V3 no se compone y todo sigue en el chat existente). No se cambia la allowlist familiar ni
 se abre un endpoint nuevo. La rama contiene código, no un despliegue.
+Custodia de la clave (04/10/2026): OXKIO_V3_INTEGRITY_KEY vive solo en Secret
+Manager (oxkio-runtime-prod), versión 1 fijada. Start-Oxkio.ps1 la carga en
+Process únicamente con OXKIO_V3_ENABLED=true y falla cerrado si no la obtiene; en
+Cloud Run se referenciará con secretKeyRef key "1". Nunca en disco, .env, logs ni
+repositorio. Rotar = migración deliberada (verificar con la clave vieja y re-sellar
+con la nueva); una clave distinta nunca abre registros antiguos (stored_integrity_invalid).
 
 Las facturas producen propuesta de organización y una entrada en la ApprovalQueue
 por usuario, sin executionPayload. La estructura se decide humanamente. No se
