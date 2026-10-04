@@ -74,6 +74,37 @@ if ($ValidateOnly) {
 $logDirectory = [string]$config.logDirectory
 if ([string]::IsNullOrWhiteSpace($logDirectory) -or -not [System.IO.Path]::IsPathRooted($logDirectory)) { Stop-V3Start 'logDirectory debe ser una ruta absoluta.' }
 New-Item -ItemType Directory -Force -Path $logDirectory | Out-Null
+
+# Supervision: the task also fires every few minutes to bring OXKIO back if it
+# died, so a start must be idempotent. If Node launched by THIS repository's
+# launcher already listens on the port, nothing is started and the live logs
+# are not rotated; if another process holds the port, nothing is started
+# either. Each decision is appended to a supervisor log (codes and PIDs only).
+$supervisorLog = Join-Path $logDirectory 'oxkio-v3.supervisor.log'
+function Write-Supervisor {
+    param([string]$Line)
+    if ((Test-Path -LiteralPath $supervisorLog) -and (Get-Item -LiteralPath $supervisorLog).Length -gt 1MB) { Move-Item -LiteralPath $supervisorLog -Destination "$supervisorLog.1" -Force }
+    Add-Content -LiteralPath $supervisorLog -Value ('{0} {1}' -f (Get-Date -Format 's'), $Line) -Encoding Ascii
+}
+$launcherFull = (Resolve-Path -LiteralPath $LauncherPath).ProviderPath.ToLowerInvariant()
+$port = 0
+if (-not [int]::TryParse([string][Environment]::GetEnvironmentVariable('PORT', 'Process'), [ref]$port) -or $port -le 0) { $port = 3000 }
+$listener = Get-NetTCPConnection -State Listen -LocalPort $port -ErrorAction SilentlyContinue | Select-Object -First 1
+if ($listener) {
+    $owner = Get-CimInstance Win32_Process -Filter "ProcessId=$($listener.OwningProcess)" -ErrorAction SilentlyContinue
+    $parent = if ($owner) { Get-CimInstance Win32_Process -Filter "ProcessId=$($owner.ParentProcessId)" -ErrorAction SilentlyContinue } else { $null }
+    $ours = $owner -and $owner.Name -eq 'node.exe' -and $parent -and $parent.CommandLine -and $parent.CommandLine.ToLowerInvariant().Contains($launcherFull)
+    if ($ours) {
+        Write-Supervisor "already-running node=$($owner.ProcessId)"
+        Write-Host '[OK] OXKIO ya esta en ejecucion; no se inicia otra instancia.'
+        exit 0
+    }
+    Write-Supervisor "port-busy owner=$($listener.OwningProcess)"
+    Write-Host "[ERROR] El puerto $port esta ocupado por otro proceso; no se inicia OXKIO."
+    exit 2
+}
+Write-Supervisor 'start'
+
 $outLog = Join-Path $logDirectory 'oxkio-v3.out.log'
 $errLog = Join-Path $logDirectory 'oxkio-v3.err.log'
 # Start-Process truncates its targets: the previous run is kept as .1.
