@@ -85,3 +85,44 @@ test('real Luna synthesis (F8): faithful findings pass, mixed-source and qualifi
  assert.deepEqual(synthesis.findings.map(one),[true,true,'claim_qualifier_dropped',true,true,'claim_not_supported',true]);
  assert.notEqual(verifySynthesis(synthesis,real),true);
 });
+// Safe partial verification (Xatai decision, 04/10/2026): the same rules per
+// finding; a finding passes whole or is dropped whole.
+const {verifyPartial,LIMITED_CONCLUSION}=require('./synthesis-verifier');
+const fixture=require('./synthesis-verifier.f8-luna.fixture.json');
+test('A/B/C: real Luna output keeps only its 5 verified findings; the one dropping "only" and the one mixing GDPR/AI Act are dropped',()=>{
+ const v=verifyPartial(fixture.synthesis,fixture.sources);
+ assert.equal(v.accepted,true);assert.equal(v.proposed,7);
+ assert.deepEqual(v.content.findings.map(f=>f.claim),[0,1,3,4,6].map(i=>fixture.synthesis.findings[i].claim));
+ assert.deepEqual(v.discarded,[{index:2,code:'claim_qualifier_dropped'},{index:5,code:'claim_not_supported'}]);
+ for(const i of [2,5])assert.ok(!v.content.findings.some(f=>f.claim===fixture.synthesis.findings[i].claim));
+});
+test('D/E: a finding with an altered number or negation is dropped whole, never trimmed',()=>{
+ const good=finding('Beta cuesta 10 euros al mes y ofrece soporte solo en inglés.','Beta cuesta 10 euros al mes. Ofrece soporte solo en inglés.',['b']);
+ for(const [bad,code] of [[finding('Alfa cuesta 25 euros al mes.','Alfa cuesta 20 euros al mes.'),'claim_number_unsupported'],[finding('Incluye soporte en español.','No incluye soporte en español.'),'claim_negation_changed']]){
+  const v=verifyPartial({findings:[good,bad],conclusion:'Beta es más barata.'},sources);
+  assert.equal(v.accepted,true);assert.deepEqual(v.content.findings.map(f=>f.claim),[good.claim]);assert.deepEqual(v.discarded,[{index:1,code}]);
+ }
+});
+test('F: with no verified finding, or mostly unverified ones, nothing is produced',()=>{
+ const bad=finding('Alfa tiene 900 clientes.','Alfa tiene 900 clientes.');
+ assert.deepEqual([verifyPartial({findings:[bad,bad],conclusion:'Alfa lidera.'},sources).accepted,verifyPartial({findings:[bad,bad],conclusion:'Alfa lidera.'},sources).verdict],[false,'no_verified_findings']);
+ const ok=finding('Alfa cuesta 20 euros al mes.','Alfa cuesta 20 euros al mes.');
+ const v=verifyPartial({findings:[ok,bad,bad],conclusion:'x'},sources);assert.equal(v.accepted,false);assert.equal(v.verdict,'too_many_unverified_findings');assert.equal(v.content,undefined);
+ assert.equal(verifyPartial({findings:[]},sources).verdict,'findings_count');
+});
+test('G: conclusion and comparison are never kept when a finding was dropped or when they fail their own checks',()=>{
+ const ok=finding('Alfa cuesta 20 euros al mes.','Alfa cuesta 20 euros al mes.');const bad=finding('Alfa tiene 900 clientes.','Alfa tiene 900 clientes.');
+ const ok2=finding('Beta cuesta 10 euros al mes.','Beta cuesta 10 euros al mes.',['b']);
+ const dropped=verifyPartial({findings:[ok,ok2,bad],conclusion:'Alfa, con sus clientes, es líder.',comparison:'Alfa tiene más clientes.'},sources);
+ assert.equal(dropped.conclusionKind,'limited');assert.equal(dropped.content.conclusion,LIMITED_CONCLUSION);assert.equal(dropped.content.comparison,'');
+ const ownFail=verifyPartial({findings:[ok,ok2],conclusion:'Alfa cuesta 35 euros.',comparison:'Difieren.'},sources);
+ assert.equal(ownFail.conclusionKind,'limited');assert.equal(ownFail.content.comparison,'');
+ const clean=verifyPartial({findings:[ok,ok2],conclusion:'Beta es más barata.',comparison:'Difieren en precio.'},sources);
+ assert.equal(clean.conclusionKind,'inference');assert.equal(clean.content.conclusion,'Beta es más barata.');assert.equal(clean.content.comparison,'Difieren en precio.');
+});
+test('H: dropped findings are reconstructible for audit as index and fixed code only, and the result is immutable',()=>{
+ const v=verifyPartial(fixture.synthesis,fixture.sources);
+ assert.ok(v.discarded.every(d=>Object.keys(d).join()==='index,code'&&/^[a-z_]+$/.test(d.code)));
+ assert.ok(Object.isFrozen(v)&&Object.isFrozen(v.content.findings)&&Object.isFrozen(v.discarded));
+ assert.equal(v.proposed,v.content.findings.length+v.discarded.length);
+});

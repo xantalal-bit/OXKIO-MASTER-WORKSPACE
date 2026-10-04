@@ -10,7 +10,7 @@ const { createScopeSessions, createScopedStore, copy, freeze, fail } = require('
 const { createCapabilityManager, createConnectionManager, DEFINITIONS } = require('./capability-manager');
 const { OUTCOMES, normalize, tokensOf } = require('./intention-interpreter');
 const { authorizeEgress, classifyEgress, mentionsPerson } = require('./egress-privacy');
-const { verifySynthesis } = require('../executive-brain/synthesis-verifier');
+const { verifyPartial } = require('../executive-brain/synthesis-verifier');
 const { createCostLedger } = require('./cost-ledger');
 const { classified, diagnose, createLearning } = require('./self-repair');
 const REGISTRAR = 'tool:supervised-operation';
@@ -144,11 +144,15 @@ function createSupervisedRuntime({membershipProvider,planner=null,conversationDe
    const sources=evidence.slice(0,20).map(v=>({id:v.id,text:v.text,provenance:v.provenance}));const issued=new Map(sources.map(v=>[v.id,v]));
    const request={...SYNTHESIS_REQUEST,context:{objective:m.intention,sources},maxOutputTokens:SYNTHESIS_MAX_OUTPUT_TOKENS};
    const r=await reasoner.reason({objective:m.intention,egressText:[m.intention,...sources.map(v=>v.text)].join('\n'),derivedFromPrivate:sources.some(v=>!PUBLIC_PROVENANCE.includes(v.provenance)),
-    request,basis:{inputTokens:Math.ceil(JSON.stringify(request).length/3)+200,outputTokens:SYNTHESIS_MAX_OUTPUT_TOKENS},spend:spendFor(m.handle),missionId:m.id,accept:content=>verifySynthesis(content,issued),
+    request,basis:{inputTokens:Math.ceil(JSON.stringify(request).length/3)+200,outputTokens:SYNTHESIS_MAX_OUTPUT_TOKENS},spend:spendFor(m.handle),missionId:m.id,accept:content=>{const v=verifyPartial(content,issued);return v.accepted||v.verdict;},
     onAttempt:a=>trace(m,'RESOURCE_FAILED',{resource:a.resource,failure:a.failure,detail:a.detail})});
    trace(m,'COGNITION',{resource:r.resource,privacyClass:r.privacyClass,fallback:r.attempts.length>0});
-   const c=r.content;
-   return {findings:c.findings.map(f=>({claim:f.claim,quote:f.quote,sourceIds:[...f.sourceIds]})),comparison:typeof c.comparison==='string'?c.comparison:'',conclusion:c.conclusion,
+   // Only findings that pass every rule survive; dropped ones are kept for
+   // audit as index + fixed code, never as content.
+   const v=verifyPartial(r.content,issued);const c=v.content;
+   trace(m,'SYNTHESIS_VERIFIED',{proposed:v.proposed,kept:c.findings.length,discarded:v.discarded.map(d=>d.code),conclusion:v.conclusionKind});
+   return {findings:c.findings.map(f=>({claim:f.claim,quote:f.quote,sourceIds:[...f.sourceIds]})),comparison:c.comparison,conclusion:c.conclusion,conclusionKind:v.conclusionKind,
+    proposedFindings:v.proposed,discarded:v.discarded.map(d=>({index:d.index,code:d.code})),
     resource:r.resource,region:r.region,privacyClass:r.privacyClass,usage:r.usage,chargedUsd:r.chargedUsd,call:{responseId:r.evidence.responseId||null,responseModel:r.evidence.responseModel||null},sourceIds:[...new Set(c.findings.flatMap(f=>f.sourceIds))],failover:r.attempts.map(a=>({resource:a.resource,failure:a.failure,...(a.detail?{detail:a.detail}:{})}))};
   }
   async function execute(contract,context){

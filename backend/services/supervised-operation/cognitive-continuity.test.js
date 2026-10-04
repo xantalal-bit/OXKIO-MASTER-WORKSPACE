@@ -94,13 +94,18 @@ test('failover: primary QUOTA_EXHAUSTED -> fallback resource -> verified -> comp
  } finally { s.cleanup(); }
 });
 
-test('verifier: a synthesis citing an unissued source is rejected and the next resource is used', async () => {
+test('verifier: a finding citing an unissued source is dropped whole; only verified findings and a limited conclusion are shown', async () => {
  const lying = provider('openai', 'primary', req => { const ok = synthesis(req); ok.content.findings[0].sourceIds = ['invented-source']; return ok; });
  const fallback = provider('anthropic', 'fallback', synthesis);
  const s = await setup({ providers: [lying, fallback] });
  try {
-  await s.seed(); const d = (await s.ask(QUESTION)).data.details;
-  assert.equal(d.status, 'COMPLETED'); assert.deepEqual(d.result.synthesis.failover, [{ resource: 'openai:primary', failure: 'INVALID_OUTPUT', detail: 'citation_unissued' }]);
+  await s.seed(); const r = await s.ask(QUESTION); const d = r.data.details; const syn = d.result.synthesis;
+  assert.equal(d.status, 'COMPLETED'); assert.equal(syn.resource, 'openai:primary'); assert.deepEqual(syn.failover, []); assert.equal(fallback.calls.length, 0);
+  assert.equal(syn.proposedFindings, 2); assert.equal(syn.findings.length, 1); assert.deepEqual(syn.discarded, [{ index: 0, code: 'citation_unissued' }]);
+  assert.equal(syn.conclusionKind, 'limited'); assert.equal(syn.comparison, '');
+  assert.doesNotMatch(r.data.response, /conviene Alfa|Difieren en precio|citation_unissued|invented-source/);
+  assert.match(r.data.response, /He descartado 1 hallazgo que no pude comprobar/);
+  assert.ok(d.trace.some(t => t.event === 'SYNTHESIS_VERIFIED' && t.kept === 1 && t.discarded.join() === 'citation_unissued'));
  } finally { s.cleanup(); }
 });
 
@@ -295,7 +300,7 @@ test('public pages become readable source text (paragraphs, no markup or scripts
 
 // Code review 04/10/2026 regressions.
 test('review: a permanent failure (revoked key, rejected request, refused output) never parks the mission; the deterministic analysis stands', async () => {
- for (const behaviour of [() => ({ status: 'error', errorCode: 'reasoning_auth_failed' }), () => ({ status: 'error', errorCode: 'reasoning_request_rejected' }), req => { const s = synthesis(req); s.content.findings[0].sourceIds = ['invented']; return s; }]) {
+ for (const behaviour of [() => ({ status: 'error', errorCode: 'reasoning_auth_failed' }), () => ({ status: 'error', errorCode: 'reasoning_request_rejected' }), req => { const s = synthesis(req); s.content.findings.forEach(f => { f.sourceIds = ['invented']; }); return s; }]) {
   const p = provider('openai', 'primary', behaviour);
   const s = await setup({ providers: [p] });
   try {

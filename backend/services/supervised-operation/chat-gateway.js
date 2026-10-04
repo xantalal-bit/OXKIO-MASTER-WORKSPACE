@@ -67,9 +67,14 @@ function createChatGateway({runtime,membershipProvider,adapterFactory=null,store
   const s=result.synthesis;const used=s.sourceIds||result.items.map(v=>v.id);const position=new Map(used.map((id,i)=>[id,i+1]));
   const cite=ids=>' [fuente '+ids.map(id=>position.get(id)).filter(Boolean).join(', ')+']';
   const listed=used.map((id,i)=>{const item=result.items.find(v=>v.id===id);return item&&item.url?(i+1)+') '+item.url:null;}).filter(Boolean);
-  const insufficient=s.conclusion.trim()===INSUFFICIENT_SOURCES;
-  return [insufficient?s.conclusion:'Valoración (inferencia a partir de los hallazgos): '+s.conclusion,'Hallazgos:',...s.findings.map(f=>'- '+f.claim+cite(f.sourceIds)),...(s.comparison?['Comparación (inferencia): '+s.comparison]:[]),...(listed.length?['Fuentes: '+listed.join(' · ')]:[]),
-   'Cada hallazgo tiene respaldo textual comprobado en '+used.length+' fuentes; la valoración y la comparación son inferencias sobre ellos. No he realizado envíos ni cambios externos.'].join('\n');
+  // Only an inference over fully verified findings is shown as an assessment;
+  // otherwise the limited or insufficient conclusion is shown as it is.
+  const kind=s.conclusionKind||(s.conclusion.trim()===INSUFFICIENT_SOURCES?'insufficient':'inference');
+  const dropped=(s.discarded||[]).length;
+  return [kind==='inference'?'Valoración (inferencia a partir de los hallazgos): '+s.conclusion:s.conclusion,'Hallazgos:',...s.findings.map(f=>'- '+f.claim+cite(f.sourceIds)),...(kind==='inference'&&s.comparison?['Comparación (inferencia): '+s.comparison]:[]),
+   ...(dropped===1?['He descartado 1 hallazgo que no pude comprobar en el texto de las fuentes; no lo presento como cierto.']:dropped>1?['He descartado '+dropped+' hallazgos que no pude comprobar en el texto de las fuentes; no los presento como ciertos.']:[]),
+   ...(listed.length?['Fuentes: '+listed.join(' · ')]:[]),
+   'Cada hallazgo mostrado tiene respaldo textual comprobado en '+used.length+' fuentes'+(kind==='inference'?'; la valoración y la comparación son inferencias sobre ellos':'')+'. No he realizado envíos ni cambios externos.'].join('\n');
  }
  return Object.freeze({handle,runtime:r,defaultConversation:DEFAULT_CONVERSATION});
 }

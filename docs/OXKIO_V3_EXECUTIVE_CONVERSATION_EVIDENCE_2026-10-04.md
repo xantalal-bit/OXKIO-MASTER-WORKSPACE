@@ -91,7 +91,18 @@ Diagnóstico offline del turno 4 (7 hallazgos reales, fixture `synthesis-verifie
 
 Con las correcciones, 5 de 7 hallazgos pasan. El Verifier sigue siendo «todo o nada», así que esta salida concreta continúa rechazada. Se refuerza la instrucción: un hallazgo afirma solo lo que dice su propia cita y conserva todas sus salvedades; las relaciones entre fuentes van en la comparación. La eficacia de esa instrucción con Luna real NO está validada (no se hizo una tercera llamada, por mandato).
 
-Decisión de diseño pendiente (no cambiada): ¿la síntesis debe descartar los hallazgos sin respaldo y mostrar solo los verificados, avisando de cuántos se descartaron, en lugar de rechazarla entera? Hoy se rechaza entera: más seguro, pero con poca utilidad en la práctica.
+## Verificación parcial segura (decisión de Xatai, 04/10/2026)
+
+Las mismas reglas del Verifier (`checkFinding`, sin rebajar ninguna) se aplican **por hallazgo** en `verifyPartial`, en el mismo flujo de síntesis:
+
+- Un hallazgo que pasa todas las reglas puede mostrarse; si falla cualquiera, se descarta entero. Nunca se recorta una afirmación.
+- Si no queda ningún hallazgo verificado, o quedan menos de la mitad (salida poco fiable), la salida se rechaza entera y no se fabrica respuesta (insuficiencia y fallback gobernado).
+- Si se descartó algún hallazgo, o si la conclusión o la comparación del modelo fallan sus propias comprobaciones, no se reutilizan, porque podrían apoyarse en material descartado. Se muestra una conclusión limitada fija («Solo presento los hallazgos que he podido comprobar…») y no hay comparación. Solo con todos los hallazgos verificados se muestra la inferencia, etiquetada como tal.
+- Auditoría: `synthesis.proposedFindings`, `synthesis.discarded[{index,code}]`, `conclusionKind` y el evento de traza `SYNTHESIS_VERIFIED`. Solo códigos fijos, nunca contenido descartado.
+- A la persona se le dice, en lenguaje natural, cuántos hallazgos se descartaron, sin códigos internos.
+- `verifySynthesis` («todo o nada») se conserva sin cambios y sus tests siguen en verde.
+
+Tests A–I: A/B/C con la salida real de Luna (5 válidos; descartados el que pierde «only» y el que mezcla RGPD/Ley de IA), D cifra alterada, E negación alterada, F insuficiencia (0 verificados o menos de la mitad), G conclusión y comparación no reutilizadas, H descartes auditables e inmutables, I respuesta por la frontera HTTP con la salida real: solo hallazgos verificados, aviso natural, sin códigos. Además, dos tests previos adaptados: el hallazgo con fuente no emitida se descarta entero, y la «salida rechazada» pasa a ser «todos los hallazgos inválidos». Suite afectada: 450/450. Suite secuencial: 1726 tests, 1710 PASS / 0 FAIL / 16 SKIP.
 
 ## Pendiente separado — fuera de esta PR
 

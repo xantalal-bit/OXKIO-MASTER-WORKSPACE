@@ -1,6 +1,7 @@
 'use strict';
 const { containsSecretMarker } = require('./privacy-gate');
 const INSUFFICIENT_SOURCES = 'Las fuentes no permiten concluir.';
+const freeze = Object.freeze;
 const normalize = value => value.trim().replace(/\s+/gu, ' ');
 const plain = value => normalize(value).normalize('NFD').replace(/[̀-ͯ]/gu, '').toLowerCase();
 const words = value => plain(value).split(/[^\p{L}\p{N}]+/u).filter(Boolean);
@@ -67,37 +68,68 @@ function faithful(claim, quote) {
  if (!own.length || own.filter(s => available.has(s)).length / own.length < 0.6) return 'claim_not_supported';
  return null;
 }
-// Findings are verified against literal quotes; conclusion and comparison are
-// an inference over those findings, allowed only without new figures and
-// presented to the person as an inference, never as a verified fact.
-function verifySynthesis(content, sources) {
- const defect = (v,max,name) => typeof v!=='string'||!v.trim()?name+'_missing':v.length>max?name+'_too_long':containsSecretMarker(v)?name+'_secret':/https?:\/\//i.test(v)?name+'_link':null;
- if(!content||typeof content!=='object'||!Array.isArray(content.findings))return 'synthesis_shape';
- if(content.findings.length<1||content.findings.length>8)return 'findings_count';
+const defect = (v,max,name) => typeof v!=='string'||!v.trim()?name+'_missing':v.length>max?name+'_too_long':containsSecretMarker(v)?name+'_secret':/https?:\/\//i.test(v)?name+'_link':null;
+// Shape and issued sources: a defect here invalidates the whole output.
+function prepare(content, sources) {
+ if(!content||typeof content!=='object'||!Array.isArray(content.findings))return {error:'synthesis_shape'};
+ if(content.findings.length<1||content.findings.length>8)return {error:'findings_count'};
  let entries;
  if(sources instanceof Map)entries=[...sources.entries()];
  else if(Array.isArray(sources))entries=sources.map(s=>[s&&s.id,s]);
- else return 'synthesis_sources_unavailable';
+ else return {error:'synthesis_sources_unavailable'};
  const issued=new Map();
  for(const [id,source] of entries){
   const text=typeof source==='string'?source:source&&source.text;
-  if(typeof id!=='string'||!id||typeof text!=='string'||issued.has(id))return 'synthesis_sources_invalid';
+  if(typeof id!=='string'||!id||typeof text!=='string'||issued.has(id))return {error:'synthesis_sources_invalid'};
   const c=canon(text);issued.set(id,{text:c,spans:spans(c)});
  }
- if(!issued.size)return 'synthesis_sources_unavailable';
- const verifiedNumbers=new Set();
- for(const f of content.findings){
-  const claim=defect(f&&f.claim,600,'claim');if(claim)return claim;
-  const quote=defect(f.quote,1200,'quote');if(quote)return quote;
-  if(!Array.isArray(f.sourceIds)||!f.sourceIds.length||f.sourceIds.length>10)return 'citation_missing';
-  if(!f.sourceIds.every(id=>issued.has(id)))return 'citation_unissued';
-  for(const id of f.sourceIds){const quoted=quotedIn(f.quote,issued.get(id));if(quoted)return quoted;}
-  const unfaithful=faithful(f.claim,f.quote);if(unfaithful)return unfaithful;
-  numbers(f.quote).forEach(n=>verifiedNumbers.add(n));
- }
- const inference=(value,name,max)=>{const d=defect(value,max,name);if(d)return d;return numbers(value).every(n=>verifiedNumbers.has(n))?null:name+'_number_unsupported';};
- const conclusion=normalize(String(content.conclusion||''))===INSUFFICIENT_SOURCES?null:inference(content.conclusion,'conclusion',1200);if(conclusion)return conclusion;
- if(content.comparison!==undefined&&content.comparison!==''){const comparison=inference(content.comparison,'comparison',1200);if(comparison)return comparison;}
+ if(!issued.size)return {error:'synthesis_sources_unavailable'};
+ return {issued};
+}
+// One finding, all rules: a fixed defect code, or null when it fully passes.
+function checkFinding(f, issued) {
+ const claim=defect(f&&f.claim,600,'claim');if(claim)return claim;
+ const quote=defect(f.quote,1200,'quote');if(quote)return quote;
+ if(!Array.isArray(f.sourceIds)||!f.sourceIds.length||f.sourceIds.length>10)return 'citation_missing';
+ if(!f.sourceIds.every(id=>issued.has(id)))return 'citation_unissued';
+ for(const id of f.sourceIds){const quoted=quotedIn(f.quote,issued.get(id));if(quoted)return quoted;}
+ return faithful(f.claim,f.quote);
+}
+const inference=(value,name,verifiedNumbers)=>{const d=defect(value,1200,name);if(d)return d;return numbers(value).every(n=>verifiedNumbers.has(n))?null:name+'_number_unsupported';};
+const numbersOf=findings=>new Set(findings.flatMap(f=>numbers(f.quote)));
+const isInsufficient=value=>normalize(String(value||''))===INSUFFICIENT_SOURCES;
+// Findings are verified against literal quotes; conclusion and comparison are
+// an inference over those findings, allowed only without new figures and
+// presented to the person as an inference, never as a verified fact.
+// All-or-nothing form: any defect rejects the whole output.
+function verifySynthesis(content, sources) {
+ const prepared=prepare(content,sources);if(prepared.error)return prepared.error;
+ for(const f of content.findings){const code=checkFinding(f,prepared.issued);if(code)return code;}
+ const verifiedNumbers=numbersOf(content.findings);
+ const conclusion=isInsufficient(content.conclusion)?null:inference(content.conclusion,'conclusion',verifiedNumbers);if(conclusion)return conclusion;
+ if(content.comparison!==undefined&&content.comparison!==''){const comparison=inference(content.comparison,'comparison',verifiedNumbers);if(comparison)return comparison;}
  return true;
 }
-module.exports={verifySynthesis,INSUFFICIENT_SOURCES};
+// Partial form: the same rules applied PER FINDING. A finding either passes
+// every rule and may be shown, or is dropped whole; a dropped finding is never
+// shown and is recorded only as its index and fixed defect code. Most of the
+// output must verify, otherwise it is treated as unreliable and rejected.
+// Conclusion and comparison may rest on a dropped finding, so whenever one is
+// dropped (or they fail their own checks) they are not reused: the answer
+// carries a limited conclusion instead of the model's inference.
+const LIMITED_CONCLUSION='Solo presento los hallazgos que he podido comprobar en las fuentes; con ellos no hay una valoración de conjunto verificable.';
+function verifyPartial(content, sources, { minVerifiedRatio = 0.5 } = {}) {
+ const prepared=prepare(content,sources);if(prepared.error)return freeze({accepted:false,verdict:prepared.error});
+ const discarded=[],kept=[];
+ content.findings.forEach((f,index)=>{const code=checkFinding(f,prepared.issued);if(code)discarded.push(freeze({index,code}));else kept.push(freeze({claim:f.claim,quote:f.quote,sourceIds:freeze([...f.sourceIds])}));});
+ const proposed=content.findings.length;
+ if(!kept.length)return freeze({accepted:false,verdict:'no_verified_findings',proposed,discarded:freeze(discarded)});
+ if(kept.length/proposed<minVerifiedRatio)return freeze({accepted:false,verdict:'too_many_unverified_findings',proposed,discarded:freeze(discarded)});
+ const verifiedNumbers=numbersOf(kept);
+ const comparisonGiven=content.comparison!==undefined&&content.comparison!=='';
+ const inferenceOk=!discarded.length&&!isInsufficient(content.conclusion)&&!inference(content.conclusion,'conclusion',verifiedNumbers)&&(!comparisonGiven||!inference(content.comparison,'comparison',verifiedNumbers));
+ const conclusionKind=isInsufficient(content.conclusion)&&!discarded.length?'insufficient':inferenceOk?'inference':'limited';
+ return freeze({accepted:true,verdict:true,proposed,discarded:freeze(discarded),conclusionKind,
+  content:freeze({findings:freeze(kept),conclusion:conclusionKind==='inference'?content.conclusion:conclusionKind==='insufficient'?INSUFFICIENT_SOURCES:LIMITED_CONCLUSION,comparison:conclusionKind==='inference'&&comparisonGiven?content.comparison:''})});
+}
+module.exports={verifySynthesis,verifyPartial,INSUFFICIENT_SOURCES,LIMITED_CONCLUSION};
