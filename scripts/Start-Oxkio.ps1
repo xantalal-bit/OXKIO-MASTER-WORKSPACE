@@ -185,6 +185,56 @@ $approvalPgRuntimeUrl = Get-OxkioApprovalPostgresRuntimeUrl -GcloudPath $gcloudP
 $approvalPgRuntimeUrl = $null
 Write-CheckOk 'Credencial PostgreSQL Approval cargada de forma segura en Process.'
 
+# Opt-in secrets: read from Secret Manager into this Process only (never disk,
+# console or User scope), failing closed when the feature asked for them.
+function Get-OxkioOptInSecret {
+    param(
+        [Parameter(Mandatory = $true)][string]$GcloudPath,
+        [Parameter(Mandatory = $true)][string]$Name,
+        [Parameter(Mandatory = $true)][string]$Version,
+        [Parameter(Mandatory = $true)][int]$MinimumLength,
+        [Parameter(Mandatory = $true)][string]$Guidance
+    )
+
+    $secretArguments = @(
+        'secrets', 'versions', 'access', $Version,
+        "--secret=$Name",
+        '--project=oxkio-runtime-prod'
+    )
+    $secretOutput = & $GcloudPath @secretArguments 2>$null
+    $secretExitCode = $LASTEXITCODE
+
+    if ($secretExitCode -ne 0) {
+        Stop-Validation "No se pudo obtener $Name desde Secret Manager." $Guidance
+    }
+
+    $secretValue = ($secretOutput | Out-String).Trim()
+    if ($secretValue.Length -lt $MinimumLength) {
+        Stop-Validation "$Name vacia o demasiado corta en Secret Manager." $null
+    }
+
+    return $secretValue
+}
+
+# OXKIO V3: the HMAC key that seals V3 data. The version is pinned: a new
+# version would invalidate every sealed record, so rotating it is a deliberate
+# migration, never a side effect of "latest".
+if ([Environment]::GetEnvironmentVariable('OXKIO_V3_ENABLED', 'Process') -eq 'true') {
+    $v3IntegrityKey = Get-OxkioOptInSecret -GcloudPath $gcloudPath -Name 'OXKIO_V3_INTEGRITY_KEY' -Version '1' -MinimumLength 32 -Guidance 'Con OXKIO_V3_ENABLED=true el arranque falla cerrado; desactive V3 o restaure el secreto.'
+    [Environment]::SetEnvironmentVariable('OXKIO_V3_INTEGRITY_KEY', $v3IntegrityKey, 'Process')
+    $v3IntegrityKey = $null
+    Write-CheckOk 'Clave de integridad V3 cargada de forma segura en Process.'
+}
+
+# Executive Reasoning: when a provider is configured in Process, its API key
+# comes from Secret Manager ("latest": an API key may rotate without data loss).
+if (-not [string]::IsNullOrWhiteSpace([Environment]::GetEnvironmentVariable('OXKIO_REASONING_PROVIDER', 'Process'))) {
+    $reasoningApiKey = Get-OxkioOptInSecret -GcloudPath $gcloudPath -Name 'OXKIO_REASONING_API_KEY' -Version 'latest' -MinimumLength 20 -Guidance 'Con OXKIO_REASONING_PROVIDER configurado el arranque falla cerrado; quite el proveedor o restaure el secreto.'
+    [Environment]::SetEnvironmentVariable('OXKIO_REASONING_API_KEY', $reasoningApiKey, 'Process')
+    $reasoningApiKey = $null
+    Write-CheckOk 'Clave del proveedor de razonamiento cargada de forma segura en Process.'
+}
+
 if ($ValidateOnly) {
     Write-Host '[OK] Configuracion Firebase Admin y selector Approval PostgreSQL validados. El servidor no se ha iniciado.'
     exit 0

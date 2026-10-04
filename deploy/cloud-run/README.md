@@ -207,3 +207,24 @@ documenta como automatico; cualquier rollback exige puerta humana explicita.
 - Los stores JSON locales (memory, executiveAgenda, projectRegistry, etc.)
   siguen sin migrar; impiden escalado horizontal real aunque
   `MAX_INSTANCES=1` lo hace irrelevante para este staging concreto.
+
+## OXKIO V3 — custodia de `OXKIO_V3_INTEGRITY_KEY` (preparado, no activado)
+
+V3 no está activado en este servicio. Cuando se active, la clave HMAC que sella
+los datos V3 se referenciará igual que PG-APR (same-project), pero con
+**versión fijada**, no `latest`: una versión nueva invalidaría todos los
+registros sellados, así que rotar es una migración deliberada.
+
+```yaml
+- name: OXKIO_V3_INTEGRITY_KEY
+  valueFrom:
+    secretKeyRef:
+      name: OXKIO_V3_INTEGRITY_KEY
+      key: "1"
+```
+
+Mínimo privilegio: la cuenta de servicio del runtime necesitará
+`roles/secretmanager.secretAccessor` **solo sobre ese secreto** (no a nivel de
+proyecto). Ese binding IAM es una puerta humana del despliegue de V3.
+En local, `scripts/Start-Oxkio.ps1` carga la misma versión en Process solo con
+`OXKIO_V3_ENABLED=true` y falla cerrado si no la obtiene.

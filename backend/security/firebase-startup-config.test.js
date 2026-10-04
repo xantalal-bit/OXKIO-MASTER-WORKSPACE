@@ -137,9 +137,17 @@ function createSyntheticGcloud(temporaryDirectory) {
   fs.writeFileSync(gcloudScript, [
     '@echo off',
     'if not "%OXKIO_TEST_GCLOUD_LOG%"=="" echo %* >> "%OXKIO_TEST_GCLOUD_LOG%"',
+    // The V3 integrity key is a distinct synthetic secret with its own outcome.
+    'echo %* | findstr /C:"OXKIO_V3_INTEGRITY_KEY" >nul',
+    'if not errorlevel 1 goto v3key',
     '<nul set /p "=%OXKIO_TEST_GCLOUD_SECRET_VALUE%"',
     'echo.',
     'exit /b %OXKIO_TEST_GCLOUD_EXIT_CODE%',
+    ':v3key',
+    '<nul set /p "=%OXKIO_TEST_GCLOUD_V3_KEY_VALUE%"',
+    'echo.',
+    'if "%OXKIO_TEST_GCLOUD_V3_EXIT_CODE%"=="" exit /b 0',
+    'exit /b %OXKIO_TEST_GCLOUD_V3_EXIT_CODE%',
     '',
   ].join('\r\n'), 'utf8');
   return directory;
@@ -210,6 +218,8 @@ function prepareSyntheticLaunch({
     present: true,
     exitCode: 0,
     secretValue: `postgresql://synthetic:synthetic@example.invalid/neondb-${marker}`,
+    v3KeyValue: `synthetic-v3-integrity-${marker}`,
+    v3ExitCode: 0,
     ...gcloud,
   };
   const gcloudDirectory = gcloudOptions.present ? createSyntheticGcloud(temporaryDirectory) : null;
@@ -222,6 +232,8 @@ function prepareSyntheticLaunch({
   setEnvironmentValue(childEnvironment, 'OXKIO_TEST_GCLOUD_LOG', gcloudLogPath);
   setEnvironmentValue(childEnvironment, 'OXKIO_TEST_GCLOUD_EXIT_CODE', String(gcloudOptions.exitCode));
   setEnvironmentValue(childEnvironment, 'OXKIO_TEST_GCLOUD_SECRET_VALUE', gcloudOptions.secretValue || '');
+  setEnvironmentValue(childEnvironment, 'OXKIO_TEST_GCLOUD_V3_KEY_VALUE', gcloudOptions.v3KeyValue || '');
+  setEnvironmentValue(childEnvironment, 'OXKIO_TEST_GCLOUD_V3_EXIT_CODE', String(gcloudOptions.v3ExitCode));
   Object.entries(environment).forEach(([name, value]) => {
     setEnvironmentValue(childEnvironment, name, value);
   });
@@ -282,6 +294,7 @@ function runValidation({
         ...values,
         credentialPath,
         ...(secretValueIsMeaningful ? { approvalPgRuntimeUrl: gcloudOptions.secretValue } : {}),
+        ...(gcloudOptions.v3KeyValue && gcloudOptions.v3KeyValue.trim() ? { v3IntegrityKey: gcloudOptions.v3KeyValue } : {}),
         ...Object.fromEntries(
           syntheticRepository.storeFiles.map(({ contents }, index) => [`storeMarker${index}`, contents]),
         ),
@@ -732,6 +745,81 @@ test('ValidateOnly falla cerrado si el secreto de Secret Manager esta vacio o en
       assertSensitiveValuesHidden(result);
     });
   }
+});
+
+// OXKIO V3 integrity key custody (04/10/2026): Secret Manager, pinned version,
+// Process-only, fail closed; synthetic secret only.
+test('ValidateOnly con V3 activado carga la clave de integridad desde Secret Manager sintetico (version fijada) y la oculta', (t) => {
+  if (powershellSpawnBlocked) { t.skip('El sandbox no permite spawnSync de powershell.exe.'); return; }
+  const result = runValidation({ environment: { OXKIO_V3_ENABLED: 'true' } });
+  assert.equal(result.status, 0, result.output);
+  assert.match(result.output, /Clave de integridad V3 cargada de forma segura en Process/);
+  assert.match(result.gcloudInvocations, /secrets versions access 1 --secret=OXKIO_V3_INTEGRITY_KEY --project=oxkio-runtime-prod/);
+  assert.ok(result.gcloudInvocations.split(/\r?\n/).filter((line) => line.includes('OXKIO_V3_INTEGRITY_KEY')).every((line) => !line.includes('latest')));
+  assertSensitiveValuesHidden(result);
+});
+
+test('ValidateOnly con V3 activado falla cerrado si Secret Manager no devuelve la clave o es demasiado corta', async (t) => {
+  if (powershellSpawnBlocked) { t.skip('El sandbox no permite spawnSync de powershell.exe.'); return; }
+  for (const [name, gcloud, message] of [
+    ['salida distinta de cero', { v3ExitCode: 1, v3KeyValue: '' }, /No se pudo obtener OXKIO_V3_INTEGRITY_KEY/],
+    ['vacia', { v3KeyValue: '   ' }, /OXKIO_V3_INTEGRITY_KEY vacia o demasiado corta/],
+    ['corta', { v3KeyValue: 'short-key' }, /OXKIO_V3_INTEGRITY_KEY vacia o demasiado corta/],
+  ]) {
+    await t.test(name, () => {
+      const result = runValidation({ environment: { OXKIO_V3_ENABLED: 'true' }, gcloud });
+      assert.notEqual(result.status, 0); assert.match(result.output, message);
+      assert.doesNotMatch(result.output, /short-key/);
+      assertSensitiveValuesHidden(result);
+    });
+  }
+});
+
+test('sin OXKIO_V3_ENABLED=true el lanzador no consulta la clave V3', (t) => {
+  if (powershellSpawnBlocked) { t.skip('El sandbox no permite spawnSync de powershell.exe.'); return; }
+  const result = runValidation({ environment: { OXKIO_V3_ENABLED: 'false' } });
+  assert.equal(result.status, 0, result.output);
+  assert.doesNotMatch(result.gcloudInvocations, /OXKIO_V3_INTEGRITY_KEY/);
+  assert.doesNotMatch(result.output, /Clave de integridad V3/);
+});
+
+test('la clave V3 vive solo en Process: nunca en User/Machine, disco ni consola', () => {
+  const script = fs.readFileSync(path.join(__dirname, '../../scripts/Start-Oxkio.ps1'), 'utf8');
+  const lines = script.split(/\r?\n/).filter((line) => /v3IntegrityKey|OXKIO_V3_INTEGRITY_KEY/.test(line));
+  assert.ok(lines.some((line) => /SetEnvironmentVariable\('OXKIO_V3_INTEGRITY_KEY',\s*\$v3IntegrityKey,\s*'Process'\)/.test(line)));
+  for (const line of lines) {
+    assert.doesNotMatch(line, /'User'|'Machine'|Set-Content|Out-File|Add-Content|Write-Host[^']*\$|Write-Output|Export-|ConvertFrom-SecureString/, line);
+  }
+  assert.match(script, /\$v3IntegrityKey = \$null/);
+});
+
+test('con OXKIO_REASONING_PROVIDER el lanzador carga OXKIO_REASONING_API_KEY desde Secret Manager sintetico y la oculta', (t) => {
+  if (powershellSpawnBlocked) { t.skip('El sandbox no permite spawnSync de powershell.exe.'); return; }
+  const result = runValidation({ environment: { OXKIO_REASONING_PROVIDER: 'openai' } });
+  assert.equal(result.status, 0, result.output);
+  assert.match(result.output, /Clave del proveedor de razonamiento cargada de forma segura en Process/);
+  assert.match(result.gcloudInvocations, /secrets versions access latest --secret=OXKIO_REASONING_API_KEY --project=oxkio-runtime-prod/);
+  assertSensitiveValuesHidden(result);
+});
+
+test('sin proveedor de razonamiento el lanzador no consulta su clave; con proveedor y fallo de gcloud falla cerrado', (t) => {
+  if (powershellSpawnBlocked) { t.skip('El sandbox no permite spawnSync de powershell.exe.'); return; }
+  const off = runValidation();
+  assert.equal(off.status, 0, off.output);
+  assert.doesNotMatch(off.gcloudInvocations, /OXKIO_REASONING_API_KEY/);
+  const failed = runValidation({ environment: { OXKIO_REASONING_PROVIDER: 'openai' }, gcloud: { exitCode: 1, secretValue: '' } });
+  assert.notEqual(failed.status, 0);
+  assertSensitiveValuesHidden(failed);
+});
+
+test('la clave del razonador vive solo en Process: nunca en User/Machine, disco ni consola', () => {
+  const script = fs.readFileSync(path.join(__dirname, '../../scripts/Start-Oxkio.ps1'), 'utf8');
+  const lines = script.split(/\r?\n/).filter((line) => /reasoningApiKey|OXKIO_REASONING_API_KEY/.test(line));
+  assert.ok(lines.some((line) => /SetEnvironmentVariable\('OXKIO_REASONING_API_KEY',\s*\$reasoningApiKey,\s*'Process'\)/.test(line)));
+  for (const line of lines) {
+    assert.doesNotMatch(line, /'User'|'Machine'|Set-Content|Out-File|Add-Content|Write-Host[^']*\$|Write-Output|Export-|ConvertFrom-SecureString/, line);
+  }
+  assert.match(script, /\$reasoningApiKey = \$null/);
 });
 
 test('ValidateOnly rejects missing, unreadable-format, and invalid credential contracts', async (t) => {

@@ -1,7 +1,7 @@
 require("dotenv").config();
 
 const http = require("http");
-const { createServerComposition } = require("../services/supervised-operation/server-composition");
+const { createServerComposition, reasoningEgressFromEnv } = require("../services/supervised-operation/server-composition");
 const EmailWorkflow = require("../workflows/emailWorkflow");
 const EmailAgent = require("../agents/emailAgent");
 const ProposalEngine = require("../core/proposalEngine");
@@ -181,7 +181,10 @@ try {
     reasoning: {
       provider: executiveReasoningProvider,
       catalog: buildReasoningCostCatalog(executiveReasoningProvider),
-      approvedDailyBudgetUsd: Number(process.env.OXKIO_V3_PLANNER_DAILY_BUDGET_USD || 0)
+      approvedDailyBudgetUsd: Number(process.env.OXKIO_V3_PLANNER_DAILY_BUDGET_USD || 0),
+      // Authorization B only when explicitly switched on; otherwise the
+      // canonical policy keeps every person's request CONFIDENTIAL (no egress).
+      ...reasoningEgressFromEnv(process.env, executiveReasoningProvider)
     }
   });
 } catch (error) {

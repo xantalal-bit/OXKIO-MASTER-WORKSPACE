@@ -61,4 +61,12 @@ function createServerComposition({enabled=false,cohortUids='',memoryRoot,integri
  }
  return Object.freeze({handle,accepts});
 }
-module.exports={createServerComposition,parseCohort};
+// Authorization B (04/10/2026) as one explicit switch: only with
+// OXKIO_V3_REASONING_INTERNAL_EGRESS=true may PUBLIC and non-sensitive INTERNAL
+// text reach the configured reasoning provider. There is deliberately no
+// switch for CONFIDENTIAL or SECRET: confidentialProviders stays empty.
+function reasoningEgressFromEnv(env,provider){
+ if(env.OXKIO_V3_REASONING_INTERNAL_EGRESS!=='true'||!provider||provider.status!=='ready'||typeof provider.provider!=='string')return {};
+ return {requestPrivacyFloor:'INTERNAL',privacyPolicy:Object.freeze({publicExternalAllowed:true,internalProviders:Object.freeze([Object.freeze({providerId:provider.provider})]),confidentialProviders:Object.freeze([])})};
+}
+module.exports={createServerComposition,parseCohort,reasoningEgressFromEnv};

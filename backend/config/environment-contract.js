@@ -70,6 +70,9 @@ const ENVIRONMENT_VARIABLES = Object.freeze({
   OXKIO_V3_MEMORY_ROOT: Object.freeze({ kind: 'config', classifications: ['optional'], scope: 'supervised_operation' }),
   OXKIO_V3_INTEGRITY_KEY: Object.freeze({ kind: 'secret', classifications: ['optional', 'secret'], scope: 'supervised_operation' }),
   OXKIO_V3_PLANNER_DAILY_BUDGET_USD: Object.freeze({ kind: 'governance', classifications: ['optional'], scope: 'supervised_operation' }),
+  // Authorization B (04/10/2026): "true" lets PUBLIC and non-sensitive INTERNAL
+  // text reach the configured reasoning provider; CONFIDENTIAL never does.
+  OXKIO_V3_REASONING_INTERNAL_EGRESS: Object.freeze({ kind: 'governance', classifications: ['optional'], scope: 'supervised_operation' }),
 });
 
 function isPresent(env, name) {
