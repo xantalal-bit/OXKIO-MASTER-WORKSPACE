@@ -51,6 +51,8 @@ function createChatGateway({runtime,membershipProvider,adapterFactory=null,store
   }
   if(state.status==='WAITING_RESOURCE')return 'El recurso de razonamiento no está disponible ahora (límite, cuota, presupuesto o fallo del proveedor) y no hay alternativa autorizada. La misión y sus fuentes quedan guardadas en este punto; di "continúa" para reanudarla. No he ejecutado nada externo.';
   if(state.status==='COMPLETED'&&state.result?.synthesis)return synthesisText(state.result);
+  if(state.status==='COMPLETED'&&state.result?.cognitionSkipped)return skippedText(state.result);
+  if(state.status==='COMPLETED'&&state.result?.items?.some(v=>v.provenance==='PUBLIC_WEB'))return publicReadText(state.result);
   if(state.status==='COMPLETED')return state.result?.capability==='memory.remember'?'He guardado esta información en tu memoria personal.':state.result?.items.length?state.result.items.map(v=>v.text).join('\n'):'No he encontrado resultados en tus fuentes.';
   if(state.status==='NEEDS_APPROVAL')return 'He preparado una propuesta para tu revisión. Necesito que decidas la estructura y autorices los cambios; no he modificado ni enviado nada.';
   if(state.status==='CANCELLED')return 'Misión cancelada.';
@@ -58,6 +60,22 @@ function createChatGateway({runtime,membershipProvider,adapterFactory=null,store
   if(state.diagnosis?.class==='capability_degraded')return 'Esta fuente ha fallado varias veces seguidas. Lo he registrado para revisión y no lo reintento automáticamente ahora; no he ejecutado nada más.';
   if(state.diagnosis?.class==='privacy_gate')return 'No he enviado la búsqueda: contenía datos personales y el proveedor no está autorizado para ellos. Reformúlala sin datos personales si quieres que busque.';
   return 'No puedo dar la misión por completada. El resultado queda pendiente de revisión.';
+ }
+ // No analysis was possible: say why in plain words and list what was read.
+ // Public pages are referenced (first sentence + link), never dumped whole;
+ // discovery snippets are dropped when the pages themselves were read.
+ const SKIPPED={privacy:'Para proteger tus datos no he enviado este contenido a analizar fuera de OXKIO, así que no hay análisis.',secret:'El contenido incluía un dato sensible, así que no lo he enviado a analizar.',unverified:'No he obtenido un análisis con respaldo comprobable en las fuentes, así que no presento conclusiones.',unavailable:'El análisis automático no está disponible ahora, así que no presento conclusiones.'};
+ function references(result){
+  const items=result.items.some(v=>v.provenance==='PUBLIC_WEB')?result.items.filter(v=>v.provenance!=='PUBLIC_DISCOVERY'):result.items;
+  const shown=items.slice(0,10).map((v,i)=>{if(!v.url)return '- '+(v.text.length>300?v.text.slice(0,300)+'…':v.text);const first=(v.text.match(/^.{1,240}?[.!?](?=\s|$)/u)||[v.text.slice(0,240)+'…'])[0];return (i+1)+') '+first+' — '+v.url;});
+  return shown.length?[items.some(v=>v.url)?'Fuentes consultadas:':'Información encontrada:',...shown]:[];
+ }
+ function skippedText(result){
+  return [SKIPPED[result.cognitionSkipped]||SKIPPED.unavailable,...references(result),'No he realizado envíos ni cambios externos.'].join('\n');
+ }
+ // Public pages read without an analysis step are referenced, not dumped.
+ function publicReadText(result){
+  return ['He leído estas fuentes públicas; si quieres, puedo compararlas o resumirlas.',...references(result),'No he realizado envíos ni cambios externos.'].join('\n');
  }
  // Sources are numbered among those the model actually reasoned over (never
  // internal ids), public ones listed with their link. Findings are checked
