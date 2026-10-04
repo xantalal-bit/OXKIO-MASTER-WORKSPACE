@@ -3,8 +3,12 @@ param(
     [Parameter(Mandatory = $true)][string]$ConfigPath,
     [switch]$ValidateOnly,
     # Tests only: replaces the canonical launcher with a stub.
-    [string]$LauncherPath = (Join-Path $PSScriptRoot 'Start-Oxkio.ps1')
+    [string]$LauncherPath = ''
 )
+
+# Windows PowerShell 5.1 leaves $PSScriptRoot empty inside param() defaults, so
+# the canonical launcher next to this script is resolved here, in the body.
+if ([string]::IsNullOrWhiteSpace($LauncherPath)) { $LauncherPath = Join-Path $PSScriptRoot 'Start-Oxkio.ps1' }
 
 # Persistent local start of OXKIO V3 (Cliente Cero). It only sets NON-secret
 # configuration in this Process and delegates to the canonical launcher, which
