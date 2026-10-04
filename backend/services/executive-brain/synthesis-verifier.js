@@ -56,12 +56,41 @@ function fragmentIn(fragment, source) {
 // The claim must say what its quote says: same figures, same negations, every
 // qualifier kept, and mostly the quote's own vocabulary. This is a fidelity
 // check, not a proof of meaning; synonyms that drop a negation fail closed.
+// Multi-word negations ("en lugar de conferir" = "no confiere"). Each one only
+// counts when it negates the same word as a negation of the quote (its scope:
+// the next content word, past clitics, compared on 4 letters), so it can never
+// be used to move a negation onto another verb.
+const EQUIVALENT_NEGATIONS = [['en','lugar','de'],['en','vez','de']];
+const CLITICS = new Set(['se','le','lo','la','les','los','las','me','te','nos','os','el','al','a','de']);
+function negationMarks(ws) {
+ const marks = [];
+ for (let i = 0; i < ws.length; i++) {
+  const equivalent = EQUIVALENT_NEGATIONS.find(e => e.every((w, k) => ws[i + k] === w));
+  const end = equivalent ? i + equivalent.length : NEGATIONS.has(ws[i]) ? i + 1 : null;
+  if (end === null) continue;
+  let scope = null;
+  for (let k = end; k < Math.min(ws.length, end + 4) && !scope; k++) if (!CLITICS.has(ws[k]) && ws[k].length >= 4 && !/^\d/u.test(ws[k])) scope = ws[k].slice(0, 4);
+  marks.push({ equivalent: !!equivalent, scope });
+  if (equivalent) i = end - 1;
+ }
+ return marks;
+}
 function faithful(claim, quote) {
- const c = words(claim), q = words(quote);
+ const c = words(claim);
  const quoteNumbers = new Set(numbers(quote));
  if (!numbers(claim).every(n => quoteNumbers.has(n))) return 'claim_number_unsupported';
- if (count(c, NEGATIONS) !== count(q, NEGATIONS)) return 'claim_negation_changed';
- if (![...new Set(q.filter(w => QUALIFIERS.has(w)))].every(w => c.includes(w))) return 'claim_qualifier_dropped';
+ // Negations and qualifiers are required for every quote sentence the claim
+ // asserts (it shares 2+ stems, or a third of the sentence's stems, with it).
+ // A sentence the claim does not touch does not constrain it. If no sentence
+ // qualifies, the whole quote applies (as before).
+ const claimStems = new Set(stems(claim)), canonical = canon(quote);
+ const sentencesOfQuote = spans(canonical).map(([s, e]) => canonical.slice(s, e));
+ const asserted = sentencesOfQuote.filter(s => { const own = [...new Set(stems(s))]; const shared = own.filter(x => claimStems.has(x)).length; return shared >= 2 || (own.length > 0 && shared / own.length >= 0.34); });
+ const scope = (asserted.length ? asserted : sentencesOfQuote).map(words);
+ const quoteMarks = scope.flatMap(negationMarks), claimMarks = negationMarks(c);
+ if (claimMarks.length !== quoteMarks.length) return 'claim_negation_changed';
+ if (claimMarks.some(m => m.equivalent && (!m.scope || !quoteMarks.some(q => q.scope === m.scope)))) return 'claim_negation_changed';
+ if (![...new Set(scope.flat().filter(w => QUALIFIERS.has(w)))].every(w => c.includes(w))) return 'claim_qualifier_dropped';
  // Each stem counts once: expanding "EU" to "European Union" twice must not
  // weigh as two unsupported words.
  const own = [...new Set(stems(claim))], available = new Set(stems(quote));
