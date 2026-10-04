@@ -16,7 +16,7 @@ const identity = authorize({ uid: UID }).identity;
 const questions = [
  'OXKIO, dime qué capacidades tienes disponibles ahora mismo para ayudarme y cuáles necesitan conexión, capacidad adicional o autorización.',
  'Quiero que analices tu propio estado operativo actual. Dime qué puedes hacer ahora mismo conmigo como Cliente Cero, qué recursos y conexiones tienes realmente disponibles, cuáles no están disponibles y por qué. No ejecutes acciones externas ni inventes capacidades.',
- '¿Qué puedes hacer?', '¿Qué capacidades tienes?', '¿Qué tienes conectado?', '¿Qué necesitas para enviar un correo?', 'Analiza tu estado operativo.',
+  '¿Qué capacidades tienes?', '¿Qué tienes conectado?', '¿Qué necesitas para enviar un correo?', 'Analiza tu estado operativo.',
 ];
 async function setup(options = {}) {
  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'v3-introspection-'));

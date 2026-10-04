@@ -23,7 +23,8 @@ function createServerComposition({enabled=false,cohortUids='',memoryRoot,integri
  // Fail closed: without a valid integrity key V3 is not composed at all.
  const integrity=createHmacIntegrity({key:integrityKey});
  const identities=new Map();
- const planner=reasoning&&reasoning.provider?createAdaptivePlanner({provider:reasoning.provider,privacyPolicy:reasoning.privacyPolicy,approvedDailyBudgetUsd:Number(reasoning.approvedDailyBudgetUsd)||0}).plan:null;
+ const adaptive=reasoning&&(reasoning.provider||reasoning.providers?.length)?createAdaptivePlanner({provider:reasoning.provider,providers:reasoning.providers,privacyPolicy:reasoning.privacyPolicy,approvedDailyBudgetUsd:Number(reasoning.approvedDailyBudgetUsd)||0,...(reasoning.requestPrivacyFloor?{requestFloor:reasoning.requestPrivacyFloor}:{})}):null;
+ const planner=adaptive?.plan||null;const conversationDecider=adaptive?.decide||null;
  // Reasoning resources in preference order (primary first). Cognition stays
  // off unless a provider is configured and a positive budget is approved.
  const providers=reasoning?(Array.isArray(reasoning.providers)?reasoning.providers:reasoning.provider?[reasoning.provider]:[]):[];
@@ -33,7 +34,7 @@ function createServerComposition({enabled=false,cohortUids='',memoryRoot,integri
  // Public research adapters (search + fetch) are added per owner scope next to
  // the private ones; they carry no credential and read only public pages.
  const factory=privateFactory||typeof publicResearch==='function'?async(identity,scope)=>({...(privateFactory?await privateFactory(identity,scope):{}),...(typeof publicResearch==='function'?publicResearch(scope):{})}):null;
- const gateway=createChatGateway({approvalFactory:createScopedApprovalFactory({root:memoryRoot}),storeFactory:createMemoryStoreFactory({root:memoryRoot,integrity}),adapterFactory:factory,planner,reasoner,
+ const gateway=createChatGateway({approvalFactory:createScopedApprovalFactory({root:memoryRoot}),storeFactory:createMemoryStoreFactory({root:memoryRoot,integrity}),adapterFactory:factory,planner,conversationDecider,reasoner,
   catalog,privacyPolicy:reasoning&&reasoning.privacyPolicy,
   // Only Cliente Cero has a connection flow today (its existing Google OAuth).
   connectable:(scope,provider)=>scope.clientId==='cliente-cero'&&['mail','calendar'].includes(provider),

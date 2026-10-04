@@ -13,8 +13,8 @@ const IGNORED_CLIENT_HINTS = ['calendar','gmail'];
 const DEFAULT_CONVERSATION = 'executive-default';
 const FOLLOW_UP = /^(contin[uú]a|sigue|adelante|reanuda|reint[eé]ntalo|vuelve a intentarlo|ya est[aá] conectad[oa]|ya lo he conectado|ya he conectado.*|listo|hecho|hazlo)[.!\s]*$/i;
 const PERMISSIONS = { 'mail.read':'leer tu correo','calendar.read':'leer tu agenda','documents.read':'consultar tus documentos','public.search':'buscar información pública','public.fetch':'leer páginas públicas' };
-function createChatGateway({runtime,membershipProvider,adapterFactory=null,storeFactory,approvalFactory,planner,reasoner,catalog,connectable,privacyPolicy}={}){
- const r=runtime||createSupervisedRuntime({membershipProvider,storeFactory,approvalFactory,planner,reasoner,catalog,connectable,privacyPolicy});
+function createChatGateway({runtime,membershipProvider,adapterFactory=null,storeFactory,approvalFactory,planner,conversationDecider,reasoner,catalog,connectable,privacyPolicy}={}){
+ const r=runtime||createSupervisedRuntime({membershipProvider,storeFactory,approvalFactory,planner,conversationDecider,reasoner,catalog,connectable,privacyPolicy});
  const latest=new Map();
  async function handle(identity,body){
   if(!identity||identity.authorized!==true||!['admin','family_member'].includes(identity.role)||typeof identity.uid!=='string')fail('authenticated_identity_required');
@@ -35,12 +35,12 @@ function createChatGateway({runtime,membershipProvider,adapterFactory=null,store
   if(['resume','cancel','pause','status'].includes(action)){const id=body.missionId||latest.get(key);if(!id)fail('mission_not_found');state=await r[action==='status'?'get':action](session,id);}
   else if(action==='start'){
    if(typeof body.query!=='string')fail('chat_request_invalid');
-   const prior=latest.get(key);
-   if(prior&&FOLLOW_UP.test(body.query.trim()))state=await r.resume(session,prior);
-   else state=await r.start(session,{text:body.query,conversationId});
+   state=await r.start(session,{text:body.query,conversationId});
   }else fail('chat_action_invalid');
   if(state.id)latest.set(key,state.id);
-  return freeze({ok:true,response:describe(state),conversationId,missionId:state.id||null,outcome:state.outcome||state.status||null,executionEnabled:false,...(body.includeDetails===true?{details:state}:{})});
+  const response=describe(state);
+  if(typeof r.recordTurn==='function'&&action!=='status'){const previous=action==='start'?null:r.turnContext(session,conversationId);const query=action==='start'?body.query:previous?.lastUser;if(typeof query==='string')await r.recordTurn(session,conversationId,{query,response,state});}
+  return freeze({ok:true,response,conversationId,missionId:state.id||null,outcome:state.outcome||state.status||null,executionEnabled:false,...(body.includeDetails===true?{details:state}:{})});
  }
  function describe(state){
   if(state.message)return state.message;
@@ -66,7 +66,7 @@ function createChatGateway({runtime,membershipProvider,adapterFactory=null,store
   const cite=ids=>' [fuente '+ids.map(id=>position.get(id)).filter(Boolean).join(', ')+']';
   const listed=used.map((id,i)=>{const item=result.items.find(v=>v.id===id);return item&&item.url?(i+1)+') '+item.url:null;}).filter(Boolean);
   return [s.conclusion,...s.findings.map(f=>'- '+f.claim+cite(f.sourceIds)),...(s.comparison?['Comparación: '+s.comparison]:[]),...(listed.length?['Fuentes: '+listed.join(' · ')]:[]),
-   'Análisis generado por '+s.resource+(s.failover.length?' tras no estar disponible '+s.failover.map(a=>a.resource).join(', '):'')+'; verificado contra '+used.length+' fuentes. No he ejecutado nada externo.'].join('\n');
+   'La respuesta recoge '+used.length+' fuentes con respaldo textual comprobado. No he realizado envíos ni cambios externos.'].join('\n');
  }
  return Object.freeze({handle,runtime:r,defaultConversation:DEFAULT_CONVERSATION});
 }

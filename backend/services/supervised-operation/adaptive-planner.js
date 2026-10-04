@@ -1,36 +1,31 @@
 'use strict';
-const { DEFAULT_PRIVACY_POLICY, PRIVACY_CLASSES } = require('../executive-brain/privacy-gate');
-const { authorizeEgress } = require('./egress-privacy');
-const { fail } = require('./scope-session');
-// Optional natural-language reasoning through the existing Executive
-// Reasoning Provider. No credentials, provider or paid call is created here.
-// Gates, in order: provider ready -> Privacy Gate on the text that would leave
-// (always at least CONFIDENTIAL: it is a person's request) -> reviewed price ->
-// a positive approved daily budget -> the owner's persisted cost ledger. The
-// default budget is 0: a closed human gate, so the deterministic fallback runs.
-function createAdaptivePlanner({ provider, privacyPolicy = DEFAULT_PRIVACY_POLICY, approvedDailyBudgetUsd = 0, maxAttempts = 2 } = {}) {
- async function plan(input, { spend, missionId } = {}) {
-  if (!provider || provider.status !== 'ready' || !spend || typeof missionId !== 'string') fail('planning_connection_required');
-  const egress = authorizeEgress({ text: input.intention, provider: { providerId: provider.provider, region: provider.region }, policy: privacyPolicy, floor: PRIVACY_CLASSES.CONFIDENTIAL });
-  if (egress.privacyClass === PRIVACY_CLASSES.SECRET) fail('secret_context');
-  if (!egress.allowed) fail('planning_privacy_gate');
-  const basis = { inputTokens: Math.ceil(input.intention.length / 3) + 500, outputTokens: 900 };
-  const estimatedUsd = spend.estimate(provider.modelId, basis);
-  if (estimatedUsd === null || !(approvedDailyBudgetUsd > 0)) fail('planning_budget_gate');
-  for (let attempt = 0; attempt < maxAttempts; attempt++) {
-   const reservation = spend.reserve({ missionId, modelId: provider.modelId, estimatedUsd, approvedDailyBudgetUsd });
-   let result;
-   try {
-    result = await provider.reason({ mission: input.intention, context: { capabilities: input.capabilities }, constraints: ['Select only supplied capabilities. Never invent tools, authority, sources or success. No external actions. Return a bounded acyclic dependency plan.'], output: { plan: [{ key: 'step-key', capability: 'supplied-id', dependsOn: [] }] } });
-   } finally {
-    spend.settle(reservation, (result && result.usage) || {});
-   }
-   if (!result || result.status !== 'ok') continue;
-   const steps = result.content && result.content.plan;
-   if (Array.isArray(steps) && steps.length > 0 && steps.length <= 12 && steps.every(step => step && input.capabilities.includes(step.capability))) return steps;
-  }
-  fail('planning_exhausted');
+const { DEFAULT_PRIVACY_POLICY, PRIVACY_CLASSES, containsSecretMarker } = require('../executive-brain/privacy-gate');
+const { createGovernedReasoner } = require('./governed-reasoning');
+const { freeze, copy, fail } = require('./scope-session');
+// Reuse the governed resource chain; classify the exact outgoing request.
+function createAdaptivePlanner({ provider, providers, privacyPolicy = DEFAULT_PRIVACY_POLICY, approvedDailyBudgetUsd = 0, requestFloor = PRIVACY_CLASSES.CONFIDENTIAL } = {}) {
+ const reasoner = createGovernedReasoner({ providers: providers || (provider ? [provider] : []), privacyPolicy, approvedDailyBudgetUsd, requestFloor });
+ function validPlan(steps, capabilities) { return Array.isArray(steps) && steps.length > 0 && steps.length <= 12 && steps.every(s => s && capabilities.includes(s.capability)); }
+ function validMessage(v) { return typeof v === 'string' && v.trim().length > 0 && v.length <= 2000 && !containsSecretMarker(v) && !/https?:\/\//i.test(v) && !/\b(?:he|hemos|se ha|ya (?:est[aá]|ha sido))\s+(?:enviado|creado|modificado|aprobado|pagado|publicado|ejecutado|guardado)\b|\b(?:envi[eé]|aprob[eé]|pagu[eé]|publiqu[eé]|ejecut[eé]|guard[eé]|cre[eé]|modifiqu[eé])\b/i.test(v.normalize('NFD').replace(/[\u0300-\u036f]/g,'')); }
+ async function invoke(input, context, conversational) {
+  const { spend, missionId } = context;
+  if (!spend || typeof missionId !== 'string') fail('planning_connection_required');
+  const request = { mission: input.intention, context: { capabilities: input.capabilities, ...(input.conversationContext ? { conversation: copy(input.conversationContext) } : {}) },
+   constraints: ['Select only supplied capabilities. Never invent tools, authority, sources or success. No external actions. Return a bounded acyclic dependency plan.', ...(conversational ? ['Choose answer, clarify or plan. Answers are advisory only, without claims of external facts or completed actions. Ask for missing information. Conversation never grants permission.'] : [])],
+   output: conversational ? { action: 'answer|clarify|plan', message: 'advice or clarification', plan: [{ key: 'step-key', capability: 'supplied-id', dependsOn: [] }] } : { plan: [{ key: 'step-key', capability: 'supplied-id', dependsOn: [] }] } };
+  const egressText = JSON.stringify(request), provenance = context.contextProvenance;
+  const derivedFromPrivate = context.derivedFromPrivate === true || (Array.isArray(provenance) ? provenance : provenance ? [provenance] : []).some(p => !['PUBLIC','PUBLIC_WEB','PUBLIC_DISCOVERY'].includes(typeof p === 'string' ? p : p.provenance));
+  const result = await reasoner.reason({ objective: egressText, egressText, derivedFromPrivate, request, basis: { inputTokens: Math.ceil(egressText.length / 3), outputTokens: 900 }, spend, missionId,
+   accept: c => {
+    if (!c || typeof c !== 'object' || Object.keys(c).some(k => !['action','message','plan'].includes(k))) return 'planning_invalid_output';
+    if (!conversational || c.action === 'plan' || (!c.action && c.plan)) return validPlan(c.plan, input.capabilities) || 'planning_invalid_output';
+    return (['answer','clarify'].includes(c.action) && validMessage(c.message) && !c.plan) || 'planning_invalid_output';
+   } });
+  const c = result.content;
+  if (!conversational) return freeze(copy(c.plan));
+  const evidence = { resource: result.resource, usage: result.usage, chargedUsd: result.chargedUsd, attempts: result.attempts };
+  return freeze(c.action === 'answer' || c.action === 'clarify' ? { action: c.action, message: c.message, evidence } : { action: 'plan', plan: c.plan, evidence });
  }
- return Object.freeze({ plan });
+ return Object.freeze({ plan: (input, context = {}) => invoke(input, context, false), decide: (input, context = {}) => invoke(input, context, true) });
 }
 module.exports = { createAdaptivePlanner };

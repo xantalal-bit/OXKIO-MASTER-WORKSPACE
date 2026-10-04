@@ -26,8 +26,8 @@ function provider(providerId, model, behaviour) {
 const synthesis = request => {
  const ids = request.context.sources.map(s => s.id);
  return { status: 'ok', usage: { inputTokens: 400, outputTokens: 120 }, content: {
-  findings: [{ claim: 'Alfa cuesta más pero da soporte en español.', sourceIds: [ids[0]] }, { claim: 'Beta es más barato y no da soporte en español.', sourceIds: [ids[1]] }],
-  comparison: 'Difieren en precio y en soporte.', conclusion: 'Si el soporte en español es imprescindible conviene Alfa; si prima el coste, Beta.' } };
+  findings: request.context.sources.map(s=>({claim:s.text,quote:s.text,sourceIds:[s.id]})),
+  comparison: request.context.sources.map(s=>s.text).join('\n'), conclusion: request.context.sources.map(s=>s.text).join('\n') } };
 };
 const rateLimited = () => ({ status: 'error', errorCode: 'reasoning_rate_limited' });
 const quota = () => ({ status: 'error', errorCode: 'reasoning_rate_limited', failureType: 'QUOTA_EXHAUSTED' });
@@ -71,8 +71,8 @@ test('real cognitive path: retrieve -> analyze/compare/synthesize with a model -
   assert.equal(primary.calls[0].context.sources.length, 2);
   assert.equal(d.result.synthesis.resource, 'openai:primary'); assert.equal(d.result.synthesis.privacyClass, 'CONFIDENTIAL');
   assert.deepEqual(d.result.synthesis.failover, []);
-  assert.match(r.data.response, /conviene Alfa/); assert.match(r.data.response, /\[fuente 1\]/); assert.match(r.data.response, /\[fuente 2\]/);
-  assert.match(r.data.response, /Análisis generado por openai:primary; verificado contra 2 fuentes/);
+  assert.match(r.data.response, /Alfa cuesta 10/); assert.match(r.data.response, /\[fuente 1\]/); assert.match(r.data.response, /\[fuente 2\]/);
+  assert.match(r.data.response, /2 fuentes con respaldo textual comprobado/);
   assert.ok(events(d).includes('COGNITION'));
   assert.equal(d.cost.models['openai:primary'].calls, 1); assert.ok(d.cost.chargedUsd > 0);
  } finally { s.cleanup(); }
@@ -89,7 +89,7 @@ test('failover: primary QUOTA_EXHAUSTED -> fallback resource -> verified -> comp
   assert.equal(d.result.synthesis.resource, 'anthropic:fallback');
   assert.deepEqual(d.result.synthesis.failover, [{ resource: 'openai:primary', failure: 'QUOTA_EXHAUSTED', detail: 'reasoning_rate_limited' }]);
   const ev = events(d); assert.ok(ev.indexOf('RESOURCE_FAILED') < ev.indexOf('COGNITION'));
-  assert.match(r.data.response, /tras no estar disponible openai:primary/);
+  assert.doesNotMatch(r.data.response, /openai:primary|anthropic:fallback/);
   assert.equal(d.cost.models['openai:primary'].calls, 1); assert.equal(d.cost.models['anthropic:fallback'].calls, 1);
  } finally { s.cleanup(); }
 });
@@ -217,7 +217,7 @@ const publicSources = async (identityArg, scope) => createPublicResearchAdapters
  search: async () => [{ title: 'snippet rgpd', url: 'https://example.org/rgpd' }, { title: 'snippet ia', url: 'https://example.org/ia' }],
  fetcher: { fetchPage: async url => ({ text: url.endsWith('rgpd') ? 'El reglamento de protección de datos regula el tratamiento de datos personales en la unión.' : 'La ley de inteligencia artificial clasifica los sistemas por niveles de riesgo.' }) } });
 const publicSynthesis = request => { const ids = request.context.sources.map(s => s.id); return { status: 'ok', usage: { inputTokens: 300, outputTokens: 90, cachedTokens: 0 }, evidence: { responseId: 'resp-fixture', responseModel: 'fixture-model' },
- content: { findings: [{ claim: 'Uno regula datos personales.', sourceIds: [ids[0]] }, { claim: 'La otra clasifica sistemas por riesgo.', sourceIds: [ids[1]] }], comparison: 'Objetos distintos.', conclusion: 'Son complementarios.' } }; };
+ content: { findings: request.context.sources.map(s=>({claim:s.text,quote:s.text,sourceIds:[s.id]})), comparison: request.context.sources.map(s=>s.text).join('\n'), conclusion: request.context.sources.map(s=>s.text).join('\n') } }; };
 
 test('B: a public-only mission reasons as INTERNAL, over fetched pages only (snippets are not final evidence)', async () => {
  const p = provider('openai', 'luna', publicSynthesis); p.region = 'global';
@@ -232,7 +232,7 @@ test('B: a public-only mission reasons as INTERNAL, over fetched pages only (sni
   // Citations are numbered among the sources reasoned over, never the snippets.
   const text = (await s.ask('estado', { action: 'status', missionId: d.id })).data.response;
   assert.match(text, /\[fuente 1\]/); assert.match(text, /\[fuente 2\]/); assert.doesNotMatch(text, /fuente 3/);
-  assert.match(text, /Fuentes: 1\) https:\/\/example\.org\/rgpd · 2\) https:\/\/example\.org\/ia/); assert.match(text, /verificado contra 2 fuentes/);
+  assert.match(text, /Fuentes: 1\) https:\/\/example\.org\/rgpd · 2\) https:\/\/example\.org\/ia/); assert.match(text, /2 fuentes con respaldo textual comprobado/);
  } finally { s.cleanup(); }
 });
 
