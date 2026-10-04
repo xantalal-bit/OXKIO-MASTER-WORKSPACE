@@ -81,6 +81,9 @@ const ENVIRONMENT_VARIABLES = Object.freeze({
   OXKIO_V3_REASONING_INPUT_USD_PER_MILLION: Object.freeze({ kind: 'config', classifications: ['optional'], scope: 'supervised_operation' }),
   OXKIO_V3_REASONING_OUTPUT_USD_PER_MILLION: Object.freeze({ kind: 'config', classifications: ['optional'], scope: 'supervised_operation' }),
   OXKIO_V3_REASONING_PRICING_REVIEWED_AT: Object.freeze({ kind: 'config', classifications: ['optional'], scope: 'supervised_operation' }),
+  // "true" adds controlled public discovery (reviewed catalogue, matched
+  // locally) and the public page fetcher to V3. Not a web search provider.
+  OXKIO_V3_PUBLIC_RESEARCH: Object.freeze({ kind: 'governance', classifications: ['optional'], scope: 'supervised_operation' }),
 });
 
 function isPresent(env, name) {

@@ -82,3 +82,23 @@ test('V3 has its own reasoning provider: OXKIO_V3_REASONING_* maps onto the prov
  // And V3's config never configures the shared provider.
  assert.equal(createExecutiveReasoningProvider({ env: v3, secretRuntime }).status, 'not_configured');
 });
+
+test('controlled public discovery: reviewed catalogue matched locally; composed next to private adapters; a public mission completes', async () => {
+ const { createCuratedDiscovery, createPublicResearchAdapters } = require('./resource-adapters');
+ const catalogue = require('./public-catalogue.json');
+ const discover = createCuratedDiscovery(catalogue);
+ assert.deepEqual((await discover('reglamento proteccion datos inteligencia artificial')).map(e => e.url), catalogue.map(e => e.url));
+ assert.deepEqual(await discover('receta tortilla'), []);
+ assert.throws(() => createCuratedDiscovery([{ title: 'x', url: 'http://127.0.0.1/x', keywords: ['x'] }]));
+ const root = fs.mkdtempSync(path.join(os.tmpdir(), 'v3-public-'));
+ try {
+  let privateInstalled = 0;
+  const server = createServerComposition({ enabled: true, cohortUids: UID, memoryRoot: root, authorizeIdentity: authorize, integrityKey: randomBytes(32),
+   privateContextReaders: () => { privateInstalled++; return { gmailReader: async () => ({}), calendarReader: async () => ({}) }; },
+   publicResearch: scope => createPublicResearchAdapters({ scope, origin: 'fixture', search: discover, fetcher: { fetchPage: async () => ({ text: '<p>Texto público suficientemente largo para ser una fuente legible de prueba.</p>' }) } }) });
+  const req = Readable.from([JSON.stringify({ query: 'Investiga en fuentes públicas el reglamento de protección de datos y compáralo', includeDetails: true })]); req.oxkioIdentity = identity;
+  let body; await server.handle(req, { writeHead() {}, end(b) { body = b; } }); const d = JSON.parse(body).details;
+  assert.equal(d.status, 'COMPLETED'); assert.equal(privateInstalled, 1);
+  assert.ok(d.trace.some(t => t.event === 'CONSULT' && t.capability === 'research.web'));
+ } finally { fs.rmSync(root, { recursive: true, force: true }); }
+});

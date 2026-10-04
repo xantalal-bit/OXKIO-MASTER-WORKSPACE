@@ -32,6 +32,18 @@ function createPublicResearchAdapters({scope,search,searchEgress=null,fetcher=cr
  }}):null;
  return Object.freeze({fetch,...(discovery?{search:discovery}:{})});
 }
+// Controlled public discovery: a reviewed catalogue of public references matched
+// locally against the minimized query terms. Nothing leaves OXKIO to search;
+// the pages themselves are then read by the public fetcher. Not a web search.
+const searchTerm=value=>String(value).normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase();
+function createCuratedDiscovery(entries){
+ if(!Array.isArray(entries))fail('catalogue_invalid');
+ const list=entries.map(e=>{
+  if(!e||typeof e.title!=='string'||typeof e.url!=='string'||!Array.isArray(e.keywords)||e.keywords.length===0)fail('catalogue_invalid');
+  parsePublicUrl(e.url);return freeze({title:e.title,url:e.url,keywords:e.keywords.map(searchTerm)});
+ });
+ return async query=>{const terms=searchTerm(query||'').match(/[a-z0-9]+/g)||[];return list.filter(e=>e.keywords.some(k=>terms.includes(k))).map(e=>({title:e.title,url:e.url}));};
+}
 // Reuses the existing OAuth-backed private-context readers (the same ones the
 // Executive Chat dashboard uses). They exist only for Cliente Cero's Google
 // authorization today; any other owner gets no adapter, i.e. NEEDS_CONNECTION.
@@ -48,4 +60,4 @@ function createPrivateContextAdapters({scope,readers,origin='live'}){
  const calendar=createReadonlyAdapter({scope,permissions:['calendar.read'],origin,read:async({limits})=>limit(limits,await payload(readers.calendarReader,'events')).map(e=>({text:[e.start,e.title,e.location].filter(Boolean).join(' · ').slice(0,2000)}))});
  return freeze({mail:{...mail,authorizationVerified:false},calendar:{...calendar,authorizationVerified:false}});
 }
-module.exports={createReadonlyAdapter,createPublicResearchAdapters,createPrivateContextAdapters,readableText};
+module.exports={createReadonlyAdapter,createPublicResearchAdapters,createPrivateContextAdapters,createCuratedDiscovery,readableText};

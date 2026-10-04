@@ -2,6 +2,7 @@ require("dotenv").config();
 
 const http = require("http");
 const { createServerComposition, reasoningEgressFromEnv, v3ReasoningEnv } = require("../services/supervised-operation/server-composition");
+const { createPublicResearchAdapters, createCuratedDiscovery } = require("../services/supervised-operation/resource-adapters");
 const EmailWorkflow = require("../workflows/emailWorkflow");
 const EmailAgent = require("../agents/emailAgent");
 const ProposalEngine = require("../core/proposalEngine");
@@ -182,6 +183,11 @@ try {
     integrityKey: process.env.OXKIO_V3_ENABLED === "true" ? (() => { try { return getSecret("OXKIO_V3_INTEGRITY_KEY"); } catch (error) { return null; } })() : null,
     authorizeIdentity: authorizeFirebaseIdentity,
     privateContextReaders: (identity) => createDashboardReaders(identity),
+    // Controlled public discovery (reviewed catalogue, matched locally) plus the
+    // real public fetcher; opt-in. Not a web search provider.
+    publicResearch: process.env.OXKIO_V3_PUBLIC_RESEARCH === "true"
+      ? (scope) => createPublicResearchAdapters({ scope, search: createCuratedDiscovery(require("../services/supervised-operation/public-catalogue.json")) })
+      : null,
     reasoning: {
       provider: v3ReasoningProvider,
       catalog: buildReasoningCostCatalog(v3ReasoningProvider),

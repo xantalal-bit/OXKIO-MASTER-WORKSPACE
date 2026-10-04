@@ -15,7 +15,7 @@ const { createGovernedReasoner } = require('./governed-reasoning');
 // stays sealed in its own root and the existing chat is untouched.
 const parseCohort = value => new Set(String(value || '').split(',').map(v => v.trim()).filter(v => /^[A-Za-z0-9:_-]{3,128}$/.test(v)));
 const STATUS = { membership_not_available: 403, permission_denied: 403, authenticated_identity_required: 403, session_authority_changed: 403, backpressure: 429, mission_capacity: 429, store_capacity: 429, mission_busy: 409, stored_integrity_invalid: 409, stored_scope_invalid: 409 };
-function createServerComposition({enabled=false,cohortUids='',memoryRoot,integrityKey,authorizeIdentity,adapterFactory=null,privateContextReaders=null,reasoning=null}={}){
+function createServerComposition({enabled=false,cohortUids='',memoryRoot,integrityKey,authorizeIdentity,adapterFactory=null,privateContextReaders=null,publicResearch=null,reasoning=null}={}){
  if(!enabled)return null;
  const cohort=parseCohort(cohortUids);
  if(cohort.size===0)return null;
@@ -29,7 +29,10 @@ function createServerComposition({enabled=false,cohortUids='',memoryRoot,integri
  const providers=reasoning?(Array.isArray(reasoning.providers)?reasoning.providers:reasoning.provider?[reasoning.provider]:[]):[];
  const reasoner=reasoning?createGovernedReasoner({providers,privacyPolicy:reasoning.privacyPolicy,approvedDailyBudgetUsd:Number(reasoning.approvedDailyBudgetUsd)||0,...(reasoning.requestPrivacyFloor?{requestFloor:reasoning.requestPrivacyFloor}:{})}):null;
  const catalog=Object.assign({},reasoning&&reasoning.catalog,...providers.map(p=>(p&&p.catalog)||{}));
- const factory=adapterFactory||(typeof privateContextReaders==='function'?async(identity,scope)=>createPrivateContextAdapters({scope,readers:privateContextReaders(identity)}):null);
+ const privateFactory=adapterFactory||(typeof privateContextReaders==='function'?async(identity,scope)=>createPrivateContextAdapters({scope,readers:privateContextReaders(identity)}):null);
+ // Public research adapters (search + fetch) are added per owner scope next to
+ // the private ones; they carry no credential and read only public pages.
+ const factory=privateFactory||typeof publicResearch==='function'?async(identity,scope)=>({...(privateFactory?await privateFactory(identity,scope):{}),...(typeof publicResearch==='function'?publicResearch(scope):{})}):null;
  const gateway=createChatGateway({approvalFactory:createScopedApprovalFactory({root:memoryRoot}),storeFactory:createMemoryStoreFactory({root:memoryRoot,integrity}),adapterFactory:factory,planner,reasoner,
   catalog,privacyPolicy:reasoning&&reasoning.privacyPolicy,
   // Only Cliente Cero has a connection flow today (its existing Google OAuth).
