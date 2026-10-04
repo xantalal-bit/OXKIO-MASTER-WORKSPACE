@@ -10,7 +10,7 @@ Adaptive Planner usa Governed Reasoning y clasifica el JSON completo que sale. E
 
 Contexto mínimo por propietario/conversación en el almacén sellado existente: objetivo, último turno y respuesta, procedencia, auditoría acotada y caducidad de 20 minutos. No se envía toda la memoria. Hazlo conserva aprobaciones; solo reanuda estados reanudables. Un workflow verificado evita repetir decisiones pagadas.
 
-Verifier exige igualdad textual entre afirmación, cita y texto completo de cada fuente citada. IDs válidos, números coincidentes o fragmentos aislados no certifican una inferencia. Conclusión/comparación solo combinan afirmaciones verificadas, o declaran evidencia insuficiente. Esto comprueba respaldo extractivo, NO verdad universal ni inferencias semánticas generales. Fuentes completas hasta 2000 caracteres; no se recortan para forzar aceptación.
+Verifier (corregido en la segunda pasada, ver abajo): cada hallazgo lleva una cita formada por frases completas y consecutivas de cada fuente que cita, y una afirmación fiel a esa cita (mismas cifras, mismas negaciones, salvedades conservadas y vocabulario mayoritariamente de la cita). Conclusión y comparación son inferencias sobre los hallazgos, sin cifras nuevas, y se presentan a la persona etiquetadas como inferencia. Esto comprueba fidelidad textual de los hallazgos, NO verdad universal ni la validez semántica de la inferencia. Las páginas públicas se recortan en su última frase completa dentro de 2000 caracteres.
 
 Análisis requiere fuentes pertinentes; propuestas de organización requieren documentos/correo; lectura web requiere descubrimiento público directo. Toda ejecución material continúa deshabilitada.
 
@@ -36,6 +36,24 @@ Análisis requiere fuentes pertinentes; propuestas de organización requieren do
 
 Revisor en solo lectura: no encontró P1 concreto de fuga entre propietarios o ampliación de autoridad. P1 de síntesis corregido con regresiones. P2 de límites de fuentes, doble llamada al reutilizar workflow y dos formas de falsa ejecución corregidos; revisor comprobó cierre por inspección. No quedan esos hallazgos abiertos.
 
+## Segunda pasada de corrección (auditoría de Claude, 04/10/2026)
+
+Hallazgos de la auditoría tras el failover y su corrección:
+
+- P1 — Verifier: la primera versión exigía claim = quote = texto íntegro de la fuente, y conclusión/comparación = copia de los hallazgos. Eso anulaba el análisis (la respuesta repetía cada fuente tres veces) y no cabía en `SYNTHESIS_MAX_OUTPUT_TOKENS=2000` con fuentes reales. Ahora se aplica el diseño F6 descrito arriba; el límite de salida pasa a 4000; el claim va en el idioma de la cita para que su fidelidad sea verificable; la respuesta muestra «Valoración (inferencia…)», «Hallazgos» y «Comparación (inferencia)».
+- P2 — «¿Qué puedes hacer?» vuelve a ser introspección técnica (diseño F2) y se restaura en su test. La orientación ejecutiva cubre «qué puedes hacer por mí», «en qué/cómo me puedes ayudar» y «por dónde empezamos».
+- P2 — El TTL de 20 minutos limita solo el contexto que puede ver el modelo. El puntero a la última misión se conserva y se evalúa por su estado vivo, de modo que «continúa» o «ya lo he conectado» reanudan una misión `NEEDS_CONNECTION`, `WAITING_RESOURCE` o `PAUSED` aunque haya pasado el TTL. Una aprobación pendiente sigue sin concederse.
+- P3 — Una petición BLOCKED se registra sin contenido; un «hazlo» posterior responde que sigue bloqueada, en lugar de recurrir a un objetivo anterior. Las misiones creadas por un plan conversacional se registran en su conversación.
+- Nota: `FOLLOW_UP` del gateway no es código muerto (decide la reinstalación del adaptador al reconectar); se mantiene.
+
+Evidencia de la segunda pasada:
+
+- Tests del verifier reescritos (10): sustentan valoración y comparación inferidas; rechazan ID válido inventado, fragmento que omite una negación, cifra, negación o salvedad cambiadas, cita ausente en una fuente atribuida, cifras nuevas en la inferencia, enlaces e instrucciones de la fuente.
+- Restaurados los fixtures con análisis real en continuidad cognitiva («conviene Alfa», «Son complementarios»).
+- Nuevos: reanudación tras TTL más «hazlo» tras bloqueo; recorte de página por frase completa.
+- Suite local secuencial (sin los 2 tests que lanzan PowerShell/lanzadores, no tocados aquí y ejecutados por CI): 1717 tests, 1701 PASS / 0 FAIL / 16 SKIP. Puerto 3000 de producción `ready` antes y después.
+- F8 (1–2 llamadas reales a Luna dentro de B): NO ejecutado. La lectura de la clave del proveedor desde Secret Manager requiere una autorización explícita del operador para esta sesión. Llamadas reales: 0. Coste real: 0 USD.
+
 ## Estado operativo separado y siguiente
 
-Checkout canónico comprobado limpio en `45c9ef0`. Al finalizar la suite, GET al puerto 3000 devuelve conexión rechazada y no se observa listener. No se reinició ni reconfiguró el servidor; causa pendiente, no atribuida a estos cambios. Esta PR no activa las mejoras en el servidor actual. Revisar la disponibilidad persistente por separado y obtener decisión humana antes de merge, restart/activación o despliegue. La beta familiar permanece cerrada.
+Checkout canónico comprobado limpio en `45c9ef0`. Al finalizar la primera pasada, el puerto 3000 rechazaba conexiones: la tarea programada había terminado con 0xC000013A (señal de consola) entre las 17:01 y las 17:33. No hay relación causal demostrable con esta PR, que no está desplegada. Se recuperó a las 18:04 relanzando la tarea existente, y se verificaron health, ready, 401, sellos, coste y logs. Esta PR no activa las mejoras en el servidor actual. Revisar la disponibilidad persistente por separado y obtener decisión humana antes de merge, restart/activación o despliegue. La beta familiar permanece cerrada.

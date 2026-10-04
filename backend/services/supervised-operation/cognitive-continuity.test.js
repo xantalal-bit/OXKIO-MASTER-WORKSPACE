@@ -26,8 +26,8 @@ function provider(providerId, model, behaviour) {
 const synthesis = request => {
  const ids = request.context.sources.map(s => s.id);
  return { status: 'ok', usage: { inputTokens: 400, outputTokens: 120 }, content: {
-  findings: request.context.sources.map(s=>({claim:s.text,quote:s.text,sourceIds:[s.id]})),
-  comparison: request.context.sources.map(s=>s.text).join('\n'), conclusion: request.context.sources.map(s=>s.text).join('\n') } };
+  findings: request.context.sources.map(s => ({ claim: s.text.replace(/^.*?(?=Alfa|Beta)/u, '').replace(/[.\s]*$/u, '.'), quote: s.text, sourceIds: [s.id] })),
+  comparison: 'Difieren en precio y en soporte.', conclusion: 'Si el soporte en español es imprescindible conviene Alfa; si prima el coste, Beta.' } };
 };
 const rateLimited = () => ({ status: 'error', errorCode: 'reasoning_rate_limited' });
 const quota = () => ({ status: 'error', errorCode: 'reasoning_rate_limited', failureType: 'QUOTA_EXHAUSTED' });
@@ -71,8 +71,8 @@ test('real cognitive path: retrieve -> analyze/compare/synthesize with a model -
   assert.equal(primary.calls[0].context.sources.length, 2);
   assert.equal(d.result.synthesis.resource, 'openai:primary'); assert.equal(d.result.synthesis.privacyClass, 'CONFIDENTIAL');
   assert.deepEqual(d.result.synthesis.failover, []);
-  assert.match(r.data.response, /Alfa cuesta 10/); assert.match(r.data.response, /\[fuente 1\]/); assert.match(r.data.response, /\[fuente 2\]/);
-  assert.match(r.data.response, /2 fuentes con respaldo textual comprobado/);
+  assert.match(r.data.response, /conviene Alfa/); assert.match(r.data.response, /Valoración \(inferencia/); assert.match(r.data.response, /\[fuente 1\]/); assert.match(r.data.response, /\[fuente 2\]/);
+  assert.match(r.data.response, /respaldo textual comprobado en 2 fuentes/);
   assert.ok(events(d).includes('COGNITION'));
   assert.equal(d.cost.models['openai:primary'].calls, 1); assert.ok(d.cost.chargedUsd > 0);
  } finally { s.cleanup(); }
@@ -217,7 +217,7 @@ const publicSources = async (identityArg, scope) => createPublicResearchAdapters
  search: async () => [{ title: 'snippet rgpd', url: 'https://example.org/rgpd' }, { title: 'snippet ia', url: 'https://example.org/ia' }],
  fetcher: { fetchPage: async url => ({ text: url.endsWith('rgpd') ? 'El reglamento de protección de datos regula el tratamiento de datos personales en la unión.' : 'La ley de inteligencia artificial clasifica los sistemas por niveles de riesgo.' }) } });
 const publicSynthesis = request => { const ids = request.context.sources.map(s => s.id); return { status: 'ok', usage: { inputTokens: 300, outputTokens: 90, cachedTokens: 0 }, evidence: { responseId: 'resp-fixture', responseModel: 'fixture-model' },
- content: { findings: request.context.sources.map(s=>({claim:s.text,quote:s.text,sourceIds:[s.id]})), comparison: request.context.sources.map(s=>s.text).join('\n'), conclusion: request.context.sources.map(s=>s.text).join('\n') } }; };
+ content: { findings: request.context.sources.map(s => ({ claim: /reglamento/.test(s.text) ? 'Regula el tratamiento de datos personales.' : 'Clasifica los sistemas por niveles de riesgo.', quote: s.text, sourceIds: [s.id] })), comparison: 'Objetos distintos.', conclusion: 'Son complementarios.' } }; };
 
 test('B: a public-only mission reasons as INTERNAL, over fetched pages only (snippets are not final evidence)', async () => {
  const p = provider('openai', 'luna', publicSynthesis); p.region = 'global';
@@ -232,7 +232,7 @@ test('B: a public-only mission reasons as INTERNAL, over fetched pages only (sni
   // Citations are numbered among the sources reasoned over, never the snippets.
   const text = (await s.ask('estado', { action: 'status', missionId: d.id })).data.response;
   assert.match(text, /\[fuente 1\]/); assert.match(text, /\[fuente 2\]/); assert.doesNotMatch(text, /fuente 3/);
-  assert.match(text, /Fuentes: 1\) https:\/\/example\.org\/rgpd · 2\) https:\/\/example\.org\/ia/); assert.match(text, /2 fuentes con respaldo textual comprobado/);
+  assert.match(text, /Fuentes: 1\) https:\/\/example\.org\/rgpd · 2\) https:\/\/example\.org\/ia/); assert.match(text, /respaldo textual comprobado en 2 fuentes/);
  } finally { s.cleanup(); }
 });
 

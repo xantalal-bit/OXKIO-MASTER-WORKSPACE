@@ -74,8 +74,10 @@ function interpretIntention(text) {
  // Questions about OXKIO's own resources are read-only introspection, not a
  // request to run the mentioned tools. Resolve them from the scoped catalogue.
  const selfQuery = plain.trim().replace(/^oxkio[\s,:]+/, '').replace(/^[¿?\s]+/, '').replace(/^dime\s+/, '');
- if (/^(que puedes hacer|como puedes ayudarme|por donde empezamos)\b/.test(selfQuery)) return result(OUTCOMES.CAN_EXECUTE, { reason: 'orientation', orientation: true });
- if (/^(que (capacidades tienes|tienes conectad[oa]|necesitas para)|(?:cual es )?tu estado operativo|(?:quiero que )?anali[cz](?:a|as|es|e) (?:tu |su )?(?:propio )?estado operativo)\b/.test(selfQuery)) {
+ // Goal-oriented help ("qué puedes hacer por mí") gets executive orientation;
+ // the bare "¿qué puedes hacer?" stays the technical catalogue.
+ if (/^(que puedes hacer (por|para) (mi|nosotros)( ahora( mismo)?| hoy)?|(en que|como) (me )?puedes ayudar(me)?( hoy)?|por donde empezamos)[?!.\s]*$/.test(selfQuery)) return result(OUTCOMES.CAN_EXECUTE, { reason: 'orientation', orientation: true });
+ if (/^que puedes hacer[?!.\s]*$/.test(selfQuery) || /^(que (capacidades tienes|tienes conectad[oa]|necesitas para)|(?:cual es )?tu estado operativo|(?:quiero que )?anali[cz](?:a|as|es|e) (?:tu |su )?(?:propio )?estado operativo)\b/.test(selfQuery)) {
   return result(OUTCOMES.CAN_EXECUTE, { reason: 'operational_state', introspection: true });
  }
  if (exact(tokens, CREDENTIALS)) return result(OUTCOMES.BLOCKED, { reason: 'credentials', gate: 'HUMAN_GATE' });

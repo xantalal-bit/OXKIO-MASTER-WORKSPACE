@@ -1,5 +1,6 @@
 'use strict';
 const { createSupervisedRuntime } = require('./mission-runtime');
+const { INSUFFICIENT_SOURCES } = require('../executive-brain/synthesis-verifier');
 const { freeze, fail } = require('./scope-session');
 // The transport MUST pass the identity produced by Firebase authentication.
 // No tenant, uid, connection, tokens, scopes or planner may come from the body.
@@ -59,14 +60,16 @@ function createChatGateway({runtime,membershipProvider,adapterFactory=null,store
   return 'No puedo dar la misión por completada. El resultado queda pendiente de revisión.';
  }
  // Sources are numbered among those the model actually reasoned over (never
- // internal ids), public ones listed with their link; the resource that
- // reasoned and any rejected resource are always disclosed.
+ // internal ids), public ones listed with their link. Findings are checked
+ // against literal quotes; the assessment and comparison are labelled as an
+ // inference over them. The resource stays in the details, not in the answer.
  function synthesisText(result){
   const s=result.synthesis;const used=s.sourceIds||result.items.map(v=>v.id);const position=new Map(used.map((id,i)=>[id,i+1]));
   const cite=ids=>' [fuente '+ids.map(id=>position.get(id)).filter(Boolean).join(', ')+']';
   const listed=used.map((id,i)=>{const item=result.items.find(v=>v.id===id);return item&&item.url?(i+1)+') '+item.url:null;}).filter(Boolean);
-  return [s.conclusion,...s.findings.map(f=>'- '+f.claim+cite(f.sourceIds)),...(s.comparison?['Comparación: '+s.comparison]:[]),...(listed.length?['Fuentes: '+listed.join(' · ')]:[]),
-   'La respuesta recoge '+used.length+' fuentes con respaldo textual comprobado. No he realizado envíos ni cambios externos.'].join('\n');
+  const insufficient=s.conclusion.trim()===INSUFFICIENT_SOURCES;
+  return [insufficient?s.conclusion:'Valoración (inferencia a partir de los hallazgos): '+s.conclusion,'Hallazgos:',...s.findings.map(f=>'- '+f.claim+cite(f.sourceIds)),...(s.comparison?['Comparación (inferencia): '+s.comparison]:[]),...(listed.length?['Fuentes: '+listed.join(' · ')]:[]),
+   'Cada hallazgo tiene respaldo textual comprobado en '+used.length+' fuentes; la valoración y la comparación son inferencias sobre ellos. No he realizado envíos ni cambios externos.'].join('\n');
  }
  return Object.freeze({handle,runtime:r,defaultConversation:DEFAULT_CONVERSATION});
 }
