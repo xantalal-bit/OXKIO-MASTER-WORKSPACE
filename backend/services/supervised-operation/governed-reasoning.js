@@ -45,15 +45,15 @@ function createGovernedReasoner({ providers = [], privacyPolicy = DEFAULT_PRIVAC
  // configured provider and a positive approved budget. Otherwise the caller
  // keeps its deterministic behaviour and no text ever leaves.
  const enabled = candidates.length > 0 && approvedDailyBudgetUsd > 0;
- async function reason({ objective, egressText, derivedFromPrivate = false, request, basis, spend, missionId, accept = () => true, onAttempt = () => {} }) {
+ async function reason({ objective, egressText, publicText = '', derivedFromPrivate = false, request, basis, spend, missionId, accept = () => true, onAttempt = () => {} }) {
   if (!enabled) fail('reasoning_not_enabled');
-  if (!spend || typeof missionId !== 'string' || typeof egressText !== 'string' || typeof objective !== 'string') fail('reasoning_context_invalid');
+  if (!spend || typeof missionId !== 'string' || typeof egressText !== 'string' || typeof publicText !== 'string' || typeof objective !== 'string') fail('reasoning_context_invalid');
   const floor = mentionsPerson(objective) ? PRIVACY_CLASSES.CONFIDENTIAL : requestFloor;
   const attempts = [];
   // detail: a fixed code (verifier defect or provider errorCode), never content.
   const record = (provider, failure, privacyClass, detail = null) => { const a = freeze({ resource: provider.modelId, region: provider.region || null, failure, privacyClass, ...(typeof detail === 'string' && /^[a-z_]{1,48}$/.test(detail) ? { detail } : {}) }); attempts.push(a); onAttempt(a); };
   for (const provider of candidates) {
-   const egress = authorizeEgress({ text: egressText, provider: { providerId: provider.provider, region: provider.region }, policy: privacyPolicy, derivedFromPrivate, floor });
+   const egress = authorizeEgress({ text: egressText, publicText, provider: { providerId: provider.provider, region: provider.region }, policy: privacyPolicy, derivedFromPrivate, floor });
    if (egress.privacyClass === PRIVACY_CLASSES.SECRET) fail('secret_context');
    if (!egress.allowed) { record(provider, FAILURES.PRIVACY_BLOCKED, egress.privacyClass); continue; }
    const estimatedUsd = spend.estimate(provider.modelId, basis);

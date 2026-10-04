@@ -143,7 +143,10 @@ function createSupervisedRuntime({membershipProvider,planner=null,conversationDe
    const evidence=items.some(v=>v.provenance==='PUBLIC_WEB')?items.filter(v=>v.provenance!=='PUBLIC_DISCOVERY'):items;
    const sources=evidence.slice(0,20).map(v=>({id:v.id,text:v.text,provenance:v.provenance}));const issued=new Map(sources.map(v=>[v.id,v]));
    const request={...SYNTHESIS_REQUEST,context:{objective:m.intention,sources},maxOutputTokens:SYNTHESIS_MAX_OUTPUT_TOKENS};
-   const r=await reasoner.reason({objective:m.intention,egressText:[m.intention,...sources.map(v=>v.text)].join('\n'),derivedFromPrivate:sources.some(v=>!PUBLIC_PROVENANCE.includes(v.provenance)),
+   // Public page text is classified as public (secrets and identifiers only);
+   // the request and any private source carry the full personal-data rules.
+   const isPublic=v=>PUBLIC_PROVENANCE.includes(v.provenance);
+   const r=await reasoner.reason({objective:m.intention,egressText:[m.intention,...sources.filter(v=>!isPublic(v)).map(v=>v.text)].join('\n'),publicText:sources.filter(isPublic).map(v=>v.text).join('\n'),derivedFromPrivate:sources.some(v=>!PUBLIC_PROVENANCE.includes(v.provenance)),
     request,basis:{inputTokens:Math.ceil(JSON.stringify(request).length/3)+200,outputTokens:SYNTHESIS_MAX_OUTPUT_TOKENS},spend:spendFor(m.handle),missionId:m.id,accept:content=>{const v=verifyPartial(content,issued);return v.accepted||v.verdict;},
     onAttempt:a=>trace(m,'RESOURCE_FAILED',{resource:a.resource,failure:a.failure,detail:a.detail})});
    trace(m,'COGNITION',{resource:r.resource,privacyClass:r.privacyClass,fallback:r.attempts.length>0});
@@ -157,7 +160,7 @@ function createSupervisedRuntime({membershipProvider,planner=null,conversationDe
   }
   async function execute(contract,context){
    if(m.cancelled)fail('cancelled');await sessions.current(m.handle);const step=m.plan.find(s=>context.taskId===m.id+':'+s.key);const d=DEFINITIONS[step.capability];const scope=sessions.scope(m.handle);
-   const dependencies=context.dependencies.filter(v=>v.output).map(v=>JSON.parse(v.output));let items=[];let proposal=null;let synthesis=null;
+   const dependencies=context.dependencies.filter(v=>v.output).map(v=>JSON.parse(v.output));let items=[];let proposal=null;let synthesis=null;let cognition=null;
    trace(m,'CONSULT',{capability:step.capability,attempt:contract.attempt.hypothesis,strategy:contract.attempt.correctiveAction||null});
    if(d.provider){
     try{items=await readSource(step,d,contract,dependencies,scope);}
@@ -184,8 +187,10 @@ function createSupervisedRuntime({membershipProvider,planner=null,conversationDe
       // No resource may receive this context (privacy, unreviewed price), or
       // every resource failed in a way waiting will not fix (credential,
       // rejected request, refused output): the deterministic analysis stands.
-      const refused=(error.attempts||[]).every(a=>['PRIVACY_BLOCKED','PRICING_UNREVIEWED'].includes(a.failure));
+      const attempts=error.attempts||[];const refused=attempts.every(a=>['PRIVACY_BLOCKED','PRICING_UNREVIEWED'].includes(a.failure));
       trace(m,'COGNITION_SKIPPED',{reason:error.code==='secret_context'?'secret_context':refused?'no_authorized_resource':'resource_failed'});
+      // A fixed reason (never content) lets the answer say why there is no analysis.
+      cognition=error.code==='secret_context'?'secret':attempts.length&&attempts.every(a=>a.failure==='PRIVACY_BLOCKED')?'privacy':attempts.some(a=>a.failure==='INVALID_OUTPUT')?'unverified':'unavailable';
      }
     }
    }
@@ -200,7 +205,7 @@ function createSupervisedRuntime({membershipProvider,planner=null,conversationDe
    if(override){const selection=await override(freeze(copy({items:trusted.items,dependencies,capability:step.capability})));if(!selection || Object.keys(selection).some(k=>k!=='itemIds') || !Array.isArray(selection.itemIds) || new Set(selection.itemIds).size!==selection.itemIds.length)throw classified({code:'selection_invalid'});items=selection.itemIds.map(id=>{const found=trusted.items.find(v=>v.id===id);if(!found)throw classified({code:'unissued_item'});return found;});}
    else items=trusted.items;
    if(m.cancelled)fail('cancelled');await sessions.current(m.handle);
-   const canonical={capability:step.capability,items,proposal:trusted.proposal,...(synthesis?{synthesis}:{})};const summary=JSON.stringify(canonical);
+   const canonical={capability:step.capability,items,proposal:trusted.proposal,...(synthesis?{synthesis}:{}),...(cognition?{cognitionSkipped:cognition}:{})};const summary=JSON.stringify(canonical);
    if(summary.length>19000)throw classified({code:'result_too_large'});
    const ref='v3:'+m.id+':'+(++sequence);registrar.record({ref,missionId:m.id,taskId:contract.taskId,supports:contract.passCriteria.map(v=>v.criterionId),kind:'canonical_output',outputDigest:digestOutput(summary)});
    trace(m,'VERIFY',{capability:step.capability});return {summary,evidenceRefs:[ref]};
