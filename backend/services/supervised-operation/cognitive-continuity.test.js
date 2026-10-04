@@ -33,10 +33,10 @@ const rateLimited = () => ({ status: 'error', errorCode: 'reasoning_rate_limited
 const quota = () => ({ status: 'error', errorCode: 'reasoning_rate_limited', failureType: 'QUOTA_EXHAUSTED' });
 const EU = providerId => ({ providerId, region: 'eu' });
 const QUESTION = 'Recupera de mi memoria lo que guardé sobre proveedores y compáralos';
-async function setup({ providers = [], budget = 1, policy = { publicExternalAllowed: true, internalProviders: [], confidentialProviders: providers.map(p => EU(p.provider)) }, root, key } = {}) {
+async function setup({ providers = [], budget = 1, policy = { publicExternalAllowed: true, internalProviders: [], confidentialProviders: providers.map(p => EU(p.provider)) }, root, key, floor, adapterFactory = null } = {}) {
  const memoryRoot = root || fs.mkdtempSync(path.join(os.tmpdir(), 'v3-cognitive-')); const integrityKey = key || randomBytes(32);
- const server = createServerComposition({ enabled: true, cohortUids: UID, integrityKey, memoryRoot, authorizeIdentity: authorize,
-  reasoning: { providers, privacyPolicy: policy, approvedDailyBudgetUsd: budget } });
+ const server = createServerComposition({ enabled: true, cohortUids: UID, integrityKey, memoryRoot, authorizeIdentity: authorize, adapterFactory,
+  reasoning: { providers, privacyPolicy: policy, approvedDailyBudgetUsd: budget, ...(floor ? { requestPrivacyFloor: floor } : {}) } });
  async function ask(query, extra = {}) {
   const req = Readable.from([JSON.stringify({ query, includeDetails: true, ...extra })]); req.oxkioIdentity = identity;
   let status, body; await server.handle(req, { writeHead(s) { status = s; }, end(b) { body = b; } });
@@ -174,7 +174,7 @@ test('governed reasoner classifies each failure type and is disabled without bud
   const p = provider('openai', 'p', behaviour);
   const spend = { estimate: () => 0.001, reserve: () => ({}), settle: () => 0.001 };
   const r = createGovernedReasoner({ providers: [p], privacyPolicy: { confidentialProviders: [EU('openai')] }, approvedDailyBudgetUsd: 1 });
-  await assert.rejects(r.reason({ egressText: 'objetivo', request: {}, basis: {}, spend, missionId: 'm-1' }), e => e.code === 'reasoning_resource_unavailable' && e.attempts[0].failure === expected && e.transient === true);
+  await assert.rejects(r.reason({ objective: 'objetivo', egressText: 'objetivo', request: {}, basis: {}, spend, missionId: 'm-1' }), e => e.code === 'reasoning_resource_unavailable' && e.attempts[0].failure === expected && e.transient === true);
  }
 });
 
@@ -197,4 +197,85 @@ test('repeated waits never burn the engine attempt budget: a long outage still e
   r = await s.ask('continúa', { action: 'resume', missionId: r.data.missionId });
   assert.equal(r.data.details.status, 'COMPLETED'); assert.equal(r.data.details.result.synthesis.resource, 'openai:primary');
  } finally { s.cleanup(); }
+});
+
+// Authorization B (04/10/2026): PUBLIC and non-sensitive INTERNAL may reach the
+// approved provider; CONFIDENTIAL, SECRET and personal data stay blocked.
+const { createPublicResearchAdapters } = require('./resource-adapters');
+const POLICY_B = { publicExternalAllowed: true, internalProviders: [{ providerId: 'openai' }], confidentialProviders: [] };
+const PUBLIC_QUESTION = 'Investiga en fuentes públicas el reglamento de protección de datos y la ley de inteligencia artificial y compáralos';
+const publicSources = async (identityArg, scope) => createPublicResearchAdapters({ scope, origin: 'fixture',
+ search: async () => [{ title: 'snippet rgpd', url: 'https://example.org/rgpd' }, { title: 'snippet ia', url: 'https://example.org/ia' }],
+ fetcher: { fetchPage: async url => ({ text: url.endsWith('rgpd') ? 'El reglamento de protección de datos regula el tratamiento de datos personales en la unión.' : 'La ley de inteligencia artificial clasifica los sistemas por niveles de riesgo.' }) } });
+const publicSynthesis = request => { const ids = request.context.sources.map(s => s.id); return { status: 'ok', usage: { inputTokens: 300, outputTokens: 90, cachedTokens: 0 }, evidence: { responseId: 'resp-fixture', responseModel: 'fixture-model' },
+ content: { findings: [{ claim: 'Uno regula datos personales.', sourceIds: [ids[0]] }, { claim: 'La otra clasifica sistemas por riesgo.', sourceIds: [ids[1]] }], comparison: 'Objetos distintos.', conclusion: 'Son complementarios.' } }; };
+
+test('B: a public-only mission reasons as INTERNAL, over fetched pages only (snippets are not final evidence)', async () => {
+ const p = provider('openai', 'luna', publicSynthesis); p.region = 'global';
+ const s = await setup({ providers: [p], policy: POLICY_B, floor: 'INTERNAL', adapterFactory: publicSources });
+ try {
+  const d = (await s.ask(PUBLIC_QUESTION)).data.details;
+  assert.equal(d.status, 'COMPLETED'); assert.equal(p.calls.length, 1);
+  assert.equal(d.result.synthesis.privacyClass, 'INTERNAL');
+  assert.deepEqual(p.calls[0].context.sources.map(v => v.provenance), ['PUBLIC_WEB', 'PUBLIC_WEB']);
+  assert.deepEqual(d.result.synthesis.call, { responseId: 'resp-fixture', responseModel: 'fixture-model' });
+  assert.equal(d.result.synthesis.usage.cachedTokens, 0); assert.equal(d.result.synthesis.sourceIds.length, 2);
+ } finally { s.cleanup(); }
+});
+
+test('B: private memory (CONFIDENTIAL) never leaves; the deterministic analysis stands', async () => {
+ const p = provider('openai', 'luna', synthesis); p.region = 'global';
+ const s = await setup({ providers: [p], policy: POLICY_B, floor: 'INTERNAL' });
+ try {
+  await s.seed(); const d = (await s.ask(QUESTION)).data.details;
+  assert.equal(p.calls.length, 0); assert.equal(d.status, 'COMPLETED'); assert.equal(d.result.synthesis, undefined); assert.ok(events(d).includes('COGNITION_SKIPPED'));
+ } finally { s.cleanup(); }
+});
+
+test('B: a request about a person or carrying an identifier is CONFIDENTIAL and is not sent', async () => {
+ for (const question of ['Investiga en fuentes públicas el reglamento de protección de datos y compáralo con mis contratos', 'Investiga en fuentes públicas la ley de inteligencia artificial y compárala para ana@example.org']) {
+  const p = provider('openai', 'luna', publicSynthesis); p.region = 'global';
+  const s = await setup({ providers: [p], policy: POLICY_B, floor: 'INTERNAL', adapterFactory: publicSources });
+  try {
+   const d = (await s.ask(question)).data.details;
+   assert.equal(p.calls.length, 0, question); assert.equal(d.result?.synthesis, undefined);
+  } finally { s.cleanup(); }
+ }
+});
+
+test('B: without the explicit INTERNAL floor nothing leaves, and a PUBLIC floor is refused', async () => {
+ const p = provider('openai', 'luna', publicSynthesis); p.region = 'global';
+ const s = await setup({ providers: [p], policy: POLICY_B, adapterFactory: publicSources });
+ try { const d = (await s.ask(PUBLIC_QUESTION)).data.details; assert.equal(p.calls.length, 0); assert.ok(events(d).includes('COGNITION_SKIPPED')); } finally { s.cleanup(); }
+ assert.throws(() => createGovernedReasoner({ providers: [p], approvedDailyBudgetUsd: 1, requestFloor: 'PUBLIC' }), e => e.code === 'request_floor_invalid');
+});
+
+test('the real OpenAI adapter reports cached tokens, response id and model snapshot without content', async () => {
+ const { ADAPTERS } = require('../executive-brain/executive-reasoning-provider');
+ const Module = require('node:module'); const original = Module._load;
+ Module._load = function (request, ...rest) { if (request === 'openai') return class { constructor() { this.chat = { completions: { create: async () => ({ id: 'chatcmpl-x', model: 'gpt-5.6-luna-2026-x', choices: [{ message: { content: '{}' } }], usage: { prompt_tokens: 10, completion_tokens: 5, prompt_tokens_details: { cached_tokens: 4 } } }) } }; } }; return original.call(this, request, ...rest); };
+ try {
+  const complete = ADAPTERS.openai({ apiKey: 'not-a-real-key', model: 'gpt-5.6-luna', timeoutMs: 1000, baseURL: 'https://api.openai.com/v1' });
+  const r = await complete({ system: 's', user: 'u', maxOutputTokens: 10 });
+  assert.deepEqual(r.usage, { inputTokens: 10, outputTokens: 5, cachedTokens: 4 }); assert.deepEqual(r.evidence, { responseId: 'chatcmpl-x', responseModel: 'gpt-5.6-luna-2026-x' });
+ } finally { Module._load = original; }
+});
+
+test('a model call longer than a source read is bounded by the cognition timeout, not retried as a tool timeout', async () => {
+ const { createSupervisedRuntime } = require('./mission-runtime');
+ const A = { tenantId: 'tenant-aaa', clientId: 'client-aaa', userId: 'user-aaa', roles: ['owner'], status: 'ACTIVE' };
+ const slow = provider('openai', 'primary', async req => { await new Promise(r => setTimeout(r, 300)); return synthesis(req); });
+ const reasoner = createGovernedReasoner({ providers: [slow], privacyPolicy: { confidentialProviders: [EU('openai')] }, approvedDailyBudgetUsd: 1 });
+ const r = createSupervisedRuntime({ membershipProvider: { findMemberships: async () => [A] }, reasoner, catalog: slow.catalog, taskTimeoutMs: 100, cognitionTimeoutMs: 3000 });
+ const h = await r.openSession(A.userId);
+ for (const t of ['Recuerda que entre los proveedores, Alfa cuesta 10 euros', 'Recuerda que entre los proveedores, Beta cuesta 7 euros']) await r.start(h, { text: t, conversationId: 'conv-0001' });
+ const done = await r.start(h, { text: QUESTION, conversationId: 'conv-0001' });
+ assert.equal(done.status, 'COMPLETED'); assert.equal(slow.calls.length, 1); assert.equal(done.result.synthesis.resource, 'openai:primary');
+});
+
+test('public pages become readable source text (paragraphs, no markup or scripts)', () => {
+ const { readableText } = require('./resource-adapters');
+ const html = '<html><head><title>T</title><script>var x=1;</script></head><body><nav>Menú principal</nav><p>Primer párrafo con <b>contenido</b> suficiente para ser evidencia legible.</p><p>corto</p><p>Segundo párrafo que también cuenta como texto de la fuente pública.</p></body></html>';
+ assert.equal(readableText(html), 'Primer párrafo con contenido suficiente para ser evidencia legible. Segundo párrafo que también cuenta como texto de la fuente pública.');
+ assert.equal(readableText('<div>Solo texto visible</div><script>no</script>'), 'Solo texto visible');
 });

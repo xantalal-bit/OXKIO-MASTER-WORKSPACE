@@ -1,6 +1,6 @@
 'use strict';
 const { PRIVACY_CLASSES, DEFAULT_PRIVACY_POLICY } = require('../executive-brain/privacy-gate');
-const { authorizeEgress } = require('./egress-privacy');
+const { authorizeEgress, mentionsPerson } = require('./egress-privacy');
 const { freeze, fail } = require('./scope-session');
 // Continuity across reasoning resources. Each candidate is an existing
 // Executive Reasoning Provider (same contract, same sanitized error codes);
@@ -28,19 +28,26 @@ function classifyResult(result) {
   default: return FAILURES.PROVIDER_ERROR;
  }
 }
-function createGovernedReasoner({ providers = [], privacyPolicy = DEFAULT_PRIVACY_POLICY, approvedDailyBudgetUsd = 0 } = {}) {
+// requestFloor: the least class a person's request can have when it leaves.
+// CONFIDENTIAL by default; INTERNAL only when a human explicitly authorized
+// non-sensitive requests. Never PUBLIC. Private sources, a reference to a
+// person or any identifier still raise the class to CONFIDENTIAL.
+const REQUEST_FLOORS = new Set([PRIVACY_CLASSES.INTERNAL, PRIVACY_CLASSES.CONFIDENTIAL]);
+function createGovernedReasoner({ providers = [], privacyPolicy = DEFAULT_PRIVACY_POLICY, approvedDailyBudgetUsd = 0, requestFloor = PRIVACY_CLASSES.CONFIDENTIAL } = {}) {
+ if (!REQUEST_FLOORS.has(requestFloor)) fail('request_floor_invalid');
  const candidates = providers.filter(p => p && p.status === 'ready' && typeof p.reason === 'function' && typeof p.modelId === 'string');
  // Cognition is enabled only by explicit human configuration: at least one
  // configured provider and a positive approved budget. Otherwise the caller
  // keeps its deterministic behaviour and no text ever leaves.
  const enabled = candidates.length > 0 && approvedDailyBudgetUsd > 0;
- async function reason({ egressText, derivedFromPrivate = false, request, basis, spend, missionId, accept = () => true, onAttempt = () => {} }) {
+ async function reason({ objective, egressText, derivedFromPrivate = false, request, basis, spend, missionId, accept = () => true, onAttempt = () => {} }) {
   if (!enabled) fail('reasoning_not_enabled');
-  if (!spend || typeof missionId !== 'string' || typeof egressText !== 'string') fail('reasoning_context_invalid');
+  if (!spend || typeof missionId !== 'string' || typeof egressText !== 'string' || typeof objective !== 'string') fail('reasoning_context_invalid');
+  const floor = mentionsPerson(objective) ? PRIVACY_CLASSES.CONFIDENTIAL : requestFloor;
   const attempts = [];
   const record = (provider, failure, privacyClass) => { const a = freeze({ resource: provider.modelId, region: provider.region || null, failure, privacyClass }); attempts.push(a); onAttempt(a); };
   for (const provider of candidates) {
-   const egress = authorizeEgress({ text: egressText, provider: { providerId: provider.provider, region: provider.region }, policy: privacyPolicy, derivedFromPrivate, floor: PRIVACY_CLASSES.CONFIDENTIAL });
+   const egress = authorizeEgress({ text: egressText, provider: { providerId: provider.provider, region: provider.region }, policy: privacyPolicy, derivedFromPrivate, floor });
    if (egress.privacyClass === PRIVACY_CLASSES.SECRET) fail('secret_context');
    if (!egress.allowed) { record(provider, FAILURES.PRIVACY_BLOCKED, egress.privacyClass); continue; }
    const estimatedUsd = spend.estimate(provider.modelId, basis);
@@ -53,7 +60,7 @@ function createGovernedReasoner({ providers = [], privacyPolicy = DEFAULT_PRIVAC
    catch (error) { result = { status: 'error', errorCode: 'reasoning_unavailable' }; }
    finally { charged = spend.settle(reservation, (result && result.usage) || {}); }
    if (result && result.status === 'ok' && accept(result.content)) {
-    return freeze({ content: result.content, resource: provider.modelId, region: provider.region || null, privacyClass: egress.privacyClass, usage: freeze({ ...(result.usage || {}) }), chargedUsd: charged, attempts: freeze(attempts) });
+    return freeze({ content: result.content, resource: provider.modelId, region: provider.region || null, privacyClass: egress.privacyClass, usage: freeze({ ...(result.usage || {}) }), evidence: freeze({ ...(result.evidence || {}) }), chargedUsd: charged, attempts: freeze(attempts) });
    }
    record(provider, result && result.status === 'ok' ? FAILURES.INVALID_OUTPUT : classifyResult(result), egress.privacyClass);
   }

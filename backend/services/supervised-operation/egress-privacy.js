@@ -32,4 +32,7 @@ function authorizeEgress({ text, provider = {}, policy = DEFAULT_PRIVACY_POLICY,
  const routing = evaluateProviderRouting({ privacyClass: classified.privacyClass, provider: { external: true, providerId: provider && provider.providerId, region: provider && provider.region }, policy });
  return freeze({ allowed: routing.allowed, privacyClass: classified.privacyClass, reasons: [...classified.reasons, routing.reason] });
 }
-module.exports = { classifyEgress, authorizeEgress };
+// A request that refers to a person (first person or a full name) is treated
+// as personal data on its own, even without a special category.
+const mentionsPerson = text => typeof text === 'string' && PERSONAL.test(text);
+module.exports = { classifyEgress, authorizeEgress, mentionsPerson };

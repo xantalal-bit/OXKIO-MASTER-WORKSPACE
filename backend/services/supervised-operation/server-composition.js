@@ -27,7 +27,7 @@ function createServerComposition({enabled=false,cohortUids='',memoryRoot,integri
  // Reasoning resources in preference order (primary first). Cognition stays
  // off unless a provider is configured and a positive budget is approved.
  const providers=reasoning?(Array.isArray(reasoning.providers)?reasoning.providers:reasoning.provider?[reasoning.provider]:[]):[];
- const reasoner=reasoning?createGovernedReasoner({providers,privacyPolicy:reasoning.privacyPolicy,approvedDailyBudgetUsd:Number(reasoning.approvedDailyBudgetUsd)||0}):null;
+ const reasoner=reasoning?createGovernedReasoner({providers,privacyPolicy:reasoning.privacyPolicy,approvedDailyBudgetUsd:Number(reasoning.approvedDailyBudgetUsd)||0,...(reasoning.requestPrivacyFloor?{requestFloor:reasoning.requestPrivacyFloor}:{})}):null;
  const catalog=Object.assign({},reasoning&&reasoning.catalog,...providers.map(p=>(p&&p.catalog)||{}));
  const factory=adapterFactory||(typeof privateContextReaders==='function'?async(identity,scope)=>createPrivateContextAdapters({scope,readers:privateContextReaders(identity)}):null);
  const gateway=createChatGateway({approvalFactory:createScopedApprovalFactory({root:memoryRoot}),storeFactory:createMemoryStoreFactory({root:memoryRoot,integrity}),adapterFactory:factory,planner,reasoner,
