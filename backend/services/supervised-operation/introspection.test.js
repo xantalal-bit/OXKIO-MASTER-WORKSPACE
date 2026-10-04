@@ -45,6 +45,9 @@ test('real V3 handler exposes the existing per-owner catalogue for every inciden
    assert.equal(rows.find(v => v.id === 'external.write').status, 'HUMAN_GATE');
    assert.match(r.data.response, /Disponible:/); assert.match(r.data.response, /No implementado:/);
    assert.match(r.data.response, /deshabilitada/);
+   // Informative closing line, never the refusal used for blocked requests.
+   assert.match(r.data.response, /Bloqueado siempre: pagos, credenciales y acciones irreversibles\./);
+   assert.doesNotMatch(r.data.response, /No puedo hacer esto/);
   }
   assert.equal(calls, 0);
  } finally { s.cleanup(); }

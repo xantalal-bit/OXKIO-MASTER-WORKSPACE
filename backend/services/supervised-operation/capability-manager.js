@@ -88,7 +88,9 @@ function createCapabilityManager({ connections, planner = null }) {
   const labels = { AVAILABLE: 'Disponible', NEEDS_CONNECTION: 'Necesita conexión o validación', NOT_AVAILABLE_FOR_ACCOUNT: 'No disponible para tu cuenta', NOT_IMPLEMENTED: 'No implementado', HUMAN_GATE: 'Requiere aprobación humana' };
   const name = row => DEFINITIONS[row.id]?.label || DECLARED[row.id]?.label || (row.id === 'external.write' ? 'envíos y cambios externos' : row.id);
   const lines = Object.entries(labels).flatMap(([status, label]) => { const matches = rows.filter(row => row.status === status); return matches.length ? [label + ': ' + matches.map(row => name(row) + (row.connection === 'NOT_VERIFIED' ? ' (adaptador instalado; lectura aún no validada)' : '')).join(', ') + '.'] : []; });
-  return freeze({ capabilities: rows, message: lines.join('\n') + '\n' + MESSAGES.BLOCKED + ' La ejecución material permanece deshabilitada.' });
+  // An informative closing line: this answers a question, it refuses nothing.
+  // MESSAGES.BLOCKED stays for requests that are actually blocked.
+  return freeze({ capabilities: rows, message: lines.join('\n') + '\nBloqueado siempre: pagos, credenciales y acciones irreversibles.\nNo he ejecutado nada; la ejecución material permanece deshabilitada.' });
  }
  return Object.freeze({ interpret, validatePlan, profile, gaps, catalogue, describe, definitions: DEFINITIONS });
 }
