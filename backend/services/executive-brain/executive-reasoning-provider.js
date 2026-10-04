@@ -181,7 +181,11 @@ function createExecutiveReasoningProvider({
       if (!content) return { status: REASONING_RESULT.ERROR, errorCode: 'reasoning_invalid_output', usage: result && result.usage };
       return { status: REASONING_RESULT.OK, content, usage: (result && result.usage) || {} };
     } catch (error) {
-      return { status: REASONING_RESULT.ERROR, errorCode: classifyProviderError(error) };
+      // OpenAI reports an exhausted plan/credit as 429 with code
+      // "insufficient_quota". The errorCode stays the existing one; the extra
+      // fixed failureType only lets V3 continuity tell it from a rate limit.
+      const quota = error && error.status === 429 && error.code === 'insufficient_quota';
+      return { status: REASONING_RESULT.ERROR, errorCode: classifyProviderError(error), ...(quota ? { failureType: 'QUOTA_EXHAUSTED' } : {}) };
     }
   }
 

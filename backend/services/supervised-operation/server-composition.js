@@ -6,6 +6,7 @@ const { createScopedApprovalFactory } = require('./approval-factory');
 const { createHmacIntegrity } = require('./integrity');
 const { createAdaptivePlanner } = require('./adaptive-planner');
 const { createPrivateContextAdapters } = require('./resource-adapters');
+const { createGovernedReasoner } = require('./governed-reasoning');
 // Opt-in only; installing code never activates a pilot or grants a new service.
 // Identities enter solely from the existing verified Firebase request boundary.
 // Routing is per identity: only uids listed in the cohort reach V3; everyone
@@ -23,9 +24,14 @@ function createServerComposition({enabled=false,cohortUids='',memoryRoot,integri
  const integrity=createHmacIntegrity({key:integrityKey});
  const identities=new Map();
  const planner=reasoning&&reasoning.provider?createAdaptivePlanner({provider:reasoning.provider,privacyPolicy:reasoning.privacyPolicy,approvedDailyBudgetUsd:Number(reasoning.approvedDailyBudgetUsd)||0}).plan:null;
+ // Reasoning resources in preference order (primary first). Cognition stays
+ // off unless a provider is configured and a positive budget is approved.
+ const providers=reasoning?(Array.isArray(reasoning.providers)?reasoning.providers:reasoning.provider?[reasoning.provider]:[]):[];
+ const reasoner=reasoning?createGovernedReasoner({providers,privacyPolicy:reasoning.privacyPolicy,approvedDailyBudgetUsd:Number(reasoning.approvedDailyBudgetUsd)||0}):null;
+ const catalog=Object.assign({},reasoning&&reasoning.catalog,...providers.map(p=>(p&&p.catalog)||{}));
  const factory=adapterFactory||(typeof privateContextReaders==='function'?async(identity,scope)=>createPrivateContextAdapters({scope,readers:privateContextReaders(identity)}):null);
- const gateway=createChatGateway({approvalFactory:createScopedApprovalFactory({root:memoryRoot}),storeFactory:createMemoryStoreFactory({root:memoryRoot,integrity}),adapterFactory:factory,planner,
-  catalog:reasoning&&reasoning.catalog||{},privacyPolicy:reasoning&&reasoning.privacyPolicy,
+ const gateway=createChatGateway({approvalFactory:createScopedApprovalFactory({root:memoryRoot}),storeFactory:createMemoryStoreFactory({root:memoryRoot,integrity}),adapterFactory:factory,planner,reasoner,
+  catalog,privacyPolicy:reasoning&&reasoning.privacyPolicy,
   // Only Cliente Cero has a connection flow today (its existing Google OAuth).
   connectable:(scope,provider)=>scope.clientId==='cliente-cero'&&['mail','calendar'].includes(provider),
   membershipProvider:{findMemberships:async({authenticatedUserId})=>{

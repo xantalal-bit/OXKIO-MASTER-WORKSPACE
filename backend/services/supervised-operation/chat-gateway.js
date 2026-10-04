@@ -13,8 +13,8 @@ const IGNORED_CLIENT_HINTS = ['calendar','gmail'];
 const DEFAULT_CONVERSATION = 'executive-default';
 const FOLLOW_UP = /^(contin[uú]a|sigue|adelante|reanuda|reint[eé]ntalo|vuelve a intentarlo|ya est[aá] conectad[oa]|ya lo he conectado|ya he conectado.*|listo|hecho|hazlo)[.!\s]*$/i;
 const PERMISSIONS = { 'mail.read':'leer tu correo','calendar.read':'leer tu agenda','documents.read':'consultar tus documentos','public.search':'buscar información pública','public.fetch':'leer páginas públicas' };
-function createChatGateway({runtime,membershipProvider,adapterFactory=null,storeFactory,approvalFactory,planner,catalog,connectable,privacyPolicy}={}){
- const r=runtime||createSupervisedRuntime({membershipProvider,storeFactory,approvalFactory,planner,catalog,connectable,privacyPolicy});
+function createChatGateway({runtime,membershipProvider,adapterFactory=null,storeFactory,approvalFactory,planner,reasoner,catalog,connectable,privacyPolicy}={}){
+ const r=runtime||createSupervisedRuntime({membershipProvider,storeFactory,approvalFactory,planner,reasoner,catalog,connectable,privacyPolicy});
  const latest=new Map();
  async function handle(identity,body){
   if(!identity||identity.authorized!==true||!['admin','family_member'].includes(identity.role)||typeof identity.uid!=='string')fail('authenticated_identity_required');
@@ -43,6 +43,8 @@ function createChatGateway({runtime,membershipProvider,adapterFactory=null,store
    if(!state.connectionRequests.length)return 'Necesito que vuelvas a autorizar la conexión para continuar. La misión queda guardada y continuará desde este punto.';
    return state.connectionRequests.map(g=>[g.reason,'Permiso solicitado: '+(PERMISSIONS[g.permission]||'consultar la fuente')+'.',g.canDo,g.cannotDo,g.how].join(' ')).join('\n')+'\nLa misión queda guardada y continuará desde este punto.';
   }
+  if(state.status==='WAITING_RESOURCE')return 'El recurso de razonamiento no está disponible ahora (límite, cuota, presupuesto o fallo del proveedor) y no hay alternativa autorizada. La misión y sus fuentes quedan guardadas en este punto; di "continúa" para reanudarla. No he ejecutado nada externo.';
+  if(state.status==='COMPLETED'&&state.result?.synthesis)return synthesisText(state.result);
   if(state.status==='COMPLETED')return state.result?.capability==='memory.remember'?'He guardado esta información en tu memoria personal.':state.result?.items.length?state.result.items.map(v=>v.text).join('\n'):'No he encontrado resultados en tus fuentes.';
   if(state.status==='NEEDS_APPROVAL')return 'He preparado una propuesta para tu revisión. Necesito que decidas la estructura y autorices los cambios; no he modificado ni enviado nada.';
   if(state.status==='CANCELLED')return 'Misión cancelada.';
@@ -50,6 +52,14 @@ function createChatGateway({runtime,membershipProvider,adapterFactory=null,store
   if(state.diagnosis?.class==='capability_degraded')return 'Esta fuente ha fallado varias veces seguidas. Lo he registrado para revisión y no lo reintento automáticamente ahora; no he ejecutado nada más.';
   if(state.diagnosis?.class==='privacy_gate')return 'No he enviado la búsqueda: contenía datos personales y el proveedor no está autorizado para ellos. Reformúlala sin datos personales si quieres que busque.';
   return 'No puedo dar la misión por completada. El resultado queda pendiente de revisión.';
+ }
+ // Sources are cited by their position in the verified result, never by
+ // internal ids; the resource that reasoned is always disclosed.
+ function synthesisText(result){
+  const s=result.synthesis;const position=new Map(result.items.map((v,i)=>[v.id,i+1]));
+  const cite=ids=>' [fuente '+ids.map(id=>position.get(id)).filter(Boolean).join(', ')+']';
+  return [s.conclusion,...s.findings.map(f=>'- '+f.claim+cite(f.sourceIds)),...(s.comparison?['Comparación: '+s.comparison]:[]),
+   'Análisis generado por '+s.resource+(s.failover.length?' tras no estar disponible '+s.failover.map(a=>a.resource).join(', '):'')+'; verificado contra '+result.items.length+' fuentes. No he ejecutado nada externo.'].join('\n');
  }
  return Object.freeze({handle,runtime:r,defaultConversation:DEFAULT_CONVERSATION});
 }
