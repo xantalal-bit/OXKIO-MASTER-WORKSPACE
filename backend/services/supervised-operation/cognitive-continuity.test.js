@@ -26,7 +26,7 @@ function provider(providerId, model, behaviour) {
 const synthesis = request => {
  const ids = request.context.sources.map(s => s.id);
  return { status: 'ok', usage: { inputTokens: 400, outputTokens: 120 }, content: {
-  findings: [{ claim: 'Alfa cuesta más pero da soporte en español.', sourceIds: [ids[0]] }, { claim: 'Beta es más barato y no da soporte en español.', sourceIds: [ids[1]] }],
+  findings: request.context.sources.map(s => ({ claim: s.text.replace(/^.*?(?=Alfa|Beta)/u, '').replace(/[.\s]*$/u, '.'), quote: s.text, sourceIds: [s.id] })),
   comparison: 'Difieren en precio y en soporte.', conclusion: 'Si el soporte en español es imprescindible conviene Alfa; si prima el coste, Beta.' } };
 };
 const rateLimited = () => ({ status: 'error', errorCode: 'reasoning_rate_limited' });
@@ -71,8 +71,8 @@ test('real cognitive path: retrieve -> analyze/compare/synthesize with a model -
   assert.equal(primary.calls[0].context.sources.length, 2);
   assert.equal(d.result.synthesis.resource, 'openai:primary'); assert.equal(d.result.synthesis.privacyClass, 'CONFIDENTIAL');
   assert.deepEqual(d.result.synthesis.failover, []);
-  assert.match(r.data.response, /conviene Alfa/); assert.match(r.data.response, /\[fuente 1\]/); assert.match(r.data.response, /\[fuente 2\]/);
-  assert.match(r.data.response, /Análisis generado por openai:primary; verificado contra 2 fuentes/);
+  assert.match(r.data.response, /conviene Alfa/); assert.match(r.data.response, /Valoración \(inferencia/); assert.match(r.data.response, /\[fuente 1\]/); assert.match(r.data.response, /\[fuente 2\]/);
+  assert.match(r.data.response, /respaldo textual comprobado en 2 fuentes/);
   assert.ok(events(d).includes('COGNITION'));
   assert.equal(d.cost.models['openai:primary'].calls, 1); assert.ok(d.cost.chargedUsd > 0);
  } finally { s.cleanup(); }
@@ -89,18 +89,23 @@ test('failover: primary QUOTA_EXHAUSTED -> fallback resource -> verified -> comp
   assert.equal(d.result.synthesis.resource, 'anthropic:fallback');
   assert.deepEqual(d.result.synthesis.failover, [{ resource: 'openai:primary', failure: 'QUOTA_EXHAUSTED', detail: 'reasoning_rate_limited' }]);
   const ev = events(d); assert.ok(ev.indexOf('RESOURCE_FAILED') < ev.indexOf('COGNITION'));
-  assert.match(r.data.response, /tras no estar disponible openai:primary/);
+  assert.doesNotMatch(r.data.response, /openai:primary|anthropic:fallback/);
   assert.equal(d.cost.models['openai:primary'].calls, 1); assert.equal(d.cost.models['anthropic:fallback'].calls, 1);
  } finally { s.cleanup(); }
 });
 
-test('verifier: a synthesis citing an unissued source is rejected and the next resource is used', async () => {
+test('verifier: a finding citing an unissued source is dropped whole; only verified findings and a limited conclusion are shown', async () => {
  const lying = provider('openai', 'primary', req => { const ok = synthesis(req); ok.content.findings[0].sourceIds = ['invented-source']; return ok; });
  const fallback = provider('anthropic', 'fallback', synthesis);
  const s = await setup({ providers: [lying, fallback] });
  try {
-  await s.seed(); const d = (await s.ask(QUESTION)).data.details;
-  assert.equal(d.status, 'COMPLETED'); assert.deepEqual(d.result.synthesis.failover, [{ resource: 'openai:primary', failure: 'INVALID_OUTPUT', detail: 'citation_unissued' }]);
+  await s.seed(); const r = await s.ask(QUESTION); const d = r.data.details; const syn = d.result.synthesis;
+  assert.equal(d.status, 'COMPLETED'); assert.equal(syn.resource, 'openai:primary'); assert.deepEqual(syn.failover, []); assert.equal(fallback.calls.length, 0);
+  assert.equal(syn.proposedFindings, 2); assert.equal(syn.findings.length, 1); assert.deepEqual(syn.discarded, [{ index: 0, code: 'citation_unissued' }]);
+  assert.equal(syn.conclusionKind, 'limited'); assert.equal(syn.comparison, '');
+  assert.doesNotMatch(r.data.response, /conviene Alfa|Difieren en precio|citation_unissued|invented-source/);
+  assert.match(r.data.response, /He descartado 1 hallazgo que no pude comprobar/);
+  assert.ok(d.trace.some(t => t.event === 'SYNTHESIS_VERIFIED' && t.kept === 1 && t.discarded.join() === 'citation_unissued'));
  } finally { s.cleanup(); }
 });
 
@@ -217,7 +222,7 @@ const publicSources = async (identityArg, scope) => createPublicResearchAdapters
  search: async () => [{ title: 'snippet rgpd', url: 'https://example.org/rgpd' }, { title: 'snippet ia', url: 'https://example.org/ia' }],
  fetcher: { fetchPage: async url => ({ text: url.endsWith('rgpd') ? 'El reglamento de protección de datos regula el tratamiento de datos personales en la unión.' : 'La ley de inteligencia artificial clasifica los sistemas por niveles de riesgo.' }) } });
 const publicSynthesis = request => { const ids = request.context.sources.map(s => s.id); return { status: 'ok', usage: { inputTokens: 300, outputTokens: 90, cachedTokens: 0 }, evidence: { responseId: 'resp-fixture', responseModel: 'fixture-model' },
- content: { findings: [{ claim: 'Uno regula datos personales.', sourceIds: [ids[0]] }, { claim: 'La otra clasifica sistemas por riesgo.', sourceIds: [ids[1]] }], comparison: 'Objetos distintos.', conclusion: 'Son complementarios.' } }; };
+ content: { findings: request.context.sources.map(s => ({ claim: /reglamento/.test(s.text) ? 'Regula el tratamiento de datos personales.' : 'Clasifica los sistemas por niveles de riesgo.', quote: s.text, sourceIds: [s.id] })), comparison: 'Objetos distintos.', conclusion: 'Son complementarios.' } }; };
 
 test('B: a public-only mission reasons as INTERNAL, over fetched pages only (snippets are not final evidence)', async () => {
  const p = provider('openai', 'luna', publicSynthesis); p.region = 'global';
@@ -232,7 +237,7 @@ test('B: a public-only mission reasons as INTERNAL, over fetched pages only (sni
   // Citations are numbered among the sources reasoned over, never the snippets.
   const text = (await s.ask('estado', { action: 'status', missionId: d.id })).data.response;
   assert.match(text, /\[fuente 1\]/); assert.match(text, /\[fuente 2\]/); assert.doesNotMatch(text, /fuente 3/);
-  assert.match(text, /Fuentes: 1\) https:\/\/example\.org\/rgpd · 2\) https:\/\/example\.org\/ia/); assert.match(text, /verificado contra 2 fuentes/);
+  assert.match(text, /Fuentes: 1\) https:\/\/example\.org\/rgpd · 2\) https:\/\/example\.org\/ia/); assert.match(text, /respaldo textual comprobado en 2 fuentes/);
  } finally { s.cleanup(); }
 });
 
@@ -295,7 +300,7 @@ test('public pages become readable source text (paragraphs, no markup or scripts
 
 // Code review 04/10/2026 regressions.
 test('review: a permanent failure (revoked key, rejected request, refused output) never parks the mission; the deterministic analysis stands', async () => {
- for (const behaviour of [() => ({ status: 'error', errorCode: 'reasoning_auth_failed' }), () => ({ status: 'error', errorCode: 'reasoning_request_rejected' }), req => { const s = synthesis(req); s.content.findings[0].sourceIds = ['invented']; return s; }]) {
+ for (const behaviour of [() => ({ status: 'error', errorCode: 'reasoning_auth_failed' }), () => ({ status: 'error', errorCode: 'reasoning_request_rejected' }), req => { const s = synthesis(req); s.content.findings.forEach(f => { f.sourceIds = ['invented']; }); return s; }]) {
   const p = provider('openai', 'primary', behaviour);
   const s = await setup({ providers: [p] });
   try {

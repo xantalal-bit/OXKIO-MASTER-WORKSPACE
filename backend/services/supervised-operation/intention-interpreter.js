@@ -30,7 +30,7 @@ const SOURCES = Object.freeze({
 });
 const WEB_VERBS = ['investiga', 'investigar', 'averigua', 'busca', 'buscar', 'buscame'];
 const WEB_STRONG = ['investiga', 'investigar', 'averigua', 'internet', 'web', 'online'];
-const WEB_TOPICS = ['informacion', 'precio', 'precios', 'receta', 'recetas', 'horario', 'horarios', 'compara'];
+const WEB_TOPICS = ['informacion', 'precio', 'precios', 'receta', 'recetas', 'horario', 'horarios'];
 const ANALYZE = ['clasifica', 'organiza', 'ordena', 'compara', 'resume', 'resumen', 'analiza', 'cuanto', 'cuantos', 'cuanta', 'total', 'suma'];
 const STORAGE = ['carpeta', 'carpetas'];
 // Declared but not implemented in V3: honest gaps, never silent fallbacks.
@@ -74,7 +74,10 @@ function interpretIntention(text) {
  // Questions about OXKIO's own resources are read-only introspection, not a
  // request to run the mentioned tools. Resolve them from the scoped catalogue.
  const selfQuery = plain.trim().replace(/^oxkio[\s,:]+/, '').replace(/^[¿?\s]+/, '').replace(/^dime\s+/, '');
- if (/^(que (puedes hacer|capacidades tienes|tienes conectad[oa]|necesitas para)|(?:quiero que )?anali[cz](?:a|as|es|e) (?:tu |su )?(?:propio )?estado operativo)\b/.test(selfQuery)) {
+ // Goal-oriented help ("qué puedes hacer por mí") gets executive orientation;
+ // the bare "¿qué puedes hacer?" stays the technical catalogue.
+ if (/^(que puedes hacer (por|para) (mi|nosotros)( ahora( mismo)?| hoy)?|(en que|como) (me )?puedes ayudar(me)?( hoy)?|por donde empezamos)[?!.\s]*$/.test(selfQuery)) return result(OUTCOMES.CAN_EXECUTE, { reason: 'orientation', orientation: true });
+ if (/^que puedes hacer[?!.\s]*$/.test(selfQuery) || /^(que (capacidades tienes|tienes conectad[oa]|necesitas para)|(?:cual es )?tu estado operativo|(?:quiero que )?anali[cz](?:a|as|es|e) (?:tu |su )?(?:propio )?estado operativo)\b/.test(selfQuery)) {
   return result(OUTCOMES.CAN_EXECUTE, { reason: 'operational_state', introspection: true });
  }
  if (exact(tokens, CREDENTIALS)) return result(OUTCOMES.BLOCKED, { reason: 'credentials', gate: 'HUMAN_GATE' });

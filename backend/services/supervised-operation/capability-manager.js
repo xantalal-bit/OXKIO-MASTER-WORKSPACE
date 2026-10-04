@@ -32,9 +32,16 @@ function createCapabilityManager({ connections, planner = null }) {
  function validatePlan(plan) {
   if (!Array.isArray(plan) || plan.length === 0 || plan.length > 12) fail('plan_invalid');
   const used = new Set();
+  const ancestors = new Map();
   for (const step of plan) {
    if (!step || Object.keys(step).some(k => !['key','capability','dependsOn'].includes(k)) || !/^[a-z][a-z0-9-]{0,30}$/.test(step.key)
     || used.has(step.key) || !DEFINITIONS[step.capability] || !Array.isArray(step.dependsOn) || step.dependsOn.some(k => !used.has(k))) fail('plan_invalid');
+   const sources = new Set(step.dependsOn.flatMap(k => [...ancestors.get(k)]));
+   if (step.capability === 'data.analyze' && ![...sources].some(c => ['memory.search','gmail.read','calendar.read','documents.read','research.web'].includes(c))) fail('plan_insufficient_sources');
+   if (step.capability === 'storage.propose' && ![...sources].some(c => ['documents.read','gmail.read'].includes(c))) fail('plan_insufficient_sources');
+   // Fetch consumes URLs only from immediate PUBLIC_DISCOVERY dependencies.
+   if (step.capability === 'research.web' && !step.dependsOn.some(k => plan.find(s => s.key === k).capability === 'web.search')) fail('plan_insufficient_sources');
+   sources.add(step.capability); ancestors.set(step.key, sources);
    used.add(step.key);
   }
   return freeze(copy(plan));
@@ -50,7 +57,7 @@ function createCapabilityManager({ connections, planner = null }) {
  async function interpret(text, context = {}) {
   if (typeof text !== 'string' || text.trim().length < 2 || text.length > 2000) fail('intention_invalid');
   let interpretation = interpretIntention(text);
-  if (interpretation.outcome === OUTCOMES.NEEDS_INFORMATION && interpretation.reason === 'no_capability' && planner) {
+  if (interpretation.outcome === OUTCOMES.NEEDS_INFORMATION && interpretation.reason === 'no_capability' && planner && context.skipPlanner !== true) {
    try {
     const plan = validatePlan(await planner(freeze({ intention: text, capabilities: Object.keys(DEFINITIONS) }), context));
     // A planner can never authorize a memory write the human did not ask for.

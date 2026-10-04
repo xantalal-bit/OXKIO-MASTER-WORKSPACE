@@ -23,9 +23,16 @@ function readableText(html){
  const paragraphs=[...String(html).matchAll(/<p\b[^>]*>([\s\S]*?)<\/p\s*>/gi)].map(m=>textRuns(m[1]).join(' ')).filter(t=>t.length>=40);
  return (paragraphs.length?paragraphs:textRuns(String(html))).join(' ').replace(/\s+/g,' ').trim();
 }
+// A source is cut at its last complete sentence, so a quoted sentence can
+// never be a truncated one that lost its trailing qualification.
+function clipSentences(text,max=2000){
+ if(text.length<=max)return text;
+ const cut=text.slice(0,max);const end=Math.max(cut.lastIndexOf('. '),cut.lastIndexOf('! '),cut.lastIndexOf('? '));
+ return end>0?cut.slice(0,end+1):cut;
+}
 function createPublicResearchAdapters({scope,search,searchEgress=null,fetcher=createPublicWebFetcher(),origin='live'}){
  const fetch=createReadonlyAdapter({scope,permissions:['public.fetch'],origin,read:async({urls})=>{
-  const items=[];for(const url of urls){parsePublicUrl(url);const page=await fetcher.fetchPage(url,{allowedSite:siteOf(new URL(url).hostname)});items.push({text:readableText(page.text).slice(0,2000),url});}return items;
+  const items=[];for(const url of urls){parsePublicUrl(url);const page=await fetcher.fetchPage(url,{allowedSite:siteOf(new URL(url).hostname)});items.push({text:clipSentences(readableText(page.text)),url});}return items;
  }});
  const discovery=typeof search==='function'?createReadonlyAdapter({scope,permissions:['public.search'],origin,egress:searchEgress,read:async({query})=>{
   const result=await search(query);if(!Array.isArray(result))fail('search_output_invalid');return result.slice(0,5).map(item=>{parsePublicUrl(item.url);return {text:String(item.title||item.snippet||item.url).slice(0,2000),url:item.url};});

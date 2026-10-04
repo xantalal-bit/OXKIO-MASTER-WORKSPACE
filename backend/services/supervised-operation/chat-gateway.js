@@ -1,5 +1,6 @@
 'use strict';
 const { createSupervisedRuntime } = require('./mission-runtime');
+const { INSUFFICIENT_SOURCES } = require('../executive-brain/synthesis-verifier');
 const { freeze, fail } = require('./scope-session');
 // The transport MUST pass the identity produced by Firebase authentication.
 // No tenant, uid, connection, tokens, scopes or planner may come from the body.
@@ -13,8 +14,8 @@ const IGNORED_CLIENT_HINTS = ['calendar','gmail'];
 const DEFAULT_CONVERSATION = 'executive-default';
 const FOLLOW_UP = /^(contin[uú]a|sigue|adelante|reanuda|reint[eé]ntalo|vuelve a intentarlo|ya est[aá] conectad[oa]|ya lo he conectado|ya he conectado.*|listo|hecho|hazlo)[.!\s]*$/i;
 const PERMISSIONS = { 'mail.read':'leer tu correo','calendar.read':'leer tu agenda','documents.read':'consultar tus documentos','public.search':'buscar información pública','public.fetch':'leer páginas públicas' };
-function createChatGateway({runtime,membershipProvider,adapterFactory=null,storeFactory,approvalFactory,planner,reasoner,catalog,connectable,privacyPolicy}={}){
- const r=runtime||createSupervisedRuntime({membershipProvider,storeFactory,approvalFactory,planner,reasoner,catalog,connectable,privacyPolicy});
+function createChatGateway({runtime,membershipProvider,adapterFactory=null,storeFactory,approvalFactory,planner,conversationDecider,reasoner,catalog,connectable,privacyPolicy}={}){
+ const r=runtime||createSupervisedRuntime({membershipProvider,storeFactory,approvalFactory,planner,conversationDecider,reasoner,catalog,connectable,privacyPolicy});
  const latest=new Map();
  async function handle(identity,body){
   if(!identity||identity.authorized!==true||!['admin','family_member'].includes(identity.role)||typeof identity.uid!=='string')fail('authenticated_identity_required');
@@ -35,12 +36,12 @@ function createChatGateway({runtime,membershipProvider,adapterFactory=null,store
   if(['resume','cancel','pause','status'].includes(action)){const id=body.missionId||latest.get(key);if(!id)fail('mission_not_found');state=await r[action==='status'?'get':action](session,id);}
   else if(action==='start'){
    if(typeof body.query!=='string')fail('chat_request_invalid');
-   const prior=latest.get(key);
-   if(prior&&FOLLOW_UP.test(body.query.trim()))state=await r.resume(session,prior);
-   else state=await r.start(session,{text:body.query,conversationId});
+   state=await r.start(session,{text:body.query,conversationId});
   }else fail('chat_action_invalid');
   if(state.id)latest.set(key,state.id);
-  return freeze({ok:true,response:describe(state),conversationId,missionId:state.id||null,outcome:state.outcome||state.status||null,executionEnabled:false,...(body.includeDetails===true?{details:state}:{})});
+  const response=describe(state);
+  if(typeof r.recordTurn==='function'&&action!=='status'){const previous=action==='start'?null:r.turnContext(session,conversationId);const query=action==='start'?body.query:previous?.lastUser;if(typeof query==='string')await r.recordTurn(session,conversationId,{query,response,state});}
+  return freeze({ok:true,response,conversationId,missionId:state.id||null,outcome:state.outcome||state.status||null,executionEnabled:false,...(body.includeDetails===true?{details:state}:{})});
  }
  function describe(state){
   if(state.message)return state.message;
@@ -59,14 +60,21 @@ function createChatGateway({runtime,membershipProvider,adapterFactory=null,store
   return 'No puedo dar la misión por completada. El resultado queda pendiente de revisión.';
  }
  // Sources are numbered among those the model actually reasoned over (never
- // internal ids), public ones listed with their link; the resource that
- // reasoned and any rejected resource are always disclosed.
+ // internal ids), public ones listed with their link. Findings are checked
+ // against literal quotes; the assessment and comparison are labelled as an
+ // inference over them. The resource stays in the details, not in the answer.
  function synthesisText(result){
   const s=result.synthesis;const used=s.sourceIds||result.items.map(v=>v.id);const position=new Map(used.map((id,i)=>[id,i+1]));
   const cite=ids=>' [fuente '+ids.map(id=>position.get(id)).filter(Boolean).join(', ')+']';
   const listed=used.map((id,i)=>{const item=result.items.find(v=>v.id===id);return item&&item.url?(i+1)+') '+item.url:null;}).filter(Boolean);
-  return [s.conclusion,...s.findings.map(f=>'- '+f.claim+cite(f.sourceIds)),...(s.comparison?['Comparación: '+s.comparison]:[]),...(listed.length?['Fuentes: '+listed.join(' · ')]:[]),
-   'Análisis generado por '+s.resource+(s.failover.length?' tras no estar disponible '+s.failover.map(a=>a.resource).join(', '):'')+'; verificado contra '+used.length+' fuentes. No he ejecutado nada externo.'].join('\n');
+  // Only an inference over fully verified findings is shown as an assessment;
+  // otherwise the limited or insufficient conclusion is shown as it is.
+  const kind=s.conclusionKind||(s.conclusion.trim()===INSUFFICIENT_SOURCES?'insufficient':'inference');
+  const dropped=(s.discarded||[]).length;
+  return [kind==='inference'?'Valoración (inferencia a partir de los hallazgos): '+s.conclusion:s.conclusion,'Hallazgos:',...s.findings.map(f=>'- '+f.claim+cite(f.sourceIds)),...(kind==='inference'&&s.comparison?['Comparación (inferencia): '+s.comparison]:[]),
+   ...(dropped===1?['He descartado 1 hallazgo que no pude comprobar en el texto de las fuentes; no lo presento como cierto.']:dropped>1?['He descartado '+dropped+' hallazgos que no pude comprobar en el texto de las fuentes; no los presento como ciertos.']:[]),
+   ...(listed.length?['Fuentes: '+listed.join(' · ')]:[]),
+   'Cada hallazgo mostrado tiene respaldo textual comprobado en '+used.length+' fuentes'+(kind==='inference'?'; la valoración y la comparación son inferencias sobre ellos':'')+'. No he realizado envíos ni cambios externos.'].join('\n');
  }
  return Object.freeze({handle,runtime:r,defaultConversation:DEFAULT_CONVERSATION});
 }
