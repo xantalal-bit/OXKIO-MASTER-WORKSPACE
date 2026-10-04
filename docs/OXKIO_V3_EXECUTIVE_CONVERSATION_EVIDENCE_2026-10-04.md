@@ -104,6 +104,17 @@ Las mismas reglas del Verifier (`checkFinding`, sin rebajar ninguna) se aplican 
 
 Tests A–I: A/B/C con la salida real de Luna (5 válidos; descartados el que pierde «only» y el que mezcla RGPD/Ley de IA), D cifra alterada, E negación alterada, F insuficiencia (0 verificados o menos de la mitad), G conclusión y comparación no reutilizadas, H descartes auditables e inmutables, I respuesta por la frontera HTTP con la salida real: solo hallazgos verificados, aviso natural, sin códigos. Además, dos tests previos adaptados: el hallazgo con fuente no emitida se descarta entero, y la «salida rechazada» pasa a ser «todos los hallazgos inválidos». Suite afectada: 450/450. Suite secuencial: 1726 tests, 1710 PASS / 0 FAIL / 16 SKIP.
 
+## Validación real de la verificación parcial (1 llamada autorizada; tope de 0,02 USD)
+
+Misma investigación RGPD/Ley de IA (fuentes públicas en inglés, política B, suelo INTERNAL), sobre 94115b2:
+
+- Privacy Gate: INTERNAL. Luna propuso 7 hallazgos; **6 verificados** y mostrados con su fuente; **1 descartado** (`claim_not_supported`): afirmaba algo de la Ley de IA con una cita que solo habla del RGPD, el mismo patrón que en el caso C.
+- Ni el hallazgo descartado ni la conclusión o comparación del modelo aparecen en la respuesta. Conclusión limitada fija; aviso natural «He descartado 1 hallazgo que no pude comprobar…»; ningún código interno.
+- Traza: `COGNITION > SYNTHESIS_VERIFIED`, sin failover. Reproducción offline con la salida capturada: idéntico resultado.
+- Coste: 0,0018464 USD. `executionEnabled=false`; sin ejecución, aprobación ni escritura; escaneo de secretos de la evidencia: 0.
+
+Coste total de F8 (5 llamadas reales): 0,0061028 USD.
+
 ## Pendiente separado — fuera de esta PR
 
 Heurístico `PERSONAL` del Privacy Gate (main): falsos positivos como «Reglamento General» o «Parlamento Europeo», que bloquean de forma segura pero incorrecta la investigación pública en español. Además, cuando se omite la cognición, la respuesta vuelca las fuentes en bruto sin explicarlo. No se modifica aquí.
