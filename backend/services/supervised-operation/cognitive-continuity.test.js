@@ -87,7 +87,7 @@ test('failover: primary QUOTA_EXHAUSTED -> fallback resource -> verified -> comp
   // The same minimal context, never more, reached the fallback.
   assert.deepEqual(fallback.calls[0].context, primary.calls[0].context);
   assert.equal(d.result.synthesis.resource, 'anthropic:fallback');
-  assert.deepEqual(d.result.synthesis.failover, [{ resource: 'openai:primary', failure: 'QUOTA_EXHAUSTED' }]);
+  assert.deepEqual(d.result.synthesis.failover, [{ resource: 'openai:primary', failure: 'QUOTA_EXHAUSTED', detail: 'reasoning_rate_limited' }]);
   const ev = events(d); assert.ok(ev.indexOf('RESOURCE_FAILED') < ev.indexOf('COGNITION'));
   assert.match(r.data.response, /tras no estar disponible openai:primary/);
   assert.equal(d.cost.models['openai:primary'].calls, 1); assert.equal(d.cost.models['anthropic:fallback'].calls, 1);
@@ -100,7 +100,7 @@ test('verifier: a synthesis citing an unissued source is rejected and the next r
  const s = await setup({ providers: [lying, fallback] });
  try {
   await s.seed(); const d = (await s.ask(QUESTION)).data.details;
-  assert.equal(d.status, 'COMPLETED'); assert.deepEqual(d.result.synthesis.failover, [{ resource: 'openai:primary', failure: 'INVALID_OUTPUT' }]);
+  assert.equal(d.status, 'COMPLETED'); assert.deepEqual(d.result.synthesis.failover, [{ resource: 'openai:primary', failure: 'INVALID_OUTPUT', detail: 'citation_unissued' }]);
  } finally { s.cleanup(); }
 });
 
@@ -220,6 +220,10 @@ test('B: a public-only mission reasons as INTERNAL, over fetched pages only (sni
   assert.deepEqual(p.calls[0].context.sources.map(v => v.provenance), ['PUBLIC_WEB', 'PUBLIC_WEB']);
   assert.deepEqual(d.result.synthesis.call, { responseId: 'resp-fixture', responseModel: 'fixture-model' });
   assert.equal(d.result.synthesis.usage.cachedTokens, 0); assert.equal(d.result.synthesis.sourceIds.length, 2);
+  // Citations are numbered among the sources reasoned over, never the snippets.
+  const text = (await s.ask('estado', { action: 'status', missionId: d.id })).data.response;
+  assert.match(text, /\[fuente 1\]/); assert.match(text, /\[fuente 2\]/); assert.doesNotMatch(text, /fuente 3/);
+  assert.match(text, /Fuentes: 1\) https:\/\/example\.org\/rgpd · 2\) https:\/\/example\.org\/ia/); assert.match(text, /verificado contra 2 fuentes/);
  } finally { s.cleanup(); }
 });
 

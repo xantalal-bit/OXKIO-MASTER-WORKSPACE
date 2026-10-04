@@ -45,7 +45,8 @@ function createGovernedReasoner({ providers = [], privacyPolicy = DEFAULT_PRIVAC
   if (!spend || typeof missionId !== 'string' || typeof egressText !== 'string' || typeof objective !== 'string') fail('reasoning_context_invalid');
   const floor = mentionsPerson(objective) ? PRIVACY_CLASSES.CONFIDENTIAL : requestFloor;
   const attempts = [];
-  const record = (provider, failure, privacyClass) => { const a = freeze({ resource: provider.modelId, region: provider.region || null, failure, privacyClass }); attempts.push(a); onAttempt(a); };
+  // detail: a fixed code (verifier defect or provider errorCode), never content.
+  const record = (provider, failure, privacyClass, detail = null) => { const a = freeze({ resource: provider.modelId, region: provider.region || null, failure, privacyClass, ...(typeof detail === 'string' && /^[a-z_]{1,48}$/.test(detail) ? { detail } : {}) }); attempts.push(a); onAttempt(a); };
   for (const provider of candidates) {
    const egress = authorizeEgress({ text: egressText, provider: { providerId: provider.provider, region: provider.region }, policy: privacyPolicy, derivedFromPrivate, floor });
    if (egress.privacyClass === PRIVACY_CLASSES.SECRET) fail('secret_context');
@@ -59,10 +60,12 @@ function createGovernedReasoner({ providers = [], privacyPolicy = DEFAULT_PRIVAC
    try { result = await provider.reason(request); }
    catch (error) { result = { status: 'error', errorCode: 'reasoning_unavailable' }; }
    finally { charged = spend.settle(reservation, (result && result.usage) || {}); }
-   if (result && result.status === 'ok' && accept(result.content)) {
+   // Only an explicit true accepts; any other verdict is the defect code.
+   const verdict = result && result.status === 'ok' ? accept(result.content) : null;
+   if (verdict === true) {
     return freeze({ content: result.content, resource: provider.modelId, region: provider.region || null, privacyClass: egress.privacyClass, usage: freeze({ ...(result.usage || {}) }), evidence: freeze({ ...(result.evidence || {}) }), chargedUsd: charged, attempts: freeze(attempts) });
    }
-   record(provider, result && result.status === 'ok' ? FAILURES.INVALID_OUTPUT : classifyResult(result), egress.privacyClass);
+   record(provider, result && result.status === 'ok' ? FAILURES.INVALID_OUTPUT : classifyResult(result), egress.privacyClass, result && result.status === 'ok' ? (typeof verdict === 'string' ? verdict : 'verifier_rejected') : result && result.errorCode);
   }
   const error = Object.assign(new Error('reasoning_resource_unavailable'), { code: 'reasoning_resource_unavailable', attempts: freeze(attempts), transient: attempts.some(a => TRANSIENT.has(a.failure)) });
   throw error;

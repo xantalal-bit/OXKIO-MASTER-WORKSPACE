@@ -52,11 +52,20 @@ function validateItems(raw,scope,provenance,origin) {
 }
 // A model synthesis is accepted only as claims bound to issued source ids: it
 // can never introduce a source, a link or a credential-looking string.
+// Returns true or a fixed defect code (never content), so a rejected
+// resource can be diagnosed and learned from.
 function verifySynthesis(content,ids){
- const text=(v,max)=>typeof v==='string'&&v.trim().length>0&&v.length<=max&&!containsSecretMarker(v)&&!/https?:\/\//i.test(v);
- if(!content||typeof content!=='object'||!Array.isArray(content.findings)||content.findings.length<1||content.findings.length>8)return false;
- if(!text(content.conclusion,1200)||(content.comparison!==undefined&&content.comparison!==''&&!text(content.comparison,1200)))return false;
- return content.findings.every(f=>f&&text(f.claim,600)&&Array.isArray(f.sourceIds)&&f.sourceIds.length>0&&f.sourceIds.length<=10&&f.sourceIds.every(id=>ids.has(id)));
+ const defect=(v,max,name)=>typeof v!=='string'||!v.trim()?name+'_missing':v.length>max?name+'_too_long':containsSecretMarker(v)?name+'_secret':/https?:\/\//i.test(v)?name+'_link':null;
+ if(!content||typeof content!=='object'||!Array.isArray(content.findings))return 'synthesis_shape';
+ if(content.findings.length<1||content.findings.length>8)return 'findings_count';
+ const conclusion=defect(content.conclusion,1200,'conclusion');if(conclusion)return conclusion;
+ if(content.comparison!==undefined&&content.comparison!==''){const comparison=defect(content.comparison,1200,'comparison');if(comparison)return comparison;}
+ for(const f of content.findings){
+  const claim=defect(f&&f.claim,600,'claim');if(claim)return claim;
+  if(!Array.isArray(f.sourceIds)||f.sourceIds.length===0||f.sourceIds.length>10)return 'citation_missing';
+  if(!f.sourceIds.every(id=>ids.has(id)))return 'citation_unissued';
+ }
+ return true;
 }
 // Room for reasoning models, whose hidden reasoning counts as output tokens;
 // the ledger reserves this whole amount before the call.
@@ -151,11 +160,11 @@ function createSupervisedRuntime({membershipProvider,planner=null,reasoner=null,
    const request={...SYNTHESIS_REQUEST,context:{objective:m.intention,sources},maxOutputTokens:SYNTHESIS_MAX_OUTPUT_TOKENS};
    const r=await reasoner.reason({objective:m.intention,egressText:[m.intention,...sources.map(v=>v.text)].join('\n'),derivedFromPrivate:sources.some(v=>!PUBLIC_PROVENANCE.includes(v.provenance)),
     request,basis:{inputTokens:Math.ceil(JSON.stringify(request).length/3)+200,outputTokens:SYNTHESIS_MAX_OUTPUT_TOKENS},spend:spendFor(m.handle),missionId:m.id,accept:content=>verifySynthesis(content,ids),
-    onAttempt:a=>trace(m,'RESOURCE_FAILED',{resource:a.resource,failure:a.failure})});
+    onAttempt:a=>trace(m,'RESOURCE_FAILED',{resource:a.resource,failure:a.failure,detail:a.detail})});
    trace(m,'COGNITION',{resource:r.resource,privacyClass:r.privacyClass,fallback:r.attempts.length>0});
    const c=r.content;
    return {findings:c.findings.map(f=>({claim:f.claim,sourceIds:[...f.sourceIds]})),comparison:typeof c.comparison==='string'?c.comparison:'',conclusion:c.conclusion,
-    resource:r.resource,region:r.region,privacyClass:r.privacyClass,usage:r.usage,chargedUsd:r.chargedUsd,call:{responseId:r.evidence.responseId||null,responseModel:r.evidence.responseModel||null},sourceIds:sources.map(v=>v.id),failover:r.attempts.map(a=>({resource:a.resource,failure:a.failure}))};
+    resource:r.resource,region:r.region,privacyClass:r.privacyClass,usage:r.usage,chargedUsd:r.chargedUsd,call:{responseId:r.evidence.responseId||null,responseModel:r.evidence.responseModel||null},sourceIds:sources.map(v=>v.id),failover:r.attempts.map(a=>({resource:a.resource,failure:a.failure,...(a.detail?{detail:a.detail}:{})}))};
   }
   async function execute(contract,context){
    if(m.cancelled)fail('cancelled');await sessions.current(m.handle);const step=m.plan.find(s=>context.taskId===m.id+':'+s.key);const d=DEFINITIONS[step.capability];const scope=sessions.scope(m.handle);

@@ -53,13 +53,15 @@ function createChatGateway({runtime,membershipProvider,adapterFactory=null,store
   if(state.diagnosis?.class==='privacy_gate')return 'No he enviado la búsqueda: contenía datos personales y el proveedor no está autorizado para ellos. Reformúlala sin datos personales si quieres que busque.';
   return 'No puedo dar la misión por completada. El resultado queda pendiente de revisión.';
  }
- // Sources are cited by their position in the verified result, never by
- // internal ids; the resource that reasoned is always disclosed.
+ // Sources are numbered among those the model actually reasoned over (never
+ // internal ids), public ones listed with their link; the resource that
+ // reasoned and any rejected resource are always disclosed.
  function synthesisText(result){
-  const s=result.synthesis;const position=new Map(result.items.map((v,i)=>[v.id,i+1]));
+  const s=result.synthesis;const used=s.sourceIds||result.items.map(v=>v.id);const position=new Map(used.map((id,i)=>[id,i+1]));
   const cite=ids=>' [fuente '+ids.map(id=>position.get(id)).filter(Boolean).join(', ')+']';
-  return [s.conclusion,...s.findings.map(f=>'- '+f.claim+cite(f.sourceIds)),...(s.comparison?['Comparación: '+s.comparison]:[]),
-   'Análisis generado por '+s.resource+(s.failover.length?' tras no estar disponible '+s.failover.map(a=>a.resource).join(', '):'')+'; verificado contra '+result.items.length+' fuentes. No he ejecutado nada externo.'].join('\n');
+  const listed=used.map((id,i)=>{const item=result.items.find(v=>v.id===id);return item&&item.url?(i+1)+') '+item.url:null;}).filter(Boolean);
+  return [s.conclusion,...s.findings.map(f=>'- '+f.claim+cite(f.sourceIds)),...(s.comparison?['Comparación: '+s.comparison]:[]),...(listed.length?['Fuentes: '+listed.join(' · ')]:[]),
+   'Análisis generado por '+s.resource+(s.failover.length?' tras no estar disponible '+s.failover.map(a=>a.resource).join(', '):'')+'; verificado contra '+used.length+' fuentes. No he ejecutado nada externo.'].join('\n');
  }
  return Object.freeze({handle,runtime:r,defaultConversation:DEFAULT_CONVERSATION});
 }
