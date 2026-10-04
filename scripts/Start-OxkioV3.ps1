@@ -86,6 +86,9 @@ function Write-Supervisor {
     if ((Test-Path -LiteralPath $supervisorLog) -and (Get-Item -LiteralPath $supervisorLog).Length -gt 1MB) { Move-Item -LiteralPath $supervisorLog -Destination "$supervisorLog.1" -Force }
     Add-Content -LiteralPath $supervisorLog -Value ('{0} {1}' -f (Get-Date -Format 's'), $Line) -Encoding Ascii
 }
+# The launcher is recognised by its path in the parent's command line. The
+# task always starts the wrapper with the same canonical path, and the wrapper
+# starts the launcher with $LauncherPath, so the string is the same.
 $launcherFull = (Resolve-Path -LiteralPath $LauncherPath).ProviderPath.ToLowerInvariant()
 $port = 0
 if (-not [int]::TryParse([string][Environment]::GetEnvironmentVariable('PORT', 'Process'), [ref]$port) -or $port -le 0) { $port = 3000 }

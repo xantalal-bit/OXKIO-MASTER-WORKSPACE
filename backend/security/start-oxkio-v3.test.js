@@ -60,7 +60,9 @@ const listening = (port) => new Promise((resolve) => { const c = net.connect(por
 async function waitFor(fn, ms = 30000) { const end = Date.now() + ms; while (Date.now() < end) { if (await fn()) return true; await new Promise(r => setTimeout(r, 200)); } return false; }
 const SERVER = "require('http').createServer((q,s)=>s.end('ok')).listen(Number(process.argv[2]),'127.0.0.1');require('fs').writeFileSync(process.argv[3],String(process.pid));";
 function serviceDir(port, launcher = STUB) {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'oxkio-v3-supervise-'));
+  // Long path, as the task uses: CI temp dirs come as 8.3 short names
+  // (RUNNER~1) while PowerShell resolves $PSScriptRoot to the long form.
+  const dir = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), 'oxkio-v3-supervise-')));
   fs.copyFileSync(WRAPPER, path.join(dir, 'Start-OxkioV3.ps1'));
   fs.writeFileSync(path.join(dir, 'Start-Oxkio.ps1'), typeof launcher === 'function' ? launcher(dir) : launcher, 'utf8');
   fs.writeFileSync(path.join(dir, 'server.js'), SERVER, 'utf8');
