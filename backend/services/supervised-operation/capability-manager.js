@@ -79,11 +79,18 @@ function createCapabilityManager({ connections, planner = null }) {
   const implemented = Object.entries(DEFINITIONS).map(([id, d]) => {
    if (!d.provider) return { id, status: 'AVAILABLE' };
    const status = connections.inspect(handle, d.provider, d.scope);
-   return { id, status: status.ready ? 'AVAILABLE' : connections.connectable(handle, d.provider) ? 'NEEDS_CONNECTION' : 'NOT_AVAILABLE_FOR_ACCOUNT', connection: status.status };
+   return { id, status: status.ready && status.verified !== false ? 'AVAILABLE' : connections.connectable(handle, d.provider) ? 'NEEDS_CONNECTION' : 'NOT_AVAILABLE_FOR_ACCOUNT', connection: status.verified === false && status.ready ? 'NOT_VERIFIED' : status.status };
   });
   return freeze([...implemented, ...Object.keys(DECLARED).map(id => ({ id, status: 'NOT_IMPLEMENTED' })), { id: 'external.write', status: 'HUMAN_GATE' }]);
  }
- return Object.freeze({ interpret, validatePlan, profile, gaps, catalogue, definitions: DEFINITIONS });
+ function describe(handle) {
+  const rows = catalogue(handle);
+  const labels = { AVAILABLE: 'Disponible', NEEDS_CONNECTION: 'Necesita conexión o validación', NOT_AVAILABLE_FOR_ACCOUNT: 'No disponible para tu cuenta', NOT_IMPLEMENTED: 'No implementado', HUMAN_GATE: 'Requiere aprobación humana' };
+  const name = row => DEFINITIONS[row.id]?.label || DECLARED[row.id]?.label || (row.id === 'external.write' ? 'envíos y cambios externos' : row.id);
+  const lines = Object.entries(labels).flatMap(([status, label]) => { const matches = rows.filter(row => row.status === status); return matches.length ? [label + ': ' + matches.map(row => name(row) + (row.connection === 'NOT_VERIFIED' ? ' (adaptador instalado; lectura aún no validada)' : '')).join(', ') + '.'] : []; });
+  return freeze({ capabilities: rows, message: lines.join('\n') + '\n' + MESSAGES.BLOCKED + ' La ejecución material permanece deshabilitada.' });
+ }
+ return Object.freeze({ interpret, validatePlan, profile, gaps, catalogue, describe, definitions: DEFINITIONS });
 }
 // Error codes adapters use to report that their authorization is no longer valid.
 const AUTH_CODES = new Set(['auth_expired', 'token_expired', 'invalid_grant', 'unauthorized', 'oauth_token_invalid', 'oauth_token_missing', 'oauth_refresh_unavailable', 'oauth_access_unavailable', 'google_oauth_tokens_missing', 'google_oauth_not_configured', 'google_oauth_token_store_unavailable']);
@@ -102,12 +109,12 @@ function createConnectionManager(sessions, { connectable = () => true } = {}) {
    || adapter.tenantId !== scope.tenantId || adapter.userId !== scope.userId || adapter.clientId !== scope.clientId
    || !Array.isArray(adapter.scopes) || !['fixture','live'].includes(adapter.origin)) fail('connection_scope_invalid');
   const egress = adapter.egress && typeof adapter.egress.providerId === 'string' ? freeze({ providerId: adapter.egress.providerId, region: typeof adapter.egress.region === 'string' ? adapter.egress.region : null }) : freeze({ providerId: null, region: null });
-  entries.set(key(handle,provider),Object.freeze({ read: adapter.read, scopes: Object.freeze([...adapter.scopes]), origin: adapter.origin, egress, state: 'CONNECTED' }));
+  entries.set(key(handle,provider),Object.freeze({ read: adapter.read, scopes: Object.freeze([...adapter.scopes]), origin: adapter.origin, egress, state: 'CONNECTED', verified: adapter.authorizationVerified !== false }));
  }
  function inspect(handle,provider,permission) {
   const e=entries.get(key(handle,provider));
   const status = !e ? 'NOT_CONNECTED' : e.state === 'EXPIRED' ? 'EXPIRED' : !e.scopes.includes(permission) ? 'PERMISSION_REQUIRED' : 'CONNECTED';
-  return { ready: status === 'CONNECTED', status };
+  return { ready: status === 'CONNECTED', status, ...(e ? { verified: e.verified } : {}) };
  }
  // A connection is replaced (never mutated): readers holding the previous
  // entry detect the change and discard their late result.
@@ -120,18 +127,19 @@ function createConnectionManager(sessions, { connectable = () => true } = {}) {
    const {signal,...data}=input; let result;
    try { result=await e.read(Object.freeze({...freeze(copy(data)),signal})); }
    catch (error) {
-    const code = error && error.code;
+    const code = error && (typeof error.code === 'string' ? error.code : error.response?.data?.error);
     if (error && (error.failureKind === 'auth' || error.failureKind === 'connection' || AUTH_CODES.has(code))) { degrade(handle, provider, e, { state: 'EXPIRED' }); throw connectionError('connection_expired'); }
     if (error && (error.failureKind === 'permission' || PERMISSION_CODES.has(code))) { degrade(handle, provider, e, { scopes: Object.freeze(e.scopes.filter(s => s !== permission)) }); throw connectionError('permission_required'); }
     throw error;
    }
    await sessions.current(handle); if(entries.get(key(handle,provider)) !== e) throw connectionError('connection_revoked');
+   if (!e.verified) degrade(handle, provider, e, { verified: true });
    return copy(result);
   } });
  }
  function disconnect(handle,provider) { entries.delete(key(handle,provider)); }
  // Installed and usable (not expired): trusted composition does not reinstall it.
  function active(handle, provider) { const e = entries.get(key(handle,provider)); return Boolean(e && e.state === 'CONNECTED'); }
- return Object.freeze({ install, inspect, capture, disconnect, active, connectable: (handle, provider) => Boolean(connectable(freeze(copy(sessions.scope(handle))), provider)) });
+ return Object.freeze({ install, inspect, capture, disconnect, active, installed: (handle, provider) => entries.has(key(handle,provider)), connectable: (handle, provider) => Boolean(connectable(freeze(copy(sessions.scope(handle))), provider)) });
 }
 module.exports = { DEFINITIONS, createCapabilityManager, createConnectionManager };

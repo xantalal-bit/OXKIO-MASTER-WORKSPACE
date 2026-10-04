@@ -234,6 +234,10 @@ function createSupervisedRuntime({membershipProvider,planner=null,agentOverrides
   const interpretation=reusable&&reusable.intention===text
    ?{outcome:OUTCOMES.CAN_EXECUTE,plan:capabilities.validatePlan(reusable.plan),searchTerms:reusable.searchTerms||[]}
    :await capabilities.interpret(text,{scope:freeze(copy(sessions.scope(handle))),spend:spendFor(handle),missionId:id});
+  if(interpretation.introspection){
+   const state=onboarding(handle);
+   return freeze({outcome:OUTCOMES.CAN_EXECUTE,status:'COMPLETED',reason:'operational_state',message:state.message,capabilities:state.capabilities,persistence:store.persistence,executionEnabled:false});
+  }
   if(interpretation.outcome!==OUTCOMES.CAN_EXECUTE){
    metric(handle,'gaps');
    return freeze({outcome:interpretation.outcome,gate:interpretation.gate||(interpretation.outcome===OUTCOMES.NEEDS_CAPABILITY?'CAPABILITY_GAP':interpretation.outcome),message:interpretation.message,missingInformation:interpretation.missingInformation||[],capabilities:interpretation.capabilities||[],executionEnabled:false});
@@ -259,7 +263,7 @@ function createSupervisedRuntime({membershipProvider,planner=null,agentOverrides
  // Existing V2.1 remains the sole commercial canon. Per-session adapter closures
  // are supplied by the trusted integration factory; no prompt chooses an owner.
  async function business(handle,input,factory){await sessions.current(handle);if(typeof factory!=='function')fail('business_adapter_required');const adapters=await factory(freeze(copy(sessions.scope(handle))));const result=await runCompanyOpportunity({...copy(input),...adapters});await sessions.current(handle);return freeze(copy({review:result.review,executionEnabled:false}));}
- function onboarding(handle){sessions.scope(handle);return freeze({message:'Soy OXKIO. Puedo consultar tus fuentes, recordar información y preparar propuestas. Tus datos permanecen separados. Conecta solo los servicios que quieras usar; puedes desconectarlos cuando quieras. Los cambios y envíos externos requieren revisión.',executionEnabled:false,connections:['calendar','mail','storage','search','fetch'].map(provider=>({provider,status:connections.inspect(handle,provider,'').status})),capabilities:capabilities.catalogue(handle)});}
+ function onboarding(handle){sessions.scope(handle);const state=capabilities.describe(handle);return freeze({...state,executionEnabled:false});}
  return Object.freeze({openSession:sessions.open,start,resume,pause,cancel,get,conversation,telemetry,costs,lessons,onboarding,business,
   scope:handle=>freeze(copy(sessions.scope(handle))),
   // Trusted administration surface: keep out of public request payloads.

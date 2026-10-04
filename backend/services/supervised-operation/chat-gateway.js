@@ -23,7 +23,7 @@ function createChatGateway({runtime,membershipProvider,adapterFactory=null,store
   const session=await r.openSession(identity.uid);
   // Trusted composition installs the owner's adapters once; an active
   // connection is never replaced mid-flight by a concurrent request.
-  if(adapterFactory){const adapters=await adapterFactory(identity,r.scope(session));for(const[provider,adapter]of Object.entries(adapters||{}))if(!r.connections.active(session,provider))r.connections.install(session,provider,adapter);}
+  if(adapterFactory){const adapters=await adapterFactory(identity,r.scope(session));for(const[provider,adapter]of Object.entries(adapters||{}))if(!r.connections.installed(session,provider))r.connections.install(session,provider,adapter);}
   const conversationId=body.conversationId||DEFAULT_CONVERSATION;const key=JSON.stringify([identity.uid,conversationId]);
   let state;const action=body.action||'start';
   if(action==='onboarding')return freeze({ok:true,response:r.onboarding(session).message,conversationId,executionEnabled:false});

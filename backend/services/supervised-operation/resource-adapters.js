@@ -39,6 +39,6 @@ function createPrivateContextAdapters({scope,readers,origin='live'}){
  const limit=(limits,list)=>list.slice(0,Math.min(Math.max(Number(limits&&limits.maxItems)||10,1),10));
  const mail=createReadonlyAdapter({scope,permissions:['mail.read'],origin,read:async({limits})=>limit(limits,await payload(readers.gmailReader,'messages')).map(m=>({text:[m.from,m.subject,m.snippet].filter(Boolean).join(' — ').slice(0,2000)||'(sin asunto)'}))});
  const calendar=createReadonlyAdapter({scope,permissions:['calendar.read'],origin,read:async({limits})=>limit(limits,await payload(readers.calendarReader,'events')).map(e=>({text:[e.start,e.title,e.location].filter(Boolean).join(' · ').slice(0,2000)}))});
- return freeze({mail,calendar});
+ return freeze({mail:{...mail,authorizationVerified:false},calendar:{...calendar,authorizationVerified:false}});
 }
 module.exports={createReadonlyAdapter,createPublicResearchAdapters,createPrivateContextAdapters};

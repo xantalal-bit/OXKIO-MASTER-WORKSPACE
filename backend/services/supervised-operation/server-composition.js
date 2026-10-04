@@ -46,7 +46,7 @@ function createServerComposition({enabled=false,cohortUids='',memoryRoot,integri
   try{
    let text='';for await(const chunk of req){text+=chunk.toString();if(Buffer.byteLength(text)>8192)fail('body_too_large');}
    const response=await gateway.handle(identity,JSON.parse(text||'{}'));
-   res.writeHead(200,{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store'});res.end(JSON.stringify(response));
+   res.writeHead(200,{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store','X-OXKIO-Handler':'supervised-operation'});res.end(JSON.stringify(response));
   }catch(error){
    const code=/^[a-z_]+$/.test(error.code||'')?error.code:'chat_request_invalid';
    res.writeHead(STATUS[code]||400,{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store'});
