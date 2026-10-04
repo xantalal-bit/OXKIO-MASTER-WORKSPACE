@@ -126,3 +126,32 @@ test('H: dropped findings are reconstructible for audit as index and fixed code 
  assert.ok(Object.isFrozen(v)&&Object.isFrozen(v.content.findings)&&Object.isFrozen(v.discarded));
  assert.equal(v.proposed,v.content.findings.length+v.discarded.length);
 });
+// Negation scope (04/10/2026). Real Luna findings over es.wikipedia: an
+// equivalent negation ("en lugar de conferir" for "no confiere") is accepted
+// only when it negates the same word; quote sentences the claim does not
+// assert no longer constrain it; a sentence the claim does assert keeps every
+// negation and qualifier.
+const ES3={claim:'La Ley de Inteligencia Artificial abarca todos los sectores, excepto el militar, y todos los tipos de inteligencia artificial; regula a los proveedores y a las entidades que usan esos sistemas profesionalmente, en lugar de conferir derechos a los particulares.',quote:'Su ámbito de aplicación abarca todos los sectores, excepto el militar, y todos los tipos de inteligencia artificial. Como Reglamento de productos, la propuesta no confiere derechos a los particulares, sino que regula y supervisa a los proveedores de sistemas de inteligencia artificial y a las entidades que hacen uso de ellos a título profesional.'};
+const ES4={claim:'La Ley de Inteligencia Artificial clasifica las aplicaciones según su riesgo y las regula en consecuencia; las aplicaciones de bajo riesgo no se regulan en absoluto, mientras que los sistemas de riesgo medio y alto requieren una evaluación obligatoria de la conformidad antes de su comercialización.',quote:'La ley clasifica las aplicaciones de inteligencia artificial en función de su riesgo y las regula en consecuencia. Las aplicaciones de bajo riesgo no se regulan en absoluto, ya que los Estados miembros, gracias a la armonización máxima , no pueden regularlas en mayor medida y no se aplican las leyes nacionales vigentes relativas a la regulación del diseño o el uso de tales sistemas. Se prevé un código de conducta voluntario para estos sistemas de bajo riesgo, aunque no estará presente desde el principio. Los sistemas de riesgo medio y alto requerirán una evaluación obligatoria de la conformidad , realizada como autoevaluación por el proveedor, antes de su comercialización.'};
+const own=f=>verifySynthesis({findings:[{...f,sourceIds:['s']}],conclusion:INSUFFICIENT_SOURCES},[{id:'s',text:f.quote}]);
+test('an equivalent negation is accepted only when it negates the same word (real ES finding #3)',()=>{
+ assert.equal(own(ES3),true);
+ const inverted={quote:ES3.quote,claim:'La propuesta confiere derechos a los particulares en lugar de regular a los proveedores de sistemas de inteligencia artificial.'};
+ assert.equal(own(inverted),'claim_negation_changed');
+ assert.equal(own({quote:'La propuesta no confiere derechos a los particulares.',claim:'La propuesta confiere derechos a los particulares.'}),'claim_negation_changed');
+});
+test('a claim summarising one of several negations of the same sentence stays rejected (real ES finding #4)',()=>{
+ assert.equal(own(ES4),'claim_negation_changed');
+});
+test('quote sentences the claim does not assert no longer constrain it; an asserted one keeps its negation',()=>{
+ const q='Alfa cuesta 20 euros al mes. No incluye soporte en español.';
+ assert.equal(own({quote:q,claim:'Alfa cuesta 20 euros al mes.'}),true);
+ assert.equal(own({quote:q,claim:'Alfa cuesta 20 euros al mes e incluye soporte en español.'}),'claim_negation_changed');
+ assert.equal(own({quote:'Beta cuesta 10 euros al mes. Ofrece soporte solo en inglés.',claim:'Beta cuesta 10 euros al mes y ofrece soporte en inglés.'}),'claim_qualifier_dropped');
+});
+test('a negated sentence cannot be smuggled in with synonyms to escape its negation',()=>{
+ const q='Alfa cuesta 20 euros al mes. El seguro no cubre daños por agua en sótanos.';
+ assert.equal(own({quote:q,claim:'El seguro protege daños por agua en sótanos.'}),'claim_negation_changed');
+ assert.notEqual(own({quote:q,claim:'Alfa cuesta 20 euros al mes y protege frente a inundaciones.'}),true);
+ assert.notEqual(own({quote:q,claim:'Alfa cuesta 20 euros al mes; el seguro protege del agua.'}),true);
+});
