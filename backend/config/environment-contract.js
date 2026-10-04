@@ -73,6 +73,14 @@ const ENVIRONMENT_VARIABLES = Object.freeze({
   // Authorization B (04/10/2026): "true" lets PUBLIC and non-sensitive INTERNAL
   // text reach the configured reasoning provider; CONFIDENTIAL never does.
   OXKIO_V3_REASONING_INTERNAL_EGRESS: Object.freeze({ kind: 'governance', classifications: ['optional'], scope: 'supervised_operation' }),
+  // V3's own reasoning provider instance (same contract as OXKIO_REASONING_*,
+  // same OXKIO_REASONING_API_KEY secret); Executive Chat is not affected.
+  OXKIO_V3_REASONING_PROVIDER: Object.freeze({ kind: 'config', classifications: ['optional'], scope: 'supervised_operation' }),
+  OXKIO_V3_REASONING_MODEL: Object.freeze({ kind: 'config', classifications: ['optional'], scope: 'supervised_operation' }),
+  OXKIO_V3_REASONING_BASE_URL: Object.freeze({ kind: 'config', classifications: ['optional'], scope: 'supervised_operation' }),
+  OXKIO_V3_REASONING_INPUT_USD_PER_MILLION: Object.freeze({ kind: 'config', classifications: ['optional'], scope: 'supervised_operation' }),
+  OXKIO_V3_REASONING_OUTPUT_USD_PER_MILLION: Object.freeze({ kind: 'config', classifications: ['optional'], scope: 'supervised_operation' }),
+  OXKIO_V3_REASONING_PRICING_REVIEWED_AT: Object.freeze({ kind: 'config', classifications: ['optional'], scope: 'supervised_operation' }),
 });
 
 function isPresent(env, name) {

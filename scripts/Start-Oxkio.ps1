@@ -226,9 +226,11 @@ if ([Environment]::GetEnvironmentVariable('OXKIO_V3_ENABLED', 'Process') -eq 'tr
     Write-CheckOk 'Clave de integridad V3 cargada de forma segura en Process.'
 }
 
-# Executive Reasoning: when a provider is configured in Process, its API key
-# comes from Secret Manager ("latest": an API key may rotate without data loss).
-if (-not [string]::IsNullOrWhiteSpace([Environment]::GetEnvironmentVariable('OXKIO_REASONING_PROVIDER', 'Process'))) {
+# Reasoning: when a provider is configured in Process (shared or V3's own), its
+# API key comes from Secret Manager ("latest": an API key may rotate without
+# data loss). The key alone enables nothing: each provider needs its config.
+$reasoningProviders = @('OXKIO_REASONING_PROVIDER', 'OXKIO_V3_REASONING_PROVIDER') | Where-Object { -not [string]::IsNullOrWhiteSpace([Environment]::GetEnvironmentVariable($_, 'Process')) }
+if (@($reasoningProviders).Count -gt 0) {
     $reasoningApiKey = Get-OxkioOptInSecret -GcloudPath $gcloudPath -Name 'OXKIO_REASONING_API_KEY' -Version 'latest' -MinimumLength 20 -Guidance 'Con OXKIO_REASONING_PROVIDER configurado el arranque falla cerrado; quite el proveedor o restaure el secreto.'
     [Environment]::SetEnvironmentVariable('OXKIO_REASONING_API_KEY', $reasoningApiKey, 'Process')
     $reasoningApiKey = $null

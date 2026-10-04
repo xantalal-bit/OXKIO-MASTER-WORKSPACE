@@ -69,4 +69,15 @@ function reasoningEgressFromEnv(env,provider){
  if(env.OXKIO_V3_REASONING_INTERNAL_EGRESS!=='true'||!provider||provider.status!=='ready'||typeof provider.provider!=='string')return {};
  return {requestPrivacyFloor:'INTERNAL',privacyPolicy:Object.freeze({publicExternalAllowed:true,internalProviders:Object.freeze([Object.freeze({providerId:provider.provider})]),confidentialProviders:Object.freeze([])})};
 }
-module.exports={createServerComposition,parseCohort,reasoningEgressFromEnv};
+// V3 reasons through its OWN Executive Reasoning Provider instance, configured
+// by OXKIO_V3_REASONING_* (mapped onto the provider's existing contract). The
+// shared provider used by Executive Chat and the email supervisor stays as it
+// is, so enabling V3 cognition never enables model calls on their (private)
+// context. Only the API key secret is shared, and alone it enables nothing.
+const V3_REASONING_FIELDS=['PROVIDER','MODEL','BASE_URL','INPUT_USD_PER_MILLION','OUTPUT_USD_PER_MILLION','PRICING_REVIEWED_AT'];
+function v3ReasoningEnv(env){
+ const mapped={};
+ for(const field of V3_REASONING_FIELDS)if(typeof env['OXKIO_V3_REASONING_'+field]==='string')mapped['OXKIO_REASONING_'+field]=env['OXKIO_V3_REASONING_'+field];
+ return mapped;
+}
+module.exports={createServerComposition,parseCohort,reasoningEgressFromEnv,v3ReasoningEnv};

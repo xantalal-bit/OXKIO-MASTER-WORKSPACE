@@ -1,7 +1,7 @@
 require("dotenv").config();
 
 const http = require("http");
-const { createServerComposition, reasoningEgressFromEnv } = require("../services/supervised-operation/server-composition");
+const { createServerComposition, reasoningEgressFromEnv, v3ReasoningEnv } = require("../services/supervised-operation/server-composition");
 const EmailWorkflow = require("../workflows/emailWorkflow");
 const EmailAgent = require("../agents/emailAgent");
 const ProposalEngine = require("../core/proposalEngine");
@@ -170,6 +170,10 @@ const costController = new CostController({
 // reviewed catalog). Without a valid integrity key V3 stays off and every
 // request keeps going to the existing Executive Chat.
 let v3Chat = null;
+// V3's own reasoning provider (OXKIO_V3_REASONING_*): enabling it never turns
+// on model calls in Executive Chat or the email supervisor, which keep the
+// shared executiveReasoningProvider above.
+const v3ReasoningProvider = createExecutiveReasoningProvider({ env: v3ReasoningEnv(process.env) });
 try {
   v3Chat = createServerComposition({
     enabled: process.env.OXKIO_V3_ENABLED === "true",
@@ -179,12 +183,12 @@ try {
     authorizeIdentity: authorizeFirebaseIdentity,
     privateContextReaders: (identity) => createDashboardReaders(identity),
     reasoning: {
-      provider: executiveReasoningProvider,
-      catalog: buildReasoningCostCatalog(executiveReasoningProvider),
+      provider: v3ReasoningProvider,
+      catalog: buildReasoningCostCatalog(v3ReasoningProvider),
       approvedDailyBudgetUsd: Number(process.env.OXKIO_V3_PLANNER_DAILY_BUDGET_USD || 0),
       // Authorization B only when explicitly switched on; otherwise the
       // canonical policy keeps every person's request CONFIDENTIAL (no egress).
-      ...reasoningEgressFromEnv(process.env, executiveReasoningProvider)
+      ...reasoningEgressFromEnv(process.env, v3ReasoningProvider)
     }
   });
 } catch (error) {
@@ -1423,5 +1427,9 @@ qualityIncidentRegistry.load().then(() => server.listen(PORT, HOST, () => {
     ? `ready (${executiveReasoningProvider.modelId}, region ${executiveReasoningProvider.region})`
     : `CONNECTION_NEEDED (missing: ${executiveReasoningProvider.missing.join(", ") || "none"}; `
       + `invalid: ${executiveReasoningProvider.invalid.join(", ") || "none"})`);
+  console.log("V3 Reasoning:", v3ReasoningProvider.status === "ready"
+    ? `ready (${v3ReasoningProvider.modelId}, region ${v3ReasoningProvider.region})`
+    : "not configured");
+  console.log("V3:", v3Chat ? "enabled for cohort" : "off");
   console.log("=================================");
 }));

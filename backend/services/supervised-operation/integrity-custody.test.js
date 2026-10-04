@@ -68,3 +68,17 @@ test('authorization-B switch: off by default, only "true" with a ready provider,
  const { ENVIRONMENT_VARIABLES } = require('../../config/environment-contract');
  assert.equal(ENVIRONMENT_VARIABLES.OXKIO_V3_REASONING_INTERNAL_EGRESS.kind, 'governance');
 });
+
+test('V3 has its own reasoning provider: OXKIO_V3_REASONING_* maps onto the provider contract; shared OXKIO_REASONING_* never leaks in', () => {
+ const { v3ReasoningEnv } = require('./server-composition');
+ const { createExecutiveReasoningProvider } = require('../executive-brain/executive-reasoning-provider');
+ const secretRuntime = { getSecret: () => 'not-a-real-key' };
+ const shared = { OXKIO_REASONING_PROVIDER: 'openai', OXKIO_REASONING_MODEL: 'shared-model', OXKIO_REASONING_BASE_URL: 'https://api.openai.com/v1', OXKIO_REASONING_INPUT_USD_PER_MILLION: '1', OXKIO_REASONING_OUTPUT_USD_PER_MILLION: '1', OXKIO_REASONING_PRICING_REVIEWED_AT: '2026-10-04' };
+ // Only shared config present: V3's provider stays NOT_CONFIGURED.
+ assert.equal(createExecutiveReasoningProvider({ env: v3ReasoningEnv(shared), secretRuntime }).status, 'not_configured');
+ const v3 = { OXKIO_V3_REASONING_PROVIDER: 'openai', OXKIO_V3_REASONING_MODEL: 'gpt-5.6-luna', OXKIO_V3_REASONING_BASE_URL: 'https://api.openai.com/v1', OXKIO_V3_REASONING_INPUT_USD_PER_MILLION: '0.2', OXKIO_V3_REASONING_OUTPUT_USD_PER_MILLION: '1.2', OXKIO_V3_REASONING_PRICING_REVIEWED_AT: '2026-10-04' };
+ const p = createExecutiveReasoningProvider({ env: v3ReasoningEnv({ ...shared, ...v3 }), secretRuntime });
+ assert.equal(p.status, 'ready'); assert.equal(p.modelId, 'openai:gpt-5.6-luna');
+ // And V3's config never configures the shared provider.
+ assert.equal(createExecutiveReasoningProvider({ env: v3, secretRuntime }).status, 'not_configured');
+});
