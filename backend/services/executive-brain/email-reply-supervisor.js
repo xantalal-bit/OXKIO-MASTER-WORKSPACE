@@ -1,6 +1,7 @@
 'use strict';
 
 const { REASONING_RESULT, PROVIDER_STATUS } = require('./executive-reasoning-provider');
+const { DEFAULT_PRIVACY_POLICY, PRIVACY_CLASSES, classifyContext, evaluateProviderRouting } = require('./privacy-gate');
 const {
   CONVERGENCE_ACTIONS,
   VERIFICATION_VERDICTS,
@@ -26,6 +27,7 @@ const SUPERVISION_STATUS = Object.freeze({
   PROVIDER_ERROR: 'provider_error',
   BUDGET_BLOCKED: 'budget_blocked',
   INSUFFICIENT_CONTEXT: 'insufficient_context',
+  PRIVACY_BLOCKED: 'privacy_blocked',
 });
 
 const MAX_SOURCE_CHARS = 6000;
@@ -218,6 +220,10 @@ function utcDay(nowMs) {
 function createEmailReplySupervisor({
   provider = null,
   costController = null,
+  // XATAI CORE V2 Privacy Gate policy. The canonical default approves no
+  // external provider for CONFIDENTIAL data, so mail never leaves unless a
+  // human explicitly approves a provider and region for it.
+  privacyPolicy = DEFAULT_PRIVACY_POLICY,
   logger = defaultLogger,
   now = () => Date.now(),
   maxAttempts = MAX_ATTEMPTS,
@@ -256,6 +262,7 @@ function createEmailReplySupervisor({
       verification: null,
       convergenceAction: null,
       supervisorDecision: null,
+      privacyClass: null,
     };
     let independentVerification = null;
     const finish = (result) => {
@@ -283,6 +290,26 @@ function createEmailReplySupervisor({
       instruccionDeJose: String(instruction || ''),
       correoRecibido: source,
     };
+    // Privacy Gate before any cost decision or provider call: a received email
+    // is private data (gmail.* -> at least CONFIDENTIAL) and any credential
+    // marker in it or in the instruction makes it SECRET, which never leaves.
+    // A blocked context makes zero provider calls.
+    const privacy = classifyContext({
+      declaredClass: PRIVACY_CLASSES.CONFIDENTIAL,
+      capabilities: EMAIL_REPLY_CONTRACT.authorizedTools,
+      texts: [context.instruccionDeJose, source.from, source.subject, source.date, source.text],
+    });
+    telemetry.privacyClass = privacy.privacyClass;
+    const routing = evaluateProviderRouting({
+      privacyClass: privacy.privacyClass,
+      provider: { external: true, providerId: provider.provider, region: provider.region },
+      policy: privacyPolicy,
+    });
+    if (!routing.allowed) {
+      telemetry.errorCode = routing.reason;
+      return finish({ status: SUPERVISION_STATUS.PRIVACY_BLOCKED });
+    }
+
     const inputTokens = estimateTokens(`${MISSION}${CONSTRAINTS.join('')}${JSON.stringify(OUTPUT_SHAPE)}${JSON.stringify(context)}`);
 
     if (!costController || typeof costController.decide !== 'function') {

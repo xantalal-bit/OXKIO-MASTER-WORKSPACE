@@ -19,6 +19,9 @@ const {
 } = require('./executive-reasoning-provider');
 
 const MODEL_ID = 'test:model';
+// Simulates the explicit human approval the Privacy Gate requires before any
+// email reaches a provider: this test provider and region only.
+const APPROVED_CONFIDENTIAL_POLICY = Object.freeze({ publicExternalAllowed: true, internalProviders: [], confidentialProviders: [{ providerId: 'test', region: 'eu' }] });
 const PRICED_CATALOG = {
   ...DEFAULT_CATALOG,
   [MODEL_ID]: {
@@ -48,7 +51,7 @@ function provider(reason, overrides = {}) {
   return {
     calls,
     value: {
-      status: PROVIDER_STATUS.READY, provider: 'test', model: 'model', modelId: MODEL_ID, missing: [], catalog: {},
+      status: PROVIDER_STATUS.READY, provider: 'test', model: 'model', modelId: MODEL_ID, region: 'eu', missing: [], catalog: {},
       async reason(request) { calls.push(request); return reason(request, calls.length); },
       ...overrides,
     },
@@ -64,6 +67,7 @@ function supervisorWith(reasoningProvider, options = {}) {
   const supervisor = createEmailReplySupervisor({
     provider: reasoningProvider,
     costController: options.costController || new CostController({ catalog: PRICED_CATALOG }),
+    privacyPolicy: options.privacyPolicy || APPROVED_CONFIDENTIAL_POLICY,
     logger: (entry) => logs.push(entry),
   });
   return { supervisor, logs };
@@ -225,8 +229,9 @@ test('telemetry carries only safe metadata: no email text, no draft body', async
   assert.equal(logs.length, 1);
   assert.deepEqual(Object.keys(logs[0]).sort(), [
     'attempts', 'convergenceAction', 'costLevel', 'durationMs', 'errorCode', 'executionPattern', 'mission', 'model',
-    'needsClarification', 'provider', 'reasoningRegion', 'supervisorDecision', 'verdict', 'verification',
+    'needsClarification', 'privacyClass', 'provider', 'reasoningRegion', 'supervisorDecision', 'verdict', 'verification',
   ]);
+  assert.equal(logs[0].privacyClass, 'CONFIDENTIAL');
   const serialized = JSON.stringify(logs[0]);
   assert.equal(serialized.includes('incidencia'), false);
   assert.equal(serialized.includes('Hosting'), false);
@@ -416,7 +421,8 @@ test('EU-D a base URL outside the allowlist is an invalid configuration and neve
 test('EU-E telemetry records only the configured region, never email or draft content', async () => {
   for (const [region, expected] of [['eu', 'eu'], ['global', 'global']]) {
     const stub = provider(() => ok(GROUNDED_REPLY), { region });
-    const { supervisor, logs } = supervisorWith(stub.value);
+    // The region checked here is the region explicitly approved for mail.
+    const { supervisor, logs } = supervisorWith(stub.value, { privacyPolicy: { confidentialProviders: [{ providerId: 'test', region }] } });
     const result = await supervisor.supervise({ message: LUCUS_SUPPORT, instruction: 'Prepara una respuesta' });
     assert.equal(result.status, SUPERVISION_STATUS.DRAFT);
     assert.equal(logs[0].reasoningRegion, expected);
@@ -497,4 +503,73 @@ test('XATAI clarification, missing context, missing provider and budget map to s
     .supervisor.supervise({ message: LUCUS_SUPPORT, instruction: 'x' });
   assert.equal(budget.decision.decision, 'BLOCKED');
   assert.equal(budget.decision.reason, 'budget_blocked');
+});
+
+// P1 Privacy Gate (04/10/2026): no email content reaches any reasoning
+// provider unless the canonical Privacy Gate allows it. Synthetic data only.
+// A blocked case must make zero provider calls and zero cost decisions.
+function countingCostController() {
+  const counts = { decide: 0, estimate: 0 };
+  const real = new CostController({ catalog: PRICED_CATALOG });
+  return { counts, controller: {
+    decide: (input) => { counts.decide += 1; return real.decide(input); },
+    estimateCost: (input) => { counts.estimate += 1; return real.estimateCost(input); },
+  } };
+}
+const { DEFAULT_PRIVACY_POLICY } = require('./privacy-gate');
+const AUTHORIZATION_B_POLICY = { publicExternalAllowed: true, internalProviders: [{ providerId: 'test' }], confidentialProviders: [] };
+const PII_MESSAGE = { from: 'Ana Pérez <ana.perez@example.test>', subject: 'Datos para la factura', date: '2026-10-04',
+  text: 'Hola José Antonio, para emitir la factura necesito que confirmes tu IBAN ES91 2100 0418 4502 0005 1332 y tu teléfono +34 600 123 456.' };
+
+test('Privacy Gate: blocked mail makes zero provider calls and zero cost decisions (PUBLIC/INTERNAL/CONFIDENTIAL/SECRET/PII)', async (t) => {
+  const cases = [
+    ['canonical runtime policy (no CONFIDENTIAL provider)', DEFAULT_PRIVACY_POLICY, LUCUS_SUPPORT, 'Prepara una respuesta', 'CONFIDENTIAL', 'confidential_provider_not_allowed'],
+    ['PUBLIC-only approval never opens mail', { publicExternalAllowed: true, internalProviders: [], confidentialProviders: [] }, LUCUS_SUPPORT, 'Prepara una respuesta', 'CONFIDENTIAL', 'confidential_provider_not_allowed'],
+    ['INTERNAL approval (authorization B) never opens mail', AUTHORIZATION_B_POLICY, LUCUS_SUPPORT, 'Prepara una respuesta', 'CONFIDENTIAL', 'confidential_provider_not_allowed'],
+    ['PII in the message stays CONFIDENTIAL and blocked', AUTHORIZATION_B_POLICY, PII_MESSAGE, 'Prepara una respuesta', 'CONFIDENTIAL', 'confidential_provider_not_allowed'],
+    ['SECRET marker in the message never leaves, even with CONFIDENTIAL approved', APPROVED_CONFIDENTIAL_POLICY, { ...LUCUS_SUPPORT, text: `${LUCUS_SUPPORT.text} Tu nueva password: Xk9-temporal` }, 'Prepara una respuesta', 'SECRET', 'secret_never_external'],
+    ['SECRET marker in the instruction never leaves', APPROVED_CONFIDENTIAL_POLICY, LUCUS_SUPPORT, 'Respóndele y añade api_key=abc123def456', 'SECRET', 'secret_never_external'],
+    ['approved provider in another region is blocked', { confidentialProviders: [{ providerId: 'test', region: 'global' }] }, LUCUS_SUPPORT, 'Prepara una respuesta', 'CONFIDENTIAL', 'confidential_provider_not_allowed'],
+  ];
+  for (const [name, policy, message, instruction, privacyClass, reason] of cases) {
+    await t.test(name, async () => {
+      const stub = provider(() => ok(GROUNDED_REPLY));
+      const cost = countingCostController(); const logs = [];
+      const supervisor = createEmailReplySupervisor({ provider: stub.value, costController: cost.controller, privacyPolicy: policy, logger: (entry) => logs.push(entry) });
+      const result = await supervisor.supervise({ message, instruction });
+      assert.equal(result.status, SUPERVISION_STATUS.PRIVACY_BLOCKED);
+      assert.equal(stub.calls.length, 0, 'no provider call');
+      assert.deepEqual(cost.counts, { decide: 0, estimate: 0 }, 'no cost decision');
+      assert.equal(result.telemetry.privacyClass, privacyClass);
+      assert.equal(result.telemetry.errorCode, reason);
+      assert.equal(result.decision.decision === 'CAN_EXECUTE', false);
+      const serialized = JSON.stringify(logs);
+      for (const fragment of ['Hosting', 'IBAN', 'ES91', '600 123', 'Xk9-temporal', 'abc123def456', 'ana.perez']) assert.equal(serialized.includes(fragment), false, fragment);
+    });
+  }
+});
+
+test('Privacy Gate: only an explicit CONFIDENTIAL approval for this provider and region lets mail through (positive control)', async () => {
+  const stub = provider(() => ok(GROUNDED_REPLY));
+  const cost = countingCostController();
+  const supervisor = createEmailReplySupervisor({ provider: stub.value, costController: cost.controller, privacyPolicy: APPROVED_CONFIDENTIAL_POLICY, logger: () => {} });
+  const result = await supervisor.supervise({ message: LUCUS_SUPPORT, instruction: 'Prepara una respuesta' });
+  assert.equal(result.status, SUPERVISION_STATUS.DRAFT);
+  assert.equal(stub.calls.length, 1); assert.equal(cost.counts.decide, 1);
+  assert.equal(result.telemetry.privacyClass, 'CONFIDENTIAL');
+});
+
+test('Privacy Gate: a provider without a declared region can never receive mail, whatever the policy', async () => {
+  const stub = provider(() => ok(GROUNDED_REPLY), { region: undefined });
+  const supervisor = createEmailReplySupervisor({ provider: stub.value, costController: countingCostController().controller,
+    privacyPolicy: { confidentialProviders: [{ providerId: 'test', region: undefined }] }, logger: () => {} });
+  const result = await supervisor.supervise({ message: LUCUS_SUPPORT, instruction: 'Prepara una respuesta' });
+  assert.equal(result.status, SUPERVISION_STATUS.PRIVACY_BLOCKED); assert.equal(stub.calls.length, 0);
+});
+
+test('Privacy Gate: the default supervisor (as composed by server.js) blocks mail', async () => {
+  const stub = provider(() => ok(GROUNDED_REPLY));
+  const supervisor = createEmailReplySupervisor({ provider: stub.value, costController: new CostController({ catalog: PRICED_CATALOG }), logger: () => {} });
+  const result = await supervisor.supervise({ message: LUCUS_SUPPORT, instruction: 'Prepara una respuesta' });
+  assert.equal(result.status, SUPERVISION_STATUS.PRIVACY_BLOCKED); assert.equal(stub.calls.length, 0);
 });

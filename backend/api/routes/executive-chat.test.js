@@ -32,7 +32,7 @@ function testCostController() {
 function groundedReasoning({ reason, text = TEST_MESSAGE_TEXT } = {}) {
   const calls = [];
   const provider = {
-    status: 'ready', provider: 'test', model: 'grounded', modelId: TEST_MODEL_ID, missing: [], catalog: {},
+    status: 'ready', provider: 'test', model: 'grounded', modelId: TEST_MODEL_ID, region: 'eu', missing: [], catalog: {},
     async reason(request) {
       calls.push(request);
       if (reason) return reason(request);
@@ -57,7 +57,10 @@ function groundedReasoning({ reason, text = TEST_MESSAGE_TEXT } = {}) {
     calls,
     textReads,
     dependencies: {
-      emailReplySupervisor: createEmailReplySupervisor({ provider, costController: testCostController(), logger: () => {} }),
+      // The test provider and region are explicitly approved for CONFIDENTIAL
+      // (simulated human decision); the runtime default approves none.
+      emailReplySupervisor: createEmailReplySupervisor({ provider, costController: testCostController(), logger: () => {},
+        privacyPolicy: { publicExternalAllowed: true, internalProviders: [], confidentialProviders: [{ providerId: 'test', region: 'eu' }] } }),
       async readGmailMessageText(options) {
         textReads.push(options);
         return text;
@@ -1238,4 +1241,21 @@ test('a missing executionLogger dependency never breaks the chat response', asyn
   const { dependencies } = createHarness(t);
   const response = await requestChat('Programa una reunión.', dependencies);
   assert.equal(response.statusCode, 200);
+});
+
+test('Privacy Gate: with the canonical policy the chat never sends the selected email to the provider and creates no approval', async (t) => {
+  const { dependencies, runtime, reasoning } = supervisorHarness(t);
+  const calls = [];
+  const provider = { status: 'ready', provider: 'test', model: 'grounded', modelId: TEST_MODEL_ID, region: 'eu', missing: [], catalog: {},
+    async reason(request) { calls.push(request); return { status: 'error', errorCode: 'reasoning_upstream_error' }; } };
+  // Exactly as server.js composes it: no privacyPolicy -> canonical default.
+  dependencies.emailReplySupervisor = createEmailReplySupervisor({ provider, costController: testCostController(), logger: () => {} });
+  const payload = (await requestChat(REFERENCE_QUERY, dependencies)).getJson();
+  assert.equal(calls.length, 0);
+  assert.equal(payload.approval, null);
+  assert.equal(payload.proposal, null);
+  assert.match(payload.response, /la política de privacidad no lo autoriza/);
+  assert.equal((await runtime.approvalQueue.listPending()).length, 0);
+  // The message text is read locally (read-only) at most once; it never left.
+  assert.ok(reasoning.textReads.length <= 1);
 });
