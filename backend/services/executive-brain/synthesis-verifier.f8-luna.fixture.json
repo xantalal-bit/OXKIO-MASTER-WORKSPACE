@@ -1,0 +1,69 @@
+{
+ "capturedAt": "2026-10-04",
+ "origin": "Real gpt-5.6-luna synthesis (F8, PR #26) over public en.wikipedia.org pages as extracted by the public fetcher. Public content only.",
+ "sources": [
+  {
+   "id": "gdpr",
+   "text": "The General Data Protection Regulation (Regulation (EU) 2016/679), abbreviated GDPR , is a European Union regulation on information privacy in the European Union (EU) and the European Economic Area (EEA). The GDPR is an important component of EU privacy law and human rights law , in particular Article 8(1) of the Charter of Fundamental Rights of the European Union . It also governs the transfer of personal data outside the EU and EEA. The GDPR's goals are to enhance individuals' control and rights over their personal information and to simplify the regulations for international business It supersedes the Data Protection Directive 95/46/EC and, among other things, simplifies the terminology. The European Parliament and Council of the European Union adopted the GDPR on 14 April 2016, to become effective on 25 May 2018. As an EU regulation (instead of a directive ), the GDPR has direct legal effect and does not require transposition into national law. However, it also provides flexibility for individual member states to modify (derogate from) some of its provisions. As an example of the Brussels effect , the regulation became a model for many other laws around the world, including in Brazil Japan Singapore South Africa South Korea Sri Lanka , and Thailand After leaving the European Union , the United Kingdom enacted its \"UK GDPR\", identical to the GDPR. The California Consumer Privacy Act (CCPA), adopted on 28 June 2018, has many similarities with the GDPR. The GDPR 2016 has eleven chapters, concerning general provisions, principles, rights of the data subject, duties of data controllers or processors, transfers of personal data to third-party countries, supervisory authorities, cooperation among member states, remedies, liability or penalties for breach of rights, provisions related to specific processing situations, and miscellaneous final provisions."
+  },
+  {
+   "id": "aia",
+   "text": "The Artificial Intelligence Act AI Act is a European Union regulation concerning artificial intelligence (AI). It establishes a common regulatory and legal framework for AI within the European Union (EU). The regulation entered into force on 1 August 2024, with provisions that shall come into operation gradually over the following 6 to 36 months. It covers most AI systems across a wide range of sectors, with exemptions for AI used only for military, national security, research purposes, or for non-professional use. As a form of product regulation, it does not create individual rights; instead, it places duties on AI providers and on organisations that use AI in a professional context. The Act classifies non-exempt AI applications by their risk of causing harm. There are four levels – unacceptable, high, limited, minimal – plus an additional category for general-purpose AI. For general-purpose AI, transparency requirements are imposed, with reduced requirements for open source models, and additional evaluations for high-capability models. 10 The Act also creates a European Artificial Intelligence Board to promote national cooperation and ensure compliance with the regulation. 11 Like the EU's General Data Protection Regulation , the Act can apply extraterritorially to providers from outside the EU if they have users within the EU. Proposed by the European Commission on 21 April 2021, 12 it passed the European Parliament on 13 March 2024, 13 and was unanimously approved by the EU Council on 21 May 2024. 14 The draft Act was revised to address the rise in popularity of generative AI systems, such as ChatGPT , whose general-purpose capabilities did not fit the main framework."
+  }
+ ],
+ "synthesis": {
+  "findings": [
+   {
+    "claim": "The GDPR regulates information privacy in the European Union and the European Economic Area, and it also regulates transfers of personal data outside those areas.",
+    "quote": "The General Data Protection Regulation (Regulation (EU) 2016/679), abbreviated GDPR , is a European Union regulation on information privacy in the European Union (EU) and the European Economic Area (EEA). It also governs the transfer of personal data outside the EU and EEA.",
+    "sourceIds": [
+     "gdpr"
+    ]
+   },
+   {
+    "claim": "The GDPR concerns principles, data-subject rights, duties of data controllers and processors, transfers of personal data to third countries, supervisory authorities, remedies, liability and penalties, among other matters.",
+    "quote": "The GDPR 2016 has eleven chapters, concerning general provisions, principles, rights of the data subject, duties of data controllers or processors, transfers of personal data to third-party countries, supervisory authorities, cooperation among member states, remedies, liability or penalties for breach of rights, provisions related to specific processing situations, and miscellaneous final provisions.",
+    "sourceIds": [
+     "gdpr"
+    ]
+   },
+   {
+    "claim": "The AI Act establishes a common regulatory and legal framework for artificial intelligence in the European Union and covers most AI systems across many sectors, subject to stated exemptions.",
+    "quote": "The Artificial Intelligence Act AI Act is a European Union regulation concerning artificial intelligence (AI). It establishes a common regulatory and legal framework for AI within the European Union (EU). It covers most AI systems across a wide range of sectors, with exemptions for AI used only for military, national security, research purposes, or for non-professional use.",
+    "sourceIds": [
+     "aia"
+    ]
+   },
+   {
+    "claim": "The AI Act does not create individual rights; it imposes duties on AI providers and on organisations that use AI professionally.",
+    "quote": "As a form of product regulation, it does not create individual rights; instead, it places duties on AI providers and on organisations that use AI in a professional context.",
+    "sourceIds": [
+     "aia"
+    ]
+   },
+   {
+    "claim": "The AI Act classifies non-exempt AI applications according to their risk of causing harm and adds a category for general-purpose AI, with transparency requirements and additional evaluations for high-capability models.",
+    "quote": "The Act classifies non-exempt AI applications by their risk of causing harm. There are four levels – unacceptable, high, limited, minimal – plus an additional category for general-purpose AI. For general-purpose AI, transparency requirements are imposed, with reduced requirements for open source models, and additional evaluations for high-capability models.",
+    "sourceIds": [
+     "aia"
+    ]
+   },
+   {
+    "claim": "Both regulations can apply beyond the European Union in specified circumstances: the GDPR governs transfers of personal data outside the EU and EEA, while the AI Act can apply to providers outside the EU when they have users in the EU.",
+    "quote": "It also governs the transfer of personal data outside the EU and EEA.",
+    "sourceIds": [
+     "gdpr"
+    ]
+   },
+   {
+    "claim": "The AI Act can apply extraterritorially to providers from outside the European Union when they have users within the European Union.",
+    "quote": "Like the EU's General Data Protection Regulation , the Act can apply extraterritorially to providers from outside the EU if they have users within the EU.",
+    "sourceIds": [
+     "aia"
+    ]
+   }
+  ],
+  "comparison": "El GDPR se centra en la privacidad de la información, los derechos de las personas cuyos datos se tratan y las obligaciones de responsables y encargados. La Ley de IA establece un marco para los sistemas de inteligencia artificial y dirige sus deberes principalmente a proveedores y organizaciones que usan IA profesionalmente, mediante una clasificación basada en el riesgo. Coinciden en que pueden tener alcance extraterritorial, pero difieren en su objeto principal y en que la Ley de IA no crea derechos individuales, mientras que el GDPR sí regula derechos de los titulares de los datos. Por ello, se complementan: el GDPR aborda la protección de los datos personales y la Ley de IA añade obligaciones específicas para los sistemas de IA y sus proveedores o usuarios profesionales.",
+  "conclusion": "El GDPR y la Ley de IA regulan ámbitos distintos pero relacionados: el primero protege la privacidad y los derechos sobre los datos personales, mientras la segunda organiza las obligaciones aplicables a los sistemas de IA según el riesgo. La Ley de IA complementa al GDPR al regular el sistema y a sus operadores, sin sustituir las reglas del GDPR sobre datos personales."
+ }
+}

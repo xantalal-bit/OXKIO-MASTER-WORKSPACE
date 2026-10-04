@@ -20,7 +20,8 @@ test('a fragment cannot leave out a negation or qualifier of its sentence',()=>{
  assert.equal(verifySynthesis(make(finding('Incluye soporte en español.','incluye soporte en español.')),sources),'quote_drops_context');
  assert.equal(verifySynthesis(make(finding('Beta ofrece soporte en inglés.','Ofrece soporte en inglés',['b'])),sources),'quote_not_supported');
  assert.equal(verifySynthesis(make(finding('Beta ofrece soporte.','Ofrece soporte solo',['b'])),sources),'claim_qualifier_dropped');
- assert.equal(verifySynthesis(make(finding('Beta ofrece soporte.','Beta cuesta 10 euros al mes. Ofrece soporte',['b'])),sources),'quote_drops_context');
+ assert.equal(verifySynthesis(make(finding('Alfa cuesta 20 euros al mes e incluye soporte en español.','Alfa cuesta 20 euros al mes. incluye soporte en español',['a'])),sources),'quote_drops_context');
+ assert.equal(verifySynthesis(make(finding('Beta cuesta 10 euros al mes y ofrece soporte solo en inglés.','Beta cuesta 10 euros al mes. Ofrece soporte solo en inglés.',['b'])),sources),true);
  assert.equal(verifySynthesis(make(finding('Alfa cuesta 20 euros.','Alfa cuesta 20 euros')),sources),true);
  assert.equal(verifySynthesis(make(finding('Alfa.','Alfa')),sources),'quote_too_short');
 });
@@ -74,4 +75,13 @@ test('long sources keep qualifications next to the quoted sentence',()=>{
  const text='Texto general sobre el servicio. '.repeat(40)+'El plan anual no implica garantía de resultados.';
  assert.equal(verifySynthesis(make(finding('El plan anual no implica garantía de resultados.','El plan anual no implica garantía de resultados.',['long'])),[{id:'long',text}]),true);
  assert.equal(verifySynthesis(make(finding('El plan anual implica garantía de resultados.','El plan anual no implica garantía de resultados.',['long'])),[{id:'long',text}]),'claim_negation_changed');
+});
+// Real Luna synthesis captured in F8 (public pages only): sentences joined
+// across a gap and a repeated expansion of "EU" are supported; a finding that
+// mixes sources and one that drops "only" are not, so the whole output fails.
+test('real Luna synthesis (F8): faithful findings pass, mixed-source and qualifier-dropping findings fail closed',()=>{
+ const {sources:real,synthesis}=require('./synthesis-verifier.f8-luna.fixture.json');
+ const one=f=>verifySynthesis({findings:[f],conclusion:synthesis.conclusion,comparison:synthesis.comparison},real);
+ assert.deepEqual(synthesis.findings.map(one),[true,true,'claim_qualifier_dropped',true,true,'claim_not_supported',true]);
+ assert.notEqual(verifySynthesis(synthesis,real),true);
 });

@@ -32,8 +32,16 @@ function spans(text) {
 // A quote may be a fragment, but never one that leaves out a negation or a
 // qualifier of the sentence(s) it was taken from: "no incluye soporte" can't
 // be quoted as "incluye soporte", nor "solo en inglés" as "en inglés".
+// A quote may join several sentences that are not consecutive in the source
+// (a model skips the ones in between): each sentence is matched, and its
+// context protected, on its own.
 function quotedIn(quote, source) {
- const q = canon(quote).replace(/[.!?]+$/u, '');
+ const q = canon(quote);
+ for (const [s, e] of spans(q)) { const verdict = fragmentIn(q.slice(s, e), source); if (verdict) return verdict; }
+ return null;
+}
+function fragmentIn(fragment, source) {
+ const q = fragment.trim().replace(/[.!?]+$/u, '');
  if (q.split(' ').length < 3) return 'quote_too_short';
  let verdict = 'quote_not_supported';
  for (let at = source.text.indexOf(q); at !== -1; at = source.text.indexOf(q, at + 1)) {
@@ -53,7 +61,9 @@ function faithful(claim, quote) {
  if (!numbers(claim).every(n => quoteNumbers.has(n))) return 'claim_number_unsupported';
  if (count(c, NEGATIONS) !== count(q, NEGATIONS)) return 'claim_negation_changed';
  if (![...new Set(q.filter(w => QUALIFIERS.has(w)))].every(w => c.includes(w))) return 'claim_qualifier_dropped';
- const own = stems(claim), available = new Set(stems(quote));
+ // Each stem counts once: expanding "EU" to "European Union" twice must not
+ // weigh as two unsupported words.
+ const own = [...new Set(stems(claim))], available = new Set(stems(quote));
  if (!own.length || own.filter(s => available.has(s)).length / own.length < 0.6) return 'claim_not_supported';
  return null;
 }

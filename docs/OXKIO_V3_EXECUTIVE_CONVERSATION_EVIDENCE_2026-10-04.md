@@ -51,7 +51,7 @@ Evidencia de la segunda pasada:
 - Tests del verifier reescritos (10): sustentan valoración y comparación inferidas; rechazan ID válido inventado, fragmento que omite una negación, cifra, negación o salvedad cambiadas, cita ausente en una fuente atribuida, cifras nuevas en la inferencia, enlaces e instrucciones de la fuente.
 - Restaurados los fixtures con análisis real en continuidad cognitiva («conviene Alfa», «Son complementarios»).
 - Nuevos: reanudación tras TTL más «hazlo» tras bloqueo; recorte de página por frase completa.
-- Suite local secuencial (sin los 2 tests que lanzan PowerShell/lanzadores, no tocados aquí y ejecutados por CI): tras F8, 1719 tests, 1703 PASS / 0 FAIL / 16 SKIP. Puerto 3000 de producción `ready` antes y después.
+- Suite local secuencial (sin los 2 tests que lanzan PowerShell/lanzadores, no tocados aquí y ejecutados por CI): tras la validación final de F8, 1720 tests, 1704 PASS / 0 FAIL / 16 SKIP. Puerto 3000 de producción `ready` antes y después.
 ## F8 — llamadas reales a Luna (autorizadas por José Antonio, 04/10/2026)
 
 Alcance: máximo 2 llamadas, política B, suelo INTERNAL, solo PUBLIC/INTERNAL no sensible, tope de 0,10 USD. La clave se leyó de Secret Manager solo en memoria del arnés (fuera del repositorio), sin mostrarse ni persistirse. Hubo un tope duro de llamadas en el arnés.
@@ -72,7 +72,30 @@ Defectos encontrados por F8 y corregidos:
 
 Hallazgo preexistente de main, NO cambiado en esta PR (decisión de política de privacidad): `PERSONAL` trata cualquier par de palabras con mayúscula («Reglamento General», «Parlamento Europeo») como un nombre propio, y junto a términos como «tratamiento» eleva fuentes públicas a CONFIDENTIAL. Falla de forma segura, pero bloquea la investigación pública en español. Además, cuando la cognición se omite, la respuesta vuelca las fuentes en bruto sin explicar por qué.
 
-Pendiente: validar en real los dos arreglos (decisor y Verifier). Requiere una nueva autorización de llamadas. El arnés guarda ya la salida del modelo en tareas públicas para diagnosticar cualquier rechazo.
+## F8 — validación real final (2 llamadas más, autorizadas; tope de 0,05 USD)
+
+| # | Turno | Resultado real | Coste |
+|---|---|---|---|
+| 3 | Consejo de captación de clientes | **Decisor validado.** Luna devolvió `{"action":"clarify", …, "plan":[]}`, el caso corregido, y fue aceptado (`attempts: []`). La persona recibe una pregunta concreta (servicio, zona, cliente ideal, canal actual, presupuesto, objetivo). Sin misión. | 0,0002746 USD |
+| 4 | Investigación RGPD/Ley de IA (fuentes en inglés, gate INTERNAL) | **Verifier: rechazo** (`quote_not_supported`); respuesta = fuentes en bruto. Salida del modelo capturada. | 0,0020004 USD |
+
+Total de F8 (4 llamadas): 0,0042564 USD. `executionEnabled=false`; sin ejecución, aprobación ni escritura; escaneo de secretos de evidencias y fixture: 0.
+
+Diagnóstico offline del turno 4 (7 hallazgos reales, fixture `synthesis-verifier.f8-luna.fixture.json`):
+
+- 2, 4 y 5 ya se aceptaban.
+- 1 y 3: la cita unía frases no consecutivas. Corregido: cada frase de la cita se comprueba por separado, con su contexto protegido.
+- 7: claim fiel que desarrolla «EU» dos veces; el anclaje léxico contaba duplicados. Corregido: cada raíz cuenta una vez.
+- 3: el claim omite la salvedad «only» de su cita → `claim_qualifier_dropped`. **Rechazo correcto.**
+- 6: afirma algo de la Ley de IA con una cita del RGPD → `claim_not_supported`. **Rechazo correcto.**
+
+Con las correcciones, 5 de 7 hallazgos pasan. El Verifier sigue siendo «todo o nada», así que esta salida concreta continúa rechazada. Se refuerza la instrucción: un hallazgo afirma solo lo que dice su propia cita y conserva todas sus salvedades; las relaciones entre fuentes van en la comparación. La eficacia de esa instrucción con Luna real NO está validada (no se hizo una tercera llamada, por mandato).
+
+Decisión de diseño pendiente (no cambiada): ¿la síntesis debe descartar los hallazgos sin respaldo y mostrar solo los verificados, avisando de cuántos se descartaron, en lugar de rechazarla entera? Hoy se rechaza entera: más seguro, pero con poca utilidad en la práctica.
+
+## Pendiente separado — fuera de esta PR
+
+Heurístico `PERSONAL` del Privacy Gate (main): falsos positivos como «Reglamento General» o «Parlamento Europeo», que bloquean de forma segura pero incorrecta la investigación pública en español. Además, cuando se omite la cognición, la respuesta vuelca las fuentes en bruto sin explicarlo. No se modifica aquí.
 
 ## Estado operativo separado y siguiente
 
