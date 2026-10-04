@@ -21,11 +21,16 @@ function createChatGateway({runtime,membershipProvider,adapterFactory=null,store
   if(!body||typeof body!=='object'||Array.isArray(body)||Object.keys(body).some(k=>!ALLOWED_KEYS.includes(k)&&!IGNORED_CLIENT_HINTS.includes(k)))fail('chat_request_invalid');
   if(IGNORED_CLIENT_HINTS.some(k=>body[k]!==undefined&&(body[k]===null||typeof body[k]!=='object'||Array.isArray(body[k]))))fail('chat_request_invalid');
   const session=await r.openSession(identity.uid);
-  // Trusted composition installs the owner's adapters once; an active
-  // connection is never replaced mid-flight by a concurrent request.
-  if(adapterFactory){const adapters=await adapterFactory(identity,r.scope(session));for(const[provider,adapter]of Object.entries(adapters||{}))if(!r.connections.installed(session,provider))r.connections.install(session,provider,adapter);}
   const conversationId=body.conversationId||DEFAULT_CONVERSATION;const key=JSON.stringify([identity.uid,conversationId]);
   let state;const action=body.action||'start';
+  // The human resuming a mission ("continúa", "ya lo he conectado", resume)
+  // is the reconnection signal: only then is an expired or reduced connection
+  // replaced by a fresh adapter (unverified until its first read succeeds).
+  const resuming=action==='resume'||(action==='start'&&typeof body.query==='string'&&latest.has(key)&&FOLLOW_UP.test(body.query.trim()));
+  // Trusted composition installs the owner's adapters once; an active
+  // connection is never replaced mid-flight by a concurrent request, and an
+  // expired one is not silently reinstalled by an ordinary question.
+  if(adapterFactory){const adapters=await adapterFactory(identity,r.scope(session));for(const[provider,adapter]of Object.entries(adapters||{}))if(!r.connections.installed(session,provider)||(resuming&&(adapter.scopes||[]).some(scope=>!r.connections.inspect(session,provider,scope).ready)))r.connections.install(session,provider,adapter);}
   if(action==='onboarding')return freeze({ok:true,response:r.onboarding(session).message,conversationId,executionEnabled:false});
   if(['resume','cancel','pause','status'].includes(action)){const id=body.missionId||latest.get(key);if(!id)fail('mission_not_found');state=await r[action==='status'?'get':action](session,id);}
   else if(action==='start'){

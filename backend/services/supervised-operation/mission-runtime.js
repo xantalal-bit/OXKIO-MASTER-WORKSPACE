@@ -192,9 +192,11 @@ function createSupervisedRuntime({membershipProvider,planner=null,reasoner=null,
       // task waits at this checkpoint, sources already sealed, and resumes later.
       if(error.code==='reasoning_resource_unavailable'&&error.transient&&!m.cancelled){m.waitingResource=error.attempts;trace(m,'CHECKPOINT',{reason:'resource_unavailable'});return {waitingFor:'tool'};}
       if(!['reasoning_resource_unavailable','secret_context'].includes(error.code))throw classified(error);
-      // No resource may receive this context (privacy, unreviewed price):
-      // the deterministic analysis stands, recorded as such.
-      trace(m,'COGNITION_SKIPPED',{reason:error.code==='secret_context'?'secret_context':'no_authorized_resource'});
+      // No resource may receive this context (privacy, unreviewed price), or
+      // every resource failed in a way waiting will not fix (credential,
+      // rejected request, refused output): the deterministic analysis stands.
+      const refused=(error.attempts||[]).every(a=>['PRIVACY_BLOCKED','PRICING_UNREVIEWED'].includes(a.failure));
+      trace(m,'COGNITION_SKIPPED',{reason:error.code==='secret_context'?'secret_context':refused?'no_authorized_resource':'resource_failed'});
      }
     }
    }

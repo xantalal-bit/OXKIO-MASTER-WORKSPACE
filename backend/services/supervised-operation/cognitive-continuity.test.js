@@ -168,13 +168,22 @@ test('governed reasoner classifies each failure type and is disabled without bud
  assert.equal(createGovernedReasoner({ providers: [provider('openai', 'p', synthesis)], approvedDailyBudgetUsd: 0 }).enabled, false);
  assert.equal(createGovernedReasoner({ providers: [], approvedDailyBudgetUsd: 5 }).enabled, false);
  assert.equal(createGovernedReasoner({ providers: [{ status: 'not_configured' }], approvedDailyBudgetUsd: 5 }).enabled, false);
- const behaviours = [[() => ({ status: 'not_configured' }), FAILURES.RESOURCE_UNAVAILABLE], [rateLimited, FAILURES.RATE_LIMIT], [quota, FAILURES.QUOTA_EXHAUSTED],
-  [() => ({ status: 'error', errorCode: 'reasoning_upstream_error' }), FAILURES.PROVIDER_ERROR], [() => { throw new Error('network'); }, FAILURES.PROVIDER_ERROR]];
- for (const [behaviour, expected] of behaviours) {
+ // [behaviour, failure, transient]: only what may clear by itself waits.
+ const behaviours = [
+  [rateLimited, FAILURES.RATE_LIMIT, true], [quota, FAILURES.QUOTA_EXHAUSTED, true],
+  [() => ({ status: 'error', errorCode: 'reasoning_upstream_error' }), FAILURES.PROVIDER_ERROR, true],
+  [() => ({ status: 'error', errorCode: 'reasoning_timeout' }), FAILURES.PROVIDER_ERROR, true],
+  [() => { throw new Error('network'); }, FAILURES.PROVIDER_ERROR, true],
+  [() => ({ status: 'not_configured' }), FAILURES.RESOURCE_UNAVAILABLE, false],
+  [() => ({ status: 'error', errorCode: 'reasoning_auth_failed' }), FAILURES.RESOURCE_UNAVAILABLE, false],
+  [() => ({ status: 'error', errorCode: 'reasoning_request_rejected' }), FAILURES.REQUEST_REJECTED, false],
+  [() => ({ status: 'error', errorCode: 'reasoning_invalid_output' }), FAILURES.INVALID_OUTPUT, false],
+ ];
+ for (const [behaviour, expected, transient] of behaviours) {
   const p = provider('openai', 'p', behaviour);
   const spend = { estimate: () => 0.001, reserve: () => ({}), settle: () => 0.001 };
   const r = createGovernedReasoner({ providers: [p], privacyPolicy: { confidentialProviders: [EU('openai')] }, approvedDailyBudgetUsd: 1 });
-  await assert.rejects(r.reason({ objective: 'objetivo', egressText: 'objetivo', request: {}, basis: {}, spend, missionId: 'm-1' }), e => e.code === 'reasoning_resource_unavailable' && e.attempts[0].failure === expected && e.transient === true);
+  await assert.rejects(r.reason({ objective: 'objetivo', egressText: 'objetivo', request: {}, basis: {}, spend, missionId: 'm-1' }), e => e.code === 'reasoning_resource_unavailable' && e.attempts[0].failure === expected && e.transient === transient);
  }
 });
 
@@ -282,4 +291,57 @@ test('public pages become readable source text (paragraphs, no markup or scripts
  const html = '<html><head><title>T</title><script>var x=1;</script></head><body><nav>Menú principal</nav><p>Primer párrafo con <b>contenido</b> suficiente para ser evidencia legible.</p><p>corto</p><p>Segundo párrafo que también cuenta como texto de la fuente pública.</p></body></html>';
  assert.equal(readableText(html), 'Primer párrafo con contenido suficiente para ser evidencia legible. Segundo párrafo que también cuenta como texto de la fuente pública.');
  assert.equal(readableText('<div>Solo texto visible</div><script>no</script>'), 'Solo texto visible');
+});
+
+// Code review 04/10/2026 regressions.
+test('review: a permanent failure (revoked key, rejected request, refused output) never parks the mission; the deterministic analysis stands', async () => {
+ for (const behaviour of [() => ({ status: 'error', errorCode: 'reasoning_auth_failed' }), () => ({ status: 'error', errorCode: 'reasoning_request_rejected' }), req => { const s = synthesis(req); s.content.findings[0].sourceIds = ['invented']; return s; }]) {
+  const p = provider('openai', 'primary', behaviour);
+  const s = await setup({ providers: [p] });
+  try {
+   await s.seed(); const d = (await s.ask(QUESTION)).data.details;
+   assert.equal(d.status, 'COMPLETED'); assert.equal(d.result.synthesis, undefined); assert.equal(p.calls.length, 1);
+   assert.ok(d.trace.some(t => t.event === 'COGNITION_SKIPPED' && t.reason === 'resource_failed'));
+  } finally { s.cleanup(); }
+ }
+});
+
+test('review: after an expired connection, an ordinary question keeps it EXPIRED but resuming the mission reinstalls a fresh adapter', async () => {
+ let healthy = false; let reads = 0;
+ const reader = async () => { reads++; if (!healthy) throw Object.assign(new Error('redacted'), { code: 400, response: { data: { error: 'invalid_grant' } } }); return { privatePayload: { messages: [{ from: 'a', subject: 'factura de prueba', snippet: 'texto' }] } }; };
+ const root = fs.mkdtempSync(path.join(os.tmpdir(), 'v3-reconnect-'));
+ const server = createServerComposition({ enabled: true, cohortUids: UID, integrityKey: randomBytes(32), memoryRoot: root, authorizeIdentity: authorize,
+  privateContextReaders: () => ({ gmailReader: reader, calendarReader: reader }) });
+ const ask = async (body) => { const req = Readable.from([JSON.stringify({ includeDetails: true, ...body })]); req.oxkioIdentity = identity; let out; await server.handle(req, { writeHead() {}, end(b) { out = b; } }); return JSON.parse(out); };
+ try {
+  const first = await ask({ query: 'Revisa mi correo' }); assert.equal(first.outcome, 'NEEDS_CONNECTION'); assert.equal(reads, 1);
+  healthy = true; // the human re-authorized Google
+  const status = await ask({ query: '¿Qué tienes conectado?' });
+  assert.equal(status.details.capabilities.find(v => v.id === 'gmail.read').connection, 'EXPIRED'); assert.equal(reads, 1);
+  const resumed = await ask({ query: 'continúa' });
+  assert.equal(resumed.details.status, 'COMPLETED'); assert.equal(reads, 2);
+ } finally { fs.rmSync(root, { recursive: true, force: true }); }
+});
+
+test('review: the first verified read does not revoke a concurrent read of the same connection', async () => {
+ // Exercised at the Connection Manager: the V3 scheduler serializes one
+ // owner's missions, but two captures of the same connection can overlap.
+ const { createConnectionManager } = require('./capability-manager');
+ const { createScopeSessions } = require('./scope-session');
+ const { createPrivateContextAdapters } = require('./resource-adapters');
+ const A = { tenantId: 'tenant-aaa', clientId: 'client-aaa', userId: 'user-aaa', roles: ['owner'], status: 'ACTIVE' };
+ const sessions = createScopeSessions({ membershipProvider: { findMemberships: async () => [A] } });
+ const h = await sessions.open(A.userId); const connections = createConnectionManager(sessions);
+ const delays = [60, 5]; let i = 0;
+ const gmailReader = async () => { await new Promise(res => setTimeout(res, delays[i++])); return { privatePayload: { messages: [{ subject: 'mensaje de prueba' }] } }; };
+ const adapters = createPrivateContextAdapters({ scope: A, origin: 'fixture', readers: { gmailReader, calendarReader: async () => ({ privatePayload: { events: [] } }) } });
+ connections.install(h, 'mail', adapters.mail);
+ const slow = connections.capture(h, 'mail', 'mail.read'); const fast = connections.capture(h, 'mail', 'mail.read');
+ // The fast read verifies the connection first; the slow one must still succeed.
+ const [one, two] = await Promise.all([slow.read({ scope: A, limits: {} }), fast.read({ scope: A, limits: {} })]);
+ assert.equal(one.items.length, 1); assert.equal(two.items.length, 1);
+ assert.equal(connections.inspect(h, 'mail', 'mail.read').verified, true);
+ // A real replacement (reinstall) still revokes a reader holding the old entry.
+ const stale = connections.capture(h, 'mail', 'mail.read'); connections.install(h, 'mail', createPrivateContextAdapters({ scope: A, origin: 'fixture', readers: { gmailReader: async () => ({ privatePayload: { messages: [] } }), calendarReader: async () => ({ privatePayload: { events: [] } }) } }).mail);
+ await assert.rejects(stale.read({ scope: A, limits: {} }), e => e.code === 'connection_revoked');
 });

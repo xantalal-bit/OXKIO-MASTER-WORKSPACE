@@ -118,12 +118,15 @@ function createConnectionManager(sessions, { connectable = () => true } = {}) {
  }
  // A connection is replaced (never mutated): readers holding the previous
  // entry detect the change and discard their late result.
- function degrade(handle, provider, entry, change) { if (entries.get(key(handle,provider)) === entry) entries.set(key(handle,provider), Object.freeze({ ...entry, ...change })); }
+ // Recording that a read succeeded (verified) is not a new connection: a
+ // concurrent reader of the same adapter, state and scopes is not revoked.
+ const sameConnection = (current, entry) => Boolean(current) && (current === entry || (current.read === entry.read && current.state === entry.state && current.scopes === entry.scopes));
+ function degrade(handle, provider, entry, change) { const current = entries.get(key(handle,provider)); if (sameConnection(current, entry)) entries.set(key(handle,provider), Object.freeze({ ...current, ...change })); }
  function capture(handle,provider,permission) {
   if (!inspect(handle,provider,permission).ready) fail('connection_required');
   const e=entries.get(key(handle,provider));
   return Object.freeze({ origin: e.origin, egress: e.egress, read: async input => {
-   await sessions.current(handle); if(entries.get(key(handle,provider)) !== e) throw connectionError('connection_revoked');
+   await sessions.current(handle); if(!sameConnection(entries.get(key(handle,provider)), e)) throw connectionError('connection_revoked');
    const {signal,...data}=input; let result;
    try { result=await e.read(Object.freeze({...freeze(copy(data)),signal})); }
    catch (error) {
@@ -132,7 +135,7 @@ function createConnectionManager(sessions, { connectable = () => true } = {}) {
     if (error && (error.failureKind === 'permission' || PERMISSION_CODES.has(code))) { degrade(handle, provider, e, { scopes: Object.freeze(e.scopes.filter(s => s !== permission)) }); throw connectionError('permission_required'); }
     throw error;
    }
-   await sessions.current(handle); if(entries.get(key(handle,provider)) !== e) throw connectionError('connection_revoked');
+   await sessions.current(handle); if(!sameConnection(entries.get(key(handle,provider)), e)) throw connectionError('connection_revoked');
    if (!e.verified) degrade(handle, provider, e, { verified: true });
    return copy(result);
   } });

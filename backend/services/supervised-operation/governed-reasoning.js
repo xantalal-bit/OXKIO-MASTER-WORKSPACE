@@ -13,11 +13,15 @@ const { freeze, fail } = require('./scope-session');
 const FAILURES = freeze({
  RESOURCE_UNAVAILABLE: 'RESOURCE_UNAVAILABLE', RATE_LIMIT: 'RATE_LIMIT', QUOTA_EXHAUSTED: 'QUOTA_EXHAUSTED',
  BUDGET_EXHAUSTED: 'BUDGET_EXHAUSTED', PROVIDER_ERROR: 'PROVIDER_ERROR', INVALID_OUTPUT: 'INVALID_OUTPUT',
- PRIVACY_BLOCKED: 'PRIVACY_BLOCKED', PRICING_UNREVIEWED: 'PRICING_UNREVIEWED',
+ PRIVACY_BLOCKED: 'PRIVACY_BLOCKED', PRICING_UNREVIEWED: 'PRICING_UNREVIEWED', REQUEST_REJECTED: 'REQUEST_REJECTED',
 });
-// Failures that may clear by themselves (or by a human top-up) without
-// changing what is sent: the mission waits and resumes from its checkpoint.
-const TRANSIENT = new Set([FAILURES.RATE_LIMIT, FAILURES.QUOTA_EXHAUSTED, FAILURES.BUDGET_EXHAUSTED, FAILURES.PROVIDER_ERROR, FAILURES.RESOURCE_UNAVAILABLE, FAILURES.INVALID_OUTPUT]);
+// Failures that may clear by themselves (a rate window, a daily budget or
+// quota reset, an upstream outage) without changing what is sent: the mission
+// waits and resumes from its checkpoint. A rejected credential, a rejected
+// request (wrong model or configuration) or an output the verifier refuses
+// will not: retrying would only repeat a call (and a paid one for outputs),
+// so the deterministic analysis stands and the failure stays in the trace.
+const TRANSIENT = new Set([FAILURES.RATE_LIMIT, FAILURES.QUOTA_EXHAUSTED, FAILURES.BUDGET_EXHAUSTED, FAILURES.PROVIDER_ERROR]);
 function classifyResult(result) {
  if (!result || result.status === 'not_configured') return FAILURES.RESOURCE_UNAVAILABLE;
  if (result.failureType === FAILURES.QUOTA_EXHAUSTED) return FAILURES.QUOTA_EXHAUSTED;
@@ -25,6 +29,7 @@ function classifyResult(result) {
   case 'reasoning_rate_limited': return FAILURES.RATE_LIMIT;
   case 'reasoning_auth_failed': return FAILURES.RESOURCE_UNAVAILABLE;
   case 'reasoning_invalid_output': return FAILURES.INVALID_OUTPUT;
+  case 'reasoning_request_rejected': return FAILURES.REQUEST_REJECTED;
   default: return FAILURES.PROVIDER_ERROR;
  }
 }
