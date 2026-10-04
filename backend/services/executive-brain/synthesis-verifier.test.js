@@ -16,9 +16,32 @@ test('fabricated claim with valid id cannot pass',()=>{
  assert.equal(verifySynthesis(make(finding('Alfa tiene 900 clientes.','Alfa tiene 900 clientes.')),sources),'quote_not_supported');
  assert.equal(verifySynthesis(make(finding('Alfa lidera el mercado europeo.','Alfa cuesta 20 euros al mes.')),sources),'claim_not_supported');
 });
-test('a quote must be whole sentences: a fragment cannot drop a negation',()=>{
- assert.equal(verifySynthesis(make(finding('Incluye soporte en español.','incluye soporte en español.')),sources),'quote_not_supported');
- assert.equal(verifySynthesis(make(finding('Alfa cuesta 20 euros.','Alfa cuesta 20 euros')),sources),'quote_not_supported');
+test('a fragment cannot leave out a negation or qualifier of its sentence',()=>{
+ assert.equal(verifySynthesis(make(finding('Incluye soporte en español.','incluye soporte en español.')),sources),'quote_drops_context');
+ assert.equal(verifySynthesis(make(finding('Beta ofrece soporte en inglés.','Ofrece soporte en inglés',['b'])),sources),'quote_not_supported');
+ assert.equal(verifySynthesis(make(finding('Beta ofrece soporte.','Ofrece soporte solo',['b'])),sources),'claim_qualifier_dropped');
+ assert.equal(verifySynthesis(make(finding('Beta ofrece soporte.','Beta cuesta 10 euros al mes. Ofrece soporte',['b'])),sources),'quote_drops_context');
+ assert.equal(verifySynthesis(make(finding('Alfa cuesta 20 euros.','Alfa cuesta 20 euros')),sources),true);
+ assert.equal(verifySynthesis(make(finding('Alfa.','Alfa')),sources),'quote_too_short');
+});
+// Text as the public fetcher really extracts it (F8, 04/10/2026): lost full
+// stops, citation numbers, stripped parentheses and stray spaces.
+const GDPR="The General Data Protection Regulation (Regulation (EU) 2016/679), abbreviated GDPR , is a European Union regulation on information privacy in the European Union (EU) and the European Economic Area (EEA). The GDPR's goals are to enhance individuals' control and rights over their personal information and to simplify the regulations for international business It supersedes the Data Protection Directive 95/46/EC and, among other things, simplifies the terminology. As an EU regulation (instead of a directive ), the GDPR has direct legal effect and does not require transposition into national law.";
+const AIA="The Artificial Intelligence Act AI Act is a European Union regulation concerning artificial intelligence (AI). For general-purpose AI, transparency requirements are imposed, with reduced requirements for open source models, and additional evaluations for high-capability models. 10 The Act also creates a European Artificial Intelligence Board to promote national cooperation and ensure compliance with the regulation. It covers most AI systems across a wide range of sectors, with exemptions for AI used only for military, national security, research purposes, or for non-professional use.";
+test('quotes a model tidies from real extracted pages are matched; dropped negations and qualifiers are not',()=>{
+ const real=[{id:'g',text:GDPR},{id:'a',text:AIA}];
+ const ok=[finding('The GDPR is a European Union regulation on information privacy.','abbreviated GDPR, is a European Union regulation on information privacy in the European Union (EU) and the European Economic Area (EEA).',['g']),
+  finding("The GDPR's goals are to enhance individuals' control over their personal information.","The GDPR’s goals are to enhance individuals’ control and rights over their personal information and to simplify the regulations for international business.",['g']),
+  finding('The Act creates a European Artificial Intelligence Board to promote national cooperation.','The Act also creates a European Artificial Intelligence Board to promote national cooperation and ensure compliance with the regulation.',['a']),
+  finding('The AI Act is a European Union regulation concerning artificial intelligence.','The Artificial Intelligence Act (AI Act) is a European Union regulation concerning artificial intelligence (AI).',['a'])];
+ assert.equal(verifySynthesis({findings:ok,comparison:'Uno protege datos personales y el otro regula sistemas de IA.',conclusion:'Se complementan.'},real),true);
+ assert.equal(verifySynthesis(make(finding('The GDPR requires transposition into national law.','the GDPR has direct legal effect and does require transposition into national law',['g'])),real),'quote_not_supported');
+ assert.equal(verifySynthesis(make(finding('The GDPR requires transposition into national law.','require transposition into national law',['g'])),real),'quote_drops_context');
+ const covers='It covers most AI systems across a wide range of sectors, with exemptions for AI used only for military, national security, research purposes, or for non-professional use.';
+ assert.equal(verifySynthesis(make(finding('It covers most AI systems across sectors, with exemptions only for military, security, research or non-professional use.',covers,['a'])),real),true);
+ assert.equal(verifySynthesis(make(finding('It covers AI systems across sectors, with exemptions only for military, security, research or non-professional use.',covers,['a'])),real),'claim_qualifier_dropped');
+ assert.equal(verifySynthesis(make(finding('It covers most AI systems across a wide range of sectors.','It covers most AI systems across a wide range of sectors',['a'])),real),'quote_drops_context');
+ assert.equal(verifySynthesis(make(finding('It covers AI systems across a wide range of sectors.','AI systems across a wide range of sectors',['a'])),real),'quote_drops_context');
 });
 test('numbers, negations and qualifiers cannot change behind a real quote',()=>{
  assert.equal(verifySynthesis(make(finding('Alfa cuesta 2 euros al mes.','Alfa cuesta 20 euros al mes.')),sources),'claim_number_unsupported');

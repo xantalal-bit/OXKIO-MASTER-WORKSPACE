@@ -12,21 +12,37 @@ const STOP = new Set(['para','como','este','esta','estos','estas','pero','sobre'
 const numbers = value => (value.match(/\d+(?:[.,]\d+)*/gu) || []).map(n => n.replace(/,/gu, '.'));
 const count = (list, set) => list.filter(w => set.has(w)).length;
 const stems = value => words(value).filter(w => w.length >= 4 && !STOP.has(w) && !/^\d/u.test(w)).map(w => w.slice(0, 5));
-// A quote is one or more complete, consecutive sentences of the source, never
-// a fragment: a fragment could drop the negation or qualification around it.
-function sentences(text) {
- return text.split(/(?<=[.!?])\s+(?=[¿¡"'«(]?\p{Lu})|\r?\n+/u).map(normalize).filter(Boolean);
-}
-function quotedIn(quote, source) {
- const target = normalize(quote);
- for (let i = 0; i < source.length; i++) {
-  let joined = '';
-  for (let j = i; j < source.length && joined.length < target.length; j++) {
-   joined = joined ? joined + ' ' + source[j] : source[j];
-   if (joined === target) return true;
-  }
+// Quotes are matched on a canonical form, because real extracted pages carry
+// artefacts a model tidies when quoting ("GDPR , is", stripped parentheses,
+// typographic quotes, a missing or added final full stop, letter case).
+const canon = value => value.normalize('NFC').replace(/[“”«»"]/gu, '').replace(/[‘’`´]/gu, "'").replace(/[()[\]]/gu, ' ').replace(/[–—]/gu, '-')
+ .replace(/\s+([,.;:!?])/gu, '$1').replace(/\s+/gu, ' ').trim().toLowerCase();
+// Sentence spans of the canonical source (abbreviations do not end one).
+const ABBREVIATION = /(?:^|\s)(?:art|arts|núm|num|ej|pág|pag|vol|cap|apdo|etc|sr|sra|dr|dra|vs|no|nos|e\.g|i\.e|\p{L})\.$/u;
+function spans(text) {
+ const result = []; let start = 0;
+ for (const m of text.matchAll(/[.!?]\s/gu)) {
+  const end = m.index + 1;
+  if (ABBREVIATION.test(text.slice(start, end))) continue;
+  result.push([start, end]); start = end + 1;
  }
- return false;
+ if (start < text.length) result.push([start, text.length]);
+ return result;
+}
+// A quote may be a fragment, but never one that leaves out a negation or a
+// qualifier of the sentence(s) it was taken from: "no incluye soporte" can't
+// be quoted as "incluye soporte", nor "solo en inglés" as "en inglés".
+function quotedIn(quote, source) {
+ const q = canon(quote).replace(/[.!?]+$/u, '');
+ if (q.split(' ').length < 3) return 'quote_too_short';
+ let verdict = 'quote_not_supported';
+ for (let at = source.text.indexOf(q); at !== -1; at = source.text.indexOf(q, at + 1)) {
+  const context = source.spans.filter(([s, e]) => s < at + q.length && e > at).map(([s, e]) => source.text.slice(s, e)).join(' ');
+  const cw = words(context), qw = words(q);
+  if (count(cw, NEGATIONS) === count(qw, NEGATIONS) && [...new Set(cw.filter(w => QUALIFIERS.has(w)))].every(w => qw.includes(w))) return null;
+  verdict = 'quote_drops_context';
+ }
+ return verdict;
 }
 // The claim must say what its quote says: same figures, same negations, every
 // qualifier kept, and mostly the quote's own vocabulary. This is a fidelity
@@ -56,7 +72,7 @@ function verifySynthesis(content, sources) {
  for(const [id,source] of entries){
   const text=typeof source==='string'?source:source&&source.text;
   if(typeof id!=='string'||!id||typeof text!=='string'||issued.has(id))return 'synthesis_sources_invalid';
-  issued.set(id,sentences(text));
+  const c=canon(text);issued.set(id,{text:c,spans:spans(c)});
  }
  if(!issued.size)return 'synthesis_sources_unavailable';
  const verifiedNumbers=new Set();
@@ -65,7 +81,7 @@ function verifySynthesis(content, sources) {
   const quote=defect(f.quote,1200,'quote');if(quote)return quote;
   if(!Array.isArray(f.sourceIds)||!f.sourceIds.length||f.sourceIds.length>10)return 'citation_missing';
   if(!f.sourceIds.every(id=>issued.has(id)))return 'citation_unissued';
-  if(!f.sourceIds.every(id=>quotedIn(f.quote,issued.get(id))))return 'quote_not_supported';
+  for(const id of f.sourceIds){const quoted=quotedIn(f.quote,issued.get(id));if(quoted)return quoted;}
   const unfaithful=faithful(f.claim,f.quote);if(unfaithful)return unfaithful;
   numbers(f.quote).forEach(n=>verifiedNumbers.add(n));
  }

@@ -10,7 +10,7 @@ Adaptive Planner usa Governed Reasoning y clasifica el JSON completo que sale. E
 
 Contexto mínimo por propietario/conversación en el almacén sellado existente: objetivo, último turno y respuesta, procedencia, auditoría acotada y caducidad de 20 minutos. No se envía toda la memoria. Hazlo conserva aprobaciones; solo reanuda estados reanudables. Un workflow verificado evita repetir decisiones pagadas.
 
-Verifier (corregido en la segunda pasada, ver abajo): cada hallazgo lleva una cita formada por frases completas y consecutivas de cada fuente que cita, y una afirmación fiel a esa cita (mismas cifras, mismas negaciones, salvedades conservadas y vocabulario mayoritariamente de la cita). Conclusión y comparación son inferencias sobre los hallazgos, sin cifras nuevas, y se presentan a la persona etiquetadas como inferencia. Esto comprueba fidelidad textual de los hallazgos, NO verdad universal ni la validez semántica de la inferencia. Las páginas públicas se recortan en su última frase completa dentro de 2000 caracteres.
+Verifier (corregido en la segunda pasada y tras F8, ver abajo): cada hallazgo lleva una cita literal (comparada en forma canónica) de cada fuente que cita, que no puede omitir una negación o salvedad de su frase, y una afirmación fiel a esa cita (mismas cifras, mismas negaciones, salvedades conservadas y vocabulario mayoritariamente de la cita). Conclusión y comparación son inferencias sobre los hallazgos, sin cifras nuevas, y se presentan a la persona etiquetadas como inferencia. Esto comprueba fidelidad textual de los hallazgos, NO verdad universal ni la validez semántica de la inferencia. Las páginas públicas se recortan en su última frase completa dentro de 2000 caracteres.
 
 Análisis requiere fuentes pertinentes; propuestas de organización requieren documentos/correo; lectura web requiere descubrimiento público directo. Toda ejecución material continúa deshabilitada.
 
@@ -51,8 +51,28 @@ Evidencia de la segunda pasada:
 - Tests del verifier reescritos (10): sustentan valoración y comparación inferidas; rechazan ID válido inventado, fragmento que omite una negación, cifra, negación o salvedad cambiadas, cita ausente en una fuente atribuida, cifras nuevas en la inferencia, enlaces e instrucciones de la fuente.
 - Restaurados los fixtures con análisis real en continuidad cognitiva («conviene Alfa», «Son complementarios»).
 - Nuevos: reanudación tras TTL más «hazlo» tras bloqueo; recorte de página por frase completa.
-- Suite local secuencial (sin los 2 tests que lanzan PowerShell/lanzadores, no tocados aquí y ejecutados por CI): 1717 tests, 1701 PASS / 0 FAIL / 16 SKIP. Puerto 3000 de producción `ready` antes y después.
-- F8 (1–2 llamadas reales a Luna dentro de B): NO ejecutado. La lectura de la clave del proveedor desde Secret Manager requiere una autorización explícita del operador para esta sesión. Llamadas reales: 0. Coste real: 0 USD.
+- Suite local secuencial (sin los 2 tests que lanzan PowerShell/lanzadores, no tocados aquí y ejecutados por CI): tras F8, 1719 tests, 1703 PASS / 0 FAIL / 16 SKIP. Puerto 3000 de producción `ready` antes y después.
+## F8 — llamadas reales a Luna (autorizadas por José Antonio, 04/10/2026)
+
+Alcance: máximo 2 llamadas, política B, suelo INTERNAL, solo PUBLIC/INTERNAL no sensible, tope de 0,10 USD. La clave se leyó de Secret Manager solo en memoria del arnés (fuera del repositorio), sin mostrarse ni persistirse. Hubo un tope duro de llamadas en el arnés.
+
+| # | Turno | Resultado real | Coste |
+|---|---|---|---|
+| 1a | Investigación RGPD/Ley de IA con fuentes en español y nombres en mayúsculas | Privacy Gate: CONFIDENTIAL (`special_category_personal`). 0 llamadas; respuesta = fuentes en bruto | 0 |
+| 1b | Consejo de captación de clientes | Luna respondió; el decisor rechazó la salida (`planning_invalid_output`); aclaración genérica | 0,0002134 USD |
+| 2 | Misma investigación en minúsculas, fuentes en inglés (gate comprobado antes en local: INTERNAL) | Luna sintetizó; el Verifier rechazó (`quote_not_supported`); respuesta = fuentes en bruto | 0,001768 USD |
+
+Total: 2 llamadas reales, 0,0019814 USD. Ninguna ejecución, aprobación ni escritura; `executionEnabled=false`; escaneo de secretos de las evidencias: 0.
+
+Defectos encontrados por F8 y corregidos:
+
+- Decisor (P1 para la conversación real): el filtro de «acción completada» quitaba las tildes, así que confundía el imperativo formal del consejo («cree», «publique», «envíe») con el pretérito («creé», «envié»). Además, un `plan: []` junto a una respuesta se trataba como plan. Ahora el pretérito se detecta con tilde, un plan vacío no es un plan, y los rechazos llevan códigos distintos (`planning_invalid_shape|plan|action|message`) para diagnosticarlos sin contenido.
+- Verifier (P1): el texto real extraído tiene puntos perdidos, números de cita, paréntesis eliminados y espacios sueltos, que un modelo limpia al citar. La cita se compara ahora en forma canónica y puede ser un fragmento contiguo, pero se rechaza (`quote_drops_context`) si su frase de contexto contiene una negación o salvedad que la cita omite. Tests con el texto real de las dos páginas.
+- Reproducción offline del turno 2 (páginas reales, modelo simulado, sin llamada): COMPLETED, INTERNAL, 2 hallazgos verificados, valoración y comparación etiquetadas como inferencia.
+
+Hallazgo preexistente de main, NO cambiado en esta PR (decisión de política de privacidad): `PERSONAL` trata cualquier par de palabras con mayúscula («Reglamento General», «Parlamento Europeo») como un nombre propio, y junto a términos como «tratamiento» eleva fuentes públicas a CONFIDENTIAL. Falla de forma segura, pero bloquea la investigación pública en español. Además, cuando la cognición se omite, la respuesta vuelca las fuentes en bruto sin explicar por qué.
+
+Pendiente: validar en real los dos arreglos (decisor y Verifier). Requiere una nueva autorización de llamadas. El arnés guarda ya la salida del modelo en tareas públicas para diagnosticar cualquier rechazo.
 
 ## Estado operativo separado y siguiente
 
