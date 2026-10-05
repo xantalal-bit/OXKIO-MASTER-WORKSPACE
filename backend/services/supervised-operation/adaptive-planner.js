@@ -27,13 +27,18 @@ function createAdaptivePlanner({ provider, providers, privacyPolicy = DEFAULT_PR
   'If action is "answer" or "clarify", plan is [] (an empty list).',
   'Only action "plan" has a non-empty plan: a bounded acyclic dependency list of steps shaped ' + JSON.stringify(STEP) + ' using supplied capability ids.',
  ];
+ // With the runtime's effective view, each capability carries its status
+ // (capability-manager decisionView). Plans are still validated only against
+ // the plannable ids in input.capabilities.
+ const STATUS_CONSTRAINT = 'Each capability has a status. AVAILABLE_NOW: usable now. AVAILABLE_WITH_APPROVAL: only prepares a proposal that a person must approve. NEEDS_CONNECTION: the person must connect or validate it first; never present it as working. UNAVAILABLE or BLOCKED: never plan it and never offer it as usable. A status never grants permission to execute.';
  async function invoke(input, context, conversational) {
   const { spend, missionId } = context;
   if (!spend || typeof missionId !== 'string') fail('planning_connection_required');
-  const request = { mission: input.intention, context: { capabilities: input.capabilities, ...(input.conversationContext ? { conversation: copy(input.conversationContext) } : {}) },
-   constraints: conversational
+  const annotated = Array.isArray(input.capabilityStatus);
+  const request = { mission: input.intention, context: { capabilities: annotated ? copy(input.capabilityStatus) : input.capabilities, ...(input.conversationContext ? { conversation: copy(input.conversationContext) } : {}) },
+   constraints: [...(conversational
     ? ['Select only supplied capabilities. Never invent tools, authority, sources or success. No external actions.', ...CONVERSATIONAL_CONSTRAINTS]
-    : ['Select only supplied capabilities. Never invent tools, authority, sources or success. No external actions. Return a bounded acyclic dependency plan.'],
+    : ['Select only supplied capabilities. Never invent tools, authority, sources or success. No external actions. Return a bounded acyclic dependency plan.']), ...(annotated ? [STATUS_CONSTRAINT] : [])],
    output: conversational ? { action: 'answer, clarify or plan (exactly one value)', message: 'advice or clarification', plan: [] } : { plan: [STEP] } };
   const egressText = JSON.stringify(request), provenance = context.contextProvenance;
   const derivedFromPrivate = context.derivedFromPrivate === true || (Array.isArray(provenance) ? provenance : provenance ? [provenance] : []).some(p => !['PUBLIC','PUBLIC_WEB','PUBLIC_DISCOVERY'].includes(typeof p === 'string' ? p : p.provenance));

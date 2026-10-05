@@ -2,20 +2,25 @@
 const { describeCapability } = require('../executive-brain/capability-registry');
 const { copy, freeze, fail } = require('./scope-session');
 const { interpretIntention, rememberConsent, OUTCOMES, DECLARED } = require('./intention-interpreter');
+const { authorizeEgress } = require('./egress-privacy');
 // Composable primitives, rather than one blueprint for each sentence. Resource
 // adapters are installed by trusted composition; planners only choose these ids.
+// explicitRequest: only the person's own words can trigger it, never a model.
+// approval: its result is a proposal for the human ApprovalQueue.
+// sendsRequest: a step sends request-derived text through its connection.
 const DEFINITIONS = freeze({
  'calendar.read': { role: 'calendar', provider: 'calendar', scope: 'calendar.read', provenance: 'CALENDAR', label: 'tu agenda' },
  'gmail.read': { role: 'email', provider: 'mail', scope: 'mail.read', provenance: 'GMAIL', label: 'tu correo' },
  'memory.search': { role: 'memory', provider: null, provenance: 'INTERNAL_MEMORY', label: 'tu memoria' },
- 'memory.remember': { role: 'memory-write', provider: null, provenance: 'INTERNAL_MEMORY', label: 'recordar información' },
+ 'memory.remember': { role: 'memory-write', provider: null, provenance: 'INTERNAL_MEMORY', label: 'recordar información', explicitRequest: true },
  'documents.read': { role: 'documents', provider: 'storage', scope: 'documents.read', provenance: 'INTERNAL_DOCUMENT', label: 'tus documentos' },
- 'web.search': { role: 'web-search', provider: 'search', scope: 'public.search', provenance: 'PUBLIC_DISCOVERY', label: 'buscar fuentes públicas' },
+ 'web.search': { role: 'web-search', provider: 'search', scope: 'public.search', provenance: 'PUBLIC_DISCOVERY', label: 'buscar fuentes públicas', sendsRequest: true },
  'research.web': { role: 'web-research', provider: 'fetch', scope: 'public.fetch', provenance: 'PUBLIC_WEB', label: 'leer fuentes públicas' },
  'data.analyze': { role: 'data-analysis', provider: null, provenance: 'DERIVED', label: 'analizar información' },
- 'storage.propose': { role: 'storage-proposal', provider: 'storage', scope: 'documents.read', provenance: 'INTERNAL_PROPOSAL', label: 'proponer organización de archivos' },
+ 'storage.propose': { role: 'storage-proposal', provider: 'storage', scope: 'documents.read', provenance: 'INTERNAL_PROPOSAL', label: 'proponer organización de archivos', approval: true },
 });
 const PROVIDERS = ['calendar', 'mail', 'storage', 'search', 'fetch'];
+const PLANNABLE = new Set(['AVAILABLE_NOW', 'AVAILABLE_WITH_APPROVAL', 'NEEDS_CONNECTION']);
 const MESSAGES = freeze({
  NEEDS_APPROVAL: 'Esta acción cambiaría algo fuera de OXKIO o enviaría información, y requiere tu autorización específica. En esta fase no envío ni modifico nada; no he ejecutado nada.',
  BLOCKED: 'No puedo hacer esto: implica una acción irreversible, un pago o credenciales. No he ejecutado nada.',
@@ -59,7 +64,9 @@ function createCapabilityManager({ connections, planner = null }) {
   let interpretation = interpretIntention(text);
   if (interpretation.outcome === OUTCOMES.NEEDS_INFORMATION && interpretation.reason === 'no_capability' && planner && context.skipPlanner !== true) {
    try {
-    const plan = validatePlan(await planner(freeze({ intention: text, capabilities: Object.keys(DEFINITIONS) }), context));
+    // The runtime supplies the effective view; without it nothing is offered.
+    const view = context.capabilityView || { capabilities: [], plannable: [] };
+    const plan = validatePlan(await planner(freeze({ intention: text, capabilities: view.plannable, capabilityStatus: view.capabilities }), context));
     // A planner can never authorize a memory write the human did not ask for.
     if (plan.some(step => step.capability === 'memory.remember') && !rememberConsent(text)) fail('memory_consent_required');
     interpretation = freeze({ ...interpretation, outcome: OUTCOMES.CAN_EXECUTE, reason: 'planner', plan, capabilities: [...new Set(plan.map(step => step.capability))] });
@@ -99,7 +106,30 @@ function createCapabilityManager({ connections, planner = null }) {
   // MESSAGES.BLOCKED stays for requests that are actually blocked.
   return freeze({ capabilities: rows, message: lines.join('\n') + '\nBloqueado siempre: pagos, credenciales y acciones irreversibles.\nNo he ejecutado nada; la ejecución material permanece deshabilitada.' });
  }
- return Object.freeze({ interpret, validatePlan, profile, gaps, catalogue, describe, definitions: DEFINITIONS });
+ // What a decider or planner may see for one request: the same catalogue()
+ // the person sees, refined by what blocks this request now. AVAILABLE_NOW,
+ // AVAILABLE_WITH_APPROVAL and NEEDS_CONNECTION may be planned (the runtime
+ // then asks for the connection or the approval); UNAVAILABLE and BLOCKED
+ // may not. A status is information, never authority: every plan still goes
+ // through validatePlan, the connection gaps, the approval queue and the
+ // Privacy Gate of each step.
+ // degraded(id): Self Repair's circuit breaker (temporarily UNAVAILABLE).
+ function decisionView(handle, { text = '', privacyPolicy, degraded = () => false } = {}) {
+  const view = catalogue(handle).map(row => {
+   const d = DEFINITIONS[row.id];
+   // Declared-but-missing capabilities are UNAVAILABLE; external writes, which
+   // V3 neither executes nor queues, are BLOCKED.
+   if (!d) return { id: row.id, status: row.status === 'HUMAN_GATE' ? 'BLOCKED' : 'UNAVAILABLE' };
+   if (d.explicitRequest) return { id: row.id, status: 'BLOCKED' };
+   if (row.status === 'NOT_AVAILABLE_FOR_ACCOUNT' || degraded(row.id)) return { id: row.id, status: 'UNAVAILABLE' };
+   if (row.status === 'NEEDS_CONNECTION') return { id: row.id, status: 'NEEDS_CONNECTION' };
+   // The same gate the runtime applies before the step sends this request out.
+   if (d.sendsRequest && !authorizeEgress({ text, provider: connections.capture(handle, d.provider, d.scope).egress, policy: privacyPolicy }).allowed) return { id: row.id, status: 'BLOCKED' };
+   return { id: row.id, status: d.approval ? 'AVAILABLE_WITH_APPROVAL' : 'AVAILABLE_NOW' };
+  });
+  return freeze({ capabilities: view, plannable: view.filter(v => PLANNABLE.has(v.status)).map(v => v.id) });
+ }
+ return Object.freeze({ interpret, validatePlan, profile, gaps, catalogue, describe, decisionView, definitions: DEFINITIONS });
 }
 // Error codes adapters use to report that their authorization is no longer valid.
 const AUTH_CODES = new Set(['auth_expired', 'token_expired', 'invalid_grant', 'unauthorized', 'oauth_token_invalid', 'oauth_token_missing', 'oauth_refresh_unavailable', 'oauth_access_unavailable', 'google_oauth_tokens_missing', 'google_oauth_not_configured', 'google_oauth_token_store_unavailable']);

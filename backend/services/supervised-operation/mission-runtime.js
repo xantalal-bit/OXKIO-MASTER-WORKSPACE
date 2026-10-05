@@ -315,12 +315,16 @@ function createSupervisedRuntime({membershipProvider,planner=null,conversationDe
   const sensitive=identifiesPerson(query)||classifyEgress(query).privacyClass!=='PUBLIC'||privateSources||!!(follow&&prev?.derivedFromPrivate);
   store.put(handle,'conversation',id,{objective:follow&&prev?prev.objective:query.slice(0,2000),lastUser:query.slice(0,2000),lastResponse:response.slice(0,3000),derivedFromPrivate:!!sensitive,missionId:state.id||null,status:state.outcome==='NEEDS_APPROVAL'?'NEEDS_APPROVAL':state.status||state.outcome,mode:state.mode||null,audit:[...(prev?.audit||[]),{id:state.id||state.turnId||null,at:now(),mode:state.mode||'OPERATION',outcome:state.outcome||state.status,evidence:state.evidence||null,cost:state.cost||null,trace:state.trace||[]}].slice(-8),expiresAt:new Date(Date.parse(now())+contextTtlMs).toISOString()});
  }
- async function conversational(handle,{text,conversationId,interpretation,previous,id}){
+ // The capabilities a decider or planner may see for this request: the owner's
+ // catalogue refined by connections, Self Repair and the Privacy Gate. It is
+ // information only; a plan still clears every runtime gate.
+ function capabilityView(handle,text){return capabilities.decisionView(handle,{text,privacyPolicy,degraded:id=>!!learning.degraded(handle,[{capability:id}])});}
+ async function conversational(handle,{text,conversationId,interpretation,previous,id,view}){
   const context=previous?{objective:previous.objective,lastUser:previous.lastUser,lastResponse:previous.lastResponse}:undefined;
   if(previous===null&&/\b(esa opcion|esa alternativa|comparalas|comparalos|cual elegirias|cual recomiendas|lo anterior)\b/.test(normalize(text)))return {state:freeze({outcome:OUTCOMES.NEEDS_INFORMATION,status:'NEEDS_INFORMATION',mode:'CLARIFICATION',message:'¿A qué alternativas te refieres? Necesito identificarlas antes de compararlas o recomendar una.',executionEnabled:false})};
   if(conversationDecider){
    try{
-    const decision=await conversationDecider(freeze({intention:text,capabilities:Object.keys(DEFINITIONS),...(context?{conversationContext:context}:{})}),{spend:spendFor(handle),missionId:id,derivedFromPrivate:!!previous?.derivedFromPrivate});
+    const decision=await conversationDecider(freeze({intention:text,capabilities:view.plannable,capabilityStatus:view.capabilities,...(context?{conversationContext:context}:{})}),{spend:spendFor(handle),missionId:id,derivedFromPrivate:!!previous?.derivedFromPrivate});
     await sessions.current(handle);
     if(decision.action==='plan')return {plan:capabilities.validatePlan(decision.plan),decision};
     if(['answer','clarify'].includes(decision.action)&&typeof decision.message==='string')return {state:freeze({outcome:decision.action==='answer'?OUTCOMES.CAN_EXECUTE:OUTCOMES.NEEDS_INFORMATION,status:decision.action==='answer'?'COMPLETED':'NEEDS_INFORMATION',turnId:id,message:decision.message,mode:decision.action==='answer'?'COGNITIVE_ADVICE':'CLARIFICATION',evidence:decision.evidence||null,cost:ledger.mission(handle,id),trace:[{event:'CONVERSATIONAL_DECISION',action:decision.action}],executionEnabled:false})};
@@ -345,11 +349,12 @@ function createSupervisedRuntime({membershipProvider,planner=null,conversationDe
   if(implicit&&stored?.missionId&&['NEEDS_CONNECTION','WAITING_RESOURCE','PAUSED'].includes(status))return resume(handle,stored.missionId);
   if(/^(prepara|preparame) (una |la )?investigacion[.!?\s]*$/.test(plain))return freeze({outcome:OUTCOMES.NEEDS_INFORMATION,status:'NEEDS_INFORMATION',mode:'CLARIFICATION',message:'¿Sobre qué tema quieres que investigue y qué resultado necesitas?',executionEnabled:false});
   let reusable=null;try{reusable=store.get(handle,'workflow',workflowId(text));}catch(error){if(error.code!=='resource_not_found')throw error;}
-  const direct=await capabilities.interpret(text,{skipPlanner:!!conversationDecider||!!reusable,scope:freeze(copy(sessions.scope(handle))),spend:spendFor(handle),missionId:id});
+  const view=capabilityView(handle,text);
+  const direct=await capabilities.interpret(text,{skipPlanner:!!conversationDecider||!!reusable,scope:freeze(copy(sessions.scope(handle))),spend:spendFor(handle),missionId:id,capabilityView:view});
   if(direct.orientation)return freeze({outcome:OUTCOMES.CAN_EXECUTE,status:'COMPLETED',mode:'ORIENTATION',message:orientation(handle),executionEnabled:false});
   const canConverse=![OUTCOMES.BLOCKED,OUTCOMES.NEEDS_APPROVAL,OUTCOMES.NEEDS_CAPABILITY].includes(direct.outcome)&&!direct.introspection;
   if(!reusable&&canConverse&&(implicit||(reference&&direct.outcome!==OUTCOMES.CAN_EXECUTE)||(direct.outcome===OUTCOMES.NEEDS_INFORMATION&&['no_capability','missing_source'].includes(direct.reason)))){
-   const result=await conversational(handle,{text,conversationId,interpretation:direct,previous:implicit||reference?previous:null,id});
+   const result=await conversational(handle,{text,conversationId,interpretation:direct,previous:implicit||reference?previous:null,id,view});
    if(result.state)return result.state;
    // A model's proposed plan still passes the canonical interpreter gates.
    const plan=result.plan;
