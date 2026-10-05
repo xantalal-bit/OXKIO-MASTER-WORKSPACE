@@ -251,7 +251,7 @@ test('B: private memory (CONFIDENTIAL) never leaves; the deterministic analysis 
 });
 
 test('B: a request about a person or carrying an identifier is CONFIDENTIAL and is not sent', async () => {
- for (const question of ['Investiga en fuentes públicas el reglamento de protección de datos y compáralo con mis contratos', 'Investiga en fuentes públicas la ley de inteligencia artificial y compárala para ana@example.org']) {
+ for (const question of ['Investiga en fuentes públicas el reglamento de protección de datos y compáralo con lo que dice mi socio','Investiga en fuentes públicas la ley de inteligencia artificial y compárala para ana@example.org']) {
   const p = provider('openai', 'luna', publicSynthesis); p.region = 'global';
   const s = await setup({ providers: [p], policy: POLICY_B, floor: 'INTERNAL', adapterFactory: publicSources });
   try {
