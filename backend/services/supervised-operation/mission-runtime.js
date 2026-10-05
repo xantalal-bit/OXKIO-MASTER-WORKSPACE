@@ -9,7 +9,7 @@ const { containsSecretMarker, DEFAULT_PRIVACY_POLICY } = require('../executive-b
 const { createScopeSessions, createScopedStore, copy, freeze, fail } = require('./scope-session');
 const { createCapabilityManager, createConnectionManager, DEFINITIONS } = require('./capability-manager');
 const { OUTCOMES, normalize, tokensOf } = require('./intention-interpreter');
-const { authorizeEgress, classifyEgress, mentionsPerson } = require('./egress-privacy');
+const { authorizeEgress, classifyEgress, identifiesPerson } = require('./egress-privacy');
 const { verifyPartial } = require('../executive-brain/synthesis-verifier');
 const { createCostLedger } = require('./cost-ledger');
 const { classified, diagnose, createLearning } = require('./self-repair');
@@ -312,7 +312,7 @@ function createSupervisedRuntime({membershipProvider,planner=null,conversationDe
   // cannot fall back to an older objective; its context never leaves.
   if(state.outcome===OUTCOMES.BLOCKED){store.put(handle,'conversation',id,{objective:null,lastUser:'',lastResponse:'',derivedFromPrivate:true,missionId:null,status:'BLOCKED',mode:null,audit:[...(prev?.audit||[]),{id:null,at:now(),mode:'OPERATION',outcome:OUTCOMES.BLOCKED,evidence:null,cost:null,trace:[]}].slice(-8),expiresAt:new Date(Date.parse(now())+contextTtlMs).toISOString()});return;}const follow=FOLLOW.test(normalize(query).trim())||REFERENCE.test(normalize(query));
   const privateSources=state.result?.items?.some(v=>!PUBLIC_PROVENANCE.includes(v.provenance));
-  const sensitive=mentionsPerson(query)||classifyEgress(query).privacyClass!=='PUBLIC'||privateSources||!!(follow&&prev?.derivedFromPrivate);
+  const sensitive=identifiesPerson(query)||classifyEgress(query).privacyClass!=='PUBLIC'||privateSources||!!(follow&&prev?.derivedFromPrivate);
   store.put(handle,'conversation',id,{objective:follow&&prev?prev.objective:query.slice(0,2000),lastUser:query.slice(0,2000),lastResponse:response.slice(0,3000),derivedFromPrivate:!!sensitive,missionId:state.id||null,status:state.outcome==='NEEDS_APPROVAL'?'NEEDS_APPROVAL':state.status||state.outcome,mode:state.mode||null,audit:[...(prev?.audit||[]),{id:state.id||state.turnId||null,at:now(),mode:state.mode||'OPERATION',outcome:state.outcome||state.status,evidence:state.evidence||null,cost:state.cost||null,trace:state.trace||[]}].slice(-8),expiresAt:new Date(Date.parse(now())+contextTtlMs).toISOString()});
  }
  async function conversational(handle,{text,conversationId,interpretation,previous,id}){
@@ -326,7 +326,7 @@ function createSupervisedRuntime({membershipProvider,planner=null,conversationDe
     if(['answer','clarify'].includes(decision.action)&&typeof decision.message==='string')return {state:freeze({outcome:decision.action==='answer'?OUTCOMES.CAN_EXECUTE:OUTCOMES.NEEDS_INFORMATION,status:decision.action==='answer'?'COMPLETED':'NEEDS_INFORMATION',turnId:id,message:decision.message,mode:decision.action==='answer'?'COGNITIVE_ADVICE':'CLARIFICATION',evidence:decision.evidence||null,cost:ledger.mission(handle,id),trace:[{event:'CONVERSATIONAL_DECISION',action:decision.action}],executionEnabled:false})};
    }catch(error){
     if(['session_authority_changed','permission_denied','stored_integrity_invalid','stored_scope_invalid'].includes(error.code))throw error;
-    const privacy=!!previous?.derivedFromPrivate||mentionsPerson(text)||classifyEgress(text).privacyClass!=='PUBLIC';
+    const privacy=!!previous?.derivedFromPrivate||identifiesPerson(text)||classifyEgress(text).privacyClass!=='PUBLIC';
     return {state:freeze({outcome:OUTCOMES.NEEDS_INFORMATION,status:'NEEDS_INFORMATION',turnId:id,evidence:{attempts:error.attempts||[]},mode:privacy?'PRIVACY_BLOCKED':'CLARIFICATION',message:privacy?'Podemos avanzar sin enviar tus datos fuera. ¿Qué tipo de actividad quieres mejorar, a quién quieres llegar y qué límites debemos respetar?':'Para avanzar necesito concretar el objetivo. ¿Qué resultado buscas y qué alternativas o información debemos considerar?',diagnosis:{code:/^[a-z_]+$/.test(error.code||'')?error.code:'conversation_unavailable'},cost:ledger.mission(handle,id),executionEnabled:false})};
    }
   }

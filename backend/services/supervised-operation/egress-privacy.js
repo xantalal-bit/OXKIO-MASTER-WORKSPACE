@@ -14,8 +14,16 @@ const IDENTIFIERS = Object.freeze([
 ]);
 // Special categories (health, beliefs, finances…) only become personal data
 // when tied to someone: a first-person reference or a full name.
-const SPECIAL = /\b(diagn[oó]stic|enfermedad|vih|sida|c[aá]ncer|embaraz|aborto|psiqui|depresi[oó]n|terapia|medicaci[oó]n|tratamiento|religi[oó]n|orientaci[oó]n sexual|afiliaci[oó]n|antecedentes|deuda|n[oó]mina|salario|hipoteca|denuncia|juicio)/i;
+const SPECIAL = /\b(diagn[oó]stic|enfermedad|vih|sida|c[aá]ncer|embaraz|aborto|psiqui|depresi[oó]n|terapia|medicaci[oó]n|tratamiento|religi[oó]n|orientaci[oó]n sexual|afiliaci[oó]n|antecedentes|deuda|n[oó]mina|salario|sueldo|hipoteca|pr[eé]stamo|ingresos|patrimonio|saldo|cuenta bancaria|pensi[oó]n|declaraci[oó]n de la renta|irpf|denuncia|juicio)/i;
 const FIRST_PERSON = /\b(mi|mis|me|m[ií]o|m[ií]a|yo|conmigo|nuestro|nuestra)\b/i;
+// An amount of money is private financial data when the person ties it to
+// themselves ("mi préstamo de 20.000 €", "gano 3.000 € al mes"); a price in a
+// general question ("portátiles de 900 €") is not.
+const MONEY = /\d[\d.,]*\s?(?:€|eur\b|euros\b|usd\b|\$|d[oó]lares\b)|(?:€|\$)\s?\d/i;
+const OWN_MONEY = /\b(gano|cobro|debo|ingreso|ahorro|ahorrado|ahorrados|pago|cuesta mi|vale mi)\b/i;
+// A relation names one specific individual for the speaker ("mi jefe", "mis
+// hijos") even without their name: a third party, not the speaker's own words.
+const RELATION = /\b(mi|mis|nuestro|nuestra|nuestros|nuestras)\s+(jef[ea]s?|mujer|marido|espos[oa]s?|pareja|novi[oa]s?|hij[oa]s?|padres?|madres?|herman[oa]s?|abuel[oa]s?|suegr[oa]s?|cuñad[oa]s?|t[ií][oa]s?|prim[oa]s?|sobrin[oa]s?|m[eé]dic[oa]s?|doctor[a]?|psic[oó]log[oa]s?|abogad[oa]s?|soci[oa]s?|compañer[oa]s?|amig[oa]s?|vecin[oa]s?|emplead[oa]s?|secretari[oa]s?)\b/i;
 // Two adjacent capitalised words are read as a full name, unless BOTH are
 // institutional or legal vocabulary ("Reglamento General", "Parlamento
 // Europeo", "European Union"). One ordinary word is enough to keep a name:
@@ -44,9 +52,13 @@ function namesPerson(text) {
  }
  return false;
 }
-// A request that refers to a person (first person or a full name) is treated
-// as personal data on its own, even without a special category.
+// Any reference to a person, the speaker included: the special-category and
+// financial rules use it to tell "mi hipoteca" from "qué es una hipoteca".
 const mentionsPerson = text => typeof text === 'string' && (FIRST_PERSON.test(text) || namesPerson(text));
+// Canon (05/10/2026): the first person alone is not confidential ("organiza mi
+// semana"); what the text says is. A request is personal data on its own only
+// when it identifies someone else: a full name or a relation ("mi jefe").
+const identifiesPerson = text => typeof text === 'string' && (namesPerson(text) || RELATION.test(text));
 // text: what the person wrote or what derives from private sources.
 // publicText: text read from PUBLIC sources (fetched pages). It is checked for
 // secrets and identifiers, but not for the special-category rule: a public
@@ -59,6 +71,7 @@ function classifyEgress(text, { derivedFromPrivate = false, floor = PRIVACY_CLAS
  if (derivedFromPrivate) raise('private_source');
  for (const [name, pattern] of IDENTIFIERS) if (pattern.test(text) || pattern.test(publicText)) raise('identifier_' + name);
  if (SPECIAL.test(text) && mentionsPerson(text)) raise('special_category_personal');
+ if (MONEY.test(text) && (mentionsPerson(text) || OWN_MONEY.test(text))) raise('financial_amount_personal');
  return freeze({ privacyClass, reasons });
 }
 // provider: the connection's declared egress { providerId, region }. Without a
@@ -68,4 +81,4 @@ function authorizeEgress({ text, publicText = '', provider = {}, policy = DEFAUL
  const routing = evaluateProviderRouting({ privacyClass: classified.privacyClass, provider: { external: true, providerId: provider && provider.providerId, region: provider && provider.region }, policy });
  return freeze({ allowed: routing.allowed, privacyClass: classified.privacyClass, reasons: [...classified.reasons, routing.reason] });
 }
-module.exports = { classifyEgress, authorizeEgress, mentionsPerson };
+module.exports = { classifyEgress, authorizeEgress, mentionsPerson, identifiesPerson };
