@@ -46,8 +46,13 @@ function createChatGateway({runtime,membershipProvider,adapterFactory=null,store
  function describe(state){
   if(state.message)return state.message;
   if(state.status==='NEEDS_CONNECTION'){
-   if(!state.connectionRequests.length)return 'Necesito que vuelvas a autorizar la conexión para continuar. La misión queda guardada y continuará desde este punto.';
-   return state.connectionRequests.map(g=>[g.reason,'Permiso solicitado: '+(PERMISSIONS[g.permission]||'consultar la fuente')+'.',g.canDo,g.cannotDo,g.how].join(' ')).join('\n')+'\nLa misión queda guardada y continuará desde este punto.';
+   const RESUME='He guardado esta tarea: en cuanto la conexión esté lista, di «continúa» y seguiré desde este punto sin que tengas que repetir la petición.';
+   if(!state.connectionRequests.length)return 'Necesito que vuelvas a autorizar la conexión para continuar. '+RESUME;
+   // What the permission allows and what it never allows are labelled, and
+   // continuation is promised only when this account can actually connect.
+   const lower=v=>v.charAt(0).toLowerCase()+v.slice(1);
+   const lines=state.connectionRequests.map(g=>[g.reason,'Permiso solicitado: '+(PERMISSIONS[g.permission]||'consultar la fuente')+'.','Con él podré '+lower(g.canDo),'Nunca podré '+lower(g.cannotDo),g.how].join(' '));
+   return lines.join('\n')+'\n'+(state.connectionRequests.some(g=>g.connectable)?RESUME:'He guardado esta tarea, pero no podré continuarla mientras esa conexión no esté disponible para tu cuenta.');
   }
   if(state.status==='WAITING_RESOURCE')return 'El recurso de razonamiento no está disponible ahora (límite, cuota, presupuesto o fallo del proveedor) y no hay alternativa autorizada. La misión y sus fuentes quedan guardadas en este punto; di "continúa" para reanudarla. No he ejecutado nada externo.';
   if(state.status==='COMPLETED'&&state.result?.synthesis)return synthesisText(state.result);
