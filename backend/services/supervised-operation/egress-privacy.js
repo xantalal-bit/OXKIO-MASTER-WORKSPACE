@@ -18,9 +18,11 @@ const SPECIAL = /\b(diagn[oó]stic|enfermedad|vih|sida|c[aá]ncer|embaraz|aborto
 const FIRST_PERSON = /\b(mi|mis|me|m[ií]o|m[ií]a|yo|conmigo|nuestro|nuestra)\b/i;
 // An amount of money is private financial data when the person ties it to
 // themselves ("mi préstamo de 20.000 €", "gano 3.000 € al mes"); a price in a
-// general question ("portátiles de 900 €") is not.
+// general question ("portátiles de 900 €") is not. A first-person verb ties it
+// too ("necesito pagar 300 €", "tengo 5.000 € ahorrados"): since 05/10/2026 such
+// requests may reach understanding instead of a block, so they stay local.
 const MONEY = /\d[\d.,]*\s?(?:€|eur\b|euros\b|usd\b|\$|d[oó]lares\b)|(?:€|\$)\s?\d/i;
-const OWN_MONEY = /\b(gano|cobro|debo|ingreso|ahorro|ahorrado|ahorrados|pago|cuesta mi|vale mi)\b/i;
+const OWN_MONEY = /\b(gano|cobro|debo|ingreso|ahorro|ahorrado|ahorrados|pago|cuesta mi|vale mi|necesito|quiero|tengo|tenemos|debemos|gasto|gastamos|pagamos|cobramos)\b/i;
 // A relation names one specific individual for the speaker ("mi jefe", "mis
 // hijos") even without their name: a third party, not the speaker's own words.
 const RELATION = /\b(mi|mis|nuestro|nuestra|nuestros|nuestras)\s+(jef[ea]s?|mujer|marido|espos[oa]s?|pareja|novi[oa]s?|hij[oa]s?|padres?|madres?|herman[oa]s?|abuel[oa]s?|suegr[oa]s?|cuñad[oa]s?|t[ií][oa]s?|prim[oa]s?|sobrin[oa]s?|m[eé]dic[oa]s?|doctor[a]?|psic[oó]log[oa]s?|abogad[oa]s?|soci[oa]s?|compañer[oa]s?|amig[oa]s?|vecin[oa]s?|emplead[oa]s?|secretari[oa]s?)\b/i;

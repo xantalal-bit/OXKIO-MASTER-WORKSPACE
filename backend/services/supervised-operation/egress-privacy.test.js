@@ -73,3 +73,11 @@ test('governed reasoning: own words reach the INTERNAL provider; a third party, 
  await assert.rejects(ask('Organiza mi semana', { egressText: 'Organiza mi semana password=fixture' }), e => e.code === 'secret_context');
  assert.equal(calls.length, 1);
 });
+// 05/10/2026: payment and transfer verbs mentioned as a topic may now reach
+// understanding, so an amount tied to the speaker by a first-person verb stays
+// local; a price in a general question still does not.
+test('an amount tied to the speaker by a first-person verb is CONFIDENTIAL; a general price is not', () => {
+ const of = text => classifyEgress(text, { floor: 'INTERNAL' }).privacyClass;
+ for (const text of ['Necesito pagar 300 € de una multa', 'Quiero transferir 1.200 € a un proveedor', 'Tengo 5.000 € ahorrados', 'Gastamos 800 € al mes en software']) assert.equal(of(text), 'CONFIDENTIAL', text);
+ for (const text of ['Compara alquilar o comprar un coche de 20.000 €', 'Compara portátiles de 900 € y 1.200 €', 'Necesito ideas para ahorrar en la oficina']) assert.equal(of(text), 'INTERNAL', text);
+});

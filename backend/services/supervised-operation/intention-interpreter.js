@@ -21,7 +21,12 @@ const exact = (tokens, words) => tokens.some(token => words.includes(token));
 // informational question ("¿cuándo me paga…?") is not an order.
 const NOUN_MARKERS = new Set(['la', 'las', 'el', 'los', 'una', 'un', 'mi', 'mis', 'tu', 'tus', 'su', 'sus', 'de', 'del', 'al', 'esta', 'este', 'esa', 'ese', 'nuestra', 'nuestro']);
 const QUESTION = /^(cuando|donde|quien|quienes|cuanto|cuanta|cuantos|cuantas|por que)\b/;
-const action = (tokens, words, plain) => !QUESTION.test(plain.replace(/^[^a-z0-9]+/, '')) && tokens.some((token, i) => words.includes(token) && !(i > 0 && NOUN_MARKERS.has(tokens[i - 1])));
+// An infinitive names a topic ("alquilar o comprar", "ayúdame a responder"),
+// not an order to OXKIO, unless it is asked of OXKIO ("¿puedes comprar…?").
+const INFINITIVE = token => token.length > 4 && /(ar|er|ir)$/.test(token);
+const ASKED_OF_OXKIO = new Set(['puedes', 'podrias', 'podras', 'podria', 'puede']);
+const asOrder = (tokens, i) => !INFINITIVE(tokens[i]) || (i > 0 && ASKED_OF_OXKIO.has(tokens[i - 1])) || (i > 1 && tokens[i - 1] === 'me' && ASKED_OF_OXKIO.has(tokens[i - 2]));
+const action = (tokens, words, plain) => !QUESTION.test(plain.replace(/^[^a-z0-9]+/, '')) && tokens.some((token, i) => words.includes(token) && !(i > 0 && NOUN_MARKERS.has(tokens[i - 1])) && asOrder(tokens, i));
 const SOURCES = Object.freeze({
  'calendar.read': ['agenda', 'cita', 'citas', 'reunion', 'reuniones', 'calendario', 'evento', 'eventos', 'compromiso'],
  'gmail.read': ['correo', 'correos', 'email', 'emails', 'mail', 'mails', 'bandeja', 'inbox', 'factura'],
@@ -34,6 +39,9 @@ const WEB_TOPICS = ['informacion', 'precio', 'precios', 'receta', 'recetas', 'ho
 const ANALYZE = ['clasifica', 'organiza', 'ordena', 'compara', 'resume', 'resumen', 'analiza', 'cuanto', 'cuantos', 'cuanta', 'total', 'suma'];
 const STORAGE = ['carpeta', 'carpetas'];
 // Declared but not implemented in V3: honest gaps, never silent fallbacks.
+// An order to remind ("recuérdame", "avísame") is unambiguous; naming the
+// other cues ("¿qué es OneDrive?", "un recordatorio") is left to understanding.
+const REMINDER_ORDERS = ['recuerdame', 'recordarme', 'avisame', 'avisarme'];
 const DECLARED = Object.freeze({
  'reminders.schedule': { cues: ['recuerdame', 'recordarme', 'avisame', 'avisarme', 'recordatorio', 'recordatorios', 'alarma'], label: 'recordatorios y tareas programadas' },
  'drive.read': { cues: ['drive'], label: 'Google Drive' },
@@ -47,7 +55,14 @@ const WHEN = '(manana|pasado manana|el (lunes|martes|miercoles|jueves|viernes|sa
 const FUTURE = new RegExp('\\b(comprueba|revisa|mira|vigila|consulta|avisa)\\s+' + WHEN + '\\b');
 const AGENDA_QUESTION = new RegExp('\\bque tengo (' + WHEN + '|hoy|esta semana|esta tarde|esta noche)\\b');
 // Any external write (sending, scheduling, changing) needs a specific human authorization.
-const SEND = ['envia', 'enviar', 'enviale', 'enviame', 'envialo', 'manda', 'mandar', 'mandale', 'mandalo', 'reenvia', 'reenviar', 'responde', 'responder', 'respondele', 'contesta', 'contestar', 'contestale', 'publica', 'publicar', 'send', 'reply', 'agendar', 'agendame', 'reserva', 'reservar', 'reservame', 'cancela', 'cancelar', 'mueve', 'mover', 'crea', 'crear', 'anade', 'anadir', 'modifica', 'modificar', 'actualiza', 'actualizar'];
+const SEND = ['envia', 'enviar', 'enviale', 'enviame', 'envialo', 'manda', 'mandar', 'mandale', 'mandalo', 'reenvia', 'reenviar', 'responde', 'responder', 'respondele', 'contesta', 'contestar', 'contestale', 'publica', 'publicar', 'send', 'reply', 'agendar', 'agendame', 'reserva', 'reservar', 'reservame', 'cancela', 'cancelar'];
+// Generic edits are external only for an external object ("crea un evento")
+// and local otherwise ("crea una lista de ideas"): understanding decides, and
+// the approval gate stays the deterministic fallback.
+const EDIT = ['mueve', 'mover', 'crea', 'crear', 'anade', 'anadir', 'modifica', 'modificar', 'actualiza', 'actualizar'];
+// Sources chosen by vocabulary that read the person's private data: a mention
+// is not a request to read it, so understanding decides when it can.
+const PRIVATE_SOURCES = ['calendar.read', 'gmail.read', 'documents.read', 'storage.propose'];
 // Credentials are never handled (not even remembered); irreversible, financial
 // or production requests are blocked in V3.
 const CREDENTIALS = ['contrasena', 'contrasenas', 'password', 'passwords', 'secreto', 'secretos', 'credencial', 'credenciales', 'iam'];
@@ -87,9 +102,14 @@ function interpretIntention(text) {
  // "agenda" is a noun ("mi agenda", "agenda de hoy") unless it opens an order.
  const agendaVerb = tokens[0] === 'agenda' && ['una', 'un', 'me', 'la', 'el', 'cita', 'reunion', 'llamada'].includes(tokens[1]);
  if (!remember && (action(tokens, SEND, plain) || agendaVerb)) return result(OUTCOMES.NEEDS_APPROVAL, { reason: 'external_action', gate: 'HUMAN_GATE' });
+ // semantic: the outcome rests on reading vocabulary, not on an explicit
+ // order; with cognition available the runtime lets understanding decide and
+ // keeps this outcome as its deterministic fallback.
+ if (!remember && action(tokens, EDIT, plain)) return result(OUTCOMES.NEEDS_APPROVAL, { reason: 'external_action', gate: 'HUMAN_GATE', semantic: true });
  const declared = Object.entries(DECLARED).filter(([, d]) => has(tokens, d.cues)).map(([id]) => id);
- if (FUTURE.test(plain) && !declared.includes('reminders.schedule')) declared.push('reminders.schedule');
- if (declared.length && !remember) return result(OUTCOMES.NEEDS_CAPABILITY, { reason: 'not_implemented', capabilities: declared, labels: declared.map(id => DECLARED[id].label) });
+ const futureOrder = FUTURE.test(plain);
+ if (futureOrder && !declared.includes('reminders.schedule')) declared.push('reminders.schedule');
+ if (declared.length && !remember) return result(OUTCOMES.NEEDS_CAPABILITY, { reason: 'not_implemented', capabilities: declared, labels: declared.map(id => DECLARED[id].label), semantic: !futureOrder && !has(tokens, REMINDER_ORDERS) });
  if (remember) {
   const content = text.trim().replace(/^\s*(recuerda|guarda esta informaci[oó]n|apunta|anota|memoriza)\s*(que\s+|:\s*)?/i, '').trim();
   if (content.length < 2) return result(OUTCOMES.NEEDS_INFORMATION, { reason: 'missing_content', missingInformation: ['¿Qué quieres que recuerde?'] });
@@ -97,19 +117,23 @@ function interpretIntention(text) {
  }
  const cues = [...Object.values(SOURCES).flat(), ...WEB_VERBS, ...WEB_STRONG, ...ANALYZE.filter(w => w !== 'compara'), ...STORAGE];
  const ids = Object.entries(SOURCES).filter(([, stems]) => has(tokens, stems)).map(([id]) => id);
- if (AGENDA_QUESTION.test(plain) && !ids.includes('calendar.read')) ids.push('calendar.read');
+ // "¿Qué tengo mañana?" is a direct question about the agenda: a fast path.
+ const agendaQuestion = AGENDA_QUESTION.test(plain);
+ if (agendaQuestion && !ids.includes('calendar.read')) ids.push('calendar.read');
  if (has(tokens, WEB_STRONG) || (ids.length === 0 && (has(tokens, WEB_VERBS) || has(tokens, WEB_TOPICS)))) ids.push('web.search', 'research.web');
  if (has(tokens, ANALYZE)) ids.push('data.analyze');
  if (has(tokens, STORAGE)) ids.push('storage.propose');
  const searchTerms = [...new Set(tokens.filter(t => !STOP.has(t) && !cues.some(stem => stemMatch(t, stem))))];
  if (!ids.some(id => SOURCE_IDS.includes(id))) {
   return result(OUTCOMES.NEEDS_INFORMATION, {
-   reason: ids.length ? 'missing_source' : 'no_capability', searchTerms,
+   reason: ids.length ? 'missing_source' : 'no_capability', searchTerms, semantic: true,
    missingInformation: [ids.length ? '¿Dónde está esa información: tu correo, tu agenda, tu memoria, tus documentos o fuentes públicas?' : '¿Qué quieres conseguir y con qué información (correo, agenda, memoria, documentos o fuentes públicas)?'],
   });
  }
  if (ids.includes('web.search') && searchTerms.length === 0) return result(OUTCOMES.NEEDS_INFORMATION, { reason: 'missing_topic', missingInformation: ['¿Qué tema quieres que investigue?'] });
  const unique = [...new Set(ids)];
- return result(OUTCOMES.CAN_EXECUTE, { capabilities: unique, plan: composePlan(unique), searchTerms });
+ // Explicit public research, memory and the direct agenda question stay fast
+ // paths; a private source picked from vocabulary is a reading to confirm.
+ return result(OUTCOMES.CAN_EXECUTE, { capabilities: unique, plan: composePlan(unique), searchTerms, semantic: !agendaQuestion && unique.some(id => PRIVATE_SOURCES.includes(id)) });
 }
 module.exports = { OUTCOMES, DECLARED, interpretIntention, rememberConsent, normalize, tokensOf };
