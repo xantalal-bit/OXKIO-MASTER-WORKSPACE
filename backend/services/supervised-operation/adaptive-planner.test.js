@@ -19,3 +19,42 @@ test('formal-imperative advice and an empty plan next to an answer are accepted;
  for(const message of ['Ya envié el correo.','Creé la campaña y publiqué el anuncio.','He enviado la propuesta.']){const x=planner({action:'answer',message});await assert.rejects(x.p.decide(input,ctx()));}
  const x=planner({action:'answer',message:'Consejo',plan:[{key:'a',capability:'memory.search',dependsOn:[]}]});await assert.rejects(x.p.decide(input,ctx()));
 });
+// planning_invalid_action diagnosis (05/10/2026): the prompt showed a combined
+// enum literal and a populated plan for every action, while the validator only
+// accepts a plan with action "plan". PROMPT = CONTRACT = VALIDATOR, fail closed,
+// with one fixed code per rejected form.
+// Real Luna output captured on canonical b9eef25 (chatcmpl-EVgKPzwxJZj5DTRos4UZcCGF0COi0).
+const LUNA_CLARIFY={action:'clarify',message:'¿Qué objetivos, proyectos o tareas quieres organizar esta semana? Indica también el periodo exacto, fechas límite, reuniones ya comprometidas y cualquier restricción de tiempo o prioridad. Con esa información podré proponer un plan; si quieres que revise calendario, correo, memoria o documentos, especifica cuáles y con qué alcance.',plan:[]};
+const ADVICE='Te propongo: 1) lista tus tareas, 2) prioriza por impacto y plazo, 3) reserva bloques de foco. ¿Qué tareas tienes?';
+const STEPS=[{key:'step-1',capability:'memory.search',dependsOn:[]},{key:'step-2',capability:'data.analyze',dependsOn:['step-1']}];
+const DECIDER_FIXTURES=[
+ ['C1 answer + plan',{action:'answer',message:ADVICE,plan:STEPS},'planning_plan_without_plan_action'],
+ ['C1 clarify + plan',{action:'clarify',message:ADVICE,plan:STEPS},'planning_plan_without_plan_action'],
+ ['C1 answer + the old template step',{action:'answer',message:ADVICE,plan:[{key:'step-key',capability:'supplied-id',dependsOn:[]}]},'planning_plan_without_plan_action'],
+ ['C2 old enum literal',{action:'answer|clarify|plan',message:ADVICE,plan:[]},'planning_unknown_action'],
+ ['C2 propose',{action:'propose',message:ADVICE,plan:[]},'planning_unknown_action'],
+ ['C2 ANSWER',{action:'ANSWER',message:ADVICE,plan:[]},'planning_unknown_action'],
+ ['C2 missing action, empty plan',{message:ADVICE,plan:[]},'planning_unknown_action'],
+ ['C2 unknown action with steps',{action:'propose',message:ADVICE,plan:STEPS},'planning_unknown_action'],
+ ['invented capability',{action:'plan',plan:[{key:'a',capability:'calendar.write',dependsOn:[]}]},'planning_invalid_plan'],
+ ['extra field',{action:'answer',message:ADVICE,plan:[],steps:['x']},'planning_invalid_shape'],
+ ['claimed completed action',{action:'answer',message:'He creado tu plan semanal y lo he guardado.',plan:[]},'planning_invalid_message'],
+];
+const DECIDER_ACCEPTED=[['real Luna clarify + []',LUNA_CLARIFY,'clarify'],['answer + []',{action:'answer',message:ADVICE,plan:[]},'answer'],['answer without plan',{action:'answer',message:ADVICE},'answer'],['valid plan',{action:'plan',message:ADVICE,plan:STEPS},'plan']];
+const CAPS={...input,capabilities:['memory.search','data.analyze']};
+test('decider contract: C1 and C2 are rejected with their own fixed code, without model content; valid forms are accepted',async()=>{
+ for(const [label,content,code] of DECIDER_FIXTURES){const x=planner(content);const error=await x.p.decide(CAPS,ctx()).then(()=>null,e=>e);assert.ok(error,label);assert.equal(error.code,'reasoning_resource_unavailable',label);assert.deepEqual(error.attempts.map(a=>[a.failure,a.detail]),[['INVALID_OUTPUT',code]],label);assert.ok(!JSON.stringify(error.attempts).includes('Te propongo'),label);assert.equal(x.calls.length,1,label);}
+ for(const [label,content,action] of DECIDER_ACCEPTED){const x=planner(content);const r=await x.p.decide(CAPS,ctx());assert.equal(r.action,action,label);if(action!=='plan')assert.equal(r.plan,undefined,label);}
+});
+test('decider prompt states exactly the validated contract and no combined enum literal',async()=>{
+ const x=planner({action:'clarify',message:'¿Qué tareas tienes?',plan:[]});await x.p.decide(CAPS,ctx());const sent=x.calls[0];const text=JSON.stringify(sent);
+ assert.ok(!text.includes('answer|clarify|plan'));assert.ok(!/"action":"[^"]*\|/.test(text));
+ assert.ok(sent.constraints.includes('action is exactly one of these values: "answer", "clarify" or "plan". Never another value or a combination of them.'));
+ assert.ok(sent.constraints.includes('If action is "answer" or "clarify", plan is [] (an empty list).'));
+ assert.ok(sent.constraints.some(c=>c.startsWith('Only action "plan" has a non-empty plan')));
+ assert.deepEqual(sent.output.plan,[]);assert.deepEqual(Object.keys(sent.output),['action','message','plan']);
+ // No constraint asks for a plan unconditionally in the conversational contract.
+ assert.ok(!sent.constraints.some(c=>/Return a bounded acyclic dependency plan/.test(c)));
+ // The non-conversational planner keeps its plan-only contract.
+ const y=planner({plan:STEPS});await y.p.plan(CAPS,ctx());assert.deepEqual(y.calls[0].output,{plan:[{key:'step-key',capability:'supplied-id',dependsOn:[]}]});assert.equal(y.calls[0].output.action,undefined);
+});
