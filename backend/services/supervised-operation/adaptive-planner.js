@@ -30,12 +30,18 @@ function createAdaptivePlanner({ provider, providers, privacyPolicy = DEFAULT_PR
   'First understand what the person wants to achieve: information, analysis, comparison, writing, planning or an action. Naming a topic (mail, meetings, invoices, documents, purchases or payments) is not a request to read that data or to perform that action.',
   'Use a capability only when the goal needs it. Read the person\'s own sources only when the goal needs their actual data; writing, ideas, explanations, comparisons and summaries of text the person supplied need no source.',
   'Answer when you can help with general advice or with what the person wrote; clarify only when information that is really needed is missing.',
-  'If the goal needs a capability that is not available, say so plainly; never claim access you do not have.',
+  'If the goal needs a capability that is UNAVAILABLE or BLOCKED, say so plainly; never claim access you do not have.',
+  // Executive continuity (05/10/2026): a missing connection is not missing
+  // information. The runtime asks for it and keeps the task resumable.
+  'If the goal is clear and needs a capability whose status is NEEDS_CONNECTION, choose plan and include it; do not clarify only to ask for the connection. Clarify only when the goal itself is unclear.',
+  'The message is for the person: never write capability ids or status names; use plain words.',
  ];
+ // Internal vocabulary never reaches the person: status names and capability ids.
+ const INTERNAL_TERMS = /\b(?:AVAILABLE_NOW|AVAILABLE_WITH_APPROVAL|NEEDS_CONNECTION|UNAVAILABLE|BLOCKED|NEEDS_APPROVAL|NEEDS_CAPABILITY)\b|\b[a-z]+\.(?:read|search|remember|analyze|propose|schedule|extract|write)\b/;
  // With the runtime's effective view, each capability carries its status
  // (capability-manager decisionView). Plans are still validated only against
  // the plannable ids in input.capabilities.
- const STATUS_CONSTRAINT = 'Each capability has a status. AVAILABLE_NOW: usable now. AVAILABLE_WITH_APPROVAL: only prepares a proposal that a person must approve. NEEDS_CONNECTION: the person must connect or validate it first; never present it as working. UNAVAILABLE or BLOCKED: never plan it and never offer it as usable. A status never grants permission to execute.';
+ const STATUS_CONSTRAINT = 'Each capability has a status. AVAILABLE_NOW: usable now. AVAILABLE_WITH_APPROVAL: only prepares a proposal that a person must approve. NEEDS_CONNECTION: plan it when the goal needs it; OXKIO asks the person to connect it and then continues the same task; never present it as working. UNAVAILABLE or BLOCKED: never plan it and never offer it as usable. A status never grants permission to execute.';
  async function invoke(input, context, conversational) {
   const { spend, missionId } = context;
   if (!spend || typeof missionId !== 'string') fail('planning_connection_required');
@@ -56,6 +62,7 @@ function createAdaptivePlanner({ provider, providers, privacyPolicy = DEFAULT_PR
     // answer or a clarification is never accepted, nor silently dropped.
     if (!['answer','clarify'].includes(c.action)) return 'planning_unknown_action';
     if (!noPlan(c.plan)) return 'planning_plan_without_plan_action';
+    if (typeof c.message === 'string' && INTERNAL_TERMS.test(c.message)) return 'planning_message_internal_terms';
     return validMessage(c.message) || 'planning_invalid_message';
    } });
   const c = result.content;
