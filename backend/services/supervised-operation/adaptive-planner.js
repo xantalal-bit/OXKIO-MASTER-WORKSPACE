@@ -26,6 +26,11 @@ function createAdaptivePlanner({ provider, providers, privacyPolicy = DEFAULT_PR
   'action is exactly one of these values: "answer", "clarify" or "plan". Never another value or a combination of them.',
   'If action is "answer" or "clarify", plan is [] (an empty list).',
   'Only action "plan" has a non-empty plan: a bounded acyclic dependency list of steps shaped ' + JSON.stringify(STEP) + ' using supplied capability ids.',
+  // Understanding before capabilities (05/10/2026): the goal decides, not the words.
+  'First understand what the person wants to achieve: information, analysis, comparison, writing, planning or an action. Naming a topic (mail, meetings, invoices, documents, purchases or payments) is not a request to read that data or to perform that action.',
+  'Use a capability only when the goal needs it. Read the person\'s own sources only when the goal needs their actual data; writing, ideas, explanations, comparisons and summaries of text the person supplied need no source.',
+  'Answer when you can help with general advice or with what the person wrote; clarify only when information that is really needed is missing.',
+  'If the goal needs a capability that is not available, say so plainly; never claim access you do not have.',
  ];
  // With the runtime's effective view, each capability carries its status
  // (capability-manager decisionView). Plans are still validated only against

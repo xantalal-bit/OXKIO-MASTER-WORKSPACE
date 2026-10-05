@@ -319,7 +319,10 @@ function createSupervisedRuntime({membershipProvider,planner=null,conversationDe
  // catalogue refined by connections, Self Repair and the Privacy Gate. It is
  // information only; a plan still clears every runtime gate.
  function capabilityView(handle,text){return capabilities.decisionView(handle,{text,privacyPolicy,degraded:id=>!!learning.degraded(handle,[{capability:id}])});}
- async function conversational(handle,{text,conversationId,interpretation,previous,id,view}){
+ // fallback: the request already has a deterministic outcome (a vocabulary
+ // reading); if understanding is unavailable or refused, that outcome stands,
+ // with no more authority than before.
+ async function conversational(handle,{text,conversationId,interpretation,previous,id,view,fallback=false}){
   const context=previous?{objective:previous.objective,lastUser:previous.lastUser,lastResponse:previous.lastResponse}:undefined;
   if(previous===null&&/\b(esa opcion|esa alternativa|comparalas|comparalos|cual elegirias|cual recomiendas|lo anterior)\b/.test(normalize(text)))return {state:freeze({outcome:OUTCOMES.NEEDS_INFORMATION,status:'NEEDS_INFORMATION',mode:'CLARIFICATION',message:'¿A qué alternativas te refieres? Necesito identificarlas antes de compararlas o recomendar una.',executionEnabled:false})};
   if(conversationDecider){
@@ -330,6 +333,7 @@ function createSupervisedRuntime({membershipProvider,planner=null,conversationDe
     if(['answer','clarify'].includes(decision.action)&&typeof decision.message==='string')return {state:freeze({outcome:decision.action==='answer'?OUTCOMES.CAN_EXECUTE:OUTCOMES.NEEDS_INFORMATION,status:decision.action==='answer'?'COMPLETED':'NEEDS_INFORMATION',turnId:id,message:decision.message,mode:decision.action==='answer'?'COGNITIVE_ADVICE':'CLARIFICATION',evidence:decision.evidence||null,cost:ledger.mission(handle,id),trace:[{event:'CONVERSATIONAL_DECISION',action:decision.action}],executionEnabled:false})};
    }catch(error){
     if(['session_authority_changed','permission_denied','stored_integrity_invalid','stored_scope_invalid'].includes(error.code))throw error;
+    if(fallback)return {fallback:/^[a-z_]+$/.test(error.code||'')?error.code:'conversation_unavailable'};
     const privacy=!!previous?.derivedFromPrivate||identifiesPerson(text)||classifyEgress(text).privacyClass!=='PUBLIC';
     return {state:freeze({outcome:OUTCOMES.NEEDS_INFORMATION,status:'NEEDS_INFORMATION',turnId:id,evidence:{attempts:error.attempts||[]},mode:privacy?'PRIVACY_BLOCKED':'CLARIFICATION',message:privacy?'Podemos avanzar sin enviar tus datos fuera. ¿Qué tipo de actividad quieres mejorar, a quién quieres llegar y qué límites debemos respetar?':'Para avanzar necesito concretar el objetivo. ¿Qué resultado buscas y qué alternativas o información debemos considerar?',diagnosis:{code:/^[a-z_]+$/.test(error.code||'')?error.code:'conversation_unavailable'},cost:ledger.mission(handle,id),executionEnabled:false})};
    }
@@ -352,9 +356,17 @@ function createSupervisedRuntime({membershipProvider,planner=null,conversationDe
   const view=capabilityView(handle,text);
   const direct=await capabilities.interpret(text,{skipPlanner:!!conversationDecider||!!reusable,scope:freeze(copy(sessions.scope(handle))),spend:spendFor(handle),missionId:id,capabilityView:view});
   if(direct.orientation)return freeze({outcome:OUTCOMES.CAN_EXECUTE,status:'COMPLETED',mode:'ORIENTATION',message:orientation(handle),executionEnabled:false});
-  const canConverse=![OUTCOMES.BLOCKED,OUTCOMES.NEEDS_APPROVAL,OUTCOMES.NEEDS_CAPABILITY].includes(direct.outcome)&&!direct.introspection;
-  if(!reusable&&canConverse&&(implicit||(reference&&direct.outcome!==OUTCOMES.CAN_EXECUTE)||(direct.outcome===OUTCOMES.NEEDS_INFORMATION&&['no_capability','missing_source'].includes(direct.reason)))){
-   const result=await conversational(handle,{text,conversationId,interpretation:direct,previous:implicit||reference?previous:null,id,view});
+  // Understanding before capabilities: when the interpreter's outcome rests on
+  // vocabulary (semantic) and cognition is available, the decider reads the
+  // goal against the effective capability view first. Explicit orders, consent
+  // and security gates never reach this point with semantic set.
+  const semanticFirst=!!conversationDecider&&!reusable&&direct.semantic===true&&!direct.introspection;
+  const canConverse=(semanticFirst||![OUTCOMES.BLOCKED,OUTCOMES.NEEDS_APPROVAL,OUTCOMES.NEEDS_CAPABILITY].includes(direct.outcome))&&!direct.introspection;
+  let semanticFallback=null;
+  if(!reusable&&canConverse&&(semanticFirst||implicit||(reference&&direct.outcome!==OUTCOMES.CAN_EXECUTE)||(direct.outcome===OUTCOMES.NEEDS_INFORMATION&&['no_capability','missing_source'].includes(direct.reason)))){
+   const result=await conversational(handle,{text,conversationId,interpretation:direct,previous:implicit||reference?previous:null,id,view,fallback:semanticFirst&&direct.outcome!==OUTCOMES.NEEDS_INFORMATION});
+   if(result.fallback)semanticFallback=result.fallback;
+   else{
    if(result.state)return result.state;
    // A model's proposed plan still passes the canonical interpreter gates.
    const plan=result.plan;
@@ -363,6 +375,7 @@ function createSupervisedRuntime({membershipProvider,planner=null,conversationDe
    prune(handle);missions.set(id,m);persist(m);metric(handle,'missions');
    const ck=JSON.stringify([m.owner,conversationId]);conversations.set(ck,[...(conversations.get(ck)||[]),id].slice(-20));
    return schedule(m);
+   }
   }
 
   const interpretation=reusable&&reusable.intention===text
@@ -374,12 +387,12 @@ function createSupervisedRuntime({membershipProvider,planner=null,conversationDe
   }
   if(interpretation.outcome!==OUTCOMES.CAN_EXECUTE){
    metric(handle,'gaps');
-   return freeze({outcome:interpretation.outcome,gate:interpretation.gate||(interpretation.outcome===OUTCOMES.NEEDS_CAPABILITY?'CAPABILITY_GAP':interpretation.outcome),message:interpretation.message,missingInformation:interpretation.missingInformation||[],capabilities:interpretation.capabilities||[],executionEnabled:false});
+   return freeze({outcome:interpretation.outcome,gate:interpretation.gate||(interpretation.outcome===OUTCOMES.NEEDS_CAPABILITY?'CAPABILITY_GAP':interpretation.outcome),message:interpretation.message,missingInformation:interpretation.missingInformation||[],capabilities:interpretation.capabilities||[],...(semanticFallback?{diagnosis:{code:semanticFallback,action:'DETERMINISTIC_FALLBACK'}}:{}),executionEnabled:false});
   }
   const plan=interpretation.plan;
   if(plan.some(step=>step.capability==='memory.remember')&&!interpretation.rememberContent)fail('memory_consent_required');
   if(plan.some(step=>step.capability==='memory.remember')&&!sessions.scope(handle).roles.some(role=>['owner','admin','operator'].includes(role)))fail('permission_denied');
-  const m={id,handle,owner:sessions.key(handle),conversationId,intention:text,query,searchTerms:interpretation.searchTerms||[],rememberContent:interpretation.rememberContent||null,priority,plan,status:'QUEUED',trace:[],cancelled:false,paused:false,aborters:new Set(),createdAt:now()};
+  const m={id,handle,owner:sessions.key(handle),conversationId,intention:text,query,searchTerms:interpretation.searchTerms||[],rememberContent:interpretation.rememberContent||null,priority,plan,status:'QUEUED',trace:semanticFallback?[{event:'SEMANTIC_FALLBACK',code:semanticFallback}]:[],cancelled:false,paused:false,aborters:new Set(),createdAt:now()};
   prune(handle);
   missions.set(id,m);persist(m);metric(handle,'missions');
   const ck=JSON.stringify([m.owner,conversationId]);const prior=conversations.get(ck)||[];conversations.set(ck,[...prior,id].slice(-20));
