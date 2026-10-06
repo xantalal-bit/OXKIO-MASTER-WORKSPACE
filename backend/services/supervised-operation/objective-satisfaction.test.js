@@ -16,6 +16,11 @@ const { createSupervisedRuntime } = require('./mission-runtime');
 const { createScopedStore } = require('./scope-session');
 const { createExecutiveAuthorizer } = require('../../security/executive-authorization');
 const INTERNAL = /\b(?:AVAILABLE_NOW|AVAILABLE_WITH_APPROVAL|NEEDS_CONNECTION|NEEDS_INFORMATION|UNAVAILABLE|BLOCKED|NEEDS_APPROVAL|NEEDS_CAPABILITY)\b|\b[a-z]+\.(?:read|search|remember|analyze|propose|schedule|extract|write)\b/;
+// Fixture items shaped like the production private adapters (text + closed
+// signals); the agenda date is relative to today so the fixture never expires.
+const inDays = n => { const d = new Date(); d.setDate(d.getDate() + n); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); };
+const MAIL_ITEM = { text: 'Gestoría — Modelo 303: falta tu confirmación', signals: { type: 'mail', unread: true, important: true, starred: false, category: 'primary', date: '2026-10-06T08:00:00Z' } };
+const EVENT_ITEM = () => ({ text: inDays(3) + ' · Comité semanal', signals: { type: 'calendar', start: inDays(3), allDay: true } });
 const POLICY = { publicExternalAllowed: true, internalProviders: [{ providerId: 'fixture' }], confidentialProviders: [] };
 const OLD_FALSE_CLOSURE = 'No he encontrado resultados en tus fuentes.';
 const PRIVATE_TEXT = /Modelo 303|Comité semanal/;
@@ -42,10 +47,10 @@ const plan = (...caps) => ({ action: 'plan', plan: caps.map((capability, i) => (
 const analyzed = (...sources) => ({ action: 'plan', plan: [...sources.map((capability, i) => ({ key: 's' + i, capability, dependsOn: [] })), { key: 'order', capability: 'data.analyze', dependsOn: sources.map((_, i) => 's' + i) }] });
 const ADVICE = { action: 'answer', message: 'Te propongo un método sencillo para priorizar.', plan: [] };
 function connections() {
- const state = { mail: false, calendar: false, mailItems: [{ text: 'Gestoría — Modelo 303: falta tu confirmación' }], reads: [] };
+ const state = { mail: false, calendar: false, mailItems: [MAIL_ITEM], reads: [] };
  const factory = async (identity, scope) => ({
   ...(state.mail ? { mail: createReadonlyAdapter({ scope, permissions: ['mail.read'], origin: 'fixture', read: async () => { state.reads.push('mail'); return state.mailItems; } }) } : {}),
-  ...(state.calendar ? { calendar: createReadonlyAdapter({ scope, permissions: ['calendar.read'], origin: 'fixture', read: async () => { state.reads.push('calendar'); return [{ text: 'Lunes 10:00 · Comité semanal' }]; } }) } : {}),
+  ...(state.calendar ? { calendar: createReadonlyAdapter({ scope, permissions: ['calendar.read'], origin: 'fixture', read: async () => { state.reads.push('calendar'); return [EVENT_ITEM()]; } }) } : {}),
  });
  return { state, factory };
 }

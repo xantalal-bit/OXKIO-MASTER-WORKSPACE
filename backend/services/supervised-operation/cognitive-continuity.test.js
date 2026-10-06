@@ -125,7 +125,7 @@ test('with every resource privacy-blocked (canonical default policy) the determi
  const s = await setup({ providers: [primary], policy: DEFAULT_PRIVACY_POLICY });
  try {
   await s.seed(); const d = (await s.ask(QUESTION)).data.details;
-  assert.equal(d.status, 'COMPLETED'); assert.equal(primary.calls.length, 0); assert.equal(d.result.synthesis, undefined);
+  assert.equal(d.status, 'NEEDS_CAPABILITY'); assert.equal(d.diagnosis.class, 'analysis_unavailable'); assert.equal(primary.calls.length, 0); assert.equal(d.result.synthesis, undefined);
   assert.ok(events(d).includes('COGNITION_SKIPPED'));
  } finally { s.cleanup(); }
 });
@@ -246,7 +246,7 @@ test('B: private memory (CONFIDENTIAL) never leaves; the deterministic analysis 
  const s = await setup({ providers: [p], policy: POLICY_B, floor: 'INTERNAL' });
  try {
   await s.seed(); const d = (await s.ask(QUESTION)).data.details;
-  assert.equal(p.calls.length, 0); assert.equal(d.status, 'COMPLETED'); assert.equal(d.result.synthesis, undefined); assert.ok(events(d).includes('COGNITION_SKIPPED'));
+  assert.equal(p.calls.length, 0); assert.equal(d.status, 'NEEDS_CAPABILITY'); assert.equal(d.diagnosis.class, 'analysis_unavailable'); assert.equal(d.result.synthesis, undefined); assert.ok(events(d).includes('COGNITION_SKIPPED'));
  } finally { s.cleanup(); }
 });
 
@@ -305,7 +305,7 @@ test('review: a permanent failure (revoked key, rejected request, refused output
   const s = await setup({ providers: [p] });
   try {
    await s.seed(); const d = (await s.ask(QUESTION)).data.details;
-   assert.equal(d.status, 'COMPLETED'); assert.equal(d.result.synthesis, undefined); assert.equal(p.calls.length, 1);
+   assert.equal(d.status, 'NEEDS_CAPABILITY'); assert.equal(d.diagnosis.class, 'analysis_unavailable'); assert.equal(d.result.synthesis, undefined); assert.equal(p.calls.length, 1);
    assert.ok(d.trace.some(t => t.event === 'COGNITION_SKIPPED' && t.reason === 'resource_failed'));
   } finally { s.cleanup(); }
  }

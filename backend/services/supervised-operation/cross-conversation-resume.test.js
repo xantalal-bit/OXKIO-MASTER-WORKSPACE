@@ -12,6 +12,11 @@ const { createReadonlyAdapter } = require('./resource-adapters');
 const { createSupervisedRuntime } = require('./mission-runtime');
 const { createExecutiveAuthorizer } = require('../../security/executive-authorization');
 const INTERNAL = /\b(?:AVAILABLE_NOW|AVAILABLE_WITH_APPROVAL|NEEDS_CONNECTION|NEEDS_INFORMATION|WAITING_RESOURCE|UNAVAILABLE|BLOCKED|NEEDS_APPROVAL|NEEDS_CAPABILITY)\b|\b[a-z]+\.(?:read|search|remember|analyze|propose|schedule|extract|write)\b|mission-[0-9a-f]{8}/;
+// Fixture items shaped like the production private adapters (text + closed
+// signals); the agenda date is relative to today so the fixture never expires.
+const inDays = n => { const d = new Date(); d.setDate(d.getDate() + n); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); };
+const MAIL_ITEM = { text: 'Gestoría — Modelo 303: falta tu confirmación', signals: { type: 'mail', unread: true, important: true, starred: false, category: 'primary', date: '2026-10-06T08:00:00Z' } };
+const EVENT_ITEM = () => ({ text: inDays(3) + ' · Comité semanal', signals: { type: 'calendar', start: inDays(3), allDay: true } });
 const POLICY = { publicExternalAllowed: true, internalProviders: [{ providerId: 'fixture' }], confidentialProviders: [] };
 const ORDER = 'Organízame lo que tengo pendiente y dime qué debería hacer primero hoy.';
 const PRIVATE_TEXT = /Modelo 303|Comité semanal/;
@@ -30,7 +35,7 @@ function decider() { const calls = []; const modelId = 'fixture:luna'; return { 
 // Like the production readers: always installed, unverified; an expired token fails each read.
 function google() {
  const state = { expired: true, reads: [] };
- const read = kind => async () => { if (state.expired) throw Object.assign(new Error('expired'), { code: 'oauth_token_invalid', failureKind: 'connection' }); state.reads.push(kind); return [{ text: kind === 'mail' ? 'Gestoría — Modelo 303: falta tu confirmación' : 'Lunes 10:00 · Comité semanal' }]; };
+ const read = kind => async () => { if (state.expired) throw Object.assign(new Error('expired'), { code: 'oauth_token_invalid', failureKind: 'connection' }); state.reads.push(kind); return [kind === 'mail' ? MAIL_ITEM : EVENT_ITEM()]; };
  const factory = async (who, scope) => ({ mail: { ...createReadonlyAdapter({ scope, permissions: ['mail.read'], origin: 'fixture', read: read('mail') }), authorizationVerified: false }, calendar: { ...createReadonlyAdapter({ scope, permissions: ['calendar.read'], origin: 'fixture', read: read('calendar') }), authorizationVerified: false } });
  return { state, factory };
 }

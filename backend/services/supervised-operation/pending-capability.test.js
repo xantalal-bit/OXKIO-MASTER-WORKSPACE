@@ -10,6 +10,11 @@ const { createServerComposition } = require('./server-composition');
 const { createReadonlyAdapter } = require('./resource-adapters');
 const { createExecutiveAuthorizer } = require('../../security/executive-authorization');
 const INTERNAL = /\b(?:AVAILABLE_NOW|AVAILABLE_WITH_APPROVAL|NEEDS_CONNECTION|UNAVAILABLE|BLOCKED|NEEDS_APPROVAL|NEEDS_CAPABILITY)\b|\b[a-z]+\.(?:read|search|remember|analyze|propose|schedule|extract|write)\b/;
+// Fixture items shaped like the production private adapters (text + closed
+// signals); the agenda date is relative to today so the fixture never expires.
+const inDays = n => { const d = new Date(); d.setDate(d.getDate() + n); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); };
+const MAIL_ITEM = { text: 'Gestoría — Modelo 303: falta tu confirmación', signals: { type: 'mail', unread: true, important: true, starred: false, category: 'primary', date: '2026-10-06T08:00:00Z' } };
+const EVENT_ITEM = () => ({ text: inDays(3) + ' · Comité semanal', signals: { type: 'calendar', start: inDays(3), allDay: true } });
 const POLICY = { publicExternalAllowed: true, internalProviders: [{ providerId: 'fixture' }], confidentialProviders: [] };
 
 // --- Decider contract -------------------------------------------------------
@@ -45,8 +50,8 @@ const plan = (...caps) => ({ action: 'plan', plan: caps.map((capability, i) => (
 function connections() {
  const state = { mail: false, calendar: false, reads: [] };
  const factory = async (identity, scope) => ({
-  ...(state.mail ? { mail: createReadonlyAdapter({ scope, permissions: ['mail.read'], origin: 'fixture', read: async () => { state.reads.push('mail'); return [{ text: 'Gestoría — Modelo 303: falta tu confirmación' }]; } }) } : {}),
-  ...(state.calendar ? { calendar: createReadonlyAdapter({ scope, permissions: ['calendar.read'], origin: 'fixture', read: async () => { state.reads.push('calendar'); return [{ text: 'Lunes 10:00 · Comité semanal' }]; } }) } : {}),
+  ...(state.mail ? { mail: createReadonlyAdapter({ scope, permissions: ['mail.read'], origin: 'fixture', read: async () => { state.reads.push('mail'); return [MAIL_ITEM]; } }) } : {}),
+  ...(state.calendar ? { calendar: createReadonlyAdapter({ scope, permissions: ['calendar.read'], origin: 'fixture', read: async () => { state.reads.push('calendar'); return [EVENT_ITEM()]; } }) } : {}),
  });
  return { state, factory };
 }

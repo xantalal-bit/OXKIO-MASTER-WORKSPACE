@@ -8,7 +8,7 @@ const { preparePrivateContextAdapter } = require('../private-context/private-con
 const { buildExecutiveResponse } = require('./executive-response-builder');
 const { listAvailable, listUnavailable } = require('./capability-registry');
 const { resolveReference } = require('./reference-resolver');
-const { classifyMailPriority } = require('../private-context/mail-priority');
+const { classifyMailPriority, extractSenderName } = require('../private-context/mail-priority');
 
 function shouldUseKnowledgeQuery(analysis) {
   return Boolean(analysis && analysis.project);
@@ -373,11 +373,6 @@ const PRIORITY_EXPLANATION = Object.freeze({
   review: 'todavia no lo has leido',
 });
 const RELATIVE_PRIORITY_EXPLANATION = 'aunque no parece urgente, es el que tiene mayor prioridad relativa entre los correos recientes';
-
-function extractSenderName(from) {
-  const match = String(from || '').match(/^([^<]+)</);
-  return match ? match[1].trim() : String(from || 'remitente desconocido').trim();
-}
 
 const EMAIL_CONTEXT_MISSING_QUESTION = 'Indícame qué correo o remitente quieres responder.';
 const EMAIL_SENDER_SEARCH_FAILED = 'No he podido consultar Gmail en este momento. No se ha preparado ningún borrador.';

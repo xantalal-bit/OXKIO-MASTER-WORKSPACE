@@ -2,6 +2,7 @@
 const { createPublicWebFetcher, parsePublicUrl, siteOf } = require('../executive-brain/mission-capabilities/public-web-fetcher');
 const { textRuns } = require('../executive-brain/mission-capabilities/company-research-extract');
 const { copy, freeze, fail } = require('./scope-session');
+const { extractSenderName } = require('../private-context/mail-priority');
 // Factories run in the trusted composition root/OAuth callback, not in a prompt.
 // The credential-bearing client stays in a closure and never enters agent input.
 // Provider contract (any new source — Drive, OneDrive, Outlook… — plugs in here
@@ -51,6 +52,10 @@ function createCuratedDiscovery(entries){
  });
  return async query=>{const terms=searchTerm(query||'').match(/[a-z0-9]+/g)||[];return list.filter(e=>e.keywords.some(k=>terms.includes(k))).map(e=>({title:e.title,url:e.url}));};
 }
+// Source text hygiene (06/10/2026, third real mission): marketing mail pads
+// its preview with invisible format characters (U+034F, ZWNJ…). They are
+// removed and spaces normalized; letters, accents and emoji stay.
+const cleanSourceText=value=>typeof value==='string'?value.replace(/[\p{Cf}͏]/gu,'').replace(/\s+/g,' ').trim():'';
 // Reuses the existing OAuth-backed private-context readers (the same ones the
 // Executive Chat dashboard uses). They exist only for Cliente Cero's Google
 // authorization today; any other owner gets no adapter, i.e. NEEDS_CONNECTION.
@@ -63,8 +68,15 @@ function createPrivateContextAdapters({scope,readers,origin='live'}){
   return context.privatePayload[field];
  };
  const limit=(limits,list)=>list.slice(0,Math.min(Math.max(Number(limits&&limits.maxItems)||10,1),10));
- const mail=createReadonlyAdapter({scope,permissions:['mail.read'],origin,read:async({limits})=>limit(limits,await payload(readers.gmailReader,'messages')).map(m=>({text:[m.from,m.subject,m.snippet].filter(Boolean).join(' — ').slice(0,2000)||'(sin asunto)'}))});
- const calendar=createReadonlyAdapter({scope,permissions:['calendar.read'],origin,read:async({limits})=>limit(limits,await payload(readers.calendarReader,'events')).map(e=>({text:[e.start,e.title,e.location].filter(Boolean).join(' · ').slice(0,2000)}))});
+ // Each item carries its readable text plus a closed set of signals for the
+ // local analysis (validateItems keeps only those); the sender is shown by
+ // name when the header has one, never with its address.
+ const mail=createReadonlyAdapter({scope,permissions:['mail.read'],origin,read:async({limits})=>limit(limits,await payload(readers.gmailReader,'messages')).map(m=>({
+  text:[m.from?cleanSourceText(extractSenderName(m.from)).replace(/^"(.*)"$/,'$1'):'',cleanSourceText(m.subject),cleanSourceText(m.snippet)].filter(Boolean).join(' — ').slice(0,2000)||'(sin asunto)',
+  signals:{type:'mail',unread:m.unread===true,important:m.important===true,starred:m.starred===true,category:m.category||null,date:m.date||null}}))});
+ const calendar=createReadonlyAdapter({scope,permissions:['calendar.read'],origin,read:async({limits})=>limit(limits,await payload(readers.calendarReader,'events')).map(e=>({
+  text:[e.start,cleanSourceText(e.title),cleanSourceText(e.location)].filter(Boolean).join(' · ').slice(0,2000),
+  signals:{type:'calendar',start:e.start||null,allDay:e.allDay===true}}))});
  return freeze({mail:{...mail,authorizationVerified:false},calendar:{...calendar,authorizationVerified:false}});
 }
-module.exports={createReadonlyAdapter,createPublicResearchAdapters,createPrivateContextAdapters,createCuratedDiscovery,readableText};
+module.exports={createReadonlyAdapter,createPublicResearchAdapters,createPrivateContextAdapters,createCuratedDiscovery,readableText,cleanSourceText};
