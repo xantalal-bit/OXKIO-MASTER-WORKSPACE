@@ -34,6 +34,9 @@ function createAdaptivePlanner({ provider, providers, privacyPolicy = DEFAULT_PR
   // Executive continuity (05/10/2026): a missing connection is not missing
   // information. The runtime asks for it and keeps the task resumable.
   'If the goal is clear and needs a capability whose status is NEEDS_CONNECTION, choose plan and include it; do not clarify only to ask for the connection. Clarify only when the goal itself is unclear.',
+  // First real Cliente Cero mission (06/10/2026): the plan read only the one
+  // source usable now, found it empty and closed the goal unresolved.
+  'When the goal needs the person\'s own current matters (what is pending, urgent or due, their priorities, what to do first), plan every supplied personal source where that information can be, whether AVAILABLE_NOW or NEEDS_CONNECTION, and data.analyze over them to organize or prioritize. Never limit the plan to a source only because it is the one usable now. Advice, ideas, methods or templates about organizing need no source: answer them.',
   'The message is for the person: never write capability ids or status names; use plain words.',
  ];
  // Internal vocabulary never reaches the person: status names and capability ids.

@@ -58,13 +58,25 @@ function createChatGateway({runtime,membershipProvider,adapterFactory=null,store
   if(state.status==='COMPLETED'&&state.result?.synthesis)return synthesisText(state.result);
   if(state.status==='COMPLETED'&&state.result?.cognitionSkipped)return skippedText(state.result);
   if(state.status==='COMPLETED'&&state.result?.items?.some(v=>v.provenance==='PUBLIC_WEB'))return publicReadText(state.result);
-  if(state.status==='COMPLETED')return state.result?.capability==='memory.remember'?'He guardado esta información en tu memoria personal.':state.result?.items.length?state.result.items.map(v=>v.text).join('\n'):'No he encontrado resultados en tus fuentes.';
+  if(state.status==='NEEDS_INFORMATION'&&state.diagnosis?.class==='objective_unmet')return unmetText(state.diagnosis);
+  // An empty lookup names what was actually consulted, never "your sources".
+  if(state.status==='COMPLETED')return state.result?.capability==='memory.remember'?'He guardado esta información en tu memoria personal.':state.result?.items.length?state.result.items.map(v=>v.text).join('\n'):state.planSources?.length?'He consultado '+list(state.planSources)+' y no he encontrado resultados.':'No he encontrado resultados.';
   if(state.status==='NEEDS_APPROVAL')return 'He preparado una propuesta para tu revisión. Necesito que decidas la estructura y autorices los cambios; no he modificado ni enviado nada.';
   if(state.status==='CANCELLED')return 'Misión cancelada.';
   if(state.status==='PAUSED')return 'Misión en pausa. Puedes reanudarla cuando quieras.';
   if(state.diagnosis?.class==='capability_degraded')return 'Esta fuente ha fallado varias veces seguidas. Lo he registrado para revisión y no lo reintento automáticamente ahora; no he ejecutado nada más.';
   if(state.diagnosis?.class==='privacy_gate')return 'No he enviado la búsqueda: contenía datos personales y el proveedor no está autorizado para ellos. Reformúlala sin datos personales si quieres que busque.';
   return 'No puedo dar la misión por completada. El resultado queda pendiente de revisión.';
+ }
+ const list=items=>items.length>1?items.slice(0,-1).join(', ')+' y '+items.at(-1):items[0]||'';
+ // The objective was not met: what was checked (and found empty), where the
+ // information may be (labels from the capability view, never ids or status
+ // names), and that nothing was closed, sent or changed.
+ function unmetText(d){
+  const pending=d.missing.filter(v=>v.needsConnection).map(v=>v.label);const ready=d.missing.filter(v=>!v.needsConnection).map(v=>v.label);
+  return [(d.consulted.length?'He comprobado '+list(d.consulted)+' y no '+(d.consulted.length>1?'contienen':'contiene')+' información para esto.':'No he encontrado información para esto.'),
+   'Para hacerlo de verdad necesito consultar las fuentes donde puede estar'+(pending.length?', como '+list(pending)+', que primero hay que conectar'+(ready.length?'; también puedo consultar '+list(ready):''):', como '+list(ready))+'.',
+   'También puedes darme tú esa información y trabajo con ella. No doy la tarea por terminada y no he realizado envíos ni cambios externos.'].join(' ');
  }
  // No analysis was possible: say why in plain words and list what was read.
  // Public pages are referenced (first sentence + link), never dumped whole;
