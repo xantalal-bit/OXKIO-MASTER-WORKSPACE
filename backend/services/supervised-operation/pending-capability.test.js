@@ -80,6 +80,7 @@ test('D/E/F/H: no waiting where none is needed; an unclear goal is clarified wit
  try {
   for (const q of ['Dame cinco ideas para mejorar una reunión.', 'Explícame qué es la factura electrónica.', 'Ideas para que mis reuniones sean más cortas']) { const r = await s.ask(q); assert.equal(r.data.details.mode, 'COGNITIVE_ADVICE', q); assert.equal(r.data.missionId, null, q); }
   const f = await s.ask('Revisa aquello.'); assert.equal(f.data.details.mode, 'CLARIFICATION'); assert.equal(f.data.missionId, null);
+  await s.ask('Recuerda mis preferencias: reuniones por la mañana');
   const h = await s.ask('¿Qué sabes de mis preferencias?'); assert.equal(h.data.details.status, 'COMPLETED'); assert.equal(h.data.details.connectionRequests.length, 0); assert.ok(!h.data.details.trace.some(t => t.event === 'NEEDS_CONNECTION'));
  } finally { await s.close(); }
 });

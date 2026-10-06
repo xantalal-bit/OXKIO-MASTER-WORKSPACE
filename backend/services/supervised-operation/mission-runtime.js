@@ -8,7 +8,7 @@ const { parsePublicUrl } = require('../executive-brain/mission-capabilities/publ
 const { containsSecretMarker, DEFAULT_PRIVACY_POLICY } = require('../executive-brain/privacy-gate');
 const { createScopeSessions, createScopedStore, copy, freeze, fail } = require('./scope-session');
 const { createCapabilityManager, createConnectionManager, DEFINITIONS } = require('./capability-manager');
-const { OUTCOMES, normalize, tokensOf } = require('./intention-interpreter');
+const { OUTCOMES, normalize, tokensOf, interpretIntention } = require('./intention-interpreter');
 const { authorizeEgress, classifyEgress, identifiesPerson } = require('./egress-privacy');
 const { verifyPartial } = require('../executive-brain/synthesis-verifier');
 const { createCostLedger } = require('./cost-ledger');
@@ -16,6 +16,15 @@ const { classified, diagnose, createLearning } = require('./self-repair');
 const REGISTRAR = 'tool:supervised-operation';
 const TERMINAL = ['COMPLETED','FAILED','CANCELLED'];
 const PUBLIC_PROVENANCE = ['PUBLIC_DISCOVERY','PUBLIC_WEB'];
+// Sources are the reads of a plan, the places where information can be found;
+// an analysis, a proposal or a memory write is not one. Labels are plain words.
+const isSource=id=>{const d=DEFINITIONS[id];return !!d&&d.provenance!=='DERIVED'&&!d.explicitRequest&&!d.approval;};
+const isPersonalSource=id=>isSource(id)&&!PUBLIC_PROVENANCE.includes(DEFINITIONS[id].provenance);
+const labelsOf=ids=>[...new Set(ids.filter(isSource))].map(id=>DEFINITIONS[id].label);
+// The sources the person delimited by naming them, read by the deterministic
+// interpreter (never by a model): only over that scope can an empty result be
+// the answer itself.
+const namedSources=text=>[...new Set((interpretIntention(text).capabilities||[]).filter(isSource))];
 // A bounded per-owner fair admission queue. A cancelled/paused queued mission never
 // consumes a worker; running reads are invalidated before their result can commit.
 function createScheduler({ concurrency = 4, maxQueued = 40, maxPerOwner = 10 } = {}) {
@@ -82,9 +91,9 @@ function createSupervisedRuntime({membershipProvider,planner=null,conversationDe
  // Only queued/running missions stay in memory; everything else reloads from
  // the owner's sealed store, so memory is bounded by the scheduler limits.
  function release(m){if(!m.busy&&missions.get(m.id)===m)missions.delete(m.id);}
- function persist(m){store.put(m.handle,'mission',m.id,{id:m.id,conversationId:m.conversationId,intention:m.intention,query:m.query,searchTerms:m.searchTerms||[],rememberContent:m.rememberContent||null,priority:m.priority,plan:m.plan,status:m.status,trace:m.trace,cancelled:m.cancelled,paused:m.paused,gaps:m.gaps||[],result:m.result||null,approvalId:m.approvalId||null,diagnosis:m.diagnosis||null,state:m.state||null,createdAt:m.createdAt});}
+ function persist(m){store.put(m.handle,'mission',m.id,{id:m.id,conversationId:m.conversationId,intention:m.intention,query:m.query,searchTerms:m.searchTerms||[],namedSources:m.namedSources||[],rememberContent:m.rememberContent||null,priority:m.priority,plan:m.plan,status:m.status,trace:m.trace,cancelled:m.cancelled,paused:m.paused,gaps:m.gaps||[],result:m.result||null,approvalId:m.approvalId||null,diagnosis:m.diagnosis||null,state:m.state||null,createdAt:m.createdAt});}
  function check(m){ if(m.cancelled)fail('cancelled');if(m.paused)fail('paused'); }
- function snapshot(m){const cost=ledger.mission(m.handle,m.id);return freeze(copy({id:m.id,conversationId:m.conversationId,status:m.status,outcome:m.status==='COMPLETED'?OUTCOMES.CAN_EXECUTE:m.status,result:m.result||null,approvalId:m.approvalId||null,connectionRequests:m.gaps||[],diagnosis:m.diagnosis||null,executionEnabled:false,estimatedCostUsd:cost.chargedUsd,actualCostUsd:null,cost,trace:m.trace||[]}));}
+ function snapshot(m){const cost=ledger.mission(m.handle,m.id);return freeze(copy({id:m.id,conversationId:m.conversationId,status:m.status,outcome:m.status==='COMPLETED'?OUTCOMES.CAN_EXECUTE:m.status,result:m.result||null,approvalId:m.approvalId||null,connectionRequests:m.gaps||[],diagnosis:m.diagnosis||null,planSources:labelsOf((m.plan||[]).map(s=>s.capability)),executionEnabled:false,estimatedCostUsd:cost.chargedUsd,actualCostUsd:null,cost,trace:m.trace||[]}));}
  function trace(m,event,fields={}){m.trace.push({event,at:now(),...fields});if(m.trace.length>150)m.trace.shift();}
  function spendFor(handle){return freeze({estimate:ledger.estimate,reserve:options=>ledger.reserve(handle,options),settle:(reservation,usage)=>ledger.settle(handle,reservation,usage)});}
  function engineFor(m){
@@ -252,10 +261,29 @@ function createSupervisedRuntime({membershipProvider,planner=null,conversationDe
    // A failed verifier never commits personal memory or a reusable workflow.
    for(const output of outputs)if(output.capability==='memory.remember')store.put(m.handle,'memory',m.id,{text:output.items[0].text,provenance:'INTERNAL_MEMORY'});
    const result=outputs.at(-1);m.result=result;
+   // A technical PASS is not the person's objective (06/10/2026, first real
+   // Cliente Cero mission). An empty result answers only over the scope the
+   // person delimited by naming its sources (deterministic reading); over a
+   // scope a model inferred it never certifies the objective while relevant
+   // personal sources stay unconsulted, whatever that model planned. The
+   // needed sources come from the person's words or, once, from the decider
+   // with this evidence: the same mission is extended and waits for its
+   // connections, so the order is never asked again. The empty reads stay as
+   // evidence and no procedure is learned from an uncertified objective.
+   const pending=!result.items.length&&!result.synthesis&&!result.proposal?pendingSources(m):[];
+   if(pending.length){
+    invalidateWorkflow(m);const consulted=labelsOf(m.plan.map(s=>s.capability));
+    const replanned=m.trace.some(t=>t.event==='OBJECTIVE_REPLAN');
+    const decision=replanned?{ids:[]}:m.namedSources?.length?{ids:pending}:await neededSources(m,pending,consulted);
+    if(decision.ids.length&&extend(m,decision.ids,decision.analyze)){m.diagnosis={class:'objective_unmet',action:'REPLAN',consulted};metric(m.handle,'gaps');trace(m,'OBJECTIVE_REPLAN',{added:decision.ids});return run(m);}
+    const view=capabilityView(m.handle,m.intention);
+    m.status='NEEDS_INFORMATION';m.diagnosis={class:'objective_unmet',action:'NEEDS_INFORMATION',consulted,missing:pending.map(id=>({label:DEFINITIONS[id].label,needsConnection:view.capabilities.some(v=>v.id===id&&v.status==='NEEDS_CONNECTION')})),...(decision.question?{question:decision.question}:{})};
+    metric(m.handle,'gaps');trace(m,'OBJECTIVE_UNMET',{pending:pending.length});return snapshot(m);
+   }
    if(result.proposal){m.status='NEEDS_APPROVAL';if(approvalFactory&&!m.approvalId)await handoffApproval(m,result);}
    // Learned procedures are reads only; a memory write is always re-derived
    // from the human's explicit words, never replayed.
-   if(!m.plan.some(step=>step.capability==='memory.remember'))store.put(m.handle,'workflow',workflowId(m.intention),{intention:m.intention,plan:m.plan,searchTerms:m.searchTerms||[],executionEnabled:false});
+   if(!m.plan.some(step=>step.capability==='memory.remember'))store.put(m.handle,'workflow',workflowId(m.intention),{intention:m.intention,plan:m.plan,searchTerms:m.searchTerms||[],objectiveSatisfied:true,missionId:m.id,executionEnabled:false});
    if(ran){metric(m.handle,'completed');trace(m,'TERMINATE');}
   }else {
    const blocked=m.state.tasks.find(t=>['BLOCKED','FAILED','NEEDS_REVIEW'].includes(t.status));
@@ -271,13 +299,48 @@ function createSupervisedRuntime({membershipProvider,planner=null,conversationDe
   finally{m.busy=false;try{await sessions.current(m.handle);persist(m);}catch{m.result=null;}release(m);}
  }
  const workflowId=text=>'wf-'+createHash('sha256').update(text).digest('hex').slice(0,40);
+ // Sources still relevant and not consulted: those the person named, or,
+ // over an inferred scope, the owner's plannable personal sources. Blocked
+ // or unavailable capabilities are never pending.
+ function pendingSources(m){
+  const view=capabilityView(m.handle,m.intention);const planned=new Set(m.plan.map(s=>s.capability));
+  const scope=m.namedSources?.length?m.namedSources:view.capabilities.map(v=>v.id).filter(isPersonalSource);
+  return [...new Set(scope)].filter(id=>view.plannable.includes(id)&&!planned.has(id));
+ }
+ // The existing decider decides, with the evidence, which pending sources the
+ // objective needs; it can only extend the plan, never certify the objective.
+ async function neededSources(m,pending,consulted){
+  if(!conversationDecider)return {ids:[]};
+  const view=capabilityView(m.handle,m.intention);
+  try{
+   const decision=await conversationDecider(freeze({intention:m.intention,capabilities:view.plannable,capabilityStatus:view.capabilities,conversationContext:{objective:m.intention,lastUser:m.intention,lastResponse:'He consultado '+consulted.join(' y ')+' y no contiene información para esto.'}}),{spend:spendFor(m.handle),missionId:m.id,derivedFromPrivate:false});
+   await sessions.current(m.handle);trace(m,'CONVERSATIONAL_DECISION',{action:decision.action,evidence:decision.evidence||null});
+   if(decision.action==='plan'){const plan=capabilities.validatePlan(decision.plan);return {ids:[...new Set(plan.map(s=>s.capability))].filter(id=>pending.includes(id)),analyze:plan.some(s=>s.capability==='data.analyze')};}
+   if(decision.action==='clarify')return {ids:[],question:decision.message};
+  }catch(error){if(['session_authority_changed','permission_denied','stored_integrity_invalid','stored_scope_invalid'].includes(error.code))throw error;}
+  return {ids:[]};
+ }
+ // The same mission gains the needed source steps (and the analysis over
+ // them when one was asked for); its engine state is re-planned from the
+ // extended plan, so the already-run reads are simply read again.
+ function extend(m,ids,analyze){
+  const derived=s=>DEFINITIONS[s.capability].provenance==='DERIVED';
+  const extra=ids.map((capability,i)=>({key:'objective-'+i,capability,dependsOn:[]}));const keys=extra.map(s=>s.key);
+  const before=m.plan.filter(s=>!derived(s));const after=m.plan.filter(derived).map(s=>({...s,dependsOn:[...s.dependsOn,...keys]}));
+  if(!after.length&&analyze)after.push({key:'objective-analysis',capability:'data.analyze',dependsOn:[...before.map(s=>s.key),...keys]});
+  try{m.plan=capabilities.validatePlan([...before,...extra,...after]);}catch{return false;}
+  m.state=null;m.engine=null;m.result=null;return true;
+ }
+ // A procedure that did not satisfy its objective stops being reusable; the
+ // record stays as history, marked, instead of being deleted.
+ function invalidateWorkflow(m){let saved=null;try{saved=store.get(m.handle,'workflow',workflowId(m.intention));}catch(error){if(error.code!=='resource_not_found')throw error;}if(saved)store.put(m.handle,'workflow',workflowId(m.intention),{...saved,objectiveSatisfied:false,invalidatedBy:m.id});}
  // Retention: an owner keeps its most recent finished missions; older finished
  // ones (and their per-mission cost detail) are pruned so a long-running pilot
  // never reaches the store capacity. Open missions are never pruned; daily cost
  // totals, memory, workflows and lessons are kept.
  function prune(handle){
   const all=store.list(handle,'mission');if(all.length<=retention.max)return;
-  const finished=all.filter(v=>TERMINAL.includes(v.status)&&!missions.has(v.id)).sort((x,y)=>String(x.createdAt||'').localeCompare(String(y.createdAt||'')));
+  const finished=all.filter(v=>(TERMINAL.includes(v.status)||(v.status==='NEEDS_INFORMATION'&&v.diagnosis?.class==='objective_unmet'))&&!missions.has(v.id)).sort((x,y)=>String(x.createdAt||'').localeCompare(String(y.createdAt||'')));
   for(const v of finished.slice(0,Math.max(0,all.length-retention.keep))){store.remove(handle,'mission',v.id);store.remove(handle,'cost-mission',v.id);}
  }
  // Conversation state uses the same owner-scoped sealed store, not a new brain.
@@ -352,7 +415,10 @@ function createSupervisedRuntime({membershipProvider,planner=null,conversationDe
   if(implicit&&!stored?.missionId&&status==='BLOCKED')return freeze({outcome:OUTCOMES.BLOCKED,status:'BLOCKED',message:'La petición anterior está bloqueada y decir hazlo no cambia eso. No he realizado ninguna acción. ¿Qué otro objetivo quieres abordar?',executionEnabled:false});
   if(implicit&&stored?.missionId&&['NEEDS_CONNECTION','WAITING_RESOURCE','PAUSED'].includes(status))return resume(handle,stored.missionId);
   if(/^(prepara|preparame) (una |la )?investigacion[.!?\s]*$/.test(plain))return freeze({outcome:OUTCOMES.NEEDS_INFORMATION,status:'NEEDS_INFORMATION',mode:'CLARIFICATION',message:'¿Sobre qué tema quieres que investigue y qué resultado necesitas?',executionEnabled:false});
+  // Only a procedure whose mission satisfied its objective is learned: older
+  // records without that mark, and invalidated ones, are never replayed.
   let reusable=null;try{reusable=store.get(handle,'workflow',workflowId(text));}catch(error){if(error.code!=='resource_not_found')throw error;}
+  if(reusable&&reusable.objectiveSatisfied!==true)reusable=null;
   const view=capabilityView(handle,text);
   const direct=await capabilities.interpret(text,{skipPlanner:!!conversationDecider||!!reusable,scope:freeze(copy(sessions.scope(handle))),spend:spendFor(handle),missionId:id,capabilityView:view});
   if(direct.orientation)return freeze({outcome:OUTCOMES.CAN_EXECUTE,status:'COMPLETED',mode:'ORIENTATION',message:orientation(handle),executionEnabled:false});
@@ -371,7 +437,7 @@ function createSupervisedRuntime({membershipProvider,planner=null,conversationDe
    // A model's proposed plan still passes the canonical interpreter gates.
    const plan=result.plan;
    if(plan.some(step=>step.capability==='memory.remember'))return freeze({outcome:OUTCOMES.NEEDS_INFORMATION,status:'NEEDS_INFORMATION',message:'Solo guardaré información cuando me indiques expresamente qué quieres recordar.',executionEnabled:false});
-   const m={id,handle,owner:sessions.key(handle),conversationId,intention:text,query,searchTerms:tokensOf(text).filter(t=>!['busca','buscar','investiga','investigar'].includes(t)),priority,plan,status:'QUEUED',trace:[{event:'CONVERSATIONAL_DECISION',action:'plan',evidence:result.decision.evidence||null}],cancelled:false,paused:false,aborters:new Set(),createdAt:now()};
+   const m={id,handle,owner:sessions.key(handle),conversationId,intention:text,query,searchTerms:tokensOf(text).filter(t=>!['busca','buscar','investiga','investigar'].includes(t)),namedSources:namedSources(text),priority,plan,status:'QUEUED',trace:[{event:'CONVERSATIONAL_DECISION',action:'plan',evidence:result.decision.evidence||null}],cancelled:false,paused:false,aborters:new Set(),createdAt:now()};
    prune(handle);missions.set(id,m);persist(m);metric(handle,'missions');
    const ck=JSON.stringify([m.owner,conversationId]);conversations.set(ck,[...(conversations.get(ck)||[]),id].slice(-20));
    return schedule(m);
@@ -392,13 +458,13 @@ function createSupervisedRuntime({membershipProvider,planner=null,conversationDe
   const plan=interpretation.plan;
   if(plan.some(step=>step.capability==='memory.remember')&&!interpretation.rememberContent)fail('memory_consent_required');
   if(plan.some(step=>step.capability==='memory.remember')&&!sessions.scope(handle).roles.some(role=>['owner','admin','operator'].includes(role)))fail('permission_denied');
-  const m={id,handle,owner:sessions.key(handle),conversationId,intention:text,query,searchTerms:interpretation.searchTerms||[],rememberContent:interpretation.rememberContent||null,priority,plan,status:'QUEUED',trace:semanticFallback?[{event:'SEMANTIC_FALLBACK',code:semanticFallback}]:[],cancelled:false,paused:false,aborters:new Set(),createdAt:now()};
+  const m={id,handle,owner:sessions.key(handle),conversationId,intention:text,query,searchTerms:interpretation.searchTerms||[],namedSources:namedSources(text),rememberContent:interpretation.rememberContent||null,priority,plan,status:'QUEUED',trace:semanticFallback?[{event:'SEMANTIC_FALLBACK',code:semanticFallback}]:[],cancelled:false,paused:false,aborters:new Set(),createdAt:now()};
   prune(handle);
   missions.set(id,m);persist(m);metric(handle,'missions');
   const ck=JSON.stringify([m.owner,conversationId]);const prior=conversations.get(ck)||[];conversations.set(ck,[...prior,id].slice(-20));
   return schedule(m);
  }
- async function resume(handle,id){await sessions.current(handle);const m=owned(handle,id);if(TERMINAL.includes(m.status)||m.cancelled)fail('terminal_mission');m.paused=false;return schedule(m);}
+ async function resume(handle,id){await sessions.current(handle);const m=owned(handle,id);if(TERMINAL.includes(m.status)||m.cancelled||(m.status==='NEEDS_INFORMATION'&&m.diagnosis?.class==='objective_unmet'))fail('terminal_mission');m.paused=false;return schedule(m);}
  async function pause(handle,id){await sessions.current(handle);const m=owned(handle,id);m.paused=true;m.status='PAUSED';scheduler.remove(id);persist(m);const s=snapshot(m);release(m);return s;}
  async function cancel(handle,id){await sessions.current(handle);const m=owned(handle,id);m.cancelled=true;m.aborters.forEach(controller=>controller.abort());m.status='CANCELLED';scheduler.remove(id);metric(handle,'cancelled');persist(m);const s=snapshot(m);release(m);return s;}
  async function get(handle,id){await sessions.current(handle);const m=owned(handle,id);const s=snapshot(m);release(m);return s;}

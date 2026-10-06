@@ -52,19 +52,33 @@ function createChatGateway({runtime,membershipProvider,adapterFactory=null,store
    // continuation is promised only when this account can actually connect.
    const lower=v=>v.charAt(0).toLowerCase()+v.slice(1);
    const lines=state.connectionRequests.map(g=>[g.reason,'Permiso solicitado: '+(PERMISSIONS[g.permission]||'consultar la fuente')+'.','Con él podré '+lower(g.canDo),'Nunca podré '+lower(g.cannotDo),g.how].join(' '));
-   return lines.join('\n')+'\n'+(state.connectionRequests.some(g=>g.connectable)?RESUME:'He guardado esta tarea, pero no podré continuarla mientras esa conexión no esté disponible para tu cuenta.');
+   // A mission extended after an empty first reading says what it checked.
+   const checked=state.diagnosis?.class==='objective_unmet'?[checkedText(state.diagnosis)]:[];
+   return [...checked,...lines].join('\n')+'\n'+(state.connectionRequests.some(g=>g.connectable)?RESUME:'He guardado esta tarea, pero no podré continuarla mientras esa conexión no esté disponible para tu cuenta.');
   }
   if(state.status==='WAITING_RESOURCE')return 'El recurso de razonamiento no está disponible ahora (límite, cuota, presupuesto o fallo del proveedor) y no hay alternativa autorizada. La misión y sus fuentes quedan guardadas en este punto; di "continúa" para reanudarla. No he ejecutado nada externo.';
   if(state.status==='COMPLETED'&&state.result?.synthesis)return synthesisText(state.result);
   if(state.status==='COMPLETED'&&state.result?.cognitionSkipped)return skippedText(state.result);
   if(state.status==='COMPLETED'&&state.result?.items?.some(v=>v.provenance==='PUBLIC_WEB'))return publicReadText(state.result);
-  if(state.status==='COMPLETED')return state.result?.capability==='memory.remember'?'He guardado esta información en tu memoria personal.':state.result?.items.length?state.result.items.map(v=>v.text).join('\n'):'No he encontrado resultados en tus fuentes.';
+  if(state.status==='NEEDS_INFORMATION'&&state.diagnosis?.class==='objective_unmet')return unmetText(state.diagnosis);
+  // An empty lookup names what was actually consulted, never "your sources".
+  if(state.status==='COMPLETED')return state.result?.capability==='memory.remember'?'He guardado esta información en tu memoria personal.':state.result?.items.length?state.result.items.map(v=>v.text).join('\n'):state.planSources?.length?'He consultado '+list(state.planSources)+' y no he encontrado resultados.':'No he encontrado resultados.';
   if(state.status==='NEEDS_APPROVAL')return 'He preparado una propuesta para tu revisión. Necesito que decidas la estructura y autorices los cambios; no he modificado ni enviado nada.';
   if(state.status==='CANCELLED')return 'Misión cancelada.';
   if(state.status==='PAUSED')return 'Misión en pausa. Puedes reanudarla cuando quieras.';
   if(state.diagnosis?.class==='capability_degraded')return 'Esta fuente ha fallado varias veces seguidas. Lo he registrado para revisión y no lo reintento automáticamente ahora; no he ejecutado nada más.';
   if(state.diagnosis?.class==='privacy_gate')return 'No he enviado la búsqueda: contenía datos personales y el proveedor no está autorizado para ellos. Reformúlala sin datos personales si quieres que busque.';
   return 'No puedo dar la misión por completada. El resultado queda pendiente de revisión.';
+ }
+ const list=items=>items.length>1?items.slice(0,-1).join(', ')+' y '+items.at(-1):items[0]||'';
+ const checkedText=d=>d.consulted.length?'He comprobado '+list(d.consulted)+' y no '+(d.consulted.length>1?'contienen':'contiene')+' información para esto.':'No he encontrado información para esto.';
+ // The objective was not certified and no needed source could be decided:
+ // what was checked, the decider's own question or where the information may
+ // be (labels, never ids or status names), and that nothing was closed.
+ function unmetText(d){
+  const pending=d.missing.filter(v=>v.needsConnection).map(v=>v.label);
+  const ask=d.question||('Dime dónde puede estar esa información'+(d.missing.length?' (por ejemplo, '+list(d.missing.map(v=>v.label))+')':'')+(pending.length?'; '+list(pending)+' primero '+(pending.length>1?'necesitan':'necesita')+' conexión':'')+', o dámela tú y trabajo con ella.');
+  return [checkedText(d),ask,'No doy la tarea por terminada y no he realizado envíos ni cambios externos.'].join(' ');
  }
  // No analysis was possible: say why in plain words and list what was read.
  // Public pages are referenced (first sentence + link), never dumped whole;
