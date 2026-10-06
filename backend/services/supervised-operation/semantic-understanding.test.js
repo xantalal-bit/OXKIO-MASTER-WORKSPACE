@@ -103,6 +103,7 @@ test('K/L/N/M/G: unavailable sources, missing capabilities, memory and orders ke
   let r = await s.ask('Resume el documento Plan2026 de mis archivos.');
   assert.equal(r.data.details.status, 'NEEDS_CONNECTION'); assert.match(r.data.response, /todavía no está disponible para tu cuenta/); assert.ok(r.data.details.trace.some(t => t.event === 'SEMANTIC_FALLBACK' && t.code === 'reasoning_resource_unavailable'));
   // N: memory search is planned and runs locally.
+  await s.ask('Recuerda mis preferencias: reuniones por la mañana');
   r = await s.ask('¿Qué sabes de mis preferencias?'); assert.equal(r.data.details.status, 'COMPLETED'); assert.equal(r.data.details.result.capability, 'memory.search');
   const before = p.calls.length;
   // L, M, G: no model involved.

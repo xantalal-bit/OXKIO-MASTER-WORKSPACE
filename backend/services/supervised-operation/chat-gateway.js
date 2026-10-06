@@ -52,7 +52,9 @@ function createChatGateway({runtime,membershipProvider,adapterFactory=null,store
    // continuation is promised only when this account can actually connect.
    const lower=v=>v.charAt(0).toLowerCase()+v.slice(1);
    const lines=state.connectionRequests.map(g=>[g.reason,'Permiso solicitado: '+(PERMISSIONS[g.permission]||'consultar la fuente')+'.','Con él podré '+lower(g.canDo),'Nunca podré '+lower(g.cannotDo),g.how].join(' '));
-   return lines.join('\n')+'\n'+(state.connectionRequests.some(g=>g.connectable)?RESUME:'He guardado esta tarea, pero no podré continuarla mientras esa conexión no esté disponible para tu cuenta.');
+   // A mission extended after an empty first reading says what it checked.
+   const checked=state.diagnosis?.class==='objective_unmet'?[checkedText(state.diagnosis)]:[];
+   return [...checked,...lines].join('\n')+'\n'+(state.connectionRequests.some(g=>g.connectable)?RESUME:'He guardado esta tarea, pero no podré continuarla mientras esa conexión no esté disponible para tu cuenta.');
   }
   if(state.status==='WAITING_RESOURCE')return 'El recurso de razonamiento no está disponible ahora (límite, cuota, presupuesto o fallo del proveedor) y no hay alternativa autorizada. La misión y sus fuentes quedan guardadas en este punto; di "continúa" para reanudarla. No he ejecutado nada externo.';
   if(state.status==='COMPLETED'&&state.result?.synthesis)return synthesisText(state.result);
@@ -69,14 +71,14 @@ function createChatGateway({runtime,membershipProvider,adapterFactory=null,store
   return 'No puedo dar la misión por completada. El resultado queda pendiente de revisión.';
  }
  const list=items=>items.length>1?items.slice(0,-1).join(', ')+' y '+items.at(-1):items[0]||'';
- // The objective was not met: what was checked (and found empty), where the
- // information may be (labels from the capability view, never ids or status
- // names), and that nothing was closed, sent or changed.
+ const checkedText=d=>d.consulted.length?'He comprobado '+list(d.consulted)+' y no '+(d.consulted.length>1?'contienen':'contiene')+' información para esto.':'No he encontrado información para esto.';
+ // The objective was not certified and no needed source could be decided:
+ // what was checked, the decider's own question or where the information may
+ // be (labels, never ids or status names), and that nothing was closed.
  function unmetText(d){
-  const pending=d.missing.filter(v=>v.needsConnection).map(v=>v.label);const ready=d.missing.filter(v=>!v.needsConnection).map(v=>v.label);
-  return [(d.consulted.length?'He comprobado '+list(d.consulted)+' y no '+(d.consulted.length>1?'contienen':'contiene')+' información para esto.':'No he encontrado información para esto.'),
-   'Para hacerlo de verdad necesito consultar las fuentes donde puede estar'+(pending.length?', como '+list(pending)+', que primero hay que conectar'+(ready.length?'; también puedo consultar '+list(ready):''):', como '+list(ready))+'.',
-   'También puedes darme tú esa información y trabajo con ella. No doy la tarea por terminada y no he realizado envíos ni cambios externos.'].join(' ');
+  const pending=d.missing.filter(v=>v.needsConnection).map(v=>v.label);
+  const ask=d.question||('Dime dónde puede estar esa información'+(d.missing.length?' (por ejemplo, '+list(d.missing.map(v=>v.label))+')':'')+(pending.length?'; '+list(pending)+' primero '+(pending.length>1?'necesitan':'necesita')+' conexión':'')+', o dámela tú y trabajo con ella.');
+  return [checkedText(d),ask,'No doy la tarea por terminada y no he realizado envíos ni cambios externos.'].join(' ');
  }
  // No analysis was possible: say why in plain words and list what was read.
  // Public pages are referenced (first sentence + link), never dumped whole;
