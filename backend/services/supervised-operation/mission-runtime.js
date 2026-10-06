@@ -369,14 +369,51 @@ function createSupervisedRuntime({membershipProvider,planner=null,conversationDe
   if(!ready('gmail.read')||!ready('calendar.read'))help.push('El correo y la agenda necesitan conexión y una lectura validada antes de poder usarlos.');
   help.push('Los envíos y los cambios externos necesitan tu autorización. ¿Qué objetivo te gustaría abordar primero?');return help.join(' ');
  }
- async function recordTurn(handle,id,{query,response,state}){
+ // Cross-conversation continuity (06/10/2026, second real mission): leaving
+ // the page to reconnect a source starts a new browser conversation, but the
+ // mission is persisted under its owner. An unambiguous continuation in a
+ // conversation with no resumable mission looks only in this owner's sealed
+ // store: one waiting mission is resumed; several are listed for the person
+ // to choose (recency never chooses an objective); none leaves the request on
+ // its ordinary path. Only waits a resume can end are candidates.
+ const RESUMABLE=['NEEDS_CONNECTION','WAITING_RESOURCE','PAUSED'];
+ const CONTINUE=/^(continua|sigue|reanuda|reintentalo|vuelve a intentarlo|ya esta conectad[oa]|ya lo he conectado|ya he conectado.*)[.!\s]*$/;
+ const ORDINALS=[['1','uno','primera','primero'],['2','dos','segunda','segundo'],['3','tres','tercera','tercero'],['4','cuatro','cuarta','cuarto'],['5','cinco','quinta','quinto']];
+ const brief=text=>{const t=String(text||'').replace(/\s+/g,' ').trim();return t.length>90?t.slice(0,89)+'…':t;};
+ function waiting(handle){return store.list(handle,'mission').filter(v=>RESUMABLE.includes(v.status)&&!v.cancelled).sort((a,b)=>String(b.createdAt||'').localeCompare(String(a.createdAt||'')));}
+ function waitingFor(v){
+  if(v.status==='PAUSED')return 'en pausa';if(v.status==='WAITING_RESOURCE')return 'esperando al recurso de análisis';
+  const labels=[...new Set((v.gaps||[]).map(g=>DEFINITIONS[g.capability]?.label).filter(Boolean))];
+  return labels.length?'esperando la conexión de '+labels.join(' y '):'esperando una conexión';
+ }
+ function choiceOf(plain,count){const m=plain.match(/^(?:la |el |opcion |tarea |numero )?([a-z0-9]+)[.!)\s]*$/);const i=m?ORDINALS.findIndex(words=>words.includes(m[1])):-1;return i<count?i:-1;}
+ async function resumeTarget(handle,conversationId,text){
+  await sessions.current(handle);
+  if(typeof text!=='string'||!/^[A-Za-z0-9_-]{8,64}$/.test(conversationId||''))return null;
+  const plain=normalize(text).trim();const pending=waiting(handle);
+  // The person's answer to a list offered in this conversation.
+  const offered=turnContext(handle,conversationId)?.choices;
+  if(offered?.length){const i=choiceOf(plain,offered.length);const v=i>=0&&pending.find(w=>w.id===offered[i]);if(v)return freeze({missionId:v.id,task:brief(v.intention),objective:v.intention});}
+  if(!CONTINUE.test(plain))return null;
+  // This conversation's own waiting mission keeps the existing path.
+  const stored=turnRecord(handle,conversationId);
+  if(stored?.missionId&&RESUMABLE.includes(lastStatus(handle,stored)))return null;
+  if(pending.length===1)return freeze({missionId:pending[0].id,task:brief(pending[0].intention),objective:pending[0].intention});
+  if(pending.length<2)return null;
+  const shown=pending.slice(0,5);
+  const message=['Tengo '+pending.length+' tareas pendientes que pueden continuar'+(pending.length>shown.length?' (te muestro las '+shown.length+' más recientes)':'')+':',...shown.map((v,i)=>(i+1)+') «'+brief(v.intention)+'» ('+waitingFor(v)+')'),'¿Cuál quieres que retome? Responde con su número. Todavía no he retomado ninguna.'].join('\n');
+  return freeze({state:freeze({outcome:OUTCOMES.NEEDS_INFORMATION,status:'NEEDS_INFORMATION',mode:'CLARIFICATION',message,choices:shown.map(v=>v.id),executionEnabled:false})});
+ }
+ async function recordTurn(handle,id,{query,response,state,objective=null}){
   await sessions.current(handle);if(state.reason==='operational_state'||state.mode==='ORIENTATION')return;const prev=turnContext(handle,id);
   // A blocked request keeps no content, only its status, so a later "hazlo"
   // cannot fall back to an older objective; its context never leaves.
   if(state.outcome===OUTCOMES.BLOCKED){store.put(handle,'conversation',id,{objective:null,lastUser:'',lastResponse:'',derivedFromPrivate:true,missionId:null,status:'BLOCKED',mode:null,audit:[...(prev?.audit||[]),{id:null,at:now(),mode:'OPERATION',outcome:OUTCOMES.BLOCKED,evidence:null,cost:null,trace:[]}].slice(-8),expiresAt:new Date(Date.parse(now())+contextTtlMs).toISOString()});return;}const follow=FOLLOW.test(normalize(query).trim())||REFERENCE.test(normalize(query));
   const privateSources=state.result?.items?.some(v=>!PUBLIC_PROVENANCE.includes(v.provenance));
-  const sensitive=identifiesPerson(query)||classifyEgress(query).privacyClass!=='PUBLIC'||privateSources||!!(follow&&prev?.derivedFromPrivate);
-  store.put(handle,'conversation',id,{objective:follow&&prev?prev.objective:query.slice(0,2000),lastUser:query.slice(0,2000),lastResponse:response.slice(0,3000),derivedFromPrivate:!!sensitive,missionId:state.id||null,status:state.outcome==='NEEDS_APPROVAL'?'NEEDS_APPROVAL':state.status||state.outcome,mode:state.mode||null,audit:[...(prev?.audit||[]),{id:state.id||state.turnId||null,at:now(),mode:state.mode||'OPERATION',outcome:state.outcome||state.status,evidence:state.evidence||null,cost:state.cost||null,trace:state.trace||[]}].slice(-8),expiresAt:new Date(Date.parse(now())+contextTtlMs).toISOString()});
+  // A mission resumed from another conversation brings its own objective,
+  // with that objective's privacy, instead of the bare "continúa".
+  const sensitive=identifiesPerson(query)||classifyEgress(query).privacyClass!=='PUBLIC'||privateSources||!!(follow&&prev?.derivedFromPrivate)||(typeof objective==='string'&&(identifiesPerson(objective)||classifyEgress(objective).privacyClass!=='PUBLIC'));
+  store.put(handle,'conversation',id,{objective:typeof objective==='string'?objective.slice(0,2000):follow&&prev?prev.objective:query.slice(0,2000),lastUser:query.slice(0,2000),lastResponse:response.slice(0,3000),derivedFromPrivate:!!sensitive,missionId:state.id||null,status:state.outcome==='NEEDS_APPROVAL'?'NEEDS_APPROVAL':state.status||state.outcome,mode:state.mode||null,audit:[...(prev?.audit||[]),{id:state.id||state.turnId||null,at:now(),mode:state.mode||'OPERATION',outcome:state.outcome||state.status,evidence:state.evidence||null,cost:state.cost||null,trace:state.trace||[]}].slice(-8),...(state.choices?{choices:[...state.choices]}:{}),expiresAt:new Date(Date.parse(now())+contextTtlMs).toISOString()});
  }
  // The capabilities a decider or planner may see for this request: the owner's
  // catalogue refined by connections, Self Repair and the Privacy Gate. It is
@@ -477,7 +514,7 @@ function createSupervisedRuntime({membershipProvider,planner=null,conversationDe
  // are supplied by the trusted integration factory; no prompt chooses an owner.
  async function business(handle,input,factory){await sessions.current(handle);if(typeof factory!=='function')fail('business_adapter_required');const adapters=await factory(freeze(copy(sessions.scope(handle))));const result=await runCompanyOpportunity({...copy(input),...adapters});await sessions.current(handle);return freeze(copy({review:result.review,executionEnabled:false}));}
  function onboarding(handle){sessions.scope(handle);const state=capabilities.describe(handle);return freeze({...state,executionEnabled:false});}
- return Object.freeze({openSession:sessions.open,start,resume,pause,cancel,get,conversation,telemetry,costs,lessons,onboarding,business,
+ return Object.freeze({openSession:sessions.open,start,resumeTarget,resume,pause,cancel,get,conversation,telemetry,costs,lessons,onboarding,business,
   scope:handle=>freeze(copy(sessions.scope(handle))),recordTurn,turnContext,
   // Trusted administration surface: keep out of public request payloads.
   connections,aggregateTelemetry:aggregate,schedulerStats:scheduler.stats,persistence:store.persistence,executionEnabled:false});

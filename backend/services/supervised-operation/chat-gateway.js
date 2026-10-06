@@ -27,7 +27,11 @@ function createChatGateway({runtime,membershipProvider,adapterFactory=null,store
   // The human resuming a mission ("continúa", "ya lo he conectado", resume)
   // is the reconnection signal: only then is an expired or reduced connection
   // replaced by a fresh adapter (unverified until its first read succeeds).
-  const resuming=action==='resume'||(action==='start'&&typeof body.query==='string'&&latest.has(key)&&FOLLOW_UP.test(body.query.trim()));
+  // A continuation in a conversation without its own waiting mission (the
+  // page was left to reconnect a source) is resolved from the owner's
+  // persisted missions by the runtime: one mission, a list to choose, or none.
+  const target=action==='start'&&typeof body.query==='string'&&typeof r.resumeTarget==='function'?await r.resumeTarget(session,conversationId,body.query):null;
+  const resuming=action==='resume'||!!target?.missionId||(action==='start'&&typeof body.query==='string'&&latest.has(key)&&FOLLOW_UP.test(body.query.trim()));
   // Trusted composition installs the owner's adapters once; an active
   // connection is never replaced mid-flight by a concurrent request, and an
   // expired one is not silently reinstalled by an ordinary question.
@@ -36,11 +40,12 @@ function createChatGateway({runtime,membershipProvider,adapterFactory=null,store
   if(['resume','cancel','pause','status'].includes(action)){const id=body.missionId||latest.get(key);if(!id)fail('mission_not_found');state=await r[action==='status'?'get':action](session,id);}
   else if(action==='start'){
    if(typeof body.query!=='string')fail('chat_request_invalid');
-   state=await r.start(session,{text:body.query,conversationId});
+   state=target?.missionId?await r.resume(session,target.missionId):target?.state||await r.start(session,{text:body.query,conversationId});
   }else fail('chat_action_invalid');
   if(state.id)latest.set(key,state.id);
-  const response=describe(state);
-  if(typeof r.recordTurn==='function'&&action!=='status'){const previous=action==='start'?null:r.turnContext(session,conversationId);const query=action==='start'?body.query:previous?.lastUser;if(typeof query==='string')await r.recordTurn(session,conversationId,{query,response,state});}
+  // The task is named; whether its connection now works is told by its state.
+  const response=(target?.missionId?'Retomo la tarea «'+target.task+'» desde donde la dejamos.\n':'')+describe(state);
+  if(typeof r.recordTurn==='function'&&action!=='status'){const previous=action==='start'?null:r.turnContext(session,conversationId);const query=action==='start'?body.query:previous?.lastUser;if(typeof query==='string')await r.recordTurn(session,conversationId,{query,response,state,...(target?.objective?{objective:target.objective}:{})});}
   return freeze({ok:true,response,conversationId,missionId:state.id||null,outcome:state.outcome||state.status||null,executionEnabled:false,...(body.includeDetails===true?{details:state}:{})});
  }
  function describe(state){
