@@ -9,7 +9,10 @@ const { freeze } = require('./scope-session');
 // only item ids and fixed codes, never text: the answer is written from the
 // cited items themselves, so the analysis cannot add a fact of its own.
 const LEVEL_ORDER = { urgent: 0, important: 1, review: 2, informational: 3, noise: 4 };
-const REASONS = ['important_unread', 'starred_unread', 'today_event', 'important', 'starred', 'unread'];
+// Unread alone means "pending review", never "do this first" (08/10/2026,
+// fourth real mission: an unread Google Play notification became the first
+// action). Such mail is listed in review, by id, and never in priorities.
+const REASONS = ['important_unread', 'starred_unread', 'today_event', 'important', 'starred'];
 const WHEN = ['today', 'tomorrow', 'upcoming'];
 const DATE_ONLY = /^\d{4}-\d{2}-\d{2}$/;
 const pad = (value, size = 2) => String(value).padStart(size, '0');
@@ -18,8 +21,7 @@ const nextDay = day => { const [y, m, d] = day.split('-').map(Number); return lo
 
 function mailReason(signals, level) {
  if (level === 'urgent') return signals.important ? 'important_unread' : 'starred_unread';
- if (level === 'important') return signals.important ? 'important' : 'starred';
- return 'unread';
+ return signals.important ? 'important' : 'starred';
 }
 
 // items: the data.analyze input (each with a unique id). now: a Date or ISO string.
@@ -47,12 +49,12 @@ function analyzePrivateItems(items, { now }) {
   ...mail.filter(m => m.level === 'urgent').map(asMail),
   ...dated.filter(ahead).map(e => ({ itemId: e.item.id, kind: 'event', reason: 'today_event' })),
   ...mail.filter(m => m.level === 'important').map(asMail),
-  ...mail.filter(m => m.level === 'review').map(asMail),
  ];
  return freeze({
   analyzedLocally: true,
   priorities: freeze(priorities.map(freeze)),
   firstAction: priorities.length ? freeze({ itemId: priorities[0].itemId, reason: priorities[0].reason }) : null,
+  review: freeze(mail.filter(m => m.level === 'review').map(m => m.item.id)),
   context: freeze(dated.filter(e => !ahead(e)).map(e => freeze({ itemId: e.item.id, when: e.when }))),
   noise: freeze(mail.filter(m => m.level === 'noise').map(m => m.item.id)),
   informational: freeze(mail.filter(m => m.level === 'informational').map(m => m.item.id)),
@@ -68,11 +70,11 @@ function verifyLocalAnalysis(analysis, items) {
  const fail = code => freeze({ verified: false, code });
  const cite = id => { if (typeof id !== 'string' || !ids.has(id) || cited.has(id)) return false; cited.add(id); return true; };
  if (!analysis || typeof analysis !== 'object' || analysis.analyzedLocally !== true) return fail('local_analysis_missing');
- if (Object.keys(analysis).sort().join() !== 'analyzedLocally,context,firstAction,informational,noise,notes,priorities') return fail('local_analysis_shape');
- if (![analysis.priorities, analysis.context, analysis.noise, analysis.informational, analysis.notes].every(Array.isArray)) return fail('local_analysis_shape');
+ if (Object.keys(analysis).sort().join() !== 'analyzedLocally,context,firstAction,informational,noise,notes,priorities,review') return fail('local_analysis_shape');
+ if (![analysis.priorities, analysis.review, analysis.context, analysis.noise, analysis.informational, analysis.notes].every(Array.isArray)) return fail('local_analysis_shape');
  for (const p of analysis.priorities) if (!p || Object.keys(p).sort().join() !== 'itemId,kind,reason' || !['mail', 'event'].includes(p.kind) || !REASONS.includes(p.reason) || !cite(p.itemId)) return fail('local_analysis_priority_invalid');
  for (const c of analysis.context) if (!c || Object.keys(c).sort().join() !== 'itemId,when' || !WHEN.includes(c.when) || !cite(c.itemId)) return fail('local_analysis_context_invalid');
- for (const id of [...analysis.noise, ...analysis.informational, ...analysis.notes]) if (!cite(id)) return fail('local_analysis_reference_invalid');
+ for (const id of [...analysis.review, ...analysis.noise, ...analysis.informational, ...analysis.notes]) if (!cite(id)) return fail('local_analysis_reference_invalid');
  const first = analysis.firstAction; const top = analysis.priorities[0];
  if (first === null ? top !== undefined : !top || first.itemId !== top.itemId || first.reason !== top.reason || Object.keys(first).sort().join() !== 'itemId,reason') return fail('local_analysis_first_action_invalid');
  return freeze({ verified: true });

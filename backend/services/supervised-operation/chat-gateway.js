@@ -122,10 +122,12 @@ function createChatGateway({runtime,membershipProvider,adapterFactory=null,store
   const first=a.firstAction&&byId.get(a.firstAction.itemId);
   if(!first)lines.push('No veo nada en lo que he consultado que pida actuar primero hoy.');
   else if(a.firstAction.reason==='today_event')lines.push('Primero atendería '+eventOf(first)+', que es hoy.');
-  else if(a.firstAction.reason==='unread')lines.push('No veo nada marcado como importante. Si quieres empezar por algo, revisaría '+mailOf(first)+', porque todavía no lo has leído.');
   else lines.push('Primero revisaría '+mailOf(first)+', porque '+BECAUSE[a.firstAction.reason]+'.');
   const after=a.priorities.slice(1,4).map(p=>{const item=byId.get(p.itemId);return p.kind==='event'?eventOf(item):mailOf(item);});
   if(after.length)lines.push('Después: '+list(after)+(a.priorities.length>4?' y '+(a.priorities.length-4)+' más':'')+'.');
+  // Unread mail with no other signal is pending review, named but never put first.
+  const review=(a.review||[]).map(id=>mailOf(byId.get(id)));
+  if(review.length)lines.push((review.length===1?'Tienes sin leer, pendiente de revisar, '+review[0]:'Tienes '+review.length+' correos sin leer pendientes de revisar: '+list(review.slice(0,3))+(review.length>3?' y '+(review.length-3)+' más':''))+'; no veo en '+(review.length===1?'él':'ellos')+' señales que pidan atenderlo'+(review.length===1?'':'s')+' primero.');
   if(a.noise.length)lines.push((a.noise.length===1?'Otro mensaje reciente parece una notificación o una promoción':'Otros '+a.noise.length+' mensajes recientes parecen notificaciones o promociones')+'; no '+(a.noise.length===1?'lo':'los')+' pondría por delante.');
   if(a.informational.length)lines.push((a.informational.length===1?'Un correo reciente ya leído no muestra':a.informational.length+' correos recientes ya leídos no muestran')+' señales de urgencia.');
   const notes=a.notes.map(id=>byId.get(id).text).map(t=>t.length>120?t.slice(0,119)+'…':t);

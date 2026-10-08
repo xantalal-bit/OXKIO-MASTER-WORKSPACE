@@ -26,8 +26,8 @@ test('1/2/3/4: mail priority reuses the Executive Chat classification; stars cou
  const items = [mail('promo', { unread: true, important: true, category: 'promotions' }), mail('social', { unread: true, category: 'social' }), mail('unread', { unread: true }),
   mail('starred', { starred: true }), mail('urgent', { unread: true, important: true }), mail('read', {}), mail('starredPromo', { starred: true, unread: true, category: 'promotions' })];
  const a = analyzePrivateItems(items, { now: NOW });
- assert.deepEqual(a.priorities.map(p => [p.itemId, p.reason]), [['urgent', 'important_unread'], ['starredPromo', 'starred_unread'], ['starred', 'starred'], ['unread', 'unread']]);
- assert.deepEqual(a.firstAction, { itemId: 'urgent', reason: 'important_unread' });
+ assert.deepEqual(a.priorities.map(p => [p.itemId, p.reason]), [['urgent', 'important_unread'], ['starredPromo', 'starred_unread'], ['starred', 'starred']]);
+ assert.deepEqual(a.firstAction, { itemId: 'urgent', reason: 'important_unread' }); assert.deepEqual(a.review, ['unread'], 'unread alone is pending review, not a priority');
  assert.deepEqual([...a.noise].sort(), ['promo', 'social']); assert.deepEqual(a.informational, ['read']);
  // The V2 function itself is unchanged; the extension lives beside it.
  assert.equal(classifyMailPriority({ unread: true }), 'review'); assert.equal(classifyMailPriority({ important: true, unread: true, category: 'promotions' }), 'urgent');
@@ -61,6 +61,13 @@ test('8/15: no actionable priority is explicit; the verifier rejects invented or
   [{ ...good, summary: 'Tienes una reunión con el ministro' }, 'local_analysis_shape'],
   [{ ...good, priorities: [{ itemId: 'x', kind: 'mail', reason: 'important_unread', note: 'texto libre' }] }, 'local_analysis_priority_invalid'],
   [{ ...good, analyzedLocally: false }, 'local_analysis_missing'],
+  // P2 (08/10/2026): review is ids only, never invented, never also a priority, and unread is no priority reason.
+  [{ ...good, review: ['invented'] }, 'local_analysis_reference_invalid'],
+  [{ ...good, review: ['x'] }, 'local_analysis_reference_invalid'],
+  [{ ...good, review: [{ itemId: 'y', note: 'texto libre' }] }, 'local_analysis_reference_invalid'],
+  [{ ...good, review: 'y' }, 'local_analysis_shape'],
+  [(({ review, ...rest }) => rest)(good), 'local_analysis_shape'],
+  [{ ...good, priorities: [{ itemId: 'x', kind: 'mail', reason: 'unread' }], firstAction: { itemId: 'x', reason: 'unread' } }, 'local_analysis_priority_invalid'],
   [{ ...good, noise: ['x'] }, 'local_analysis_reference_invalid'],
  ];
  for (const [analysis, code] of broken) assert.deepEqual(verifyLocalAnalysis(analysis, goodItems), { verified: false, code });
@@ -318,4 +325,63 @@ test('P1 1: the invoice plan (mail -> analysis -> storage proposal) with an unan
  const c = await planCase({ plans: [[step('g', 'gmail.read'), step('a', 'data.analyze', ['g']), step('p', 'storage.propose', ['g', 'a'])]], mail: [{ text: 'Factura agua' }], storage: [] });
  assert.deepEqual(consulted(c.first), ['gmail.read', 'data.analyze', 'storage.propose']);
  uncertified(c, 'invoice proposal'); assert.equal(c.first.approvalId, null);
+});
+
+// --- P2 (08/10/2026, fourth real mission): unread alone is pending review, never the first action ---
+// An unread Google Play notification (category updates, not important, not
+// starred) became the first action only because it was unread.
+const firstOf = (...items) => { const a = analyzePrivateItems(items, { now: NOW }); assert.equal(verifyLocalAnalysis(a, items).verified, true); return a; };
+const todayAhead = id => event(id, '2026-10-06T15:00:00Z');
+
+test('P2 1-5: unread alone is review; important or starred unread lead; promotions and social stay noise', () => {
+ const updates = firstOf(mail('play', { unread: true, category: 'updates' }));
+ assert.equal(updates.firstAction, null); assert.deepEqual(updates.priorities, []); assert.deepEqual(updates.review, ['play']);
+ assert.deepEqual(firstOf(mail('i', { unread: true, important: true })).firstAction, { itemId: 'i', reason: 'important_unread' });
+ assert.deepEqual(firstOf(mail('s', { unread: true, starred: true })).firstAction, { itemId: 's', reason: 'starred_unread' });
+ for (const category of ['promotions', 'social']) {
+  const a = firstOf(mail('n', { unread: true, category }));
+  assert.equal(a.firstAction, null, category); assert.deepEqual(a.noise, ['n'], category); assert.deepEqual(a.review, [], category);
+ }
+});
+
+test('P2 6-8: with only unread mail there is no first action; a pending event today or an important read mail comes before it', () => {
+ assert.equal(firstOf(mail('u', { unread: true })).firstAction, null);
+ const withEvent = firstOf(mail('u', { unread: true }), todayAhead('meeting'));
+ assert.deepEqual(withEvent.firstAction, { itemId: 'meeting', reason: 'today_event' }); assert.deepEqual(withEvent.review, ['u']);
+ const withImportant = firstOf(mail('u', { unread: true }), mail('imp', { important: true }));
+ assert.deepEqual(withImportant.firstAction, { itemId: 'imp', reason: 'important' }); assert.deepEqual(withImportant.priorities.map(p => p.itemId), ['imp']); assert.deepEqual(withImportant.review, ['u']);
+ // The strong levels keep their order: unread important or starred mail, today's event, then read important or starred mail
+ // (within a level the most recent first, unchanged).
+ const order = firstOf(mail('st', { starred: true }), mail('im', { important: true }), todayAhead('ev'), mail('su', { starred: true, unread: true }), mail('iu', { important: true, unread: true }), mail('u', { unread: true }));
+ assert.deepEqual(order.priorities.slice(0, 2).map(p => p.reason).sort(), ['important_unread', 'starred_unread']); assert.equal(order.priorities[2].reason, 'today_event'); assert.deepEqual(order.priorities.slice(3).map(p => p.reason).sort(), ['important', 'starred']); assert.deepEqual(order.review, ['u']);
+});
+
+test('P2 9: the fourth real mission reproduced: the unread Google Play update is pending review, no first action, still a verified and certified analysis', async () => {
+ const inbox = [
+  raw('gp', ['INBOX', 'UNREAD', 'CATEGORY_UPDATES'], 'Google Play <googleplay-noreply@google.example>', 'Tus Play Points te esperan en PC ☀️'),
+  raw('p1', ['INBOX', 'IMPORTANT', 'CATEGORY_PROMOTIONS'], 'Tienda Ejemplo <ofertas@tienda.example>', 'Rebajas de otoño'),
+  raw('p2', ['INBOX', 'UNREAD', 'CATEGORY_PROMOTIONS'], 'Club Ejemplo <news@club.example>', 'Nuevas ventajas para ti'),
+  raw('r1', ['INBOX', 'CATEGORY_PERSONAL'], 'Ana Ejemplo <ana@example.test>', 'Gracias por lo de ayer'),
+  raw('r2', ['INBOX', 'CATEGORY_UPDATES'], 'Banco Ejemplo <avisos@banco.example>', 'Tu extracto está disponible'),
+ ].map(normalizeGmailMessage);
+ const s = await setup(inbox, []);
+ try {
+  const r = await s.ask(ORDER); const d = r.data.details; const a = d.result.localAnalysis; const textOf = id => d.result.items.find(v => v.id === id).text;
+  assert.equal(d.status, 'COMPLETED', 'the analysis exists and is verified'); assert.ok(d.trace.some(t => t.event === 'LOCAL_ANALYSIS' && t.verified === true && t.firstAction === false));
+  assert.ok(d.trace.some(t => t.event === 'TERMINATE')); assert.ok(!d.trace.some(t => t.event === 'ANALYSIS_UNAVAILABLE'));
+  assert.equal(a.firstAction, null); assert.deepEqual(a.priorities, []);
+  assert.equal(a.review.length, 1); assert.match(textOf(a.review[0]), /^Google Play — Tus Play Points te esperan en PC ☀️/);
+  assert.equal(a.noise.length, 2); assert.equal(a.informational.length, 2); assert.deepEqual(a.context, []);
+  assert.deepEqual(r.data.response.split('\n'), [
+   'Hoy no tienes eventos en la agenda.',
+   'No veo nada en lo que he consultado que pida actuar primero hoy.',
+   'Tienes sin leer, pendiente de revisar, el correo de Google Play («Tus Play Points te esperan en PC ☀️»); no veo en él señales que pidan atenderlo primero.',
+   'Otros 2 mensajes recientes parecen notificaciones o promociones; no los pondría por delante.',
+   '2 correos recientes ya leídos no muestran señales de urgencia.',
+   'Lo he analizado aquí, sin enviar tus datos fuera de OXKIO. No he realizado envíos ni cambios externos.',
+  ]);
+  assert.doesNotMatch(r.data.response, /Primero|Si quieres empezar/); assert.doesNotMatch(r.data.response, INTERNAL); assert.doesNotMatch(r.data.response, /@/);
+  assert.equal(s.p.calls.length, 1, 'only the decision; no private content reached a provider'); assert.ok(!s.p.calls.some(c => /Play Points|Rebajas|extracto/.test(JSON.stringify(c))));
+  assert.equal(r.data.executionEnabled, false);
+ } finally { s.close(); }
 });
