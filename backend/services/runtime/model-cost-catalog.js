@@ -62,4 +62,34 @@ function estimateCatalogCostUsd(catalog, modelId, { inputTokens = 0, outputToken
   return Number(((input * entry.inputUsdPerMillion + output * entry.outputUsdPerMillion) / 1_000_000).toFixed(8));
 }
 
-module.exports = { DEFAULT_CATALOG, normalizeCatalog, estimateCatalogCostUsd };
+
+/**
+ * Pure, opt-in routing decision. Does not authorize or perform a paid call.
+ * Exact tier/residency/privacy matches are intentional: unknowns fail closed.
+ * A reviewed catalog is required; actual billing and permission remain external.
+ */
+function selectCheapestEligibleModel(catalog, constraints = {}) {
+  if (!constraints || typeof constraints !== 'object' || Array.isArray(constraints)) return null;
+  const { tier, residency, privacy, inputTokens, outputTokens } = constraints;
+  if ([tier, residency, privacy].some((value) => typeof value !== 'string' || !value.trim())) return null;
+  if (![inputTokens, outputTokens].every((value) => Number.isSafeInteger(value) && value >= 0)) return null;
+
+  const normalized = normalizeCatalog(catalog);
+  let best = null;
+  for (const modelId of Object.keys(normalized).sort()) {
+    const entry = normalized[modelId];
+    if (entry.tier !== tier || entry.residency !== residency || entry.privacy !== privacy) continue;
+    const rawCost = (inputTokens * entry.inputUsdPerMillion
+      + outputTokens * entry.outputUsdPerMillion) / 1_000_000;
+    if (!Number.isFinite(rawCost)) continue;
+    if (!best || rawCost < best.rawCost) best = { modelId, entry, rawCost };
+  }
+  return best ? Object.freeze({
+    modelId: best.modelId,
+    provider: best.entry.provider,
+    estimatedCostUsd: Number(best.rawCost.toFixed(8)),
+    pricingVersion: best.entry.pricingVersion,
+  }) : null;
+}
+
+module.exports = { DEFAULT_CATALOG, normalizeCatalog, estimateCatalogCostUsd, selectCheapestEligibleModel };
