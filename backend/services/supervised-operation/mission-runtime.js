@@ -288,6 +288,20 @@ function createSupervisedRuntime({membershipProvider,planner=null,conversationDe
   const retries=m.state.missionRetriesUsed;if(retries){metric(m.handle,'recovered');metric(m.handle,'retries');trace(m,'CHANGE_STRATEGY',{retries});}
   if(m.state.verification?.verdict==='PASS'&&m.status==='COMPLETED'){
    const outputs=m.state.tasks.filter(t=>t.status==='COMPLETED').map(t=>JSON.parse(t.output));
+   // An analysis the objective needed but that did not happen (the content
+   // could not be sent and no verified local analysis exists, no usable
+   // reasoner, or every resource failed) is not a satisfied objective
+   // (06/10/2026, third real mission). Every data.analyze of the plan is
+   // checked, not only the last output (08/10/2026, PR #37 audit), and before
+   // anything is committed: no memory, no TERMINATE, no procedure learned.
+   // Only a synthesis or a verified local analysis counts as the analysis
+   // done; the unanalysed output stays as the partial result and its reason.
+   const unanalyzed=outputs.filter(v=>v.capability==='data.analyze'&&!v.synthesis&&!v.localAnalysis&&(v.cognitionSkipped||v.items.length));
+   if(unanalyzed.length){
+    const reason=unanalyzed[0].cognitionSkipped||'unavailable';m.result=unanalyzed[0];
+    invalidateWorkflow(m);m.status='NEEDS_CAPABILITY';m.diagnosis={class:'analysis_unavailable',action:'PARTIAL_RESULT',reason};
+    metric(m.handle,'gaps');trace(m,'ANALYSIS_UNAVAILABLE',{reason,unanalyzed:unanalyzed.length,last:unanalyzed.includes(outputs.at(-1))});return snapshot(m);
+   }
    // A failed verifier never commits personal memory or a reusable workflow.
    for(const output of outputs)if(output.capability==='memory.remember')store.put(m.handle,'memory',m.id,{text:output.items[0].text,provenance:'INTERNAL_MEMORY'});
    const result=outputs.at(-1);m.result=result;
@@ -309,17 +323,6 @@ function createSupervisedRuntime({membershipProvider,planner=null,conversationDe
     const view=capabilityView(m.handle,m.intention);
     m.status='NEEDS_INFORMATION';m.diagnosis={class:'objective_unmet',action:'NEEDS_INFORMATION',consulted,missing:pending.map(id=>({label:DEFINITIONS[id].label,needsConnection:view.capabilities.some(v=>v.id===id&&v.status==='NEEDS_CONNECTION')})),...(decision.question?{question:decision.question}:{})};
     metric(m.handle,'gaps');trace(m,'OBJECTIVE_UNMET',{pending:pending.length});return snapshot(m);
-   }
-   // An analysis the objective needed but that did not happen (the content
-   // could not be sent and no verified local analysis exists, or every
-   // resource failed) is not a satisfied objective (06/10/2026, third real
-   // mission): what was read is a partial result, no procedure is learned
-   // and the existing NEEDS_CAPABILITY outcome says what is missing. Only a
-   // synthesis or a verified local analysis counts as the analysis done.
-   if(result.capability==='data.analyze'&&!result.synthesis&&!result.localAnalysis&&(result.cognitionSkipped||result.items.length)){
-    const reason=result.cognitionSkipped||'unavailable';
-    invalidateWorkflow(m);m.status='NEEDS_CAPABILITY';m.diagnosis={class:'analysis_unavailable',action:'PARTIAL_RESULT',reason};
-    metric(m.handle,'gaps');trace(m,'ANALYSIS_UNAVAILABLE',{reason});return snapshot(m);
    }
    if(result.proposal){m.status='NEEDS_APPROVAL';if(approvalFactory&&!m.approvalId)await handoffApproval(m,result);}
    // Learned procedures are reads only; a memory write is always re-derived

@@ -652,7 +652,8 @@ test('R1 restart preserves mission, memory, approvals, costs and lessons; resume
     const make = () => createSupervisedRuntime({ membershipProvider: provider, storeFactory: sealed(root), approvalFactory: approvals });
     let r = make(); let a = await session(r, A);
     await r.start(a, { text: 'Recuerda que el contador es el 4521', conversationId: 'conv-0001' });
-    r.connections.install(a, 'mail', fixture(A, ['mail.read'], items(A, ['Factura agua'])));
+    // Gmail signals let the plan's analysis run locally and verify (PR #37 audit).
+    r.connections.install(a, 'mail', fixture(A, ['mail.read'], items(A, [{ text: 'Factura agua', signals: { type: 'mail', unread: true, important: true, starred: false, category: 'primary', date: '2026-10-06T08:00:00.000Z' } }])));
     r.connections.install(a, 'storage', fixture(A, ['documents.read'], items(A, [])));
     const proposal = await r.start(a, { text: 'Organiza las facturas de mi correo en carpetas', conversationId: 'conv-0001' });
     assert.equal(proposal.status, 'NEEDS_APPROVAL');

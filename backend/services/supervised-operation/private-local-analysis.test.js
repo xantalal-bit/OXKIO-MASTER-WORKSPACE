@@ -247,3 +247,75 @@ test('P1 8: a disabled reasoner receives nothing; the local path sends no conten
  const reasoner = spyReasoner(); const c = await noReasonerCase({ reasoner, items: MAIL_SIGNALS });
  certifiedLocally(c, 'disabled spy'); assert.equal(reasoner.calls.length, 0); assert.equal(c.first.actualCostUsd, null); assert.equal(c.first.cost.chargedUsd, 0);
 });
+
+// --- P1 closure (08/10/2026, second PR #37 audit): every data.analyze, not the last output ---
+// Work reproduced gmail.read -> data.analyze -> memory.search: the barrier saw
+// only outputs.at(-1) (memory.search) and the unanalysed mail certified.
+const step = (key, capability, dependsOn = []) => ({ key, capability, dependsOn });
+// A reasoner whose synthesis quotes its sources verbatim: verified, zero cost.
+const synthesizing = () => { const calls = []; return { enabled: true, calls, reason: async ({ request, accept }) => {
+ calls.push(request); const content = { findings: request.context.sources.map(s => ({ claim: s.text, quote: s.text, sourceIds: [s.id] })), comparison: '', conclusion: 'Revisar primero lo citado.' };
+ assert.equal(accept(content), true); return { content, resource: 'fixture', region: 'eu', privacyClass: 'INTERNAL', usage: { inputTokens: 0, outputTokens: 0 }, chargedUsd: 0, evidence: {}, attempts: [] }; } }; };
+async function planCase({ reasoner = null, plans, mail = BARE, calendar = BARE, storage = null }) {
+ let decisions = 0; const queue = [...plans];
+ const r = createSupervisedRuntime({ membershipProvider, reasoner, conversationDecider: async () => { decisions++; return { action: 'plan', plan: queue.length > 1 ? queue.shift() : queue[0] }; } });
+ const h = await r.openSession(membership.userId);
+ r.connections.install(h, 'mail', fixtureAdapter(membership, 'mail.read', mail)); r.connections.install(h, 'calendar', fixtureAdapter(membership, 'calendar.read', calendar));
+ if (storage) r.connections.install(h, 'storage', fixtureAdapter(membership, 'documents.read', storage));
+ const text = 'Revisa mi correo y dime qué hago primero.';
+ const first = await r.start(h, { text, conversationId: 'conv-0001' }); const second = await r.start(h, { text, conversationId: 'conv-0002' });
+ return { first, second, decisions: () => decisions, r, h };
+}
+const consulted = s => s.trace.filter(t => t.event === 'CONSULT').map(t => t.capability);
+const uncertified = (c, name) => {
+ assert.equal(c.first.status, 'NEEDS_CAPABILITY', name); assert.equal(c.first.outcome, 'NEEDS_CAPABILITY', name); assert.equal(c.first.diagnosis.class, 'analysis_unavailable', name);
+ assert.ok(!c.first.trace.some(t => t.event === 'TERMINATE'), name + ': no TERMINATE'); assert.ok(c.first.trace.some(t => t.event === 'ANALYSIS_UNAVAILABLE'), name);
+ // The unanalysed output is the partial result: evidence kept, no analysis invented.
+ assert.equal(c.first.result.capability, 'data.analyze', name); assert.equal(c.first.result.synthesis, undefined, name); assert.equal(c.first.result.localAnalysis, undefined, name); assert.ok(c.first.result.items.length, name);
+ assert.equal(c.decisions(), 2, name + ': no workflow learned, the request is decided again'); assert.equal(c.second.status, 'NEEDS_CAPABILITY', name); assert.equal(c.first.executionEnabled, false, name);
+};
+const certified = (c, name) => {
+ assert.equal(c.first.status, 'COMPLETED', name); assert.ok(c.first.trace.some(t => t.event === 'TERMINATE'), name); assert.ok(!c.first.trace.some(t => t.event === 'ANALYSIS_UNAVAILABLE'), name);
+ assert.equal(c.decisions(), 1, name + ': the certified procedure is learned and reused'); assert.equal(c.second.status, 'COMPLETED', name); assert.equal(c.first.executionEnabled, false, name);
+};
+
+test('P1 Work case: gmail.read -> data.analyze -> memory.search with no usable reasoner and no signals never certifies', async () => {
+ for (const reasoner of [null, { enabled: false }]) {
+  const c = await planCase({ reasoner, plans: [[step('g', 'gmail.read'), step('a', 'data.analyze', ['g']), step('m', 'memory.search', ['a'])]] });
+  assert.deepEqual(consulted(c.first), ['gmail.read', 'data.analyze', 'memory.search'], 'the later task ran: the unanalysed step is not the last output');
+  uncertified(c, 'work case'); assert.equal(c.first.diagnosis.reason, 'unavailable');
+  assert.ok(c.first.trace.some(t => t.event === 'ANALYSIS_UNAVAILABLE' && t.unanalyzed === 1 && t.last === false));
+  assert.deepEqual(c.first.result.items.map(v => v.text), ['Nota sin señales']);
+ }
+});
+
+test('P1 1/5/6/7: an unanalysed data.analyze anywhere in the plan, followed by any task or last, certifies nothing and learns nothing', async () => {
+ for (const [name, plan] of [
+  ['then calendar.read', [step('g', 'gmail.read'), step('a', 'data.analyze', ['g']), step('c', 'calendar.read', ['a'])]],
+  ['then independent memory.search', [step('g', 'gmail.read'), step('a', 'data.analyze', ['g']), step('m', 'memory.search')]],
+  ['last (existing safe behaviour)', [step('g', 'gmail.read'), step('a', 'data.analyze', ['g'])]],
+ ]) uncertified(await planCase({ plans: [plan], calendar: CALENDAR_SIGNALS }), name);
+});
+
+test('P1 2/3: a verified synthesis or a verified local analysis followed by another task completes normally', async () => {
+ const plan = [step('g', 'gmail.read'), step('a', 'data.analyze', ['g']), step('m', 'memory.search', ['a'])];
+ const reasoner = synthesizing(); const viaSynthesis = await planCase({ reasoner, plans: [plan] });
+ certified(viaSynthesis, 'synthesis'); assert.equal(reasoner.calls.length, 2, 'the replayed procedure analyses again: one call per run, fixture only');
+ const local = await planCase({ plans: [plan], mail: MAIL_SIGNALS }); certified(local, 'local analysis');
+ assert.ok(local.first.trace.some(t => t.event === 'LOCAL_ANALYSIS' && t.verified === true));
+});
+
+test('P1 4: several analyses certify only when every one of them was performed', async () => {
+ const plan = [step('g', 'gmail.read'), step('a1', 'data.analyze', ['g']), step('c', 'calendar.read'), step('a2', 'data.analyze', ['c']), step('m', 'memory.search', ['a1', 'a2'])];
+ certified(await planCase({ plans: [plan], mail: MAIL_SIGNALS, calendar: CALENDAR_SIGNALS }), 'all verified');
+ const mailOnly = await planCase({ plans: [plan], mail: MAIL_SIGNALS, calendar: BARE }); uncertified(mailOnly, 'agenda analysis missing');
+ assert.ok(mailOnly.first.trace.some(t => t.event === 'ANALYSIS_UNAVAILABLE' && t.unanalyzed === 1));
+ const calendarOnly = await planCase({ plans: [plan], mail: BARE, calendar: CALENDAR_SIGNALS }); uncertified(calendarOnly, 'mail analysis missing');
+ const neither = await planCase({ plans: [plan] }); uncertified(neither, 'none'); assert.ok(neither.first.trace.some(t => t.event === 'ANALYSIS_UNAVAILABLE' && t.unanalyzed === 2));
+});
+
+test('P1 1: the invoice plan (mail -> analysis -> storage proposal) with an unanalysed mail hands nothing to approval', async () => {
+ const c = await planCase({ plans: [[step('g', 'gmail.read'), step('a', 'data.analyze', ['g']), step('p', 'storage.propose', ['g', 'a'])]], mail: [{ text: 'Factura agua' }], storage: [] });
+ assert.deepEqual(consulted(c.first), ['gmail.read', 'data.analyze', 'storage.propose']);
+ uncertified(c, 'invoice proposal'); assert.equal(c.first.approvalId, null);
+});
