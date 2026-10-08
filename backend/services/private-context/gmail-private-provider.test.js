@@ -151,7 +151,7 @@ test('normalizes Gmail messages by whitelist', () => {
     attachments: [{ filename: 'secret.pdf' }],
   }));
 
-  assert.deepEqual(Object.keys(message), ['id', 'threadId', 'from', 'subject', 'date', 'snippet', 'unread', 'important']);
+  assert.deepEqual(Object.keys(message), ['id', 'threadId', 'from', 'subject', 'date', 'snippet', 'unread', 'important', 'starred', 'category']);
   assert.equal(message.id, 'message-1');
   assert.equal(message.threadId, 'thread-1');
   assert.equal(message.from, 'Cliente Ficticio <cliente@example.test>');
@@ -247,7 +247,7 @@ test('real Gmail readonly reader uses metadata-only Gmail API calls', async () =
     metadataHeaders: ['From', 'Subject', 'Date'],
   });
   assert.equal(messages.length, 2);
-  assert.deepEqual(Object.keys(messages[0]), ['id', 'threadId', 'from', 'subject', 'date', 'snippet', 'unread', 'important']);
+  assert.deepEqual(Object.keys(messages[0]), ['id', 'threadId', 'from', 'subject', 'date', 'snippet', 'unread', 'important', 'starred', 'category']);
 });
 
 test('sender search reuses the readonly list call with a from: query and metadata-only gets', async () => {

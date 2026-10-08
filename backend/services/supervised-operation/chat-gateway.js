@@ -62,6 +62,8 @@ function createChatGateway({runtime,membershipProvider,adapterFactory=null,store
    return [...checked,...lines].join('\n')+'\n'+(state.connectionRequests.some(g=>g.connectable)?RESUME:'He guardado esta tarea, pero no podré continuarla mientras esa conexión no esté disponible para tu cuenta.');
   }
   if(state.status==='WAITING_RESOURCE')return 'El recurso de razonamiento no está disponible ahora (límite, cuota, presupuesto o fallo del proveedor) y no hay alternativa autorizada. La misión y sus fuentes quedan guardadas en este punto; di "continúa" para reanudarla. No he ejecutado nada externo.';
+  if(state.status==='COMPLETED'&&state.result?.localAnalysis)return localText(state.result,state.planSources||[]);
+  if(state.status==='NEEDS_CAPABILITY'&&state.diagnosis?.class==='analysis_unavailable'&&state.result)return partialText(state.result);
   if(state.status==='COMPLETED'&&state.result?.synthesis)return synthesisText(state.result);
   if(state.status==='COMPLETED'&&state.result?.cognitionSkipped)return skippedText(state.result);
   if(state.status==='COMPLETED'&&state.result?.items?.some(v=>v.provenance==='PUBLIC_WEB'))return publicReadText(state.result);
@@ -96,6 +98,40 @@ function createChatGateway({runtime,membershipProvider,adapterFactory=null,store
  }
  function skippedText(result){
   return [SKIPPED[result.cognitionSkipped]||SKIPPED.unavailable,...references(result),'No he realizado envíos ni cambios externos.'].join('\n');
+ }
+ // The analysis the objective needed did not happen: what was read is shown
+ // as a partial result and the task is not presented as done.
+ function partialText(result){
+  return [SKIPPED[result.cognitionSkipped]||SKIPPED.unavailable,'Por eso no doy la tarea por terminada.',...references(result),'No he realizado envíos ni cambios externos.'].join('\n');
+ }
+ // Local analysis (06/10/2026): every sentence is built from the cited items
+ // and fixed reasons, never from text the analysis wrote. Mail is named by
+ // sender and subject; agenda events by title and when they happen.
+ const BECAUSE={important_unread:'está marcado como importante y todavía no lo has leído',starred_unread:'lo marcaste con estrella y todavía no lo has leído',important:'está marcado como importante',starred:'lo marcaste con estrella'};
+ function localText(result,planSources){
+  const a=result.localAnalysis;const byId=new Map(result.items.map(v=>[v.id,v]));
+  const mailOf=item=>{const [who,subject]=item.text.split(' — ');return 'el correo de '+who+(subject?' («'+subject+'»)':'');};
+  const titleOf=item=>{const start=item.signals?.start;const text=start&&item.text.startsWith(start+' · ')?item.text.slice(start.length+3):item.text;return text.split(' · ')[0];};
+  const timeOf=item=>{const start=item.signals?.start;if(!start||item.signals.allDay||start.length===10)return null;const d=new Date(start);return Number.isNaN(d.getTime())?null:d.toLocaleTimeString('es-ES',{hour:'2-digit',minute:'2-digit'});};
+  const eventOf=item=>titleOf(item)+(timeOf(item)?' a las '+timeOf(item):'');
+  const lines=[];
+  const todayEvents=[...a.priorities.filter(p=>p.kind==='event').map(p=>byId.get(p.itemId)),...a.context.filter(c=>c.when==='today').map(c=>byId.get(c.itemId))];
+  if(planSources.includes('tu agenda')||todayEvents.length)lines.push(todayEvents.length?'Hoy en tu agenda: '+list(todayEvents.map(eventOf))+'.':'Hoy no tienes eventos en la agenda.');
+  const tomorrow=a.context.filter(c=>c.when==='tomorrow').map(c=>eventOf(byId.get(c.itemId)));if(tomorrow.length)lines.push('Mañana: '+list(tomorrow)+'.');
+  const upcoming=a.context.filter(c=>c.when==='upcoming').map(c=>byId.get(c.itemId));if(upcoming.length)lines.push('Próximos días: '+list(upcoming.slice(0,3).map(eventOf))+(upcoming.length>3?' y '+(upcoming.length-3)+' más':'')+'.');
+  const first=a.firstAction&&byId.get(a.firstAction.itemId);
+  if(!first)lines.push('No veo nada en lo que he consultado que pida actuar primero hoy.');
+  else if(a.firstAction.reason==='today_event')lines.push('Primero atendería '+eventOf(first)+', que es hoy.');
+  else if(a.firstAction.reason==='unread')lines.push('No veo nada marcado como importante. Si quieres empezar por algo, revisaría '+mailOf(first)+', porque todavía no lo has leído.');
+  else lines.push('Primero revisaría '+mailOf(first)+', porque '+BECAUSE[a.firstAction.reason]+'.');
+  const after=a.priorities.slice(1,4).map(p=>{const item=byId.get(p.itemId);return p.kind==='event'?eventOf(item):mailOf(item);});
+  if(after.length)lines.push('Después: '+list(after)+(a.priorities.length>4?' y '+(a.priorities.length-4)+' más':'')+'.');
+  if(a.noise.length)lines.push((a.noise.length===1?'Otro mensaje reciente parece una notificación o una promoción':'Otros '+a.noise.length+' mensajes recientes parecen notificaciones o promociones')+'; no '+(a.noise.length===1?'lo':'los')+' pondría por delante.');
+  if(a.informational.length)lines.push((a.informational.length===1?'Un correo reciente ya leído no muestra':a.informational.length+' correos recientes ya leídos no muestran')+' señales de urgencia.');
+  const notes=a.notes.map(id=>byId.get(id).text).map(t=>t.length>120?t.slice(0,119)+'…':t);
+  if(notes.length)lines.push('También tienes: '+list(notes.slice(0,3))+'.');
+  lines.push('Lo he analizado aquí, sin enviar tus datos fuera de OXKIO. No he realizado envíos ni cambios externos.');
+  return lines.join('\n');
  }
  // Public pages read without an analysis step are referenced, not dumped.
  function publicReadText(result){

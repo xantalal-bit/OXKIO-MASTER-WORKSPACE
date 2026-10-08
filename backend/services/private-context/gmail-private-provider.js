@@ -67,12 +67,32 @@ function getHeader(headers, name) {
   return found && typeof found.value === 'string' ? found.value : '';
 }
 
+// Gmail's own inbox tabs, read from the labels the metadata call already
+// returns (V3 local analysis, 06/10/2026). No new scope or request.
+const GMAIL_CATEGORIES = Object.freeze({
+  CATEGORY_PERSONAL: 'primary',
+  CATEGORY_SOCIAL: 'social',
+  CATEGORY_PROMOTIONS: 'promotions',
+  CATEGORY_UPDATES: 'updates',
+  CATEGORY_FORUMS: 'forums',
+});
+
+function categoryOf(labelIds) {
+  const found = labelIds.find((label) => Object.hasOwn(GMAIL_CATEGORIES, label));
+  return found ? GMAIL_CATEGORIES[found] : null;
+}
+
 function normalizeGmailMessage(message = {}) {
   const payload = message.payload && typeof message.payload === 'object'
     ? message.payload
     : {};
   const headers = Array.isArray(payload.headers) ? payload.headers : [];
-  const labelIds = Array.isArray(message.labelIds) ? message.labelIds : [];
+  // Idempotent (06/10/2026): buildGmailPrivateContext normalizes the reader's
+  // already-normalized messages again; without labels, the flags they carry
+  // are kept instead of being recomputed as false.
+  const hasLabels = Array.isArray(message.labelIds);
+  const labelIds = hasLabels ? message.labelIds : [];
+  const flag = (label, field) => (hasLabels ? labelIds.includes(label) : message[field] === true);
 
   return {
     id: isValidText(message.id) ? message.id.trim() : null,
@@ -81,8 +101,12 @@ function normalizeGmailMessage(message = {}) {
     subject: isValidText(message.subject) ? message.subject.trim() : getHeader(headers, 'Subject'),
     date: isValidText(message.date) ? message.date.trim() : getHeader(headers, 'Date'),
     snippet: isValidText(message.snippet) ? message.snippet.trim() : '',
-    unread: labelIds.includes('UNREAD'),
-    important: labelIds.includes('IMPORTANT'),
+    unread: flag('UNREAD', 'unread'),
+    important: flag('IMPORTANT', 'important'),
+    starred: flag('STARRED', 'starred'),
+    category: hasLabels
+      ? categoryOf(labelIds)
+      : (Object.values(GMAIL_CATEGORIES).includes(message.category) ? message.category : null),
   };
 }
 

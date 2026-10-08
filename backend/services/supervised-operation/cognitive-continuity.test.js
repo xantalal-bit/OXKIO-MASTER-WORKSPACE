@@ -50,13 +50,16 @@ async function setup({ providers = [], budget = 1, policy = { publicExternalAllo
 }
 const events = details => details.trace.map(t => t.event);
 
-test('cognition stays off by default: zero budget keeps the deterministic analysis and no text leaves', async () => {
+// Cognition off is no analysis at all (PR #37 audit, 08/10/2026): what was
+// read is a partial result, never a certified objective.
+test('cognition stays off by default: zero budget sends no text and certifies nothing it did not analyse', async () => {
  const primary = provider('openai', 'primary', synthesis);
  const s = await setup({ providers: [primary], budget: 0 });
  try {
-  await s.seed(); const r = await s.ask(QUESTION);
-  assert.equal(r.data.details.status, 'COMPLETED'); assert.equal(r.data.details.result.synthesis, undefined);
-  assert.equal(primary.calls.length, 0); assert.match(r.data.response, /Alfa/);
+  await s.seed(); const r = await s.ask(QUESTION); const d = r.data.details;
+  assert.equal(d.status, 'NEEDS_CAPABILITY'); assert.equal(d.diagnosis.class, 'analysis_unavailable'); assert.equal(d.result.synthesis, undefined);
+  assert.ok(events(d).includes('ANALYSIS_UNAVAILABLE')); assert.ok(!events(d).includes('TERMINATE'));
+  assert.equal(primary.calls.length, 0); assert.match(r.data.response, /Alfa/); assert.match(r.data.response, /no doy la tarea por terminada/);
  } finally { s.cleanup(); }
 });
 
@@ -125,7 +128,7 @@ test('with every resource privacy-blocked (canonical default policy) the determi
  const s = await setup({ providers: [primary], policy: DEFAULT_PRIVACY_POLICY });
  try {
   await s.seed(); const d = (await s.ask(QUESTION)).data.details;
-  assert.equal(d.status, 'COMPLETED'); assert.equal(primary.calls.length, 0); assert.equal(d.result.synthesis, undefined);
+  assert.equal(d.status, 'NEEDS_CAPABILITY'); assert.equal(d.diagnosis.class, 'analysis_unavailable'); assert.equal(primary.calls.length, 0); assert.equal(d.result.synthesis, undefined);
   assert.ok(events(d).includes('COGNITION_SKIPPED'));
  } finally { s.cleanup(); }
 });
@@ -246,7 +249,7 @@ test('B: private memory (CONFIDENTIAL) never leaves; the deterministic analysis 
  const s = await setup({ providers: [p], policy: POLICY_B, floor: 'INTERNAL' });
  try {
   await s.seed(); const d = (await s.ask(QUESTION)).data.details;
-  assert.equal(p.calls.length, 0); assert.equal(d.status, 'COMPLETED'); assert.equal(d.result.synthesis, undefined); assert.ok(events(d).includes('COGNITION_SKIPPED'));
+  assert.equal(p.calls.length, 0); assert.equal(d.status, 'NEEDS_CAPABILITY'); assert.equal(d.diagnosis.class, 'analysis_unavailable'); assert.equal(d.result.synthesis, undefined); assert.ok(events(d).includes('COGNITION_SKIPPED'));
  } finally { s.cleanup(); }
 });
 
@@ -305,7 +308,7 @@ test('review: a permanent failure (revoked key, rejected request, refused output
   const s = await setup({ providers: [p] });
   try {
    await s.seed(); const d = (await s.ask(QUESTION)).data.details;
-   assert.equal(d.status, 'COMPLETED'); assert.equal(d.result.synthesis, undefined); assert.equal(p.calls.length, 1);
+   assert.equal(d.status, 'NEEDS_CAPABILITY'); assert.equal(d.diagnosis.class, 'analysis_unavailable'); assert.equal(d.result.synthesis, undefined); assert.equal(p.calls.length, 1);
    assert.ok(d.trace.some(t => t.event === 'COGNITION_SKIPPED' && t.reason === 'resource_failed'));
   } finally { s.cleanup(); }
  }
