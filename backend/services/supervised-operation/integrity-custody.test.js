@@ -98,7 +98,8 @@ test('controlled public discovery: reviewed catalogue matched locally; composed 
    publicResearch: scope => createPublicResearchAdapters({ scope, origin: 'fixture', search: discover, fetcher: { fetchPage: async () => ({ text: '<p>Texto público suficientemente largo para ser una fuente legible de prueba.</p>' }) } }) });
   const req = Readable.from([JSON.stringify({ query: 'Investiga en fuentes públicas el reglamento de protección de datos y compáralo', includeDetails: true })]); req.oxkioIdentity = identity;
   let body; await server.handle(req, { writeHead() {}, end(b) { body = b; } }); const d = JSON.parse(body).details;
-  assert.equal(d.status, 'COMPLETED'); assert.equal(privateInstalled, 1);
+  // No reasoner is configured, so the comparison is not certified (PR #37 audit).
+  assert.equal(d.status, 'NEEDS_CAPABILITY'); assert.equal(d.diagnosis.class, 'analysis_unavailable'); assert.equal(privateInstalled, 1);
   assert.ok(d.trace.some(t => t.event === 'CONSULT' && t.capability === 'research.web'));
  } finally { fs.rmSync(root, { recursive: true, force: true }); }
 });

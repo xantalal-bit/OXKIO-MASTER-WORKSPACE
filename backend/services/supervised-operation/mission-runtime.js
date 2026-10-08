@@ -198,7 +198,12 @@ function createSupervisedRuntime({membershipProvider,planner=null,conversationDe
     items=[{id:'item-0',text:m.rememberContent||m.intention,provenance:'INTERNAL_MEMORY',origin:'local'}];
    }else{
     items=dependencies.flatMap(v=>v.items||[]);
-    if(step.capability==='data.analyze'&&reasoner&&reasoner.enabled&&items.length){
+    // Without a usable reasoner (absent or disabled) nobody performs the
+    // analysis unless the local one below runs and verifies (08/10/2026,
+    // PR #37 audit): never a silent pass-through that certifies.
+    const usable=!!(reasoner&&reasoner.enabled);
+    if(step.capability==='data.analyze'&&items.length&&!usable){cognition='unavailable';trace(m,'COGNITION_SKIPPED',{reason:'no_reasoner'});}
+    if(step.capability==='data.analyze'&&usable&&items.length){
      try{synthesis=await synthesize(items);}
      catch(error){
       // No resource available now (limit, quota, budget, provider fault): the
@@ -212,17 +217,18 @@ function createSupervisedRuntime({membershipProvider,planner=null,conversationDe
       trace(m,'COGNITION_SKIPPED',{reason:error.code==='secret_context'?'secret_context':refused?'no_authorized_resource':'resource_failed'});
       // A fixed reason (never content) lets the answer say why there is no analysis.
       cognition=error.code==='secret_context'?'secret':attempts.length&&attempts.every(a=>a.failure==='PRIVACY_BLOCKED')?'privacy':attempts.some(a=>a.failure==='INVALID_OUTPUT')?'unverified':'unavailable';
-      // Content no resource may receive is analysed here, deterministically,
-      // and kept only if its own verification passes (06/10/2026). It needs
-      // the signals of the person's mail or agenda; public pages or bare
-      // notes stay a partial result instead of a pretended analysis.
-      if(['privacy','secret'].includes(cognition)&&items.some(v=>v.signals)){
-       let analysis=null;try{analysis=privateAnalyzer(items,{now:now()});}catch{analysis=null;}
-       const check=verifyLocalAnalysis(analysis,items);
-       trace(m,'LOCAL_ANALYSIS',check.verified?{verified:true,priorities:analysis.priorities.length,firstAction:!!analysis.firstAction}:{verified:false,code:check.code});
-       if(check.verified)local=analysis;
-      }
      }
+    }
+    // Content no resource may receive, or that no usable reasoner exists for,
+    // is analysed here, deterministically, and kept only if its own
+    // verification passes (06/10/2026). It needs the signals of the person's
+    // mail or agenda; public pages or bare notes stay a partial result
+    // instead of a pretended analysis.
+    if(step.capability==='data.analyze'&&cognition&&(['privacy','secret'].includes(cognition)||!usable)&&items.some(v=>v.signals)){
+     let analysis=null;try{analysis=privateAnalyzer(items,{now:now()});}catch{analysis=null;}
+     const check=verifyLocalAnalysis(analysis,items);
+     trace(m,'LOCAL_ANALYSIS',check.verified?{verified:true,priorities:analysis.priorities.length,firstAction:!!analysis.firstAction}:{verified:false,code:check.code});
+     if(check.verified)local=analysis;
     }
    }
    if(!['data.analyze','storage.propose'].includes(step.capability))items=items.map((item,index)=>({...item,id:context.taskId+':item-'+index}));
@@ -308,10 +314,12 @@ function createSupervisedRuntime({membershipProvider,planner=null,conversationDe
    // could not be sent and no verified local analysis exists, or every
    // resource failed) is not a satisfied objective (06/10/2026, third real
    // mission): what was read is a partial result, no procedure is learned
-   // and the existing NEEDS_CAPABILITY outcome says what is missing.
-   if(result.capability==='data.analyze'&&result.cognitionSkipped&&!result.localAnalysis){
-    invalidateWorkflow(m);m.status='NEEDS_CAPABILITY';m.diagnosis={class:'analysis_unavailable',action:'PARTIAL_RESULT',reason:result.cognitionSkipped};
-    metric(m.handle,'gaps');trace(m,'ANALYSIS_UNAVAILABLE',{reason:result.cognitionSkipped});return snapshot(m);
+   // and the existing NEEDS_CAPABILITY outcome says what is missing. Only a
+   // synthesis or a verified local analysis counts as the analysis done.
+   if(result.capability==='data.analyze'&&!result.synthesis&&!result.localAnalysis&&(result.cognitionSkipped||result.items.length)){
+    const reason=result.cognitionSkipped||'unavailable';
+    invalidateWorkflow(m);m.status='NEEDS_CAPABILITY';m.diagnosis={class:'analysis_unavailable',action:'PARTIAL_RESULT',reason};
+    metric(m.handle,'gaps');trace(m,'ANALYSIS_UNAVAILABLE',{reason});return snapshot(m);
    }
    if(result.proposal){m.status='NEEDS_APPROVAL';if(approvalFactory&&!m.approvalId)await handoffApproval(m,result);}
    // Learned procedures are reads only; a memory write is always re-derived

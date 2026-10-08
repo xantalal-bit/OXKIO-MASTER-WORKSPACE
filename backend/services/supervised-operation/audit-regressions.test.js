@@ -358,7 +358,9 @@ test('E1 a tampered persisted mission is refused, never restored as evidence (wa
   } finally { fs.rmSync(root, { recursive: true, force: true }); }
 });
 
-test('E2 an untampered paused mission restores its sealed evidence and completes without re-reading', async () => {
+// Without a reasoner the plan's analysis cannot run, so the resumed mission
+// ends as a partial result (PR #37 audit); what is tested is the sealed evidence.
+test('E2 an untampered paused mission restores its sealed evidence and finishes without re-reading', async () => {
   const root = tempRoot();
   try {
     const { id, plan } = await pausedTwoStepMission(root);
@@ -367,7 +369,7 @@ test('E2 an untampered paused mission restores its sealed evidence and completes
     const a = await session(r, A);
     r.connections.install(a, 'mail', fixture(A, ['mail.read'], async () => { reads += 1; return { ...A, items: [{ text: 'SECOND' }] }; }));
     const s = await r.resume(a, id);
-    assert.equal(s.status, 'COMPLETED');
+    assert.equal(s.status, 'NEEDS_CAPABILITY'); assert.equal(s.diagnosis.class, 'analysis_unavailable');
     assert.deepEqual(s.result.items.map((i) => i.text), ['ORIGINAL_MAIL']);
     assert.equal(reads, 0);
   } finally { fs.rmSync(root, { recursive: true, force: true }); }

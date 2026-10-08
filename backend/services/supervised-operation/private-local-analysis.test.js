@@ -189,3 +189,61 @@ test('16/17/20: a local analysis that fails or cannot be verified, or an analysi
  assert.equal(ok.first.status, 'COMPLETED'); assert.equal(ok.first.result.localAnalysis.analyzedLocally, true); assert.equal(ok.decisions(), 1, 'a certified procedure is reused');
  assert.ok(ok.first.trace.some(t => t.event === 'LOCAL_ANALYSIS' && t.verified === true && t.firstAction === true));
 });
+
+// --- P1 (08/10/2026, PR #37 audit): no usable reasoner is never a silent pass ---
+// data.analyze used to enter analysis only with an enabled reasoner; without
+// one the items passed through and the mission certified its objective.
+const MAIL_SIGNALS = [{ text: 'Gestoría — Modelo 303', signals: { type: 'mail', unread: true, important: true, starred: false, category: 'primary', date: NOW } }];
+const CALENDAR_SIGNALS = [{ text: 'Reunión con la gestoría', signals: { type: 'calendar', start: localDay(1), allDay: true } }];
+const BARE = [{ text: 'Nota sin señales' }];
+const spyReasoner = () => { const calls = []; return { enabled: false, calls, reason: async request => { calls.push(request); throw new Error('a disabled reasoner is never called'); } }; };
+async function noReasonerCase({ reasoner, source = 'mail', items, privateAnalyzer }) {
+ let decisions = 0; const capability = source === 'mail' ? 'gmail.read' : 'calendar.read';
+ const r = createSupervisedRuntime({ membershipProvider, ...(reasoner !== undefined ? { reasoner } : {}), ...(privateAnalyzer ? { privateAnalyzer } : {}), conversationDecider: async () => { decisions++; return { action: 'plan', plan: [{ key: 's', capability, dependsOn: [] }, { key: 'a', capability: 'data.analyze', dependsOn: ['s'] }] }; } });
+ const h = await r.openSession(membership.userId);
+ r.connections.install(h, source, fixtureAdapter(membership, source + '.read', items));
+ const text = 'Revisa lo que tengo y dime qué hago primero.';
+ const first = await r.start(h, { text, conversationId: 'conv-0001' }); const second = await r.start(h, { text, conversationId: 'conv-0002' });
+ return { first, second, decisions: () => decisions };
+}
+const certifiedLocally = (c, name) => {
+ assert.equal(c.first.status, 'COMPLETED', name); assert.equal(c.first.result.localAnalysis.analyzedLocally, true, name); assert.equal(c.first.result.synthesis, undefined, name);
+ assert.ok(c.first.trace.some(t => t.event === 'LOCAL_ANALYSIS' && t.verified === true), name); assert.ok(c.first.trace.some(t => t.event === 'COGNITION_SKIPPED' && t.reason === 'no_reasoner'), name);
+ assert.equal(c.decisions(), 1, name + ': the certified procedure is learned and reused'); assert.equal(c.second.status, 'COMPLETED', name); assert.equal(c.first.executionEnabled, false, name);
+};
+const notCertified = (c, name) => {
+ assert.equal(c.first.status, 'NEEDS_CAPABILITY', name); assert.equal(c.first.diagnosis.class, 'analysis_unavailable', name); assert.equal(c.first.outcome, 'NEEDS_CAPABILITY', name);
+ assert.equal(c.first.result.localAnalysis, undefined, name); assert.equal(c.first.result.synthesis, undefined, name);
+ assert.ok(c.first.trace.some(t => t.event === 'ANALYSIS_UNAVAILABLE'), name); assert.ok(!c.first.trace.some(t => t.event === 'TERMINATE'), name);
+ assert.equal(c.decisions(), 2, name + ': no workflow was learned, the request is decided again'); assert.equal(c.second.status, 'NEEDS_CAPABILITY', name); assert.equal(c.first.executionEnabled, false, name);
+};
+
+test('P1 1/2/3: with no reasoner (null, absent) or a disabled one, mail or agenda signals are analysed locally, verified and certified', async () => {
+ for (const [name, reasoner] of [['null', null], ['absent', undefined], ['disabled', { enabled: false, reason: async () => { throw new Error('never'); } }]]) {
+  certifiedLocally(await noReasonerCase({ reasoner, source: 'mail', items: MAIL_SIGNALS }), 'gmail, reasoner ' + name);
+  const cal = await noReasonerCase({ reasoner, source: 'calendar', items: CALENDAR_SIGNALS }); certifiedLocally(cal, 'calendar, reasoner ' + name);
+  assert.deepEqual(cal.first.result.localAnalysis.context.map(v => v.when), ['tomorrow'], name);
+ }
+ const mail = await noReasonerCase({ reasoner: null, source: 'mail', items: MAIL_SIGNALS });
+ assert.equal(verifyLocalAnalysis(mail.first.result.localAnalysis, mail.first.result.items).verified, true);
+ assert.equal(mail.first.result.localAnalysis.firstAction.reason, 'important_unread');
+});
+
+test('P1 4/5: no usable reasoner and nothing a local analysis can read is a partial result, never COMPLETED or a learned workflow', async () => {
+ for (const [name, reasoner] of [['null', null], ['absent', undefined], ['disabled', { enabled: false }]]) notCertified(await noReasonerCase({ reasoner, items: BARE }), 'bare items, reasoner ' + name);
+});
+
+test('P1 6: a local analysis produced without a reasoner that fails its verification is treated as not done', async () => {
+ const invented = () => ({ analyzedLocally: true, priorities: [{ itemId: 'invented', kind: 'mail', reason: 'important' }], firstAction: { itemId: 'invented', reason: 'important' }, context: [], noise: [], informational: [], notes: [] });
+ for (const [name, privateAnalyzer] of [['invented reference', invented], ['analyzer throws', () => { throw new Error('boom'); }], ['nothing returned', () => null]]) {
+  for (const reasoner of [null, { enabled: false }]) {
+   const c = await noReasonerCase({ reasoner, items: MAIL_SIGNALS, privateAnalyzer }); notCertified(c, name);
+   assert.ok(c.first.trace.some(t => t.event === 'LOCAL_ANALYSIS' && t.verified === false), name);
+  }
+ }
+});
+
+test('P1 8: a disabled reasoner receives nothing; the local path sends no content anywhere', async () => {
+ const reasoner = spyReasoner(); const c = await noReasonerCase({ reasoner, items: MAIL_SIGNALS });
+ certifiedLocally(c, 'disabled spy'); assert.equal(reasoner.calls.length, 0); assert.equal(c.first.actualCostUsd, null); assert.equal(c.first.cost.chargedUsd, 0);
+});

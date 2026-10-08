@@ -50,13 +50,16 @@ async function setup({ providers = [], budget = 1, policy = { publicExternalAllo
 }
 const events = details => details.trace.map(t => t.event);
 
-test('cognition stays off by default: zero budget keeps the deterministic analysis and no text leaves', async () => {
+// Cognition off is no analysis at all (PR #37 audit, 08/10/2026): what was
+// read is a partial result, never a certified objective.
+test('cognition stays off by default: zero budget sends no text and certifies nothing it did not analyse', async () => {
  const primary = provider('openai', 'primary', synthesis);
  const s = await setup({ providers: [primary], budget: 0 });
  try {
-  await s.seed(); const r = await s.ask(QUESTION);
-  assert.equal(r.data.details.status, 'COMPLETED'); assert.equal(r.data.details.result.synthesis, undefined);
-  assert.equal(primary.calls.length, 0); assert.match(r.data.response, /Alfa/);
+  await s.seed(); const r = await s.ask(QUESTION); const d = r.data.details;
+  assert.equal(d.status, 'NEEDS_CAPABILITY'); assert.equal(d.diagnosis.class, 'analysis_unavailable'); assert.equal(d.result.synthesis, undefined);
+  assert.ok(events(d).includes('ANALYSIS_UNAVAILABLE')); assert.ok(!events(d).includes('TERMINATE'));
+  assert.equal(primary.calls.length, 0); assert.match(r.data.response, /Alfa/); assert.match(r.data.response, /no doy la tarea por terminada/);
  } finally { s.cleanup(); }
 });
 
