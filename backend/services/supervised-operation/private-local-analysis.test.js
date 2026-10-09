@@ -385,3 +385,81 @@ test('P2 9: the fourth real mission reproduced: the unread Google Play update is
   assert.equal(r.data.executionEnabled, false);
  } finally { s.close(); }
 });
+
+// --- P2 UX (09/10/2026, post-#38 real mission): equivalent mail is named once with its count ---
+// Three distinct Google messages with the same sender and subject were named one
+// by one and read as a duplication. Only the sentence groups them; the items, ids
+// and the analysis stay as they were.
+const at = (date, id, labels, from, subject) => { const m = raw(id, labels, from, subject); m.payload.headers = m.payload.headers.map(h => h.name === 'Date' ? { ...h, value: date } : h); return m; };
+const GOOGLE = ['Google <no-reply@accounts.google.example>', 'Has compartido algunos datos de tu cuenta de Google con Claude'];
+const IU = ['INBOX', 'UNREAD', 'IMPORTANT', 'CATEGORY_UPDATES'];
+const UPD = ['INBOX', 'UNREAD', 'CATEGORY_UPDATES']; const PROMO = ['INBOX', 'UNREAD', 'CATEGORY_PROMOTIONS'];
+async function answer(inbox) {
+ const s = await setup(inbox, []);
+ try { const r = await s.ask(ORDER); const d = r.data.details; return { d, a: d.result.localAnalysis, lines: r.data.response.split('\n'), response: r.data.response, calls: s.p.calls, executionEnabled: r.data.executionEnabled }; } finally { s.close(); }
+}
+const once = (text, needle) => text.split(needle).length - 1;
+
+test('P2 UX A/D: three distinct messages with the same sender and subject are named once as 3; a single one stays singular', async () => {
+ const { d, a, lines, response } = await answer([at('Fri, 09 Oct 2026 19:36:35 +0200', 'g1', IU, ...GOOGLE), at('Fri, 09 Oct 2026 19:23:04 +0200', 'g2', IU, ...GOOGLE), at('Fri, 09 Oct 2026 19:22:07 +0200', 'g3', IU, ...GOOGLE)]);
+ assert.equal(d.status, 'COMPLETED'); assert.equal(a.priorities.length, 3); assert.equal(new Set(a.priorities.map(p => p.itemId)).size, 3, 'three items, never merged');
+ assert.equal(a.firstAction.itemId, a.priorities[0].itemId); assert.ok(a.priorities.every(p => p.reason === 'important_unread'));
+ assert.equal(lines[1], 'Primero revisaría 3 correos de Google («Has compartido algunos datos de tu cuenta de Google con Claude»), porque están marcados como importantes y todavía no los has leído.');
+ assert.equal(once(response, 'Has compartido'), 1, 'the subject is named once'); assert.ok(!lines.some(l => l.startsWith('Después')));
+ const single = await answer([at('Fri, 09 Oct 2026 19:36:35 +0200', 'g1', IU, ...GOOGLE)]);
+ assert.equal(single.lines[1], 'Primero revisaría el correo de Google («Has compartido algunos datos de tu cuenta de Google con Claude»), porque está marcado como importante y todavía no lo has leído.');
+});
+
+test('P2 UX B/C: same sender with another subject, or same subject from another sender, is never grouped', async () => {
+ const b = await answer([at('Fri, 09 Oct 2026 10:00:00 +0200', 'b1', IU, 'Banco Ejemplo <avisos@banco.example>', 'Recibo de octubre'), at('Fri, 09 Oct 2026 09:00:00 +0200', 'b2', IU, 'Banco Ejemplo <avisos@banco.example>', 'Cambio de condiciones')]);
+ assert.deepEqual(b.lines.slice(1, 3), ['Primero revisaría el correo de Banco Ejemplo («Recibo de octubre»), porque está marcado como importante y todavía no lo has leído.', 'Después: el correo de Banco Ejemplo («Cambio de condiciones»).']);
+ const c = await answer([at('Fri, 09 Oct 2026 10:00:00 +0200', 'c1', IU, 'Ana Ejemplo <ana@example.test>', 'Factura pendiente'), at('Fri, 09 Oct 2026 09:00:00 +0200', 'c2', IU, 'Luis Ejemplo <luis@example.test>', 'Factura pendiente')]);
+ assert.deepEqual(c.lines.slice(1, 3), ['Primero revisaría el correo de Ana Ejemplo («Factura pendiente»), porque está marcado como importante y todavía no lo has leído.', 'Después: el correo de Luis Ejemplo («Factura pendiente»).']);
+});
+
+test('P2 UX E/F: a group leads once with its count even with another message between its members; the distinct mail follows; another level is never merged', async () => {
+ const e = await answer([at('Fri, 09 Oct 2026 19:36:35 +0200', 'g1', IU, ...GOOGLE), at('Fri, 09 Oct 2026 19:23:04 +0200', 'g2', IU, ...GOOGLE), at('Fri, 09 Oct 2026 19:22:07 +0200', 'g3', IU, ...GOOGLE), at('Fri, 09 Oct 2026 19:40:00 +0200', 'r', ['INBOX', 'IMPORTANT', 'CATEGORY_PERSONAL'], 'Gestoría Ejemplo <gestoria@example.test>', 'Modelo 303')]);
+ assert.deepEqual(e.lines.slice(1, 3), ['Primero revisaría 3 correos de Google («Has compartido algunos datos de tu cuenta de Google con Claude»), porque están marcados como importantes y todavía no los has leído.', 'Después: el correo de Gestoría Ejemplo («Modelo 303»).']);
+ // F: the Google messages are not contiguous in the priorities (a distinct one of the same level sits between them).
+ const f = await answer([at('Fri, 09 Oct 2026 19:36:35 +0200', 'g1', IU, ...GOOGLE), at('Fri, 09 Oct 2026 19:30:00 +0200', 'o', IU, 'Gestoría Ejemplo <gestoria@example.test>', 'Modelo 303'), at('Fri, 09 Oct 2026 19:22:07 +0200', 'g3', IU, ...GOOGLE)]);
+ assert.deepEqual(f.a.priorities.map(p => f.d.result.items.find(v => v.id === p.itemId).text.split(' — ')[0]), ['Google', 'Gestoría Ejemplo', 'Google'], 'the analysis order is unchanged');
+ assert.deepEqual(f.lines.slice(1, 3), ['Primero revisaría 2 correos de Google («Has compartido algunos datos de tu cuenta de Google con Claude»), porque están marcados como importantes y todavía no los has leído.', 'Después: el correo de Gestoría Ejemplo («Modelo 303»).']);
+ assert.equal(once(f.response, 'Has compartido'), 1);
+ // Same sender and subject at another level (read, important) keeps its own reason and is named apart.
+ const levels = await answer([at('Fri, 09 Oct 2026 19:36:35 +0200', 'g1', IU, ...GOOGLE), at('Fri, 09 Oct 2026 19:22:07 +0200', 'g2', ['INBOX', 'IMPORTANT', 'CATEGORY_UPDATES'], ...GOOGLE)]);
+ assert.deepEqual(levels.lines.slice(1, 3), ['Primero revisaría el correo de Google («Has compartido algunos datos de tu cuenta de Google con Claude»), porque está marcado como importante y todavía no lo has leído.', 'Después: el correo de Google («Has compartido algunos datos de tu cuenta de Google con Claude»).']);
+});
+
+test('P2 UX G/H: noise keeps its generic count; equivalent mail pending review is named once with its count', async () => {
+ const promo = ['Tienda Ejemplo <ofertas@tienda.example>', 'Rebajas de otoño'];
+ const g = await answer([at('Fri, 09 Oct 2026 17:20:59 +0200', 'p1', PROMO, ...promo), at('Fri, 09 Oct 2026 17:19:10 +0200', 'p2', PROMO, ...promo)]);
+ assert.equal(g.a.noise.length, 2); assert.ok(g.lines.includes('Otros 2 mensajes recientes parecen notificaciones o promociones; no los pondría por delante.'));
+ const play = ['Google Play <googleplay-noreply@google.example>', 'Tus Play Points te esperan'];
+ const h = await answer([at('Fri, 09 Oct 2026 12:00:00 +0200', 'u1', UPD, ...play), at('Fri, 09 Oct 2026 11:00:00 +0200', 'u2', UPD, ...play)]);
+ assert.equal(h.a.firstAction, null); assert.equal(h.a.review.length, 2);
+ assert.ok(h.lines.includes('Tienes sin leer, pendientes de revisar, 2 correos de Google Play («Tus Play Points te esperan»); no veo en ellos señales que pidan atenderlos primero.'));
+ const mixed = await answer([at('Fri, 09 Oct 2026 12:00:00 +0200', 'u1', UPD, ...play), at('Fri, 09 Oct 2026 11:00:00 +0200', 'u2', UPD, ...play), at('Fri, 09 Oct 2026 10:00:00 +0200', 'u3', UPD, 'Banco Ejemplo <avisos@banco.example>', 'Tu extracto')]);
+ assert.ok(mixed.lines.includes('Tienes 3 correos sin leer pendientes de revisar: 2 correos de Google Play («Tus Play Points te esperan») y el correo de Banco Ejemplo («Tu extracto»); no veo en ellos señales que pidan atenderlos primero.'));
+});
+
+test('P2 UX I: the post-#38 real mission reproduced: one grouped first sentence, promotions still 2 messages, the analysis unchanged', async () => {
+ const { d, a, lines, response, calls, executionEnabled } = await answer([
+  at('Fri, 09 Oct 2026 19:36:35 +0200', 'g1', IU, ...GOOGLE), at('Fri, 09 Oct 2026 19:23:04 +0200', 'g2', IU, ...GOOGLE), at('Fri, 09 Oct 2026 19:22:07 +0200', 'g3', IU, ...GOOGLE),
+  at('Fri, 09 Oct 2026 17:20:59 +0200', 'p1', PROMO, 'Tienda Ejemplo <ofertas@tienda.example>', 'Rebajas de otoño'),
+  at('Fri, 09 Oct 2026 17:19:10 +0200', 'p2', PROMO, 'Club Ejemplo <news@club.example>', 'Nuevas ventajas para ti'),
+ ]);
+ assert.equal(d.status, 'COMPLETED'); assert.ok(d.trace.some(t => t.event === 'LOCAL_ANALYSIS' && t.verified === true && t.priorities === 3 && t.firstAction === true));
+ assert.equal(d.result.items.length, 5); assert.equal(new Set(d.result.items.map(v => v.id)).size, 5, 'no item merged or dropped');
+ assert.equal(a.priorities.length, 3); assert.equal(a.firstAction.itemId, d.result.items[0].id); assert.equal(a.firstAction.reason, 'important_unread');
+ assert.equal(a.noise.length, 2); assert.deepEqual([a.review, a.informational, a.context], [[], [], []]);
+ assert.equal(verifyLocalAnalysis(a, d.result.items).verified, true, 'the stored analysis still verifies against the items');
+ assert.deepEqual(lines, [
+  'Hoy no tienes eventos en la agenda.',
+  'Primero revisaría 3 correos de Google («Has compartido algunos datos de tu cuenta de Google con Claude»), porque están marcados como importantes y todavía no los has leído.',
+  'Otros 2 mensajes recientes parecen notificaciones o promociones; no los pondría por delante.',
+  'Lo he analizado aquí, sin enviar tus datos fuera de OXKIO. No he realizado envíos ni cambios externos.',
+ ]);
+ assert.doesNotMatch(response, INTERNAL); assert.doesNotMatch(response, /@/);
+ assert.equal(calls.length, 1); assert.ok(!calls.some(c => /Has compartido|Rebajas|ventajas/.test(JSON.stringify(c))), 'no private content reached a provider');
+ assert.equal(executionEnabled, false);
+});
