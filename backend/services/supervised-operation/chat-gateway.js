@@ -108,9 +108,23 @@ function createChatGateway({runtime,membershipProvider,adapterFactory=null,store
  // and fixed reasons, never from text the analysis wrote. Mail is named by
  // sender and subject; agenda events by title and when they happen.
  const BECAUSE={important_unread:'está marcado como importante y todavía no lo has leído',starred_unread:'lo marcaste con estrella y todavía no lo has leído',important:'está marcado como importante',starred:'lo marcaste con estrella'};
+ const BECAUSE_MANY={important_unread:'están marcados como importantes y todavía no los has leído',starred_unread:'los marcaste con estrella y todavía no los has leído',important:'están marcados como importantes',starred:'los marcaste con estrella'};
+ // P2 UX (09/10/2026): distinct messages with the same sender and subject (exact
+ // match after trim, spacing and case) are named once with their count. Only the
+ // sentence changes: the items, their ids and the analysis stay as they are.
+ const mailKey=item=>item.text.split(' — ').slice(0,2).map(v=>v.trim().replace(/\s+/g,' ').toLocaleLowerCase('es-ES')).join('\u0000');
+ function groupMail(entries,byId){
+  const groups=[];const index=new Map();
+  for(const e of entries){const item=byId.get(e.itemId);const key=e.kind==='event'?null:mailKey(item)+'\u0000'+(e.reason||'');
+   if(key!==null&&index.has(key)){index.get(key).items.push(item);continue;}
+   const g={kind:e.kind,reason:e.reason,items:[item]};groups.push(g);if(key!==null)index.set(key,g);}
+  return groups;
+ }
+ const countOf=groups=>groups.reduce((n,g)=>n+g.items.length,0);
  function localText(result,planSources){
   const a=result.localAnalysis;const byId=new Map(result.items.map(v=>[v.id,v]));
-  const mailOf=item=>{const [who,subject]=item.text.split(' — ');return 'el correo de '+who+(subject?' («'+subject+'»)':'');};
+  const mailOf=(item,count=1)=>{const [who,subject]=item.text.split(' — ');return (count===1?'el correo':count+' correos')+' de '+who+(subject?' («'+subject+'»)':'');};
+  const groupOf=g=>g.kind==='event'?eventOf(g.items[0]):mailOf(g.items[0],g.items.length);
   const titleOf=item=>{const start=item.signals?.start;const text=start&&item.text.startsWith(start+' · ')?item.text.slice(start.length+3):item.text;return text.split(' · ')[0];};
   const timeOf=item=>{const start=item.signals?.start;if(!start||item.signals.allDay||start.length===10)return null;const d=new Date(start);return Number.isNaN(d.getTime())?null:d.toLocaleTimeString('es-ES',{hour:'2-digit',minute:'2-digit'});};
   const eventOf=item=>titleOf(item)+(timeOf(item)?' a las '+timeOf(item):'');
@@ -120,14 +134,16 @@ function createChatGateway({runtime,membershipProvider,adapterFactory=null,store
   const tomorrow=a.context.filter(c=>c.when==='tomorrow').map(c=>eventOf(byId.get(c.itemId)));if(tomorrow.length)lines.push('Mañana: '+list(tomorrow)+'.');
   const upcoming=a.context.filter(c=>c.when==='upcoming').map(c=>byId.get(c.itemId));if(upcoming.length)lines.push('Próximos días: '+list(upcoming.slice(0,3).map(eventOf))+(upcoming.length>3?' y '+(upcoming.length-3)+' más':'')+'.');
   const first=a.firstAction&&byId.get(a.firstAction.itemId);
+  // The first action is priorities[0]; its group carries every equivalent message of the same level.
+  const groups=groupMail(a.priorities,byId);const firstGroup=first&&groups.find(g=>g.items.includes(first));
   if(!first)lines.push('No veo nada en lo que he consultado que pida actuar primero hoy.');
   else if(a.firstAction.reason==='today_event')lines.push('Primero atendería '+eventOf(first)+', que es hoy.');
-  else lines.push('Primero revisaría '+mailOf(first)+', porque '+BECAUSE[a.firstAction.reason]+'.');
-  const after=a.priorities.slice(1,4).map(p=>{const item=byId.get(p.itemId);return p.kind==='event'?eventOf(item):mailOf(item);});
-  if(after.length)lines.push('Después: '+list(after)+(a.priorities.length>4?' y '+(a.priorities.length-4)+' más':'')+'.');
+  else{const n=firstGroup?firstGroup.items.length:1;lines.push('Primero revisaría '+mailOf(first,n)+', porque '+(n===1?BECAUSE:BECAUSE_MANY)[a.firstAction.reason]+'.');}
+  const rest=groups.filter(g=>g!==firstGroup);const after=rest.slice(0,3);const more=countOf(rest.slice(3));
+  if(after.length)lines.push('Después: '+list(after.map(groupOf))+(more?' y '+more+' más':'')+'.');
   // Unread mail with no other signal is pending review, named but never put first.
-  const review=(a.review||[]).map(id=>mailOf(byId.get(id)));
-  if(review.length)lines.push((review.length===1?'Tienes sin leer, pendiente de revisar, '+review[0]:'Tienes '+review.length+' correos sin leer pendientes de revisar: '+list(review.slice(0,3))+(review.length>3?' y '+(review.length-3)+' más':''))+'; no veo en '+(review.length===1?'él':'ellos')+' señales que pidan atenderlo'+(review.length===1?'':'s')+' primero.');
+  const review=groupMail((a.review||[]).map(itemId=>({itemId,kind:'mail'})),byId);const reviewCount=countOf(review);const one=reviewCount===1;
+  if(review.length)lines.push((review.length===1?'Tienes sin leer, '+(one?'pendiente':'pendientes')+' de revisar, '+groupOf(review[0]):'Tienes '+reviewCount+' correos sin leer pendientes de revisar: '+list(review.slice(0,3).map(groupOf))+(review.length>3?' y '+countOf(review.slice(3))+' más':''))+'; no veo en '+(one?'él':'ellos')+' señales que pidan atenderlo'+(one?'':'s')+' primero.');
   if(a.noise.length)lines.push((a.noise.length===1?'Otro mensaje reciente parece una notificación o una promoción':'Otros '+a.noise.length+' mensajes recientes parecen notificaciones o promociones')+'; no '+(a.noise.length===1?'lo':'los')+' pondría por delante.');
   if(a.informational.length)lines.push((a.informational.length===1?'Un correo reciente ya leído no muestra':a.informational.length+' correos recientes ya leídos no muestran')+' señales de urgencia.');
   const notes=a.notes.map(id=>byId.get(id).text).map(t=>t.length>120?t.slice(0,119)+'…':t);
