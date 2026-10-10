@@ -373,3 +373,84 @@ test('message text reader rejects anything that is not a Gmail message id before
     );
   }
 });
+
+// --- Latency (10/10/2026): messages.get with bounded concurrency ---------------
+// A controllable Gmail double: every get stays pending until the test settles
+// it, so concurrency and ordering are checked without real timers.
+function controlledGmail(count) {
+  const ids = Array.from({ length: count }, (_, i) => 'msg-' + String(i).padStart(2, '0'));
+  const pending = [];
+  const state = { active: 0, maxActive: 0, gets: 0 };
+  const client = {
+    users: {
+      messages: {
+        async list(options) {
+          return { data: { messages: ids.slice(0, options.maxResults).map((id) => ({ id })) } };
+        },
+        get(options) {
+          state.gets += 1;
+          state.active += 1;
+          state.maxActive = Math.max(state.maxActive, state.active);
+          return new Promise((resolve, reject) => {
+            pending.push({
+              id: options.id,
+              resolve: () => { state.active -= 1; resolve({ data: buildGmailMessage({ id: options.id, threadId: 't-' + options.id }) }); },
+              reject: (error) => { state.active -= 1; reject(error); },
+            });
+          });
+        },
+        async send() { throw new Error('send must never be called'); },
+      },
+    },
+  };
+  return { ids, pending, state, client };
+}
+const flush = () => new Promise((resolve) => setImmediate(resolve));
+
+test('latency A/B: 20 reads, the first alone, then never more than 4 at once; settled out of order, the result keeps Gmail\'s order', async () => {
+  const g = controlledGmail(20);
+  const call = listReadonlyGmailMessages({ maxMessages: 20 }, { getGmailClient: () => g.client });
+  await flush();
+  assert.equal(g.state.active, 1, 'the first read goes alone (a token refresh happens once)');
+  g.pending.shift().resolve();
+  const activeSeen = [];
+  // Settle until all 20 reads have started and finished (bounded, never hangs).
+  for (let round = 0; round < 100 && (g.state.gets < 20 || g.pending.length); round += 1) {
+    await flush();
+    activeSeen.push(g.state.active);
+    assert.ok(g.state.active <= 4, 'never more than 4 reads at once');
+    if (g.pending.length) g.pending.pop().resolve(); // the newest first: completion out of order
+  }
+  const messages = await call;
+  assert.equal(g.state.gets, 20);
+  assert.equal(g.state.maxActive, 4, 'the bound is reached, never exceeded');
+  assert.ok(activeSeen.includes(4));
+  assert.deepEqual(messages.map((m) => m.id), g.ids, 'the original order');
+});
+
+test('latency C: one failed read fails the whole call, with its error, and no new read starts after it', async () => {
+  const g = controlledGmail(20);
+  const call = listReadonlyGmailMessages({ maxMessages: 20 }, { getGmailClient: () => g.client });
+  const outcome = call.then(() => 'resolved', (error) => error);
+  await flush();
+  g.pending.shift().resolve();
+  await flush();
+  assert.equal(g.state.active, 4);
+  const failure = Object.assign(new Error('gmail_get_failed'), { code: 'gmail_get_failed' });
+  g.pending.shift().reject(failure);
+  // The three reads already in flight settle; nothing new starts.
+  for (let i = 0; i < 5; i += 1) { await flush(); while (g.pending.length) g.pending.shift().resolve(); }
+  const result = await outcome;
+  assert.equal(result, failure, 'the same error, never a partial list');
+  assert.equal(g.state.gets, 5, 'the first read, then the 4 in flight; no read after the failure');
+});
+
+test('latency D: the requested count is what is read: 5 by default, 20 for V3, 5 for a reduced retry', async () => {
+  for (const [maxMessages, expected] of [[undefined, 5], [20, 20], [5, 5], [50, 20]]) {
+    const g = controlledGmail(25);
+    const call = listReadonlyGmailMessages(maxMessages === undefined ? {} : { maxMessages }, { getGmailClient: () => g.client });
+    for (let round = 0; round < 100 && (g.state.gets < expected || g.pending.length); round += 1) { await flush(); while (g.pending.length) g.pending.shift().resolve(); }
+    assert.equal((await call).length, expected, String(maxMessages));
+    assert.equal(g.state.gets, expected, String(maxMessages));
+  }
+});
