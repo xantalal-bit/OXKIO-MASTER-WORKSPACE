@@ -2,6 +2,7 @@ require("dotenv").config();
 
 const http = require("http");
 const { createServerComposition, reasoningEgressFromEnv, v3ReasoningEnv } = require("../services/supervised-operation/server-composition");
+const { dispatchExecutiveChat } = require("./executive-chat-routing");
 const { createPublicResearchAdapters, createCuratedDiscovery } = require("../services/supervised-operation/resource-adapters");
 const EmailWorkflow = require("../workflows/emailWorkflow");
 const EmailAgent = require("../agents/emailAgent");
@@ -398,9 +399,10 @@ if (pathname === "/api/executive/security-context") {
   });
 }
 
-if (v3Chat && pathname === "/api/executive/chat" && req.method === "POST" && v3Chat.accepts(req.oxkioIdentity)) return v3Chat.handle(req, res);
+// V3 for its cohort, an explicit routing error for Cliente Cero outside it,
+// the classic chat otherwise; every answer carries X-OXKIO-Handler.
 if (isExecutiveChatRoute(pathname, req.method)) {
-  return handleExecutiveChatRequest(req, res, {
+  const chat = () => handleExecutiveChatRequest(req, res, {
     dependencies: {
       memory: executiveRuntime.memory,
       proposalEngine,
@@ -425,6 +427,7 @@ if (isExecutiveChatRoute(pathname, req.method)) {
       emailReplySupervisor
     }
   });
+  return dispatchExecutiveChat(req, res, { v3Chat, legacy: chat });
 }
 
 if (isQualitySummaryRoute(pathname, req.method)) {

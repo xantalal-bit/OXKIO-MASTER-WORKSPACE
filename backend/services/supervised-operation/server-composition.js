@@ -14,6 +14,7 @@ const { createGovernedReasoner } = require('./governed-reasoning');
 // Executive Chat. Rollback = remove the uid (or the flag) and restart; V3 data
 // stays sealed in its own root and the existing chat is untouched.
 const parseCohort = value => new Set(String(value || '').split(',').map(v => v.trim()).filter(v => /^[A-Za-z0-9:_-]{3,128}$/.test(v)));
+const HANDLER = 'supervised-operation';
 const STATUS = { membership_not_available: 403, permission_denied: 403, authenticated_identity_required: 403, session_authority_changed: 403, backpressure: 429, mission_capacity: 429, store_capacity: 429, mission_busy: 409, stored_integrity_invalid: 409, stored_scope_invalid: 409 };
 function createServerComposition({enabled=false,cohortUids='',memoryRoot,integrityKey,authorizeIdentity,adapterFactory=null,privateContextReaders=null,publicResearch=null,reasoning=null}={}){
  if(!enabled)return null;
@@ -54,17 +55,19 @@ function createServerComposition({enabled=false,cohortUids='',memoryRoot,integri
  function accepts(identity){return Boolean(identity&&identity.authorized===true&&['admin','family_member'].includes(identity.role)&&typeof identity.uid==='string'&&cohort.has(identity.uid));}
  async function handle(req,res){
   const identity=req.oxkioIdentity;
-  if(!identity?.authorized){res.writeHead(401);res.end();return;}
-  if(!accepts(identity)){res.writeHead(403,{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store'});res.end(JSON.stringify({ok:false,code:'v3_not_enabled_for_identity',executionEnabled:false}));return;}
+  // Every V3 answer, error included, names its handler (header and field).
+  const headers={'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store','X-OXKIO-Handler':HANDLER};
+  if(!identity?.authorized){res.writeHead(401,{'X-OXKIO-Handler':HANDLER});res.end();return;}
+  if(!accepts(identity)){res.writeHead(403,headers);res.end(JSON.stringify({ok:false,code:'v3_not_enabled_for_identity',handler:HANDLER,executionEnabled:false}));return;}
   identities.set(identity.uid,identity);
   try{
    let text='';for await(const chunk of req){text+=chunk.toString();if(Buffer.byteLength(text)>8192)fail('body_too_large');}
    const response=await gateway.handle(identity,JSON.parse(text||'{}'));
-   res.writeHead(200,{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store','X-OXKIO-Handler':'supervised-operation'});res.end(JSON.stringify(response));
+   res.writeHead(200,headers);res.end(JSON.stringify({...response,handler:HANDLER}));
   }catch(error){
    const code=/^[a-z_]+$/.test(error.code||'')?error.code:'chat_request_invalid';
-   res.writeHead(STATUS[code]||400,{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store'});
-   res.end(JSON.stringify({ok:false,code,response:'No he ejecutado la petición. Revisa la conexión o el permiso solicitado.',executionEnabled:false}));
+   res.writeHead(STATUS[code]||400,headers);
+   res.end(JSON.stringify({ok:false,code,handler:HANDLER,response:'No he ejecutado la petición. Revisa la conexión o el permiso solicitado.',executionEnabled:false}));
   }
  }
  return Object.freeze({handle,accepts});
