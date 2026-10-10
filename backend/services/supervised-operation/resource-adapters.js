@@ -2,7 +2,7 @@
 const { createPublicWebFetcher, parsePublicUrl, siteOf } = require('../executive-brain/mission-capabilities/public-web-fetcher');
 const { textRuns } = require('../executive-brain/mission-capabilities/company-research-extract');
 const { copy, freeze, fail } = require('./scope-session');
-const { extractSenderName, isDirectMessageSubject } = require('../private-context/mail-priority');
+const { extractSenderName, isDirectMessageSubject, isAutomatedSenderAddress } = require('../private-context/mail-priority');
 // Factories run in the trusted composition root/OAuth callback, not in a prompt.
 // The credential-bearing client stays in a closure and never enters agent input.
 // Provider contract (any new source — Drive, OneDrive, Outlook… — plugs in here
@@ -70,10 +70,11 @@ function createPrivateContextAdapters({scope,readers,origin='live'}){
  const limit=(limits,list)=>list.slice(0,Math.min(Math.max(Number(limits&&limits.maxItems)||10,1),10));
  // Each item carries its readable text plus a closed set of signals for the
  // local analysis (validateItems keeps only those); the sender is shown by
- // name when the header has one, never with its address.
+ // name when the header has one, never with its address (automatedSender is
+ // only a boolean read from it).
  const mail=createReadonlyAdapter({scope,permissions:['mail.read'],origin,read:async({limits})=>limit(limits,await payload(readers.gmailReader,'messages')).map(m=>({
   text:[m.from?cleanSourceText(extractSenderName(m.from)).replace(/^"(.*)"$/,'$1'):'',cleanSourceText(m.subject),cleanSourceText(m.snippet)].filter(Boolean).join(' — ').slice(0,2000)||'(sin asunto)',
-  signals:{type:'mail',unread:m.unread===true,important:m.important===true,starred:m.starred===true,bulk:m.bulk===true,directMessage:isDirectMessageSubject(cleanSourceText(m.subject)),category:m.category||null,date:m.date||null}}))});
+  signals:{type:'mail',unread:m.unread===true,important:m.important===true,starred:m.starred===true,bulk:m.bulk===true,automatedSender:isAutomatedSenderAddress(m.from),directMessage:isDirectMessageSubject(cleanSourceText(m.subject)),category:m.category||null,date:m.date||null}}))});
  const calendar=createReadonlyAdapter({scope,permissions:['calendar.read'],origin,read:async({limits})=>limit(limits,await payload(readers.calendarReader,'events')).map(e=>({
   text:[e.start,cleanSourceText(e.title),cleanSourceText(e.location)].filter(Boolean).join(' · ').slice(0,2000),
   signals:{type:'calendar',start:e.start||null,allDay:e.allDay===true}}))});

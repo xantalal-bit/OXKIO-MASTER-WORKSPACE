@@ -94,7 +94,7 @@ test('11/19: Gmail flags survive the production double normalization and reach t
  const mails = validateItems(await adapters.mail.read({ scope: A, limits: {} }), A, 'GMAIL', 'fixture');
  const events = validateItems(await adapters.calendar.read({ scope: A, limits: {} }), A, 'CALENDAR', 'fixture');
  assert.equal(mails[0].text, 'Ana Ruiz — Contrato — Vista previa'); assert.doesNotMatch(mails[0].text, /@|͏/);
- assert.deepEqual(mails[0].signals, { type: 'mail', unread: true, important: true, starred: true, bulk: false, directMessage: false, category: 'primary', date: '2026-10-06T07:00:00.000Z' });
+ assert.deepEqual(mails[0].signals, { type: 'mail', unread: true, important: true, starred: true, bulk: false, automatedSender: false, directMessage: false, category: 'primary', date: '2026-10-06T07:00:00.000Z' });
  assert.equal(mails[1].signals.category, null, 'an unknown category is dropped'); assert.equal('extra' in mails[1].signals, false);
  assert.deepEqual(events[0].signals, { type: 'calendar', start: '2026-10-07', allDay: true }); assert.equal(events[0].text, '2026-10-07 · ELENA - Cumpleaños');
  // Signals belong to their own source only.
@@ -534,4 +534,57 @@ test('P2 semantics 6: the sixth real mission reproduced: the Railway newsletter 
  assert.doesNotMatch(response, INTERNAL); assert.doesNotMatch(response, /@|unsubscribe/);
  assert.equal(calls.length, 1); assert.ok(!calls.some(c => /Railway|Enrique|Applause/.test(JSON.stringify(c))), 'no private content reached a provider');
  assert.equal(executionEnabled, false);
+});
+
+// --- P2 bulk detection (10/10/2026, targeted real check): the real Railway newsletter has no List-Unsubscribe header ---
+// Real metadata: hello@news.railway.app, updates, important, read, no
+// List-Unsubscribe. The sender address is the second, closed bulk signal.
+const RAILWAY = ['Railway <hello@news.railway.app>','Railway.com is now just Railway on iOS, Railway Authentication, OpenRouter Support'];
+const ENRIQUE = ['Enrique Ejemplo a través de LinkedIn <messaging-digest-noreply@linkedin.com>', 'Enrique acaba de enviarte un mensaje'];
+const NEWSLETTER = ['Mathieu Ejemplo a través de LinkedIn <newsletters-noreply@linkedin.com>', 'Not Everything That Matters Can Be Measured in Applause'];
+const signalsOfRaw = async (...inbox) => { const readers = { gmailReader: async () => ({ privatePayload: { messages: inbox.map(normalizeGmailMessage).map(normalizeGmailMessage) } }), calendarReader: async () => ({ privatePayload: { events: [] } }) };
+ return validateItems(await createPrivateContextAdapters({ scope: A, readers, origin: 'fixture' }).mail.read({ scope: A, limits: {} }), A, 'GMAIL', 'fixture'); };
+
+test('P2 bulk 1/2/3: the real Railway newsletter is bulk by its sender; the real LinkedIn message stays a direct message; a LinkedIn newsletter is bulk', async () => {
+ const [rw, dm, nl] = await signalsOfRaw(at('Sat, 10 Oct 2026 01:05:10 +0200', 'rw', ['INBOX', 'IMPORTANT', 'CATEGORY_UPDATES'], ...RAILWAY),
+  at('Sat, 10 Oct 2026 09:25:43 +0200', 'dm', ['INBOX', 'UNREAD', 'CATEGORY_SOCIAL'], ...ENRIQUE), at('Sat, 10 Oct 2026 10:02:33 +0200', 'nl', ['INBOX', 'UNREAD', 'CATEGORY_UPDATES'], ...NEWSLETTER));
+ assert.deepEqual([rw.signals.bulk, rw.signals.automatedSender, rw.signals.important, rw.signals.directMessage], [false, true, true, false], 'no header; the sender is automated');
+ assert.equal(classifyMailSignals(rw.signals), 'informational', 'Gmail\'s important mark alone does not lift it');
+ assert.deepEqual([dm.signals.directMessage, dm.signals.automatedSender, dm.signals.category], [true, true, 'social']);
+ assert.equal(classifyMailSignals(dm.signals), 'review', 'the direct message wins over its digest sender');
+ assert.deepEqual([nl.signals.directMessage, nl.signals.automatedSender], [false, true]); assert.equal(classifyMailSignals(nl.signals), 'review', 'unread alone, never a priority');
+ assert.ok(![rw, dm, nl].some(item => /@/.test(item.text) || /@/.test(JSON.stringify(item.signals))), 'the address never reaches the items');
+ const a = analyzePrivateItems([rw, dm, nl], { now: '2026-10-10T10:00:00.000Z' });
+ assert.equal(a.firstAction, null); assert.deepEqual(a.priorities, []); assert.deepEqual(a.informational, [rw.id]); assert.deepEqual([...a.review].sort(), [dm.id, nl.id].sort()); assert.deepEqual(a.noise, []);
+ assert.equal(verifyLocalAnalysis(a, [rw, dm, nl]).verified, true);
+ // The person's star still makes it a priority, named as the star.
+ const [starred] = await signalsOfRaw(at('Sat, 10 Oct 2026 01:05:10 +0200', 'rw', ['INBOX', 'IMPORTANT', 'STARRED', 'CATEGORY_UPDATES'], ...RAILWAY));
+ assert.deepEqual(firstOf(starred).firstAction, { itemId: starred.id, reason: 'starred' });
+});
+
+test('P2 bulk 4/5/6: promotions stay noise; a person in updates and a no-reply invoice keep Gmail\'s important mark', async () => {
+ const [promo, person, invoice, primary] = await signalsOfRaw(at('Sat, 10 Oct 2026 09:00:00 +0200', 'p', ['INBOX', 'UNREAD', 'IMPORTANT', 'CATEGORY_PROMOTIONS'], 'Tienda <news@tienda.example>', 'Rebajas'),
+  at('Sat, 10 Oct 2026 08:00:00 +0200', 'h', ['INBOX', 'IMPORTANT', 'CATEGORY_UPDATES'], 'Persona Ejemplo <persona@empresa.example>', 'Revisión del contrato'),
+  at('Sat, 10 Oct 2026 07:00:00 +0200', 'f', ['INBOX', 'UNREAD', 'IMPORTANT', 'CATEGORY_UPDATES'], 'Servicio <no-reply@servicio.example>', 'Tu factura está disponible'),
+  at('Sat, 10 Oct 2026 06:00:00 +0200', 'n', ['INBOX', 'IMPORTANT', 'CATEGORY_PERSONAL'], 'Ana <ana@news.empresa.example>', 'Te paso lo de ayer'));
+ assert.equal(classifyMailSignals(promo.signals), 'noise');
+ assert.deepEqual([person.signals.automatedSender, classifyMailSignals(person.signals)], [false, 'important'], 'the category alone is not bulk');
+ assert.deepEqual([invoice.signals.automatedSender, classifyMailSignals(invoice.signals)], [false, 'urgent'], 'no-reply alone is not bulk');
+ assert.deepEqual([primary.signals.automatedSender, classifyMailSignals(primary.signals)], [true, 'important'], 'an automated-looking sender in primary is not bulk');
+});
+
+test('P2 bulk 7: the real mission reproduced with the real metadata: Railway no longer leads by Gmail\'s important mark alone', async () => {
+ const { d, a, lines, response, calls, executionEnabled } = await answer([
+  at('Sat, 10 Oct 2026 10:02:33 +0200', 'nl', ['INBOX', 'UNREAD', 'CATEGORY_UPDATES'], ...NEWSLETTER),
+  at('Sat, 10 Oct 2026 09:25:43 +0200', 'dm', ['INBOX', 'UNREAD', 'CATEGORY_SOCIAL'], ...ENRIQUE),
+  at('Sat, 10 Oct 2026 01:05:10 +0200', 'rw', ['INBOX', 'IMPORTANT', 'CATEGORY_UPDATES'], ...RAILWAY),
+ ]);
+ const textOf = id => d.result.items.find(v => v.id === id).text;
+ assert.equal(d.status, 'COMPLETED'); assert.equal(verifyLocalAnalysis(a, d.result.items).verified, true);
+ assert.equal(a.firstAction, null); assert.deepEqual(a.priorities, []); assert.deepEqual(a.noise, []);
+ assert.deepEqual(a.informational.map(id => textOf(id).split(' — ')[0]), ['Railway']);
+ assert.ok(lines.includes('Un correo reciente ya leído no muestra señales de urgencia.'));
+ assert.deepEqual(a.review.map(id => textOf(id).split(' — ')[1]), [NEWSLETTER[1], ENRIQUE[1]]);
+ assert.ok(!lines.some(l => l.startsWith('Primero')), 'no first action'); assert.doesNotMatch(response, INTERNAL);
+ assert.equal(calls.length, 1); assert.equal(executionEnabled, false);
 });

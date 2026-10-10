@@ -2,7 +2,26 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { MAIL_PRIORITY_LEVELS, classifyMailPriority, classifyMailSignals, countsAsImportant } = require('./mail-priority');
+const { MAIL_PRIORITY_LEVELS, classifyMailPriority, classifyMailSignals, countsAsImportant, isAutomatedSenderAddress } = require('./mail-priority');
+
+test('automated sender: a whole news/newsletter(s)/digest token in the local part or a subdomain; noreply alone is not one', () => {
+  for (const from of ['hello@news.railway.app', 'Railway <hello@news.railway.app>', 'newsletters-noreply@linkedin.com', 'messaging-digest-noreply@linkedin.com', 'news@club.example', '"Club" <Newsletter@club.example>', 'a.digest+x@mail.example'])
+    assert.equal(isAutomatedSenderAddress(from), true, from);
+  for (const from of ['no-reply@servicio.example', 'noreply@banco.example', 'persona@empresa.example', 'newsroom@diario.example', 'ana@news.example', 'ana@bbc-news.example', 'Ana <ana@example.test> news', 'news', '', null, undefined])
+    assert.equal(isAutomatedSenderAddress(from), false, String(from));
+});
+
+test('automated sender counts as bulk only in updates, social or promotions; a direct message and a star keep precedence', () => {
+  assert.equal(classifyMailSignals({ important: true, automatedSender: true, category: 'updates' }), 'informational');
+  assert.equal(classifyMailSignals({ important: true, unread: true, automatedSender: true, category: 'updates' }), 'review');
+  assert.equal(classifyMailSignals({ important: true, automatedSender: true, category: 'primary' }), 'important');
+  assert.equal(classifyMailSignals({ important: true, automatedSender: true, category: null }), 'important');
+  assert.equal(classifyMailSignals({ unread: true, automatedSender: true, directMessage: true, category: 'social' }), 'review');
+  assert.equal(classifyMailSignals({ important: true, unread: true, automatedSender: true, directMessage: true, category: 'social' }), 'urgent');
+  assert.equal(classifyMailSignals({ important: true, starred: true, automatedSender: true, category: 'updates' }), 'important');
+  assert.equal(countsAsImportant({ important: true, automatedSender: true, category: 'updates' }), false);
+  assert.equal(countsAsImportant({ important: true, category: 'updates' }), true);
+});
 
 test('exposes exactly the five documented priority levels', () => {
   assert.deepEqual(MAIL_PRIORITY_LEVELS, ['urgent', 'important', 'review', 'informational', 'noise']);
