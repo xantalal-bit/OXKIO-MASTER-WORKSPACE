@@ -11,7 +11,7 @@ const { analyzePrivateItems, verifyLocalAnalysis } = require('./local-analysis')
 const { createPrivateContextAdapters, cleanSourceText } = require('./resource-adapters');
 const { validateItems, createSupervisedRuntime } = require('./mission-runtime');
 const { createServerComposition } = require('./server-composition');
-const { classifyMailPriority, classifyMailSignals } = require('../private-context/mail-priority');
+const { classifyMailPriority, classifyMailSignals, isDirectMessageSubject } = require('../private-context/mail-priority');
 const { normalizeGmailMessage } = require('../private-context/gmail-private-provider');
 const { createExecutiveAuthorizer } = require('../../security/executive-authorization');
 const INTERNAL = /\b(?:AVAILABLE_NOW|NEEDS_CONNECTION|NEEDS_INFORMATION|NEEDS_CAPABILITY|UNAVAILABLE|BLOCKED|PRIVACY_BLOCKED|CONFIDENTIAL)\b|\b[a-z]+\.(?:read|search|remember|analyze|propose)\b|item-\d|analyzedLocally|important_unread/;
@@ -94,7 +94,7 @@ test('11/19: Gmail flags survive the production double normalization and reach t
  const mails = validateItems(await adapters.mail.read({ scope: A, limits: {} }), A, 'GMAIL', 'fixture');
  const events = validateItems(await adapters.calendar.read({ scope: A, limits: {} }), A, 'CALENDAR', 'fixture');
  assert.equal(mails[0].text, 'Ana Ruiz — Contrato — Vista previa'); assert.doesNotMatch(mails[0].text, /@|͏/);
- assert.deepEqual(mails[0].signals, { type: 'mail', unread: true, important: true, starred: true, category: 'primary', date: '2026-10-06T07:00:00.000Z' });
+ assert.deepEqual(mails[0].signals, { type: 'mail', unread: true, important: true, starred: true, bulk: false, directMessage: false, category: 'primary', date: '2026-10-06T07:00:00.000Z' });
  assert.equal(mails[1].signals.category, null, 'an unknown category is dropped'); assert.equal('extra' in mails[1].signals, false);
  assert.deepEqual(events[0].signals, { type: 'calendar', start: '2026-10-07', allDay: true }); assert.equal(events[0].text, '2026-10-07 · ELENA - Cumpleaños');
  // Signals belong to their own source only.
@@ -141,7 +141,9 @@ test('contrast with the real mission: tomorrow\'s birthday is context, promotion
    'Mañana: ELENA - Cumpleaños.',
    'Primero revisaría el correo de Gestoría Ejemplo («Modelo 303: falta tu confirmación»), porque está marcado como importante y todavía no lo has leído.',
   ]);
-  assert.ok(lines.includes('Otros 4 mensajes recientes parecen notificaciones o promociones; no los pondría por delante.'));
+  // Since 10/10/2026 Gabriel's LinkedIn message is a person writing: pending review, not noise.
+  assert.ok(lines.includes('Tienes sin leer, pendiente de revisar, el correo de Gabriel Ejemplo a través de LinkedIn («Gabriel acaba de enviarte un mensaje»); no veo en él señales que pidan atenderlo primero.'));
+  assert.ok(lines.includes('Otros 3 mensajes recientes parecen notificaciones o promociones; no los pondría por delante.'));
   assert.ok(lines.includes('Un correo reciente ya leído no muestra señales de urgencia.'));
   assert.equal(lines.at(-1), 'Lo he analizado aquí, sin enviar tus datos fuera de OXKIO. No he realizado envíos ni cambios externos.');
   assert.doesNotMatch(r.data.response, /Amazon|Después/, 'an important-looking promotion never leads');
@@ -461,5 +463,75 @@ test('P2 UX I: the post-#38 real mission reproduced: one grouped first sentence,
  ]);
  assert.doesNotMatch(response, INTERNAL); assert.doesNotMatch(response, /@/);
  assert.equal(calls.length, 1); assert.ok(!calls.some(c => /Has compartido|Rebajas|ventajas/.test(JSON.stringify(c))), 'no private content reached a provider');
+ assert.equal(executionEnabled, false);
+});
+
+// --- P2 semantics (10/10/2026, sixth real mission): a person writing is not noise; Gmail's important mark alone does not make bulk mail lead ---
+// A LinkedIn message from a person (social) was noise, and a Railway newsletter
+// marked important (updates, read) became the first action.
+const bulkAt = (...args) => { const m = at(...args); m.payload.headers.push({ name: 'List-Unsubscribe', value: '<https://example.test/unsubscribe>' }); return m; };
+
+test('P2 semantics: direct-message subjects are a closed list', () => {
+ for (const subject of ['Enrique acaba de enviarte un mensaje', 'Ana te ha enviado un mensaje', 'Ana te ha enviado un nuevo mensaje', 'Luis te envió un mensaje', 'Ana sent you a new message', 'Ana sent you a message'])
+  assert.equal(isDirectMessageSubject(subject), true, subject);
+ for (const subject of ['Juan ha aceptado tu invitación', 'Tienes 1 mensaje nuevo', 'Not Everything That Matters Can Be Measured in Applause', 'Mensaje importante sobre tu cuenta', '', null, undefined])
+  assert.equal(isDirectMessageSubject(subject), false, String(subject));
+});
+
+test('P2 semantics 1/4/5: a direct message in social is review; unread alone is review; promotions and social notifications stay noise', () => {
+ const a = firstOf(mail('dm', { unread: true, category: 'social', directMessage: true, bulk: true }), mail('u', { unread: true, bulk: true, category: 'updates' }),
+  mail('socialNotice', { unread: true, category: 'social', bulk: true }), mail('promo', { unread: true, important: true, category: 'promotions', bulk: true }), mail('promoDm', { unread: true, category: 'promotions', directMessage: true }));
+ assert.equal(a.firstAction, null); assert.deepEqual(a.priorities, []);
+ assert.deepEqual([...a.review].sort(), ['dm', 'u']); assert.deepEqual([...a.noise].sort(), ['promo', 'promoDm', 'socialNotice']);
+ assert.equal(classifyMailSignals({ unread: true, category: 'social', directMessage: true }), 'review');
+ assert.equal(classifyMailSignals({ unread: true }), 'review');
+});
+
+test('P2 semantics 2: Gmail\'s important mark alone never makes bulk mail a priority; the person\'s star still does', () => {
+ for (const category of ['updates', 'primary', 'forums', null]) {
+  const read = firstOf(mail('nl', { important: true, bulk: true, category }));
+  assert.equal(read.firstAction, null, String(category)); assert.deepEqual(read.informational, ['nl'], String(category));
+  const unread = firstOf(mail('nl', { important: true, unread: true, bulk: true, category }));
+  assert.equal(unread.firstAction, null, String(category)); assert.deepEqual(unread.review, ['nl'], String(category));
+ }
+ for (const category of ['promotions', 'social']) assert.deepEqual(firstOf(mail('nl', { important: true, unread: true, bulk: true, category })).noise, ['nl'], category);
+ // A star is the person's own mark: it leads, and the reason names the star, not Gmail's mark.
+ assert.deepEqual(firstOf(mail('s', { important: true, starred: true, unread: true, bulk: true, category: 'updates' })).firstAction, { itemId: 's', reason: 'starred_unread' });
+ assert.deepEqual(firstOf(mail('s', { important: true, starred: true, bulk: true, category: 'updates' })).firstAction, { itemId: 's', reason: 'starred' });
+});
+
+test('P2 semantics 3: important mail from a person keeps its priority, also a direct message through a platform', () => {
+ assert.deepEqual(firstOf(mail('h', { important: true, unread: true })).firstAction, { itemId: 'h', reason: 'important_unread' });
+ assert.deepEqual(firstOf(mail('h', { important: true })).firstAction, { itemId: 'h', reason: 'important' });
+ assert.deepEqual(firstOf(mail('dm', { important: true, unread: true, category: 'social', directMessage: true, bulk: true })).firstAction, { itemId: 'dm', reason: 'important_unread' });
+ // Between a person's important mail and bulk mail with the same mark, the person leads alone.
+ const both = firstOf(mail('nl', { important: true, unread: true, bulk: true, category: 'updates', date: '2026-10-06T09:00:00.000Z' }), mail('h', { important: true, unread: true }));
+ assert.deepEqual(both.priorities.map(p => p.itemId), ['h']); assert.deepEqual(both.review, ['nl']);
+});
+
+test('P2 semantics 6: the sixth real mission reproduced: the Railway newsletter no longer leads over a pending direct message; verified and certified', async () => {
+ const { d, a, lines, response, calls, executionEnabled } = await answer([
+  bulkAt('Sat, 10 Oct 2026 10:02:33 +0200', 'n1', ['INBOX', 'UNREAD', 'CATEGORY_UPDATES'], 'Mathieu Ejemplo a través de LinkedIn <newsletters-noreply@linkedin.example>', 'Not Everything That Matters Can Be Measured in Applause'),
+  bulkAt('Sat, 10 Oct 2026 09:49:39 +0200', 'p1', PROMO, 'Tienda Ejemplo <ofertas@tienda.example>', 'Lo más vendido de la semana'),
+  bulkAt('Sat, 10 Oct 2026 09:25:43 +0200', 'dm', ['INBOX', 'UNREAD', 'CATEGORY_SOCIAL'], 'Enrique Ejemplo a través de LinkedIn <messages-noreply@linkedin.example>', 'Enrique acaba de enviarte un mensaje'),
+  bulkAt('Sat, 10 Oct 2026 09:04:24 +0200', 'p2', PROMO, 'Club Ejemplo <news@club.example>', 'Crea tu contenido de un mes en 3 pasos'),
+  bulkAt('Sat, 10 Oct 2026 01:05:10 +0200', 'rw', ['INBOX', 'IMPORTANT', 'CATEGORY_UPDATES'], 'Railway Ejemplo <hello@railway.example>', 'Railway is now just Railway on iOS'),
+ ]);
+ const textOf = id => d.result.items.find(v => v.id === id).text;
+ assert.equal(d.status, 'COMPLETED'); assert.ok(d.trace.some(t => t.event === 'LOCAL_ANALYSIS' && t.verified === true && t.firstAction === false));
+ assert.equal(verifyLocalAnalysis(a, d.result.items).verified, true);
+ assert.equal(a.firstAction, null, 'Gmail\'s important mark alone does not make the newsletter the first action'); assert.deepEqual(a.priorities, []);
+ assert.deepEqual(a.review.map(id => textOf(id).split(' — ')[1]), ['Not Everything That Matters Can Be Measured in Applause', 'Enrique acaba de enviarte un mensaje'], 'the direct message is pending review, not noise');
+ assert.equal(a.noise.length, 2); assert.deepEqual(a.informational.map(id => textOf(id).split(' — ')[0]), ['Railway Ejemplo']);
+ assert.deepEqual(lines, [
+  'Hoy no tienes eventos en la agenda.',
+  'No veo nada en lo que he consultado que pida actuar primero hoy.',
+  'Tienes 2 correos sin leer pendientes de revisar: el correo de Mathieu Ejemplo a través de LinkedIn («Not Everything That Matters Can Be Measured in Applause») y el correo de Enrique Ejemplo a través de LinkedIn («Enrique acaba de enviarte un mensaje»); no veo en ellos señales que pidan atenderlos primero.',
+  'Otros 2 mensajes recientes parecen notificaciones o promociones; no los pondría por delante.',
+  'Un correo reciente ya leído no muestra señales de urgencia.',
+  'Lo he analizado aquí, sin enviar tus datos fuera de OXKIO. No he realizado envíos ni cambios externos.',
+ ]);
+ assert.doesNotMatch(response, INTERNAL); assert.doesNotMatch(response, /@|unsubscribe/);
+ assert.equal(calls.length, 1); assert.ok(!calls.some(c => /Railway|Enrique|Applause/.test(JSON.stringify(c))), 'no private content reached a provider');
  assert.equal(executionEnabled, false);
 });

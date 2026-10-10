@@ -151,7 +151,7 @@ test('normalizes Gmail messages by whitelist', () => {
     attachments: [{ filename: 'secret.pdf' }],
   }));
 
-  assert.deepEqual(Object.keys(message), ['id', 'threadId', 'from', 'subject', 'date', 'snippet', 'unread', 'important', 'starred', 'category']);
+  assert.deepEqual(Object.keys(message), ['id', 'threadId', 'from', 'subject', 'date', 'snippet', 'unread', 'important', 'starred', 'category', 'bulk']);
   assert.equal(message.id, 'message-1');
   assert.equal(message.threadId, 'thread-1');
   assert.equal(message.from, 'Cliente Ficticio <cliente@example.test>');
@@ -180,6 +180,21 @@ test('normalizes Gmail messages without altering Unicode text', () => {
   assert.equal(message.from, 'José García <jose@example.test>');
   assert.equal(message.subject, 'Presupuesto 25€ 🚀');
   assert.equal(message.snippet, 'Necesito más detalle ✅');
+});
+
+test('keeps only whether List-Unsubscribe is present, never its value, and stays idempotent', () => {
+  const headers = [
+    { name: 'From', value: 'Boletín Ficticio <news@example.test>' },
+    { name: 'Subject', value: 'Novedades' },
+    { name: 'list-unsubscribe', value: '<https://example.test/unsub?token=secret-unsub>' },
+  ];
+  const bulk = normalizeGmailMessage(buildGmailMessage({ payload: { headers } }));
+  assert.equal(bulk.bulk, true);
+  assert.equal(JSON.stringify(bulk).includes('secret-unsub'), false);
+  assert.deepEqual(normalizeGmailMessage(bulk), bulk);
+  const person = normalizeGmailMessage(buildGmailMessage());
+  assert.equal(person.bulk, false);
+  assert.deepEqual(normalizeGmailMessage(person), person);
 });
 
 test('does not mutate Gmail input data', async () => {
@@ -244,10 +259,10 @@ test('real Gmail readonly reader uses metadata-only Gmail API calls', async () =
     userId: 'me',
     id: 'message-1',
     format: 'metadata',
-    metadataHeaders: ['From', 'Subject', 'Date'],
+    metadataHeaders: ['From', 'Subject', 'Date', 'List-Unsubscribe'],
   });
   assert.equal(messages.length, 2);
-  assert.deepEqual(Object.keys(messages[0]), ['id', 'threadId', 'from', 'subject', 'date', 'snippet', 'unread', 'important', 'starred', 'category']);
+  assert.deepEqual(Object.keys(messages[0]), ['id', 'threadId', 'from', 'subject', 'date', 'snippet', 'unread', 'important', 'starred', 'category', 'bulk']);
 });
 
 test('sender search reuses the readonly list call with a from: query and metadata-only gets', async () => {
@@ -282,7 +297,7 @@ test('sender search reuses the readonly list call with a from: query and metadat
     userId: 'me',
     id: 'message-9',
     format: 'metadata',
-    metadataHeaders: ['From', 'Subject', 'Date'],
+    metadataHeaders: ['From', 'Subject', 'Date', 'List-Unsubscribe'],
   });
   assert.equal(messages.length, 1);
 });

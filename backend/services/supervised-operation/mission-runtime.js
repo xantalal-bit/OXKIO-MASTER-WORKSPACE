@@ -53,7 +53,7 @@ const MAIL_CATEGORIES=['primary','social','promotions','updates','forums'];
 const START=/^\d{4}-\d{2}-\d{2}(T\d{2}:\d{2}(:\d{2}(\.\d+)?)?(Z|[+-]\d{2}:\d{2})?)?$/;
 function signalsOf(raw,provenance){
  if(!raw||typeof raw!=='object')return null;
- if(provenance==='GMAIL'&&raw.type==='mail'){const date=Date.parse(raw.date);return freeze({type:'mail',unread:raw.unread===true,important:raw.important===true,starred:raw.starred===true,category:MAIL_CATEGORIES.includes(raw.category)?raw.category:null,date:Number.isFinite(date)?new Date(date).toISOString():null});}
+ if(provenance==='GMAIL'&&raw.type==='mail'){const date=Date.parse(raw.date);return freeze({type:'mail',unread:raw.unread===true,important:raw.important===true,starred:raw.starred===true,bulk:raw.bulk===true,directMessage:raw.directMessage===true,category:MAIL_CATEGORIES.includes(raw.category)?raw.category:null,date:Number.isFinite(date)?new Date(date).toISOString():null});}
  if(provenance==='CALENDAR'&&raw.type==='calendar'){const start=typeof raw.start==='string'&&START.test(raw.start)&&Number.isFinite(Date.parse(raw.start))?raw.start:null;return freeze({type:'calendar',start,allDay:raw.allDay===true||(start!==null&&start.length===10)});}
  return null;
 }

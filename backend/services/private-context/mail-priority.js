@@ -31,10 +31,36 @@ function classifyMailPriority(message) {
 // Unread alone stays "review", never "urgent".
 const NOISE_CATEGORIES = new Set(['promotions', 'social']);
 
+// P2 (10/10/2026, sixth real mission): a LinkedIn message from a person
+// (social) was noise and a Railway newsletter marked important became the
+// first action. Two closed signals separate a person writing from bulk mail:
+// - directMessage: the subject is a platform's "X sent you a message"
+//   notice (closed phrases below). Outside promotions it is never noise, and
+//   Gmail's important mark keeps counting for it.
+// - bulk: the message carries List-Unsubscribe (RFC 2369), the header bulk
+//   senders add. Gmail's important mark alone does not make it a priority;
+//   the person's own star still does.
+const DIRECT_MESSAGE_SUBJECTS = [
+  /\b(?:acaba de enviarte|te ha enviado|te envió) un (?:nuevo )?mensaje\b/i,
+  /\bsent you a (?:new )?message\b/i,
+];
+
+function isDirectMessageSubject(subject) {
+  return typeof subject === 'string' && DIRECT_MESSAGE_SUBJECTS.some((pattern) => pattern.test(subject));
+}
+
+const isDirect = (s) => s.directMessage === true && s.category !== 'promotions';
+
+// Whether Gmail's important mark counts for these signals.
+function countsAsImportant(signals) {
+  const s = signals || {};
+  return s.important === true && (isDirect(s) || s.bulk !== true);
+}
+
 function classifyMailSignals(signals) {
   const s = signals || {};
-  if (NOISE_CATEGORIES.has(s.category) && !s.starred) return 'noise';
-  return classifyMailPriority({ important: Boolean(s.important || s.starred), unread: Boolean(s.unread) });
+  if (NOISE_CATEGORIES.has(s.category) && !s.starred && !isDirect(s)) return 'noise';
+  return classifyMailPriority({ important: countsAsImportant(s) || Boolean(s.starred), unread: Boolean(s.unread) });
 }
 
 // Moved unchanged from executive-orchestrator.js so V3 can reuse it.
@@ -47,5 +73,7 @@ module.exports = {
   MAIL_PRIORITY_LEVELS,
   classifyMailPriority,
   classifyMailSignals,
+  countsAsImportant,
+  isDirectMessageSubject,
   extractSenderName,
 };
