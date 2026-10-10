@@ -1,5 +1,5 @@
 'use strict';
-const { classifyMailSignals } = require('../private-context/mail-priority');
+const { classifyMailSignals, countsAsImportant } = require('../private-context/mail-priority');
 const { freeze } = require('./scope-session');
 // Local, deterministic analysis of the person's own sources (06/10/2026,
 // third real Cliente Cero mission). It is what data.analyze does when no
@@ -19,9 +19,12 @@ const pad = (value, size = 2) => String(value).padStart(size, '0');
 const localDay = date => { const d = new Date(date); return pad(d.getFullYear(), 4) + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()); };
 const nextDay = day => { const [y, m, d] = day.split('-').map(Number); return localDay(new Date(y, m - 1, d + 1)); };
 
+// The reason names the signal that made it a priority: a star on bulk mail
+// is "starred", never "important".
 function mailReason(signals, level) {
- if (level === 'urgent') return signals.important ? 'important_unread' : 'starred_unread';
- return signals.important ? 'important' : 'starred';
+ const important = countsAsImportant(signals);
+ if (level === 'urgent') return important ? 'important_unread' : 'starred_unread';
+ return important ? 'important' : 'starred';
 }
 
 // items: the data.analyze input (each with a unique id). now: a Date or ISO string.

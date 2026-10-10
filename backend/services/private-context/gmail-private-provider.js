@@ -107,6 +107,11 @@ function normalizeGmailMessage(message = {}) {
     category: hasLabels
       ? categoryOf(labelIds)
       : (Object.values(GMAIL_CATEGORIES).includes(message.category) ? message.category : null),
+    // Bulk mail (10/10/2026): the sender added List-Unsubscribe (RFC 2369).
+    // Only its presence is kept, never its value.
+    bulk: Array.isArray(payload.headers)
+      ? getHeader(headers, 'List-Unsubscribe').trim() !== ''
+      : message.bulk === true,
   };
 }
 
@@ -149,7 +154,7 @@ async function listReadonlyGmailMessages(options = {}, dependencies = {}) {
       userId: 'me',
       id: message.id,
       format: 'metadata',
-      metadataHeaders: ['From', 'Subject', 'Date'],
+      metadataHeaders: ['From', 'Subject', 'Date', 'List-Unsubscribe'],
     });
 
     details.push(detail.data || {});
