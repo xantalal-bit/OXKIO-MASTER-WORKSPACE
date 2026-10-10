@@ -5,6 +5,38 @@ const UIDS=['fixture-owner-a','fixture-owner-b'];const authorize=createExecutive
 const ADVICE='Te propongo comparar una oferta clara, recomendaciones y seguimiento comercial. Son ideas generales; podemos elegir una prueba pequeña.';
 function model(id='primary',behaviour){const calls=[];const modelId='fixture:'+id;return{status:'ready',provider:'fixture',modelId,region:'eu',calls,catalog:{[modelId]:{provider:'fixture',tier:'small_model',inputUsdPerMillion:1,outputUsdPerMillion:2,residency:'eu',privacy:'fixture',pricingVersion:'fixture',pricingSource:'test-fixture',reviewedAt:'2026-10-04'}},async reason(request){calls.push(request);if(behaviour)return behaviour(request);if(request.context?.sources){const findings=request.context.sources.map(s=>({claim:s.text,quote:s.text,sourceIds:[s.id]}));return{status:'ok',content:{findings,comparison:findings.map(f=>f.claim).join('\n'),conclusion:findings.map(f=>f.claim).join('\n')},usage:{inputTokens:100,outputTokens:80}};}return{status:'ok',content:{action:'answer',message:ADVICE},usage:{inputTokens:100,outputTokens:80}};}};}
 async function setup({providers=[model()],root,key,adapters}={}){const memoryRoot=root||fs.mkdtempSync(path.join(os.tmpdir(),'v3-exec-http-'));const integrityKey=key||randomBytes(32);const composition=createServerComposition({enabled:true,cohortUids:UIDS.join(','),memoryRoot,integrityKey,authorizeIdentity:authorize,adapterFactory:adapters,reasoning:{providers,requestPrivacyFloor:'INTERNAL',privacyPolicy:{publicExternalAllowed:true,internalProviders:[{providerId:'fixture'}],confidentialProviders:[]},approvedDailyBudgetUsd:0.9}});const server=http.createServer((req,res)=>{req.oxkioIdentity=UIDS.includes(req.headers['x-fixture-owner'])?authorize({uid:req.headers['x-fixture-owner']}).identity:null;composition.handle(req,res).catch(()=>{res.writeHead(500);res.end('{}');});});await new Promise(r=>server.listen(0,'127.0.0.1',r));const port=server.address().port;async function ask(query,uid=UIDS[0],extra={}){const body=JSON.stringify({query,includeDetails:true,...extra});return new Promise((resolve,reject)=>{const req=http.request({host:'127.0.0.1',port,path:'/api/executive/chat',method:'POST',headers:{'content-type':'application/json','x-fixture-owner':uid||'','content-length':Buffer.byteLength(body)}},res=>{let data='';res.on('data',s=>data+=s);res.on('end',()=>resolve({status:res.statusCode,data:JSON.parse(data||'{}')}));});req.on('error',reject);req.end(body);});}return{ask,composition,providers,root:memoryRoot,key:integrityKey,async close(remove=true){await new Promise(r=>server.close(r));if(remove)fs.rmSync(memoryRoot,{recursive:true,force:true});}};}
+test('V1-A: direct answer telemetry has a stable type without a fabricated task or routing change',async()=>{
+ const primary=model('primary');const preferred=model('answer-specialist');preferred.tasks=['conversation.answer'];
+ const s=await setup({providers:[primary,preferred]});try{
+  const r=await s.ask('Compara n8n y Make para automatizar tareas de una pequeña empresa.');
+  assert.equal(r.status,200);assert.equal(r.data.response,ADVICE);assert.equal(r.data.missionId,null);
+  assert.equal(r.data.details.mode,'COGNITIVE_ADVICE');assert.equal(r.data.executionEnabled,false);
+  assert.equal(primary.calls.length,1);assert.equal(preferred.calls.length,0);
+  const records=r.data.details.cost.executions;assert.equal(records.length,1);
+  const e=records[0];assert.equal(e.taskType,'conversation.answer');assert.equal(e.taskId,null);
+  assert.equal(e.missionId,r.data.details.turnId);assert.equal(e.status,'ACCEPTED');assert.equal(e.verificationStatus,'PASS');
+  assert.equal(e.role,'EXECUTOR');assert.equal(e.privacyClass,'INTERNAL');assert.equal(e.accountingCurrency,'USD');
+  assert.equal(e.chargedCost,r.data.details.cost.chargedUsd);
+  assert.ok(!JSON.stringify(records).includes('n8n'));assert.ok(!JSON.stringify(records).includes(ADVICE));
+ }finally{await s.close();}
+});
+test('V1-A: clarification and planning calls keep their existing telemetry type',async()=>{
+ for(const content of [{action:'clarify',message:'Necesito saber qué objetivo deseas resolver.',plan:[]},{action:'plan',plan:[{key:'source',capability:'calendar.read',dependsOn:[]}]}]){
+  const p=model('decision',()=>({status:'ok',content,usage:{inputTokens:100,outputTokens:80}}));const s=await setup({providers:[p]});try{
+   const r=await s.ask('Resuelve xyzzy por favor');assert.equal(p.calls.length,1);assert.equal(r.data.executionEnabled,false);
+   assert.equal(r.data.details.cost.executions.length,1);assert.equal(r.data.details.cost.executions[0].taskType,null);assert.equal(r.data.details.cost.executions[0].taskId,null);
+  }finally{await s.close();}
+ }
+});
+test('V1-A: rejected answer is not labelled; accepted fallback answer is labelled once',async()=>{
+ const bad=model('bad',()=>({status:'ok',content:{action:'answer',message:'He enviado un correo.'},usage:{inputTokens:100,outputTokens:80}}));
+ const good=model('good');const s=await setup({providers:[bad,good]});try{
+  const r=await s.ask('Dame ideas generales para mejorar la captación de clientes de una pyme.');assert.equal(r.data.response,ADVICE);
+  assert.equal(bad.calls.length,1);assert.equal(good.calls.length,1);const es=r.data.details.cost.executions;assert.equal(es.length,2);
+  assert.deepEqual(es.map(e=>[e.status,e.taskType,e.taskId]),[['REJECTED',null,null],['ACCEPTED','conversation.answer',null]]);
+  assert.equal(es[1].role,'FALLBACK');assert.equal(es[1].fallbackReason,'INVALID_OUTPUT');assert.equal(r.data.executionEnabled,false);
+ }finally{await s.close();}
+});
 test('A/B/I: orientation is useful, technical introspection is explicit; neither creates a mission or calls a model',async()=>{const s=await setup();try{const a=await s.ask('¿Qué puedes hacer por mí ahora mismo?');assert.equal(a.status,200);assert.equal(a.data.details.mode,'ORIENTATION');assert.match(a.data.response,/objetivo/);assert.doesNotMatch(a.data.response,/Disponible:|Capability|openai|fixture/);assert.equal(a.data.missionId,null);const b=await s.ask('¿Qué capacidades tienes?');assert.equal(b.data.details.reason,'operational_state');assert.match(b.data.response,/Disponible:/);assert.equal(s.providers[0].calls.length,0);assert.equal(b.data.missionId,null);}finally{await s.close();}});
 test('C/I: ordinary public advice uses governed cognition and ledger, without an operational mission',async()=>{const s=await setup();try{const r=await s.ask('Dame ideas generales para mejorar la captación de clientes de una pyme.');assert.equal(r.data.details.mode,'COGNITIVE_ADVICE');assert.equal(r.data.response,ADVICE);assert.equal(r.data.missionId,null);assert.equal(s.providers[0].calls.length,1);assert.ok(r.data.details.cost.chargedUsd>0);assert.equal(r.data.executionEnabled,false);}finally{await s.close();}});
 // Canon 05/10/2026: the first person alone is not confidential; the content is.
