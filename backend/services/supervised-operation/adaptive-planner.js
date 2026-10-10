@@ -56,7 +56,13 @@ function createAdaptivePlanner({ provider, providers, privacyPolicy = DEFAULT_PR
    output: conversational ? { action: 'answer, clarify or plan (exactly one value)', message: 'advice or clarification', plan: [] } : { plan: [STEP] } };
   const egressText = JSON.stringify(request), provenance = context.contextProvenance;
   const derivedFromPrivate = context.derivedFromPrivate === true || (Array.isArray(provenance) ? provenance : provenance ? [provenance] : []).some(p => !['PUBLIC','PUBLIC_WEB','PUBLIC_DISCOVERY'].includes(typeof p === 'string' ? p : p.provenance));
-  const result = await reasoner.reason({ objective: egressText, egressText, derivedFromPrivate, request, basis: { inputTokens: Math.ceil(egressText.length / 3), outputTokens: 900 }, spend, missionId,
+  // Annotate accepted direct answers only after verification. Passing taskType
+  // to reason() would also affect provider routing; this is telemetry only.
+  let acceptedAnswer = false;
+  const telemetrySpend = typeof spend.recordExecution === 'function' ? { ...spend, recordExecution: execution => spend.recordExecution({ ...execution,
+   ...(acceptedAnswer && execution.status === 'ACCEPTED' ? { taskType: 'conversation.answer' } : {}),
+  }) } : spend;
+  const result = await reasoner.reason({ objective: egressText, egressText, derivedFromPrivate, request, basis: { inputTokens: Math.ceil(egressText.length / 3), outputTokens: 900 }, spend: telemetrySpend, missionId,
    accept: c => {
     // Distinct fixed codes so a live rejection can be diagnosed without content.
     if (!c || typeof c !== 'object' || Object.keys(c).some(k => !['action','message','plan'].includes(k))) return 'planning_invalid_shape';
@@ -66,7 +72,9 @@ function createAdaptivePlanner({ provider, providers, privacyPolicy = DEFAULT_PR
     if (!['answer','clarify'].includes(c.action)) return 'planning_unknown_action';
     if (!noPlan(c.plan)) return 'planning_plan_without_plan_action';
     if (typeof c.message === 'string' && INTERNAL_TERMS.test(c.message)) return 'planning_message_internal_terms';
-    return validMessage(c.message) || 'planning_invalid_message';
+    const valid = validMessage(c.message);
+    acceptedAnswer = valid && c.action === 'answer';
+    return valid || 'planning_invalid_message';
    } });
   const c = result.content;
   if (!conversational) return freeze(copy(c.plan));
