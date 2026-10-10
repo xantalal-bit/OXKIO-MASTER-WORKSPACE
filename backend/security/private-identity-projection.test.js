@@ -90,6 +90,21 @@ test('buildDashboardReaders isolates two different family members from each othe
   assert.equal(calendarCalls, 0);
 });
 
+test('the Gmail reader keeps 5 messages for the dashboard and lets V3 ask for its own window', async () => {
+  const dependencies = {
+    getClienteCeroIdentity,
+    buildGmailPrivateContext: async (input) => ({ input }),
+    buildCalendarPrivateContext: async (input) => ({ input }),
+  };
+  const cero = buildDashboardReaders(clienteCeroFirebaseIdentity, dependencies);
+  assert.equal((await cero.gmailReader()).input.maxMessages, 5);
+  assert.equal((await cero.gmailReader({ maxMessages: 20 })).input.maxMessages, 20);
+  assert.equal((await cero.gmailReader({ maxMessages: 20 })).input.clientId, 'cliente-cero');
+  // A capability-gap reader ignores the window and never reaches Gmail.
+  const gap = buildDashboardReaders(familyFirebaseIdentityA, dependencies);
+  assert.equal((await gap.gmailReader({ maxMessages: 20 })).capabilityGap, true);
+});
+
 test('end-to-end composition: a family member is denied /api/dashboard, /api/approve, and /api/execute-approved (they all gate on isAuthorizedExecutiveIdentity)', () => {
   const familyPrivateIdentity = buildPrivateIdentity(familyFirebaseIdentityA, { getClienteCeroIdentity });
   assert.equal(isAuthorizedExecutiveIdentity(familyPrivateIdentity), false);

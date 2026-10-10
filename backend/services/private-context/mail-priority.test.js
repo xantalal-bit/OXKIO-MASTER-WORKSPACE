@@ -2,7 +2,61 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { MAIL_PRIORITY_LEVELS, classifyMailPriority, classifyMailSignals, countsAsImportant, isAutomatedSenderAddress } = require('./mail-priority');
+const { MAIL_PRIORITY_LEVELS, classifyMailPriority, classifyMailSignals, countsAsImportant, isAutomatedSenderAddress, selectRelevantMailCandidates } = require('./mail-priority');
+
+// Selector fixtures: newest first, one minute apart, as Gmail lists INBOX.
+const at = (minutesAgo) => new Date(Date.UTC(2026, 9, 10, 10, 0) - minutesAgo * 60000).toISOString();
+const item = (id, minutesAgo, signals = {}) => ({ id, signals: { type: 'mail', unread: false, important: false, starred: false, bulk: false, automatedSender: false, directMessage: false, category: 'primary', date: at(minutesAgo), ...signals } });
+const promo = (id, minutesAgo) => item(id, minutesAgo, { unread: true, bulk: true, category: 'promotions' });
+const ids = (list) => list.map((v) => v.id);
+
+test('selection 1/2: five newer promotions never push out a direct message (6th) or a person\'s important mail (7th)', () => {
+  const inbox = [promo('p1', 1), promo('p2', 2), promo('p3', 3), promo('p4', 4), promo('p5', 5),
+    item('dm', 6, { unread: true, category: 'social', directMessage: true, bulk: true, automatedSender: true }),
+    item('imp', 7, { important: true, category: 'updates' })];
+  assert.deepEqual(ids(selectRelevantMailCandidates(inbox, { maxItems: 5 })), ['p1', 'p2', 'p3', 'dm', 'imp']);
+  // Only room for two: the people win, in reading order.
+  assert.deepEqual(ids(selectRelevantMailCandidates(inbox, { maxItems: 2 })), ['dm', 'imp']);
+});
+
+test('selection 5: twenty promotions fill at most a sample of three, never the candidates', () => {
+  const inbox = Array.from({ length: 20 }, (_, i) => promo('p' + i, i));
+  assert.deepEqual(ids(selectRelevantMailCandidates(inbox, { maxItems: 8 })), ['p0', 'p1', 'p2']);
+});
+
+test('selection 6: twenty people\'s messages respect maxItems, the most recent first, deterministically', () => {
+  const inbox = Array.from({ length: 20 }, (_, i) => item('h' + i, i, { unread: true }));
+  const first = selectRelevantMailCandidates(inbox, { maxItems: 8 });
+  assert.deepEqual(ids(first), ['h0', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'h7']);
+  assert.deepEqual(ids(selectRelevantMailCandidates([...inbox], { maxItems: 8 })), ids(first), 'same input, same output');
+  // Same date: the reading order decides.
+  const tied = ['a', 'b', 'c'].map((id) => item(id, 0, { unread: true }));
+  assert.deepEqual(ids(selectRelevantMailCandidates(tied, { maxItems: 2 })), ['a', 'b']);
+});
+
+test('selection 7 and order: an old star survives newer promotions; ranks go direct, star, important, unread person, read person, bulk, noise', () => {
+  const inbox = [promo('p1', 1), promo('p2', 2), promo('p3', 3), promo('p4', 4),
+    item('bulkRead', 5, { important: true, automatedSender: true, category: 'updates' }),
+    item('read', 6), item('unread', 7, { unread: true }), item('imp', 8, { important: true }),
+    item('star', 19, { starred: true, category: 'promotions' }), item('dm', 20, { unread: true, directMessage: true, category: 'social' })];
+  for (const [max, expected] of [[1, ['dm']], [2, ['star', 'dm']], [3, ['imp', 'star', 'dm']], [4, ['unread', 'imp', 'star', 'dm']],
+    [5, ['read', 'unread', 'imp', 'star', 'dm']], [6, ['bulkRead', 'read', 'unread', 'imp', 'star', 'dm']], [7, ['p1', 'bulkRead', 'read', 'unread', 'imp', 'star', 'dm']]])
+    assert.deepEqual(ids(selectRelevantMailCandidates(inbox, { maxItems: max })), expected, 'maxItems ' + max);
+});
+
+test('selection is not prioritization: it never changes signals or classification, and fails safe', () => {
+  const railway = item('rw', 1, { important: true, automatedSender: true, category: 'updates' });
+  const inbox = [railway, item('u', 2, { unread: true })];
+  const before = JSON.stringify(inbox);
+  const chosen = selectRelevantMailCandidates(inbox, { maxItems: 8 });
+  assert.deepEqual(ids(chosen), ['rw', 'u'], 'Railway is selected when there is room');
+  assert.equal(chosen[0], railway, 'the same objects, untouched'); assert.equal(JSON.stringify(inbox), before);
+  assert.equal(classifyMailSignals(chosen[0].signals), 'informational', 'selected, still not a priority by important alone');
+  assert.deepEqual(selectRelevantMailCandidates(null), []); assert.deepEqual(selectRelevantMailCandidates(inbox, { maxItems: 0 }), []);
+  // Malformed entries do not throw; they keep their reading order.
+  const odd = [{ id: 'x' }, null];
+  assert.deepEqual(selectRelevantMailCandidates(odd, { maxItems: 8 }), [{ id: 'x' }, null]);
+});
 
 test('automated sender: a whole news/newsletter(s)/digest token in the local part or a subdomain; noreply alone is not one', () => {
   for (const from of ['hello@news.railway.app', 'Railway <hello@news.railway.app>', 'newsletters-noreply@linkedin.com', 'messaging-digest-noreply@linkedin.com', 'news@club.example', '"Club" <Newsletter@club.example>', 'a.digest+x@mail.example'])

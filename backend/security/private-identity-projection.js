@@ -62,7 +62,9 @@ function buildDashboardReaders(firebaseIdentity, {
   }
   const identity = buildPrivateIdentity(firebaseIdentity, { getClienteCeroIdentity });
   return {
-    gmailReader: () => buildGmailPrivateContext({ ...identity, maxMessages: 5 }),
+    // The dashboard reads 5; V3 asks for its own recent window (see
+    // resource-adapters.js), capped again by the Gmail provider.
+    gmailReader: ({ maxMessages = 5 } = {}) => buildGmailPrivateContext({ ...identity, maxMessages }),
     calendarReader: () => buildCalendarPrivateContext({
       ...identity,
       range: 'next7Days',

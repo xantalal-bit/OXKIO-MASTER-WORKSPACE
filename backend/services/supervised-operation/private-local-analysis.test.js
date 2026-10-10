@@ -588,3 +588,47 @@ test('P2 bulk 7: the real mission reproduced with the real metadata: Railway no 
  assert.ok(!lines.some(l => l.startsWith('Primero')), 'no first action'); assert.doesNotMatch(response, INTERNAL);
  assert.equal(calls.length, 1); assert.equal(executionEnabled, false);
 });
+
+// --- P2 mail selection (10/10/2026, mission-d306cb31): the five newest messages were all the analysis saw ---
+// Three promotions and two newsletters arrived after the LinkedIn message and
+// the Railway newsletter, which never reached the analysis. V3 now reads a
+// window of 20 and selects at most 8 candidates locally.
+test('P2 selection: the adapter asks for a window of 20, keeps at most 8 candidates and nothing else leaves it', async () => {
+ const requested = [];
+ const inbox = [...Array.from({ length: 15 }, (_, i) => bulkAt('Sat, 10 Oct 2026 11:' + String(59 - i).padStart(2, '0') + ':00 +0200', 'p' + i, PROMO, 'Tienda ' + i + ' <ofertas@tienda.example>', 'Oferta ' + i)),
+  at('Sat, 10 Oct 2026 09:25:43 +0200', 'dm', ['INBOX', 'UNREAD', 'CATEGORY_SOCIAL'], ...ENRIQUE),
+  ...Array.from({ length: 6 }, (_, i) => at('Sat, 10 Oct 2026 08:0' + i + ':00 +0200', 'h' + i, ['INBOX', 'UNREAD', 'CATEGORY_PERSONAL'], 'Persona ' + i + ' <persona' + i + '@empresa.example>', 'Asunto ' + i)),
+  at('Fri, 09 Oct 2026 08:00:00 +0200', 'late', ['INBOX', 'STARRED', 'CATEGORY_PERSONAL'], 'Fuera Ejemplo <fuera@empresa.example>', 'Fuera de la ventana')].map(normalizeGmailMessage);
+ const readers = { gmailReader: async options => { requested.push(options); return { privatePayload: { messages: inbox } }; }, calendarReader: async () => ({ privatePayload: { events: [] } }) };
+ const items = validateItems(await createPrivateContextAdapters({ scope: A, readers, origin: 'fixture' }).mail.read({ scope: A, limits: { maxItems: 20 } }), A, 'GMAIL', 'fixture');
+ assert.deepEqual(requested, [{ maxMessages: 20 }]);
+ assert.equal(items.length, 8); const subjects = items.map(v => v.text.split(' — ')[1]);
+ assert.deepEqual(subjects, ['Oferta 0', 'Oferta 1', 'Oferta 2', ENRIQUE[1], 'Asunto 0', 'Asunto 1', 'Asunto 2', 'Asunto 3'], 'reading order; the direct message and the people, a sample of three promotions');
+ assert.ok(!subjects.includes('Fuera de la ventana'), 'the 23rd message is beyond the window of 20');
+ // A reduced retry reads only 5, as before #42, and keeps at most a sample of three promotions.
+ const reduced = validateItems(await createPrivateContextAdapters({ scope: A, readers, origin: 'fixture' }).mail.read({ scope: A, limits: { maxItems: 5 } }), A, 'GMAIL', 'fixture');
+ assert.deepEqual(requested.at(-1), { maxMessages: 5 }); assert.deepEqual(reduced.map(v => v.text.split(' — ')[1]), ['Oferta 0', 'Oferta 1', 'Oferta 2']);
+});
+
+test('P2 selection: mission-d306cb31 reproduced: the LinkedIn message and Railway, 6th and 7th, now reach the analysis; selected is not prioritized', async () => {
+ const { d, a, lines, response, calls, executionEnabled } = await answer([
+  bulkAt('Sat, 10 Oct 2026 11:30:17 +0200', 'p1', PROMO, 'Ofertas Ejemplo <ofertas@club.example>', 'Solo hoy'),
+  bulkAt('Sat, 10 Oct 2026 11:15:45 +0200', 'p2', PROMO, 'Ofertas Dos <ofertas@club2.example>', 'Solo hoy también'),
+  bulkAt('Sat, 10 Oct 2026 11:09:35 +0200', 'p3', PROMO, 'Juegos Ejemplo <info@juegos.example>', 'Este fin de semana'),
+  bulkAt('Sat, 10 Oct 2026 10:49:28 +0200', 'mo', ['INBOX', 'UNREAD', 'CATEGORY_SOCIAL'], 'Mohammed Ejemplo a través de LinkedIn <newsletters-noreply@linkedin.com>', 'Can Purpose Survive a Business Model'),
+  bulkAt('Sat, 10 Oct 2026 10:02:33 +0200', 'nl', ['INBOX', 'UNREAD', 'CATEGORY_UPDATES'], ...NEWSLETTER),
+  bulkAt('Sat, 10 Oct 2026 09:25:43 +0200', 'dm', ['INBOX', 'UNREAD', 'CATEGORY_SOCIAL'], ...ENRIQUE),
+  at('Sat, 10 Oct 2026 01:05:10 +0200', 'rw', ['INBOX', 'IMPORTANT', 'CATEGORY_UPDATES'], ...RAILWAY),
+ ]);
+ const textOf = id => d.result.items.find(v => v.id === id).text;
+ assert.equal(d.status, 'COMPLETED'); assert.equal(verifyLocalAnalysis(a, d.result.items).verified, true);
+ assert.equal(d.result.items.length, 6, 'the direct message, both newsletters and a sample of three noise messages');
+ assert.ok(!d.result.items.some(v => v.text.startsWith('Mohammed')), 'the fourth noise message is left out');
+ assert.equal(a.firstAction, null, 'Railway is selected, never the first action by Gmail\'s important mark alone'); assert.deepEqual(a.priorities, []);
+ assert.deepEqual(a.review.map(id => textOf(id).split(' — ')[1]), [NEWSLETTER[1], ENRIQUE[1]], 'the direct message is pending review, not noise');
+ assert.deepEqual(a.informational.map(id => textOf(id).split(' — ')[0]), ['Railway']); assert.equal(a.noise.length, 3);
+ assert.ok(lines.some(l => l.includes('Enrique acaba de enviarte un mensaje')), 'the person now appears in the answer');
+ assert.doesNotMatch(response, INTERNAL); assert.doesNotMatch(response, /@/);
+ assert.equal(calls.length, 1, 'only the decision'); assert.ok(!calls.some(c => /Enrique|Railway|Applause|Solo hoy/.test(JSON.stringify(c))), 'no private content reached a provider');
+ assert.equal(executionEnabled, false);
+});

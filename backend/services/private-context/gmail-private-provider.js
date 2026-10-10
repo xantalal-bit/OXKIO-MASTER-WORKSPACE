@@ -5,7 +5,10 @@ const {
   getGmailClient,
 } = require('../../integrations/googleOAuth');
 
-const MAX_MESSAGES = 10;
+// Ceiling for a caller that asks for more (10/10/2026: V3 reads a window of
+// 20 recent INBOX messages and selects locally; every other caller keeps
+// asking for its own, smaller count).
+const MAX_MESSAGES = 20;
 const DEFAULT_MESSAGES = 5;
 
 function buildProviderError(code, message) {
@@ -147,20 +150,50 @@ async function listReadonlyGmailMessages(options = {}, dependencies = {}) {
   const messages = listResponse && listResponse.data && Array.isArray(listResponse.data.messages)
     ? listResponse.data.messages
     : [];
-  const details = [];
-
-  for (const message of messages.slice(0, maxMessages)) {
+  const getMetadata = async (message) => {
     const detail = await gmail.users.messages.get({
       userId: 'me',
       id: message.id,
       format: 'metadata',
       metadataHeaders: ['From', 'Subject', 'Date', 'List-Unsubscribe'],
     });
-
-    details.push(detail.data || {});
-  }
+    return detail.data || {};
+  };
+  // Latency (10/10/2026): V3 reads up to 20. The first read goes alone, so a
+  // token refresh happens once on it; the rest run at most
+  // GMAIL_GET_CONCURRENCY at a time, each result in its original position.
+  // Any failed read fails the whole call, as the sequential loop did.
+  const selected = messages.slice(0, maxMessages);
+  const details = selected.length
+    ? [await getMetadata(selected[0]), ...await mapWithConcurrency(selected.slice(1), GMAIL_GET_CONCURRENCY, getMetadata)]
+    : [];
 
   return details.map(normalizeGmailMessage);
+}
+
+const GMAIL_GET_CONCURRENCY = 4;
+
+// At most `limit` workers; results keep the input order. After the first
+// error no new item starts and that error is thrown; nothing partial is
+// returned.
+async function mapWithConcurrency(items, limit, worker) {
+  const results = new Array(items.length);
+  let next = 0;
+  let failed = false;
+  const run = async () => {
+    while (!failed && next < items.length) {
+      const index = next;
+      next += 1;
+      try {
+        results[index] = await worker(items[index], index);
+      } catch (error) {
+        failed = true;
+        throw error;
+      }
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, run));
+  return results;
 }
 
 const MESSAGE_ID_PATTERN = /^[A-Za-z0-9_-]{1,128}$/;

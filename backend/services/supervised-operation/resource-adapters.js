@@ -2,7 +2,7 @@
 const { createPublicWebFetcher, parsePublicUrl, siteOf } = require('../executive-brain/mission-capabilities/public-web-fetcher');
 const { textRuns } = require('../executive-brain/mission-capabilities/company-research-extract');
 const { copy, freeze, fail } = require('./scope-session');
-const { extractSenderName, isDirectMessageSubject, isAutomatedSenderAddress } = require('../private-context/mail-priority');
+const { extractSenderName, isDirectMessageSubject, isAutomatedSenderAddress, selectRelevantMailCandidates } = require('../private-context/mail-priority');
 // Factories run in the trusted composition root/OAuth callback, not in a prompt.
 // The credential-bearing client stays in a closure and never enters agent input.
 // Provider contract (any new source — Drive, OneDrive, Outlook… — plugs in here
@@ -59,22 +59,30 @@ const cleanSourceText=value=>typeof value==='string'?value.replace(/[\p{Cf}͏]/g
 // Reuses the existing OAuth-backed private-context readers (the same ones the
 // Executive Chat dashboard uses). They exist only for Cliente Cero's Google
 // authorization today; any other owner gets no adapter, i.e. NEEDS_CONNECTION.
-// readers: { gmailReader(), calendarReader() } from buildDashboardReaders.
+// readers: { gmailReader({ maxMessages }), calendarReader() } from buildDashboardReaders.
+const MAIL_WINDOW=20; const MAIL_CANDIDATES=8;
 function createPrivateContextAdapters({scope,readers,origin='live'}){
  if(!readers||typeof readers.gmailReader!=='function'||typeof readers.calendarReader!=='function')return freeze({});
- const payload=async(reader,field)=>{
-  const context=await reader();
+ const payload=async(reader,field,options)=>{
+  const context=await reader(options);
   if(!context||context.capabilityGap||!context.privatePayload||!Array.isArray(context.privatePayload[field]))throw Object.assign(new Error('connection_required'),{code:'connection_required',failureKind:'connection'});
   return context.privatePayload[field];
  };
- const limit=(limits,list)=>list.slice(0,Math.min(Math.max(Number(limits&&limits.maxItems)||10,1),10));
+ const count=limits=>Math.min(Math.max(Number(limits&&limits.maxItems)||10,1),10);
+ const limit=(limits,list)=>list.slice(0,count(limits));
  // Each item carries its readable text plus a closed set of signals for the
  // local analysis (validateItems keeps only those); the sender is shown by
  // name when the header has one, never with its address (automatedSender is
  // only a boolean read from it).
- const mail=createReadonlyAdapter({scope,permissions:['mail.read'],origin,read:async({limits})=>limit(limits,await payload(readers.gmailReader,'messages')).map(m=>({
+ // Mail (10/10/2026): a window of MAIL_WINDOW recent messages is read and at
+ // most MAIL_CANDIDATES are kept here, by selectRelevantMailCandidates, before
+ // anything else sees them; the rest never leave this function.
+ // A reduced retry (maxItems 5) reads only 5, as before, so a slow window
+ // falls back instead of timing out again.
+ const windowOf=limits=>count(limits)>=MAIL_CANDIDATES?MAIL_WINDOW:count(limits);
+ const mail=createReadonlyAdapter({scope,permissions:['mail.read'],origin,read:async({limits})=>selectRelevantMailCandidates((await payload(readers.gmailReader,'messages',{maxMessages:windowOf(limits)})).slice(0,windowOf(limits)).map(m=>({
   text:[m.from?cleanSourceText(extractSenderName(m.from)).replace(/^"(.*)"$/,'$1'):'',cleanSourceText(m.subject),cleanSourceText(m.snippet)].filter(Boolean).join(' — ').slice(0,2000)||'(sin asunto)',
-  signals:{type:'mail',unread:m.unread===true,important:m.important===true,starred:m.starred===true,bulk:m.bulk===true,automatedSender:isAutomatedSenderAddress(m.from),directMessage:isDirectMessageSubject(cleanSourceText(m.subject)),category:m.category||null,date:m.date||null}}))});
+  signals:{type:'mail',unread:m.unread===true,important:m.important===true,starred:m.starred===true,bulk:m.bulk===true,automatedSender:isAutomatedSenderAddress(m.from),directMessage:isDirectMessageSubject(cleanSourceText(m.subject)),category:m.category||null,date:m.date||null}})),{maxItems:Math.min(count(limits),MAIL_CANDIDATES)})});
  const calendar=createReadonlyAdapter({scope,permissions:['calendar.read'],origin,read:async({limits})=>limit(limits,await payload(readers.calendarReader,'events')).map(e=>({
   text:[e.start,cleanSourceText(e.title),cleanSourceText(e.location)].filter(Boolean).join(' · ').slice(0,2000),
   signals:{type:'calendar',start:e.start||null,allDay:e.allDay===true}}))});
