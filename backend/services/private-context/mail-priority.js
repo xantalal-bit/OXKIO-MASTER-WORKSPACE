@@ -88,6 +88,46 @@ function classifyMailSignals(signals) {
   return classifyMailPriority({ important: countsAsImportant(s) || Boolean(s.starred), unread: Boolean(s.unread) });
 }
 
+// P2 mail selection (10/10/2026): V3 reads a recent window and analyses only
+// the candidates chosen here, so five new promotions can no longer push a
+// person's message out of the analysis. Selected is not prioritized: each
+// candidate is then classified by classifyMailSignals as before.
+// Selection order (most useful to review first): a direct message, a star,
+// Gmail's important mark where it counts, unread mail from a person, read
+// mail from a person, bulk mail; noise last and at most a small sample.
+const NOISE_SAMPLE = 3;
+
+function selectionRank(s) {
+  if (classifyMailSignals(s) === 'noise') return 6;
+  if (isDirect(s)) return 0;
+  if (s.starred === true) return 1;
+  if (countsAsImportant(s)) return 2;
+  if (isBulk(s)) return 5;
+  return s.unread === true ? 3 : 4;
+}
+
+const dateOf = (s) => { const ms = Date.parse(s.date); return Number.isFinite(ms) ? ms : 0; };
+
+// items: [{ signals }] in the order they were read. Returns at most maxItems
+// of them, in that same order. Within a rank the most recent wins; ties keep
+// the reading order, so the result is deterministic.
+function selectRelevantMailCandidates(items, { maxItems = 8 } = {}) {
+  const list = Array.isArray(items) ? items : [];
+  const max = Math.max(0, Math.floor(Number(maxItems)) || 0);
+  const ranked = list.map((item, index) => {
+    const s = (item && item.signals) || {};
+    return { index, rank: selectionRank(s), date: dateOf(s) };
+  }).sort((a, b) => a.rank - b.rank || b.date - a.date || a.index - b.index);
+  const chosen = [];
+  let noise = 0;
+  for (const entry of ranked) {
+    if (chosen.length >= max) break;
+    if (entry.rank === 6 && noise++ >= NOISE_SAMPLE) break;
+    chosen.push(entry.index);
+  }
+  return chosen.sort((a, b) => a - b).map((index) => list[index]);
+}
+
 // Moved unchanged from executive-orchestrator.js so V3 can reuse it.
 function extractSenderName(from) {
   const match = String(from || '').match(/^([^<]+)</);
@@ -101,5 +141,6 @@ module.exports = {
   countsAsImportant,
   isDirectMessageSubject,
   isAutomatedSenderAddress,
+  selectRelevantMailCandidates,
   extractSenderName,
 };

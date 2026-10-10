@@ -5,7 +5,10 @@ const {
   getGmailClient,
 } = require('../../integrations/googleOAuth');
 
-const MAX_MESSAGES = 10;
+// Ceiling for a caller that asks for more (10/10/2026: V3 reads a window of
+// 20 recent INBOX messages and selects locally; every other caller keeps
+// asking for its own, smaller count).
+const MAX_MESSAGES = 20;
 const DEFAULT_MESSAGES = 5;
 
 function buildProviderError(code, message) {
