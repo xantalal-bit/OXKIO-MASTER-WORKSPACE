@@ -48,10 +48,15 @@ function classifyGmailContextFailure(code) {
   return 'gmail_unavailable';
 }
 
+// Classic Executive Chat answers say so (10/10/2026) in the X-OXKIO-Handler
+// header, so V3 is never assumed. The body keeps its existing contract.
+const LEGACY_HANDLER = 'executive-chat-legacy';
+
 function sendJson(res, statusCode, data) {
   res.writeHead(statusCode, {
     'Content-Type': 'application/json; charset=utf-8',
     'Access-Control-Allow-Origin': '*',
+    'X-OXKIO-Handler': LEGACY_HANDLER,
   });
   res.end(JSON.stringify(data, null, 2));
 }
