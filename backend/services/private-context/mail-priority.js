@@ -51,10 +51,35 @@ function isDirectMessageSubject(subject) {
 
 const isDirect = (s) => s.directMessage === true && s.category !== 'promotions';
 
+// P2 bulk detection (10/10/2026, targeted real check): the real Railway
+// newsletter (hello@news.railway.app, updates, important) carries no
+// List-Unsubscribe header. Second closed signal, metadata only:
+// - automatedSender: the sender address has a whole token news, newsletter(s)
+//   or digest, in its local part (split on . _ + -) or in a subdomain label.
+//   noreply/no-reply alone is not one: it is also how invoices and receipts
+//   arrive.
+// - it counts as bulk only together with a Gmail category that holds
+//   automated mail (updates, social, promotions), never in primary.
+// A direct message keeps precedence over it, as over List-Unsubscribe.
+const AUTOMATED_SENDER_TOKENS = new Set(['news', 'newsletter', 'newsletters', 'digest']);
+const AUTOMATED_CATEGORIES = new Set(['updates', 'social', 'promotions']);
+
+function isAutomatedSenderAddress(from) {
+  const text = String(from || '');
+  const bracketed = text.match(/<([^<>]+)>\s*$/);
+  const address = (bracketed ? bracketed[1] : text).trim().toLowerCase();
+  const match = address.match(/^([^@\s]+)@([^@\s]+)$/);
+  if (!match) return false;
+  const subdomains = match[2].split('.').slice(0, -2);
+  return [...match[1].split(/[._+-]/), ...subdomains].some((token) => AUTOMATED_SENDER_TOKENS.has(token));
+}
+
+const isBulk = (s) => s.bulk === true || (s.automatedSender === true && AUTOMATED_CATEGORIES.has(s.category));
+
 // Whether Gmail's important mark counts for these signals.
 function countsAsImportant(signals) {
   const s = signals || {};
-  return s.important === true && (isDirect(s) || s.bulk !== true);
+  return s.important === true && (isDirect(s) || !isBulk(s));
 }
 
 function classifyMailSignals(signals) {
@@ -75,5 +100,6 @@ module.exports = {
   classifyMailSignals,
   countsAsImportant,
   isDirectMessageSubject,
+  isAutomatedSenderAddress,
   extractSenderName,
 };
