@@ -73,6 +73,7 @@ function createChatGateway({runtime,membershipProvider,adapterFactory=null,store
   if(state.status==='NEEDS_APPROVAL')return 'He preparado una propuesta para tu revisión. Necesito que decidas la estructura y autorices los cambios; no he modificado ni enviado nada.';
   if(state.status==='CANCELLED')return 'Misión cancelada.';
   if(state.status==='PAUSED')return 'Misión en pausa. Puedes reanudarla cuando quieras.';
+  if(state.diagnosis?.class==='call_reconciliation_required')return 'No sé si la última llamada al recurso de razonamiento llegó a ejecutarse (y a cobrarse). No la repito ni la sustituyo por otro recurso: este paso queda bloqueado hasta que se concilie. Las demás misiones siguen disponibles; no he ejecutado nada más.';
   if(state.diagnosis?.class==='capability_degraded')return 'Esta fuente ha fallado varias veces seguidas. Lo he registrado para revisión y no lo reintento automáticamente ahora; no he ejecutado nada más.';
   if(state.diagnosis?.class==='privacy_gate')return 'No he enviado la búsqueda: contenía datos personales y el proveedor no está autorizado para ellos. Reformúlala sin datos personales si quieres que busque.';
   return 'No puedo dar la misión por completada. El resultado queda pendiente de revisión.';

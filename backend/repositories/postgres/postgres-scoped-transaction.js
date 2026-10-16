@@ -31,6 +31,9 @@ async function runPostgresScopedTransaction({
     return result;
   } catch (error) {
     if (committing) { discard = true; throw commitUnknownError(); }
+    // A failed BEGIN leaves the session state unknown (it may even have
+    // opened a transaction): that connection never goes back to the pool.
+    if (!transactionStarted) discard = true;
     if (transactionStarted) {
       try {
         await client.query('ROLLBACK');

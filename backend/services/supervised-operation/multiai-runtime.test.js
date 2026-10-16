@@ -136,7 +136,7 @@ test('budget: 40 EUR stays 40 EUR; without a reviewed FX policy every paid call 
 });
 
 const usdBudget = (monthly, providers) => ({ human: { amount: monthly, currency: 'USD' }, providers: Object.fromEntries(Object.entries(providers).map(([k, v]) => [k, { amount: v, currency: 'USD' }])) });
-const call = async (ledger, modelId = 'openai:a', usage = BASIS) => { const r = await ledger.reserve('owner', { missionId: 'm-' + Math.random().toString(36).slice(2), modelId, estimatedUsd: 0.002, approvedDailyBudgetUsd: 1 }); return ledger.settle('owner', r, usage); };
+const call = async (ledger, modelId = 'openai:a', usage = BASIS) => { const r = await ledger.reserve('owner', { missionId: 'm-' + Math.random().toString(36).slice(2), modelId, estimatedUsd: 0.002, approvedDailyBudgetUsd: 1 }); await ledger.claimCall('owner', r); return ledger.settle('owner', r, usage); };
 
 // 8, 9, 10: monthly and per-provider hard stops; warnings never block.
 test('budget: monthly and per-provider hard stops; a provider without its own limit gets nothing', async () => {
@@ -193,6 +193,7 @@ test('failover: primary QUOTA_EXHAUSTED -> second provider, each call charged on
  assert.equal(executions[1].responseId, 'resp_fixture_1'); assert.equal(executions[0].responseId, null);
  // A settled reservation cannot be settled again.
  const reservation = await ledger.reserve('owner', { missionId: 'm-x', modelId: 'openai:primary', estimatedUsd: 0.002, approvedDailyBudgetUsd: 1 });
+ await ledger.claimCall('owner', reservation);
  await ledger.settle('owner', reservation, BASIS);
  assert.equal(await ledger.settle('owner', reservation, BASIS),0.002);
 });

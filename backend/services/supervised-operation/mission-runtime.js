@@ -209,6 +209,9 @@ function createSupervisedRuntime({membershipProvider,planner=null,conversationDe
       // No resource available now (limit, quota, budget, provider fault): the
       // task waits at this checkpoint, sources already sealed, and resumes later.
       if(error.code==='reasoning_resource_unavailable'&&error.transient&&!m.cancelled){m.waitingResource=error.attempts;trace(m,'CHECKPOINT',{reason:'resource_unavailable'});return {waitingFor:'tool'};}
+      // A paid call needs a human reconciliation: the task stops at this
+      // checkpoint (never retried, never waiting) until it is reconciled.
+      if(error.status==='CALL_RECONCILIATION_REQUIRED'&&!m.cancelled){m.reconciliation={code:error.code,detail:error.detail||null,attempts:error.attempts||[]};trace(m,'CHECKPOINT',{reason:'call_reconciliation_required'});return {waitingFor:'tool'};}
       if(!['reasoning_resource_unavailable','secret_context'].includes(error.code))throw classified(error);
       // No resource may receive this context (privacy, unreviewed price), or
       // every resource failed in a way waiting will not fix (credential,
@@ -283,6 +286,10 @@ function createSupervisedRuntime({membershipProvider,planner=null,conversationDe
   if(m.state.engine.state==='WAITING_TOOL'&&m.waitingResource){
    const attempts=m.waitingResource;m.waitingResource=null;m.status='WAITING_RESOURCE';
    m.diagnosis={class:'resource_unavailable',action:'WAIT_RESOURCE',attempts:copy(attempts)};trace(m,'WAITING_RESOURCE');return snapshot(m);
+  }
+  if(m.state.engine.state==='WAITING_TOOL'&&m.reconciliation){
+   const r=m.reconciliation;m.reconciliation=null;m.status='BLOCKED';
+   m.diagnosis={class:'call_reconciliation_required',code:r.code,detail:r.detail,action:'RECONCILE_CALL',attempts:copy(r.attempts)};trace(m,'CALL_RECONCILIATION_REQUIRED',{code:r.code});return snapshot(m);
   }
   m.status=m.state.engine.state;
   const retries=m.state.missionRetriesUsed;if(retries){metric(m.handle,'recovered');metric(m.handle,'retries');trace(m,'CHANGE_STRATEGY',{retries});}

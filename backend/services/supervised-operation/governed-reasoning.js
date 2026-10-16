@@ -18,7 +18,9 @@ const FAILURES = freeze({
  BUDGET_EXHAUSTED: 'BUDGET_EXHAUSTED', PROVIDER_ERROR: 'PROVIDER_ERROR', INVALID_OUTPUT: 'INVALID_OUTPUT',
  PRIVACY_BLOCKED: 'PRIVACY_BLOCKED', PRICING_UNREVIEWED: 'PRICING_UNREVIEWED', REQUEST_REJECTED: 'REQUEST_REJECTED',
  BUDGET_POLICY_REQUIRED: 'BUDGET_POLICY_REQUIRED', CIRCUIT_OPEN: 'CIRCUIT_OPEN', CAPABILITY_MISMATCH: 'CAPABILITY_MISMATCH',
+ CALL_RECONCILIATION_REQUIRED: 'CALL_RECONCILIATION_REQUIRED',
 });
+const RECONCILIATION_CODES = new Set(['call_reconciliation_required', 'ledger_reconciliation_required', 'reservation_conflict']);
 // Roles of a model call. REVIEWER is the caller's deterministic verifier
 // (accept); no second model reviews or approves an output in V1-A.
 const ROLES = freeze({ EXECUTOR: 'EXECUTOR', FALLBACK: 'FALLBACK', REVIEWER: 'DETERMINISTIC_VERIFIER' });
@@ -93,6 +95,14 @@ function createGovernedReasoner({ providers = [], privacyPolicy = DEFAULT_PRIVAC
    // into a retry (and a second charge).
    try { await spend.recordExecution({ missionId, taskId, taskType, provider: provider.provider, model: provider.model, resource: provider.modelId, region: provider.region || null, reviewer: ROLES.REVIEWER, ...fields }); } catch { /* the ledger already holds the charge */ }
   };
+  // A call that needs reconciliation stops this step: no failover (a second
+  // call for the same step) and no waiting (it never clears by itself).
+  const scopeKey = [missionId, taskId || callId].join(':');
+  const reconcile = (provider, error, privacyClass) => {
+   record(provider, FAILURES.CALL_RECONCILIATION_REQUIRED, privacyClass, error.detail); excluded();
+   const code = RECONCILIATION_CODES.has(error.code) ? error.code : 'call_reconciliation_required';
+   throw Object.assign(new Error(code), { code, status: FAILURES.CALL_RECONCILIATION_REQUIRED, detail: error.detail || null, attempts: freeze(attempts), transient: false, route: route.route });
+  };
   for (const provider of route.candidates.map(id => byId.get(id))) {
    const egress = authorizeEgress({ text: egressText, publicText, provider: { providerId: provider.provider, region: provider.region }, policy: privacyPolicy, derivedFromPrivate, floor });
    if (egress.privacyClass === PRIVACY_CLASSES.SECRET) fail('secret_context');
@@ -100,20 +110,28 @@ function createGovernedReasoner({ providers = [], privacyPolicy = DEFAULT_PRIVAC
    const estimatedUsd = estimates.get(provider.modelId);
    if (estimatedUsd === null) { previous = record(provider, FAILURES.PRICING_UNREVIEWED, egress.privacyClass); continue; }
    let reservation;
-   try { reservation = await spend.reserve({ idempotencyKey: [missionId,taskId||callId,provider.modelId].join(':'), missionId, modelId: provider.modelId, estimatedUsd, approvedDailyBudgetUsd }); }
-   catch (error) { if (error.code === 'planning_budget_gate') { previous = record(provider, BUDGET_DETAIL[error.detail] || FAILURES.BUDGET_EXHAUSTED, egress.privacyClass, error.detail); continue; } throw error; }
+   try { reservation = await spend.reserve({ idempotencyKey: [scopeKey,provider.modelId].join(':'), scopeKey, missionId, modelId: provider.modelId, estimatedUsd, approvedDailyBudgetUsd }); }
+   catch (error) { if (error.code === 'planning_budget_gate') { previous = record(provider, BUDGET_DETAIL[error.detail] || FAILURES.BUDGET_EXHAUSTED, egress.privacyClass, error.detail); continue; } if (error.reconciliation) reconcile(provider, error, egress.privacyClass); throw error; }
    // EXECUTOR is the first routed candidate that is called; any later call
    // replaces a routed candidate that failed (FALLBACK, with that reason).
    const role = calls === 0 && !previous ? ROLES.EXECUTOR : ROLES.FALLBACK; const fallbackReason = role === ROLES.FALLBACK && previous ? previous.failure : null; calls += 1;
    if(typeof spend.claimCall!=='function')fail('ledger_claim_required');
-   await spend.claimCall(reservation);
+   try { await spend.claimCall(reservation); } catch (error) { if (error.reconciliation) reconcile(provider, error, egress.privacyClass); throw error; }
    const started = clock();
    let result; let charged = 0;
-   try { result = await provider.reason(request); }
-   catch { await spend.markCallUnknown(reservation); fail('call_reconciliation_required'); }
+   try { result = await provider.reason(request); } catch { result = null; }
    const definitiveRejection = result && (result.status==='not_configured'||['reasoning_rate_limited','reasoning_auth_failed','reasoning_request_rejected','reasoning_invalid_output'].includes(result.errorCode));
-   if(!result || (result.status !== 'ok'&&!definitiveRejection)){await spend.markCallUnknown(reservation);fail('call_reconciliation_required');}
-   charged = await spend.settle(reservation, {...(result.usage || {}),definitiveRejection});
+   if(!result || (result.status !== 'ok'&&!definitiveRejection)){
+    // The provider may have executed (and billed) it: the call stays
+    // CALL_RECONCILIATION_REQUIRED in the ledger and is never repeated.
+    try { await spend.markCallUnknown(reservation); } catch { /* still claimed: its scope stays blocked */ }
+    await execution(provider, { role, fallbackReason, privacyClass: egress.privacyClass, estimatedCost: estimatedUsd, chargedCost: null, latencyMs: Math.max(0, clock() - started), responseId: null, status: 'FAILED', verificationStatus: 'NOT_RUN', failureKind: FAILURES.CALL_RECONCILIATION_REQUIRED });
+    reconcile(provider, { code: 'call_reconciliation_required', detail: (result && typeof result.errorCode === 'string' && result.errorCode) || 'call_uncertain' }, egress.privacyClass);
+   }
+   // A response whose settlement is not confirmed stays claimed (its scope
+   // blocked) until reconciled: it is never booked twice nor asked again.
+   try { charged = await spend.settle(reservation, result.usage || {}); }
+   catch (error) { reconcile(provider, error.reconciliation ? error : { code: 'call_reconciliation_required', detail: 'settle_unconfirmed' }, egress.privacyClass); }
    const latencyMs = Math.max(0, clock() - started);
    // Only an explicit true accepts; any other verdict is the defect code.
    const verdict = result && result.status === 'ok' ? accept(result.content) : null;

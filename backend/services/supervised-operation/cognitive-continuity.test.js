@@ -143,6 +143,23 @@ test('BUDGET_EXHAUSTED never calls the model and keeps the mission at its checkp
  } finally { s.cleanup(); }
 });
 
+test('an uncertain paid call (5xx) blocks only its mission step: no repeat, no failover, never WAIT_RESOURCE or budget', async () => {
+ const primary = provider('openai', 'primary', () => ({ status: 'error', errorCode: 'reasoning_upstream_error' }));
+ const fallback = provider('openai', 'fallback', synthesis);
+ const s = await setup({ providers: [primary, fallback] });
+ try {
+  await s.seed(); const r = await s.ask(QUESTION); const d = r.data.details;
+  assert.equal(primary.calls.length, 1); assert.equal(fallback.calls.length, 0);
+  assert.equal(d.status, 'BLOCKED'); assert.equal(d.diagnosis.class, 'call_reconciliation_required'); assert.equal(d.diagnosis.action, 'RECONCILE_CALL');
+  assert.deepEqual(d.diagnosis.attempts.map(a => a.failure), [FAILURES.CALL_RECONCILIATION_REQUIRED]);
+  assert.ok(events(d).includes('CALL_RECONCILIATION_REQUIRED')); assert.ok(!events(d).includes('WAITING_RESOURCE'));
+  assert.match(r.data.response, /No la repito ni la sustituyo por otro recurso/); assert.doesNotMatch(r.data.response, /presupuesto/);
+  // Another mission of the same owner is not blocked by it.
+  primary.behaviour = synthesis; const next = (await s.ask(QUESTION)).data.details;
+  assert.equal(next.status, 'COMPLETED'); assert.equal(primary.calls.length, 2); assert.equal(fallback.calls.length, 0);
+ } finally { s.cleanup(); }
+});
+
 test('no substitute: WAITING_RESOURCE survives a restart with the same integrity key and resumes from the checkpoint', async () => {
  const primary = provider('openai', 'primary', rateLimited); const fallback = provider('anthropic', 'fallback', rateLimited);
  const s = await setup({ providers: [primary, fallback] });
