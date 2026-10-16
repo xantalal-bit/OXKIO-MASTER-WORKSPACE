@@ -189,9 +189,9 @@ test('governed reasoner classifies each failure type and is disabled without bud
  ];
  for (const [behaviour, expected, transient] of behaviours) {
   const p = provider('openai', 'p', behaviour);
-  const spend = { estimate: () => 0.001, reserve: () => ({}), settle: () => 0.001 };
+  const spend = { estimate: () => 0.001, reserve: () => ({}), claimCall:()=>true,markCallUnknown:()=>true,settle: () => 0.001 };
   const r = createGovernedReasoner({ providers: [p], privacyPolicy: { confidentialProviders: [EU('openai')] }, approvedDailyBudgetUsd: 1 });
-  await assert.rejects(r.reason({ objective: 'objetivo', egressText: 'objetivo', request: {}, basis: {}, spend, missionId: 'm-1' }), e => e.code === 'reasoning_resource_unavailable' && e.attempts[0].failure === expected && e.transient === transient);
+  await assert.rejects(r.reason({ objective: 'objetivo', egressText: 'objetivo', request: {}, basis: {}, spend, missionId: 'm-1' }), e => expected === FAILURES.PROVIDER_ERROR ? e.code === 'call_reconciliation_required' : e.code === 'reasoning_resource_unavailable' && e.attempts[0].failure === expected && e.transient === transient);
  }
 });
 

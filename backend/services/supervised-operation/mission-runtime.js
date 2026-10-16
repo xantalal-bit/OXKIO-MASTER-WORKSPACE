@@ -107,7 +107,7 @@ function createSupervisedRuntime({membershipProvider,planner=null,conversationDe
  function check(m){ if(m.cancelled)fail('cancelled');if(m.paused)fail('paused'); }
  function snapshot(m){const cost=ledger.mission(m.handle,m.id);return freeze(copy({id:m.id,conversationId:m.conversationId,status:m.status,outcome:m.status==='COMPLETED'?OUTCOMES.CAN_EXECUTE:m.status,result:m.result||null,approvalId:m.approvalId||null,connectionRequests:m.gaps||[],diagnosis:m.diagnosis||null,planSources:labelsOf((m.plan||[]).map(s=>s.capability)),executionEnabled:false,estimatedCostUsd:cost.chargedUsd,actualCostUsd:null,cost,trace:m.trace||[]}));}
  function trace(m,event,fields={}){m.trace.push({event,at:now(),...fields});if(m.trace.length>150)m.trace.shift();}
- function spendFor(handle){return freeze({estimate:ledger.estimate,reserve:options=>ledger.reserve(handle,options),settle:(reservation,usage)=>ledger.settle(handle,reservation,usage),budget:()=>ledger.budget(handle),recordExecution:execution=>ledger.recordExecution(handle,execution)});}
+ function spendFor(handle){return freeze({estimate:ledger.estimate,claimCall:r=>ledger.claimCall(handle,r),markCallUnknown:r=>ledger.markCallUnknown(handle,r),reserve:options=>ledger.reserve(handle,options),settle:(reservation,usage)=>ledger.settle(handle,reservation,usage),budget:()=>ledger.budget(handle),recordExecution:execution=>ledger.recordExecution(handle,execution)});}
  function engineFor(m){
   const evidence=createEvidenceRegistry({trustedRegistrars:[REGISTRAR],now});const registrar=evidence.registrar(REGISTRAR);
   const additions=Object.entries(DEFINITIONS).filter(([id])=>!AGENT_DECLARATIONS.some(a=>a.capabilities.includes(id))).map(([id,d])=>declaration('v3-'+id.replace(/\./g,'-'),d.role,id));
@@ -124,7 +124,7 @@ function createSupervisedRuntime({membershipProvider,planner=null,conversationDe
   }
   let sequence=m.state.tasks.reduce((n,t)=>n+t.evidenceRefs.length,0);
   async function readSource(step,d,contract,dependencies,scope){
-   const adapter=connections.capture(m.handle,d.provider,d.scope);metric(m.handle,'toolCalls');ledger.recordTool(m.handle,m.id,step.capability);
+   const adapter=connections.capture(m.handle,d.provider,d.scope);metric(m.handle,'toolCalls');await ledger.recordTool(m.handle,m.id,step.capability);
    let query='';let urls=[];
    if(step.capability==='web.search'){
     // Only a minimized query (topic words, never source content) may leave,
@@ -360,7 +360,7 @@ function createSupervisedRuntime({membershipProvider,planner=null,conversationDe
   if(!conversationDecider)return {ids:[]};
   const view=capabilityView(m.handle,m.intention);
   try{
-   const decision=await conversationDecider(freeze({intention:m.intention,capabilities:view.plannable,capabilityStatus:view.capabilities,conversationContext:{objective:m.intention,lastUser:m.intention,lastResponse:'He consultado '+consulted.join(' y ')+' y no contiene información para esto.'}}),{spend:spendFor(m.handle),missionId:m.id,derivedFromPrivate:false});
+   const decision=await conversationDecider(freeze({intention:m.intention,capabilities:view.plannable,capabilityStatus:view.capabilities,conversationContext:{objective:m.intention,lastUser:m.intention,lastResponse:'He consultado '+consulted.join(' y ')+' y no contiene información para esto.'}}),{spend:spendFor(m.handle),missionId:m.id,callId:'objective-replan',derivedFromPrivate:false});
    await sessions.current(m.handle);trace(m,'CONVERSATIONAL_DECISION',{action:decision.action,evidence:decision.evidence||null});
    if(decision.action==='plan'){const plan=capabilities.validatePlan(decision.plan);return {ids:[...new Set(plan.map(s=>s.capability))].filter(id=>pending.includes(id)),analyze:plan.some(s=>s.capability==='data.analyze')};}
    if(decision.action==='clarify')return {ids:[],question:decision.message};

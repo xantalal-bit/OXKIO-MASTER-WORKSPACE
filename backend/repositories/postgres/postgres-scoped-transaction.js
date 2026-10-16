@@ -18,6 +18,7 @@ async function runPostgresScopedTransaction({
 
   let transactionStarted = false;
   let committing = false;
+  let discard = false;
   try {
     await client.query('BEGIN');
     transactionStarted = true;
@@ -29,17 +30,18 @@ async function runPostgresScopedTransaction({
     await client.query('COMMIT');
     return result;
   } catch (error) {
-    if (committing) throw commitUnknownError();
+    if (committing) { discard = true; throw commitUnknownError(); }
     if (transactionStarted) {
       try {
         await client.query('ROLLBACK');
       } catch {
-        // Preserve the original sanitized failure; the connection is released below.
+        discard = true;
+        // Preserve the sanitized failure and discard the connection.
       }
     }
     throw sanitizeError(error);
   } finally {
-    if (client && typeof client.release === 'function') client.release();
+    if (client && typeof client.release === 'function') client.release(discard ? true : undefined);
   }
 }
 

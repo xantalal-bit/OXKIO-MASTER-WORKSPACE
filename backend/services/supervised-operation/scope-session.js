@@ -37,6 +37,11 @@ function createScopedStore(sessions, { maxRecords = 2000 } = {}) {
   function remove(handle, kind, id) { const k = key(handle, kind, id); if (rows.delete(k)) { const owner = sessions.key(handle); counts.set(owner, counts.get(owner) - 1); } }
   function get(handle, kind, id) { if (!ID.test(id)) fail('resource_id_invalid'); const v = rows.get(key(handle, kind, id)); if (!v) fail('resource_not_found'); return copy(v); }
   function list(handle, kind) { const namespace = sessions.key(handle); return [...rows].filter(([k]) => { const parts = JSON.parse(k); return parts[0] === namespace && parts[1] === kind; }).map(([, v]) => copy(v)); }
-  return Object.freeze({ put, get, list, remove, newId: () => randomUUID(), persistence: 'EPHEMERAL' });
+  function transaction(handle,operation){
+    const before=new Map(rows);const previousCounts=new Map(counts);
+    try{const result=operation({put,get,list,remove,newId:randomUUID});if(result&&typeof result.then==='function')fail('transaction_async_not_supported');return result;}
+    catch(e){rows.clear();counts.clear();for(const [k,v] of before)rows.set(k,v);for(const [k,v] of previousCounts)counts.set(k,v);throw e;}
+  }
+  return Object.freeze({ put, get, list, remove, transaction, newId: () => randomUUID(), persistence: 'EPHEMERAL' });
 }
 module.exports = { createScopeSessions, createScopedStore, copy, freeze, fail };

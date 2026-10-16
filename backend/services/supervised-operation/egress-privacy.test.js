@@ -64,7 +64,7 @@ test('first-person requests are classified by content: INTERNAL unless they carr
 test('governed reasoning: own words reach the INTERNAL provider; a third party, private context or a secret never leave', async () => {
  const calls = []; const provider = { status: 'ready', provider: 'fixture', region: 'eu', modelId: 'fixture:model', reason: async request => { calls.push(request); return { status: 'ok', content: {}, usage: {} }; } };
  const reasoner = createGovernedReasoner({ providers: [provider], privacyPolicy: { publicExternalAllowed: true, internalProviders: [{ providerId: 'fixture' }], confidentialProviders: [] }, approvedDailyBudgetUsd: 1, requestFloor: 'INTERNAL' });
- const spend = { estimate: () => 0.001, reserve: () => ({}), settle: () => 0.001 };
+ const spend = { estimate: () => 0.001, reserve: () => ({}), claimCall:()=>true,markCallUnknown:()=>true,settle: () => 0.001 };
  const ask = (objective, extra = {}) => reasoner.reason({ objective, egressText: objective, request: {}, basis: {}, spend, missionId: 'fixture', ...extra });
  const ok = await ask('Organiza mi semana'); assert.equal(ok.privacyClass, 'INTERNAL'); assert.equal(calls.length, 1);
  for (const [objective, extra] of [['Prepara la conversación con mi jefe'], ['Analiza mi hipoteca de 180.000 €'], ['Organiza mi semana', { derivedFromPrivate: true }], ['Organiza mi semana', { egressText: 'Organiza mi semana\nReunión con el cliente: ana@example.org' }]]) {

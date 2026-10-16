@@ -60,7 +60,7 @@ function createGovernedReasoner({ providers = [], privacyPolicy = DEFAULT_PRIVAC
  // configured provider and a positive approved budget. Otherwise the caller
  // keeps its deterministic behaviour and no text ever leaves.
  const enabled = candidates.length > 0 && approvedDailyBudgetUsd > 0;
- async function reason({ objective, egressText, publicText = '', derivedFromPrivate = false, request, basis, spend, missionId, taskId = null, taskType = null, requiredTier = null, accept = () => true, onAttempt = () => {} }) {
+ async function reason({ objective, egressText, publicText = '', derivedFromPrivate = false, request, basis, spend, missionId, taskId = null, callId = 'reason', taskType = null, requiredTier = null, accept = () => true, onAttempt = () => {} }) {
   if (!enabled) fail('reasoning_not_enabled');
   if (!spend || typeof missionId !== 'string' || typeof egressText !== 'string' || typeof publicText !== 'string' || typeof objective !== 'string') fail('reasoning_context_invalid');
   const floor = identifiesPerson(objective) ? PRIVACY_CLASSES.CONFIDENTIAL : requestFloor;
@@ -87,11 +87,11 @@ function createGovernedReasoner({ providers = [], privacyPolicy = DEFAULT_PRIVAC
   // they were never in the route, so the trace keeps the real attempts first.
   const excluded = () => { for (const x of route.excluded) record(byId.get(x.id), x.failure, classified.privacyClass, x.detail); };
   let calls = 0; let previous = null;
-  const execution = (provider, fields) => {
+  const execution = async (provider, fields) => {
    if (typeof spend.recordExecution !== 'function') return;
    // The paid call is already settled: a failed telemetry write never turns
    // into a retry (and a second charge).
-   try { spend.recordExecution({ missionId, taskId, taskType, provider: provider.provider, model: provider.model, resource: provider.modelId, region: provider.region || null, reviewer: ROLES.REVIEWER, ...fields }); } catch { /* the ledger already holds the charge */ }
+   try { await spend.recordExecution({ missionId, taskId, taskType, provider: provider.provider, model: provider.model, resource: provider.modelId, region: provider.region || null, reviewer: ROLES.REVIEWER, ...fields }); } catch { /* the ledger already holds the charge */ }
   };
   for (const provider of route.candidates.map(id => byId.get(id))) {
    const egress = authorizeEgress({ text: egressText, publicText, provider: { providerId: provider.provider, region: provider.region }, policy: privacyPolicy, derivedFromPrivate, floor });
@@ -100,28 +100,32 @@ function createGovernedReasoner({ providers = [], privacyPolicy = DEFAULT_PRIVAC
    const estimatedUsd = estimates.get(provider.modelId);
    if (estimatedUsd === null) { previous = record(provider, FAILURES.PRICING_UNREVIEWED, egress.privacyClass); continue; }
    let reservation;
-   try { reservation = spend.reserve({ missionId, modelId: provider.modelId, estimatedUsd, approvedDailyBudgetUsd }); }
+   try { reservation = await spend.reserve({ idempotencyKey: [missionId,taskId||callId,provider.modelId].join(':'), missionId, modelId: provider.modelId, estimatedUsd, approvedDailyBudgetUsd }); }
    catch (error) { if (error.code === 'planning_budget_gate') { previous = record(provider, BUDGET_DETAIL[error.detail] || FAILURES.BUDGET_EXHAUSTED, egress.privacyClass, error.detail); continue; } throw error; }
    // EXECUTOR is the first routed candidate that is called; any later call
    // replaces a routed candidate that failed (FALLBACK, with that reason).
    const role = calls === 0 && !previous ? ROLES.EXECUTOR : ROLES.FALLBACK; const fallbackReason = role === ROLES.FALLBACK && previous ? previous.failure : null; calls += 1;
+   if(typeof spend.claimCall!=='function')fail('ledger_claim_required');
+   await spend.claimCall(reservation);
    const started = clock();
    let result; let charged = 0;
    try { result = await provider.reason(request); }
-   catch (error) { result = { status: 'error', errorCode: 'reasoning_unavailable' }; }
-   finally { charged = spend.settle(reservation, (result && result.usage) || {}); }
+   catch { await spend.markCallUnknown(reservation); fail('call_reconciliation_required'); }
+   const definitiveRejection = result && (result.status==='not_configured'||['reasoning_rate_limited','reasoning_auth_failed','reasoning_request_rejected','reasoning_invalid_output'].includes(result.errorCode));
+   if(!result || (result.status !== 'ok'&&!definitiveRejection)){await spend.markCallUnknown(reservation);fail('call_reconciliation_required');}
+   charged = await spend.settle(reservation, {...(result.usage || {}),definitiveRejection});
    const latencyMs = Math.max(0, clock() - started);
    // Only an explicit true accepts; any other verdict is the defect code.
    const verdict = result && result.status === 'ok' ? accept(result.content) : null;
    const responseId = result && result.evidence && typeof result.evidence.responseId === 'string' ? result.evidence.responseId : null;
    const base = { role, fallbackReason, privacyClass: egress.privacyClass, estimatedCost: estimatedUsd, chargedCost: charged, latencyMs, responseId };
    if (verdict === true) {
-    execution(provider, { ...base, status: 'ACCEPTED', verificationStatus: 'PASS', failureKind: null });
+    await execution(provider, { ...base, status: 'ACCEPTED', verificationStatus: 'PASS', failureKind: null });
     excluded();
     return freeze({ content: result.content, resource: provider.modelId, region: provider.region || null, privacyClass: egress.privacyClass, role, usage: freeze({ ...(result.usage || {}) }), evidence: freeze({ ...(result.evidence || {}) }), chargedUsd: charged, attempts: freeze(attempts) });
    }
    const answered = result && result.status === 'ok'; const failure = answered ? FAILURES.INVALID_OUTPUT : classifyResult(result);
-   execution(provider, { ...base, status: answered ? 'REJECTED' : 'FAILED', verificationStatus: answered ? 'REJECTED' : 'NOT_RUN', failureKind: failure });
+   await execution(provider, { ...base, status: answered ? 'REJECTED' : 'FAILED', verificationStatus: answered ? 'REJECTED' : 'NOT_RUN', failureKind: failure });
    previous = record(provider, failure, egress.privacyClass, answered ? (typeof verdict === 'string' ? verdict : 'verifier_rejected') : result && result.errorCode);
   }
   excluded();

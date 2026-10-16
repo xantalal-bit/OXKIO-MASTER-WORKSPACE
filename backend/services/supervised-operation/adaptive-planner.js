@@ -62,7 +62,7 @@ function createAdaptivePlanner({ provider, providers, privacyPolicy = DEFAULT_PR
   const telemetrySpend = typeof spend.recordExecution === 'function' ? { ...spend, recordExecution: execution => spend.recordExecution({ ...execution,
    ...(acceptedAnswer && execution.status === 'ACCEPTED' ? { taskType: 'conversation.answer' } : {}),
   }) } : spend;
-  const result = await reasoner.reason({ objective: egressText, egressText, derivedFromPrivate, request, basis: { inputTokens: Math.ceil(egressText.length / 3), outputTokens: 900 }, spend: telemetrySpend, missionId,
+  const result = await reasoner.reason({ objective: egressText, egressText, derivedFromPrivate, request, basis: { inputTokens: Math.ceil(egressText.length / 3), outputTokens: 900 }, spend: telemetrySpend, missionId, callId: context.callId || (conversational ? 'decision' : 'planning'),
    accept: c => {
     // Distinct fixed codes so a live rejection can be diagnosed without content.
     if (!c || typeof c !== 'object' || Object.keys(c).some(k => !['action','message','plan'].includes(k))) return 'planning_invalid_shape';
