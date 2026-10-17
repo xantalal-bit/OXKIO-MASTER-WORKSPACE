@@ -573,8 +573,18 @@ function auditClosures(registry, prFacts) {
   return deepFreeze(findings);
 }
 
+// A front contradicted by evidence it has not yet answered (e.g. main red).
+function contradicted(entry) {
+  return entry.state !== "CLOSED" && latestContradictionAt(entry) > 0 && closureGaps(entry).includes("ci_green");
+}
+
+// Priority first; at equal priority an unanswered contradiction outranks
+// paperwork, and a PENDING front outranks one waiting on a gate.
 function byPriority(a, b) {
-  return PRIORITIES.indexOf(a.priority) - PRIORITIES.indexOf(b.priority) || a.id.localeCompare(b.id);
+  return PRIORITIES.indexOf(a.priority) - PRIORITIES.indexOf(b.priority)
+    || Number(contradicted(b)) - Number(contradicted(a))
+    || STATES.indexOf(a.state) - STATES.indexOf(b.state)
+    || a.id.localeCompare(b.id);
 }
 
 function nextAction(registry) {
@@ -607,7 +617,11 @@ function describeEvent(event) {
 function buildDailyReport({ registry, date, since, now = new Date().toISOString() } = {}) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(String(date))) fail("date_invalid", String(date));
   const from = since || `${date}T00:00:00.000Z`;
-  const events = registry.events.filter((event) => time(event.at) >= time(from) && event.type !== "daily_report");
+  const events = registry.events
+    .filter((event) => time(event.at) >= time(from) && event.type !== "daily_report")
+    .map((event, index) => ({ event, index }))
+    .sort((a, b) => time(a.event.at) - time(b.event.at) || a.index - b.index)
+    .map(({ event }) => event);
   const list = (items, render, empty = "- (ninguno)") => (items.length ? items.map(render).join("\n") : empty);
   const entries = [...registry.entries].sort(byPriority);
   const of = (state) => entries.filter((entry) => entry.state === state);

@@ -313,10 +313,16 @@ test('GitHub CI runs become evidence for their fronts, and CLOSED fronts are aud
 });
 
 test('the Parte Diario is generated from the registry, names its source and what to audit', () => {
-  const { registry } = reconcile({ registry: fixture(), now: T2, observations: [
+  const paperwork = {
+    id: 'CZ-AAA-DOC', project: 'OXKIO', scope: 'docs', title: 'Documento pendiente de merge', aliases: [], state: 'BLOCKED',
+    priority: 'P1', blockedBy: 'puerta humana: merge', decision: 'd', reopenCondition: 'r', nextAction: 'Merge del documento.',
+    changes: 'c', confidence: 'high', version: 1, updatedAt: T1, evidence: [],
+  };
+  const { registry } = reconcile({ registry: fixture([closedFront(), paperwork]), now: T2, observations: [
     { entry: 'CZ-PG-RLS', ...ev('ci:500#approval-postgres-integration', 'ci_failure', 'failure', T2, 'falla en main') },
   ] });
-  const blocked = transition({ registry, id: 'CZ-PG-RLS', state: 'BLOCKED', blockedBy: 'puerta humana: push', nextAction: 'Autorizar push del arreglo.', now: T3 });
+  const late = continuity.recordEvent({ registry, now: T3, event: { type: 'human_decision', at: T0, note: 'Decisión anotada tarde.' } });
+  const blocked = transition({ registry: late, id: 'CZ-PG-RLS', state: 'BLOCKED', blockedBy: 'puerta humana: push', nextAction: 'Autorizar push del arreglo.', now: T3 });
   const report = buildDailyReport({ registry: blocked, date: '2026-10-17', now: NOW });
   const md = report.markdown;
   assert.match(md, /^# Parte Diario OXKIO — 2026-10-17/);
@@ -328,9 +334,13 @@ test('the Parte Diario is generated from the registry, names its source and what
   ].forEach((section) => assert.match(md, new RegExp(`## ${section}`)));
   assert.match(md, /DEFECTO DE CONTINUIDAD · CZ-PG-RLS/);
   assert.match(md, /CZ-PG-RLS\*\* \[P1\] PostgreSQL\/RLS real — bloqueado por: puerta humana: push/);
-  assert.match(md, /- CZ-PG-RLS \(BLOCKED\): Autorizar push del arreglo\./);
+  // At equal priority the front contradicted by unanswered evidence goes first.
+  assert.match(md, /## Siguiente acción\n- CZ-PG-RLS \(BLOCKED\): Autorizar push del arreglo\./);
+  // Material changes in chronological order, whatever the order they were noted in.
+  const changesSection = md.split('## Cambios materiales')[1].split('## Hitos')[0];
+  assert.ok(changesSection.indexOf('Decisión anotada tarde.') < changesSection.indexOf('DEFECTO DE CONTINUIDAD'));
   assert.match(md, /- ci:500#approval-postgres-integration/);
-  assert.deepEqual(report.summary.counts, { CLOSED: 0, PENDING: 0, BLOCKED: 1, BACKLOG: 0 });
+  assert.deepEqual(report.summary.counts, { CLOSED: 0, PENDING: 0, BLOCKED: 2, BACKLOG: 0 });
   assert.throws(() => buildDailyReport({ registry: blocked, date: '17/10/2026' }), { code: 'date_invalid' });
 });
 
