@@ -1,7 +1,7 @@
 {
   "schema": "oxkio.continuity-registry/v1",
-  "revision": 1,
-  "updatedAt": "2026-10-17T17:52:15.000Z",
+  "revision": 17,
+  "updatedAt": "2026-10-17T18:05:16.450Z",
   "canon": {
     "path": "KNOWLEDGE-CURATOR/CLIENT-ZERO/XATAI-CLIENT-ZERO-CANON.md",
     "issue": "issue:49",
@@ -24,7 +24,14 @@
   "authorizations": [
     {
       "id": "AUTH-CZ-SELF-REPAIR",
-      "actions": ["test_only_fix", "local_commit", "create_branch", "create_worktree", "ephemeral_local_db", "read_github"],
+      "actions": [
+        "test_only_fix",
+        "local_commit",
+        "create_branch",
+        "create_worktree",
+        "ephemeral_local_db",
+        "read_github"
+      ],
       "standing": true,
       "grantedBy": "José Antonio",
       "grantedAt": "2026-10-17T16:58:16.000Z",
@@ -33,9 +40,14 @@
     },
     {
       "id": "AUTH-PR46-PUSH-PR",
-      "actions": ["push", "open_pr"],
+      "actions": [
+        "push",
+        "open_pr"
+      ],
       "standing": false,
-      "scope": { "pr": 46 },
+      "scope": {
+        "pr": 46
+      },
       "consumed": true,
       "grantedBy": "José Antonio",
       "grantedAt": "2026-10-17T13:40:00.000Z",
@@ -44,9 +56,14 @@
     },
     {
       "id": "AUTH-PR47-TEST-FIX",
-      "actions": ["test_only_fix", "push"],
+      "actions": [
+        "test_only_fix",
+        "push"
+      ],
       "standing": false,
-      "scope": { "pr": 47 },
+      "scope": {
+        "pr": 47
+      },
       "consumed": true,
       "grantedBy": "José Antonio",
       "grantedAt": "2026-10-17T14:48:00.000Z",
@@ -60,7 +77,13 @@
       "project": "OXKIO",
       "scope": "ci",
       "title": "CI backend en Node 22 y Node 24",
-      "aliases": ["node 22", "node 24", "node22", "matriz node", "ci node"],
+      "aliases": [
+        "node 22",
+        "node 24",
+        "node22",
+        "matriz node",
+        "ci node"
+      ],
       "state": "CLOSED",
       "priority": "P1",
       "decision": "backend-tests corre en Node 22 (runtime de la imagen) y Node 24; el job gate backend-tests es el check requerido de main.",
@@ -69,14 +92,85 @@
       "changes": "Alta en el registro con la evidencia de PR #47.",
       "confidence": "high",
       "requiresRealTest": false,
-      "signals": ["backend-tests (node 22)", "backend-tests (node 24)"],
-      "version": 1,
-      "updatedAt": "2026-10-17T17:52:15.000Z",
+      "signals": [
+        "backend-tests (node 22)",
+        "backend-tests (node 24)"
+      ],
+      "version": 6,
+      "updatedAt": "2026-10-17T17:57:33.699Z",
       "evidence": [
-        { "ref": "ci:39041516033#backend-tests (node 22)", "kind": "ci_failure", "result": "failure", "observedAt": "2026-10-17T14:43:37Z", "source": "github-actions:ci/oxkio-node22-matrix-20261017@9c98f76", "summary": "Node 22 falló en PR #47 @ 9c98f76: 5 tests cancelledByParent en quality-incident-registry." },
-        { "ref": "ci:39042819422#backend-tests (node 22)", "kind": "ci_green", "result": "success", "observedAt": "2026-10-17T15:06:13Z", "source": "github-actions:ci/oxkio-node22-matrix-20261017@f00edfa", "summary": "PR #47 @ f00edfa: Node 22 y Node 24 verdes tras el keepalive del test." },
-        { "ref": "pr:47", "kind": "pr_merged", "result": "success", "observedAt": "2026-10-17T15:10:57Z", "source": "github", "summary": "PR #47 mergeada en dc339ce por la cuenta propietaria xantalal-bit." },
-        { "ref": "ci:39043920387#backend-tests (node 22)", "kind": "ci_green", "result": "success", "observedAt": "2026-10-17T15:16:14Z", "source": "github-actions:main@dc339ce", "summary": "push a main dc339ce: backend-tests verde en Node 22 y Node 24." }
+        {
+          "ref": "ci:39041516033#backend-tests (node 22)",
+          "kind": "ci_failure",
+          "result": "failure",
+          "observedAt": "2026-10-17T14:43:37Z",
+          "source": "github-actions:ci/oxkio-node22-matrix-20261017@9c98f76",
+          "summary": "Node 22 falló en PR #47 @ 9c98f76: 5 tests cancelledByParent en quality-incident-registry."
+        },
+        {
+          "ref": "ci:39042819422#backend-tests (node 22)",
+          "kind": "ci_green",
+          "result": "success",
+          "observedAt": "2026-10-17T15:06:13Z",
+          "source": "github-actions:ci/oxkio-node22-matrix-20261017@f00edfa",
+          "summary": "PR #47 @ f00edfa: Node 22 y Node 24 verdes tras el keepalive del test."
+        },
+        {
+          "ref": "pr:47",
+          "kind": "pr_merged",
+          "result": "success",
+          "observedAt": "2026-10-17T15:10:57Z",
+          "source": "github",
+          "summary": "PR #47 mergeada en dc339ce por la cuenta propietaria xantalal-bit."
+        },
+        {
+          "ref": "ci:39043920387#backend-tests (node 22)",
+          "kind": "ci_green",
+          "result": "success",
+          "observedAt": "2026-10-17T15:16:14Z",
+          "source": "github-actions:main@dc339ce",
+          "summary": "push a main dc339ce: backend-tests verde en Node 22 y Node 24."
+        },
+        {
+          "ref": "ci:39049802907#backend-tests (node 22)",
+          "kind": "ci_green",
+          "result": "success",
+          "observedAt": "2026-10-17T16:37:40Z",
+          "source": "github-actions:main@67b8fe9",
+          "summary": "backend-tests (node 22) success en push main @ 67b8fe9"
+        },
+        {
+          "ref": "ci:39049802907#backend-tests (node 24)",
+          "kind": "ci_green",
+          "result": "success",
+          "observedAt": "2026-10-17T16:40:48Z",
+          "source": "github-actions:main@67b8fe9",
+          "summary": "backend-tests (node 24) success en push main @ 67b8fe9"
+        },
+        {
+          "ref": "ci:39043920387#backend-tests (node 24)",
+          "kind": "ci_green",
+          "result": "success",
+          "observedAt": "2026-10-17T15:16:16Z",
+          "source": "github-actions:main@dc339ce",
+          "summary": "backend-tests (node 24) success en push main @ dc339ce"
+        },
+        {
+          "ref": "ci:39053864531#backend-tests (node 24)",
+          "kind": "ci_green",
+          "result": "success",
+          "observedAt": "2026-10-17T17:33:38Z",
+          "source": "github-actions:docs/client-zero-xatai-canon-20261017@6dc4afc",
+          "summary": "backend-tests (node 24) success en pull_request docs/client-zero-xatai-canon-20261017 @ 6dc4afc"
+        },
+        {
+          "ref": "ci:39053864531#backend-tests (node 22)",
+          "kind": "ci_green",
+          "result": "success",
+          "observedAt": "2026-10-17T17:33:13Z",
+          "source": "github-actions:docs/client-zero-xatai-canon-20261017@6dc4afc",
+          "summary": "backend-tests (node 22) success en pull_request docs/client-zero-xatai-canon-20261017 @ 6dc4afc"
+        }
       ]
     },
     {
@@ -84,7 +178,13 @@
       "project": "OXKIO",
       "scope": "supervised-operation",
       "title": "Ledger V3: PID fail-closed y residuos .tmp/.stale",
-      "aliases": ["ledger pid", "pid reuse", "ledger", "memory-store", "residuos tmp stale"],
+      "aliases": [
+        "ledger pid",
+        "pid reuse",
+        "ledger",
+        "memory-store",
+        "residuos tmp stale"
+      ],
       "state": "CLOSED",
       "priority": "P1",
       "decision": "Solo un int32 positivo identifica a un titular y solo ESRCH prueba su muerte; los residuos .tmp/.stale se barren solo con evidencia. Gaps conocidos no bloqueantes en CZ-LEDGER-PID-GAPS.",
@@ -96,10 +196,38 @@
       "version": 1,
       "updatedAt": "2026-10-17T17:52:15.000Z",
       "evidence": [
-        { "ref": "ci:39039180727#backend-tests", "kind": "ci_green", "result": "success", "observedAt": "2026-10-17T14:09:32Z", "source": "github-actions:agent/oxkio-v3-ledger-atomicity-fix-20261016@5571197", "summary": "PR #46 @ 5571197: backend-tests y docker-image-build verdes." },
-        { "ref": "test:ledger-pid-residues@5571197", "kind": "real_test", "result": "success", "observedAt": "2026-10-17T14:09:32Z", "source": "github-actions:agent/oxkio-v3-ledger-atomicity-fix-20261016@5571197", "summary": "ledger-pid-residues.test.js: 10 tests con procesos hijos y crashes reales (process.exit), dentro de backend-tests." },
-        { "ref": "pr:46", "kind": "pr_merged", "result": "success", "observedAt": "2026-10-17T14:25:31Z", "source": "github", "summary": "PR #46 mergeada en 60f2073 por la cuenta propietaria xantalal-bit." },
-        { "ref": "ci:39040696789#backend-tests", "kind": "ci_green", "result": "success", "observedAt": "2026-10-17T14:32:08Z", "source": "github-actions:main@60f2073", "summary": "push a main 60f2073: backend-tests verde." }
+        {
+          "ref": "ci:39039180727#backend-tests",
+          "kind": "ci_green",
+          "result": "success",
+          "observedAt": "2026-10-17T14:09:32Z",
+          "source": "github-actions:agent/oxkio-v3-ledger-atomicity-fix-20261016@5571197",
+          "summary": "PR #46 @ 5571197: backend-tests y docker-image-build verdes."
+        },
+        {
+          "ref": "test:ledger-pid-residues@5571197",
+          "kind": "real_test",
+          "result": "success",
+          "observedAt": "2026-10-17T14:09:32Z",
+          "source": "github-actions:agent/oxkio-v3-ledger-atomicity-fix-20261016@5571197",
+          "summary": "ledger-pid-residues.test.js: 10 tests con procesos hijos y crashes reales (process.exit), dentro de backend-tests."
+        },
+        {
+          "ref": "pr:46",
+          "kind": "pr_merged",
+          "result": "success",
+          "observedAt": "2026-10-17T14:25:31Z",
+          "source": "github",
+          "summary": "PR #46 mergeada en 60f2073 por la cuenta propietaria xantalal-bit."
+        },
+        {
+          "ref": "ci:39040696789#backend-tests",
+          "kind": "ci_green",
+          "result": "success",
+          "observedAt": "2026-10-17T14:32:08Z",
+          "source": "github-actions:main@60f2073",
+          "summary": "push a main 60f2073: backend-tests verde."
+        }
       ]
     },
     {
@@ -107,7 +235,12 @@
       "project": "OXKIO",
       "scope": "approval",
       "title": "Approval: bigint como string en la clasificación de conflictos",
-      "aliases": ["bigint", "classifyconflict", "bigint string", "status conflict"],
+      "aliases": [
+        "bigint",
+        "classifyconflict",
+        "bigint string",
+        "status conflict"
+      ],
       "state": "CLOSED",
       "priority": "P1",
       "decision": "#classifyConflict normaliza la versión bigint de PostgreSQL; status_conflict y execution_id_mismatch ya no se devuelven como stale_version.",
@@ -119,10 +252,38 @@
       "version": 1,
       "updatedAt": "2026-10-17T17:52:15.000Z",
       "evidence": [
-        { "ref": "commit:091bba7", "kind": "commit", "result": "success", "observedAt": "2026-10-17T16:18:48Z", "source": "github", "summary": "fix(approval): normalize PostgreSQL bigint version in conflict classification (091bba7)." },
-        { "ref": "ci:39048856582#approval-postgres-integration", "kind": "ci_green", "result": "success", "observedAt": "2026-10-17T16:19:32Z", "source": "github-actions:test/oxkio-postgres-rls-real-20261017@091bba7", "summary": "PR #48 @ 091bba7: approval-postgres-integration verde (19/19), junto a Node 22, Node 24 y docker." },
-        { "ref": "realpg:ci-39048856582#classification", "kind": "real_test", "result": "success", "observedAt": "2026-10-17T16:19:32Z", "source": "github-actions:test/oxkio-postgres-rls-real-20261017@091bba7", "summary": "D1b y el contrato «mismatched executionId» verdes contra postgres:18 efímero." },
-        { "ref": "pr:48", "kind": "pr_merged", "result": "success", "observedAt": "2026-10-17T16:31:42Z", "source": "github", "summary": "PR #48 mergeada en 67b8fe9 por la cuenta propietaria xantalal-bit." }
+        {
+          "ref": "commit:091bba7",
+          "kind": "commit",
+          "result": "success",
+          "observedAt": "2026-10-17T16:18:48Z",
+          "source": "github",
+          "summary": "fix(approval): normalize PostgreSQL bigint version in conflict classification (091bba7)."
+        },
+        {
+          "ref": "ci:39048856582#approval-postgres-integration",
+          "kind": "ci_green",
+          "result": "success",
+          "observedAt": "2026-10-17T16:19:32Z",
+          "source": "github-actions:test/oxkio-postgres-rls-real-20261017@091bba7",
+          "summary": "PR #48 @ 091bba7: approval-postgres-integration verde (19/19), junto a Node 22, Node 24 y docker."
+        },
+        {
+          "ref": "realpg:ci-39048856582#classification",
+          "kind": "real_test",
+          "result": "success",
+          "observedAt": "2026-10-17T16:19:32Z",
+          "source": "github-actions:test/oxkio-postgres-rls-real-20261017@091bba7",
+          "summary": "D1b y el contrato «mismatched executionId» verdes contra postgres:18 efímero."
+        },
+        {
+          "ref": "pr:48",
+          "kind": "pr_merged",
+          "result": "success",
+          "observedAt": "2026-10-17T16:31:42Z",
+          "source": "github",
+          "summary": "PR #48 mergeada en 67b8fe9 por la cuenta propietaria xantalal-bit."
+        }
       ]
     },
     {
@@ -130,50 +291,178 @@
       "project": "OXKIO",
       "scope": "approval",
       "title": "Approval contra PostgreSQL/RLS real",
-      "aliases": ["postgresql rls", "postgres rls", "rls real", "approval postgres integration", "postgresql real"],
-      "state": "CLOSED",
+      "aliases": [
+        "postgresql rls",
+        "postgres rls",
+        "rls real",
+        "approval postgres integration",
+        "postgresql real",
+        "pr 50 ci rojo"
+      ],
+      "state": "BLOCKED",
       "priority": "P1",
       "decision": "Migraciones 001-004, RLS ENABLED+FORCED con política NULLIF, privilegios mínimos del rol runtime, ciclo de vida, rollback y concurrencia validados contra PostgreSQL 18 efímero; job no requerido approval-postgres-integration en CI.",
       "reopenCondition": "Fallo de approval-postgres-integration en main (o en una PR sin cambios en approval) posterior a la última ejecución verde.",
-      "nextAction": "Ninguna.",
-      "changes": "Alta en el registro como CLOSED, tal como lo declaran el Issue #49 y el canon (PR #50).",
+      "nextAction": "Autorizar push y PR del arreglo 20ee80a; con approval-postgres-integration verde en main y la prueba real registrada, cerrar con continuity.js apply (close).",
+      "changes": "Autorreparación, una ronda: pg-pool end() resuelve antes de cerrar los sockets y DROP DATABASE ... WITH (FORCE) mataba una conexión (57P01) que node:test reportaba como uncaughtException; 19/19 aserciones verdes en el run rojo. Arreglo solo en el teardown del test.",
       "confidence": "high",
       "requiresRealTest": true,
-      "signals": ["approval-postgres-integration"],
-      "version": 1,
-      "updatedAt": "2026-10-17T17:52:15.000Z",
+      "signals": [
+        "approval-postgres-integration"
+      ],
+      "version": 5,
+      "updatedAt": "2026-10-17T18:00:08.618Z",
       "evidence": [
-        { "ref": "ci:39048856582#approval-postgres-integration", "kind": "ci_green", "result": "success", "observedAt": "2026-10-17T16:19:32Z", "source": "github-actions:test/oxkio-postgres-rls-real-20261017@091bba7", "summary": "PR #48 @ 091bba7: approval-postgres-integration verde." },
-        { "ref": "realpg:ci-39048856582", "kind": "real_test", "result": "success", "observedAt": "2026-10-17T16:19:32Z", "source": "github-actions:test/oxkio-postgres-rls-real-20261017@091bba7", "summary": "19/19 contra postgres:18 efímero en loopback, contraseñas aleatorias enmascaradas." },
-        { "ref": "pr:48", "kind": "pr_merged", "result": "success", "observedAt": "2026-10-17T16:31:42Z", "source": "github", "summary": "PR #48 mergeada en 67b8fe9 por la cuenta propietaria xantalal-bit." }
-      ]
+        {
+          "ref": "ci:39048856582#approval-postgres-integration",
+          "kind": "ci_green",
+          "result": "success",
+          "observedAt": "2026-10-17T16:19:32Z",
+          "source": "github-actions:test/oxkio-postgres-rls-real-20261017@091bba7",
+          "summary": "PR #48 @ 091bba7: approval-postgres-integration verde."
+        },
+        {
+          "ref": "realpg:ci-39048856582",
+          "kind": "real_test",
+          "result": "success",
+          "observedAt": "2026-10-17T16:19:32Z",
+          "source": "github-actions:test/oxkio-postgres-rls-real-20261017@091bba7",
+          "summary": "19/19 contra postgres:18 efímero en loopback, contraseñas aleatorias enmascaradas."
+        },
+        {
+          "ref": "pr:48",
+          "kind": "pr_merged",
+          "result": "success",
+          "observedAt": "2026-10-17T16:31:42Z",
+          "source": "github",
+          "summary": "PR #48 mergeada en 67b8fe9 por la cuenta propietaria xantalal-bit."
+        },
+        {
+          "ref": "ci:39049802907#approval-postgres-integration",
+          "kind": "ci_failure",
+          "result": "failure",
+          "observedAt": "2026-10-17T16:32:37Z",
+          "source": "github-actions:main@67b8fe9",
+          "summary": "approval-postgres-integration failure en push main @ 67b8fe9"
+        },
+        {
+          "ref": "ci:39053864531#approval-postgres-integration",
+          "kind": "ci_failure",
+          "result": "failure",
+          "observedAt": "2026-10-17T17:28:33Z",
+          "source": "github-actions:docs/client-zero-xatai-canon-20261017@6dc4afc",
+          "summary": "approval-postgres-integration failure en pull_request docs/client-zero-xatai-canon-20261017 @ 6dc4afc"
+        },
+        {
+          "ref": "read:pg-pool@3.14.0#_pulseQueue",
+          "kind": "observation",
+          "result": "info",
+          "observedAt": "2026-10-17T17:38:00Z",
+          "source": "lectura de node_modules/pg-pool/index.js",
+          "summary": "end() vacía _clients y llama a _endCallback antes del 'end' de cada conexión."
+        },
+        {
+          "ref": "probe:pg-teardown-race-20261017",
+          "kind": "observation",
+          "result": "info",
+          "observedAt": "2026-10-17T17:43:00Z",
+          "source": "sonda local contra PostgreSQL 18.6 efímero (127.0.0.1)",
+          "summary": "Teardown actual: 3 de 380 rondas con 57P01 no capturado; esperando a pg_stat_activity: 0 de 380."
+        },
+        {
+          "ref": "commit:20ee80a",
+          "kind": "commit",
+          "result": "success",
+          "observedAt": "2026-10-17T17:45:26Z",
+          "source": "git local, rama fix/oxkio-approval-pg-teardown-20261017 (sin push)",
+          "summary": "test(approval): drain PostgreSQL backends before dropping the test database (20ee80a, solo test)."
+        },
+        {
+          "ref": "realpg:local-20ee80a",
+          "kind": "real_test",
+          "result": "success",
+          "observedAt": "2026-10-17T17:45:00Z",
+          "source": "PostgreSQL 18.6 efímero local en 127.0.0.1:55432 (initdb en scratchpad)",
+          "summary": "8 de 8 ejecuciones 19/19 con el arreglo; 0 uncaughtException, 0 bases residuales, 0 credenciales en la salida."
+        }
+      ],
+      "blockedBy": "puerta humana: push + PR de fix/oxkio-approval-pg-teardown-20261017 (20ee80a)"
     },
     {
       "id": "CZ-CONTINUITY-PREFLIGHT",
       "project": "OXKIO",
       "scope": "cliente-cero",
       "title": "Canon de Cliente Cero integrado: preflight de continuidad antes de planificar",
-      "aliases": ["preflight de continuidad", "registro de continuidad", "canon cliente cero", "issue 49", "parte diario oxkio"],
-      "state": "PENDING",
+      "aliases": [
+        "preflight de continuidad",
+        "registro de continuidad",
+        "canon cliente cero",
+        "issue 49",
+        "parte diario oxkio"
+      ],
+      "state": "BLOCKED",
       "priority": "P1",
       "decision": "Una sola fuente: orchestration/CONTINUITY-REGISTRY.json (Project Registry), proyectada por ProjectManagerService al Ecosystem Observer; preflight, cierre, auditoría y Parte Diario por scripts/client-zero/continuity.js.",
       "reopenCondition": "Una misión se planifica sin preflight, o se reabre un CLOSED sin evidencia material nueva.",
-      "nextAction": "Implementar y validar en la rama feat/oxkio-client-zero-continuity-20261017.",
-      "changes": "Alta al iniciar la misión del Issue #49.",
+      "nextAction": "Autorizar push y PR; con CI verde y merge, cerrar con continuity.js apply (close). Después, misión separada CZ-RUNTIME-SYNC.",
+      "changes": "Implementación y dogfooding completos en local; cierre pendiente de puerta humana.",
       "confidence": "medium",
       "requiresRealTest": true,
-      "version": 1,
-      "updatedAt": "2026-10-17T17:52:15.000Z",
+      "version": 2,
+      "updatedAt": "2026-10-17T18:04:16.331Z",
       "evidence": [
-        { "ref": "issue:49", "kind": "human_decision", "result": "info", "observedAt": "2026-10-17T16:58:16Z", "source": "github", "summary": "Issue #49: canon operativo obligatorio antes de cada misión, con dogfooding real." }
-      ]
+        {
+          "ref": "issue:49",
+          "kind": "human_decision",
+          "result": "info",
+          "observedAt": "2026-10-17T16:58:16Z",
+          "source": "github",
+          "summary": "Issue #49: canon operativo obligatorio antes de cada misión, con dogfooding real."
+        },
+        {
+          "ref": "commit:b77240d",
+          "kind": "commit",
+          "result": "success",
+          "observedAt": "2026-10-17T17:56:00Z",
+          "source": "git local, rama feat/oxkio-client-zero-continuity-20261017 (sin push)",
+          "summary": "feat(client-zero): continuity preflight before planning (Issue #49)."
+        },
+        {
+          "ref": "commit:e7c54e2",
+          "kind": "commit",
+          "result": "success",
+          "observedAt": "2026-10-17T17:59:00Z",
+          "source": "git local, rama feat/oxkio-client-zero-continuity-20261017 (sin push)",
+          "summary": "fix(client-zero): reapertura y cierre por job de CI (defecto hallado en el dogfooding; el test nuevo falla en b77240d)."
+        },
+        {
+          "ref": "suite:node24@e7c54e2",
+          "kind": "observation",
+          "result": "info",
+          "observedAt": "2026-10-17T18:05:00Z",
+          "source": "node --test local, Node 24.15.0",
+          "summary": "2025 tests: 2005 pass, 2 fail (hash 003 por CRLF del worktree; blob 45e1b076 intacto), 18 skip."
+        },
+        {
+          "ref": "dogfood:cz-20261017",
+          "kind": "real_test",
+          "result": "success",
+          "observedAt": "2026-10-17T18:06:00Z",
+          "source": "registro vivo + GitHub real",
+          "summary": "preflight (REFUSE_REOPEN, exit 3) → observe (reapertura por evidencia más reciente) → preflight (PROCEED) → apply (fusión de duplicado, BLOCKED, cierre prematuro rechazado) → audit (3/3 verificados)."
+        }
+      ],
+      "blockedBy": "puerta humana: push + PR de feat/oxkio-client-zero-continuity-20261017"
     },
     {
       "id": "CZ-CANON-PR50",
       "project": "OXKIO",
       "scope": "cliente-cero",
       "title": "PR #50: persistencia del canon operativo de Xatai",
-      "aliases": ["pr 50", "xatai client zero canon"],
+      "aliases": [
+        "pr 50",
+        "xatai client zero canon"
+      ],
       "state": "BLOCKED",
       "priority": "P1",
       "decision": "El canon vive en KNOWLEDGE-CURATOR/CLIENT-ZERO/XATAI-CLIENT-ZERO-CANON.md; la rama de integración incluye el mismo commit (6dc4afc) sin cambios.",
@@ -186,7 +475,14 @@
       "version": 1,
       "updatedAt": "2026-10-17T17:52:15.000Z",
       "evidence": [
-        { "ref": "pr:50", "kind": "observation", "result": "info", "observedAt": "2026-10-17T17:27:48Z", "source": "github", "summary": "PR #50 abierta, head 6dc4afc, solo añade el canon." }
+        {
+          "ref": "pr:50",
+          "kind": "observation",
+          "result": "info",
+          "observedAt": "2026-10-17T17:27:48Z",
+          "source": "github",
+          "summary": "PR #50 abierta, head 6dc4afc, solo añade el canon."
+        }
       ]
     },
     {
@@ -194,7 +490,11 @@
       "project": "OXKIO",
       "scope": "runtime-local",
       "title": "Sincronización controlada del checkout/runtime local a main",
-      "aliases": ["sincronizacion del runtime", "checkout local", "runtime local"],
+      "aliases": [
+        "sincronizacion del runtime",
+        "checkout local",
+        "runtime local"
+      ],
       "state": "BLOCKED",
       "priority": "P1",
       "decision": "Misión separada: parada controlada → actualización → arranque → smoke test → cierre. No se mezcla con la integración del canon.",
@@ -207,7 +507,14 @@
       "version": 1,
       "updatedAt": "2026-10-17T17:52:15.000Z",
       "evidence": [
-        { "ref": "git:local-main@adef97a", "kind": "observation", "result": "info", "observedAt": "2026-10-17T17:52:15Z", "source": "git local", "summary": "Checkout principal en adef97a; origin/main en 67b8fe9." }
+        {
+          "ref": "git:local-main@adef97a",
+          "kind": "observation",
+          "result": "info",
+          "observedAt": "2026-10-17T17:52:15Z",
+          "source": "git local",
+          "summary": "Checkout principal en adef97a; origin/main en 67b8fe9."
+        }
       ]
     },
     {
@@ -215,7 +522,10 @@
       "project": "OXKIO",
       "scope": "supervised-operation",
       "title": "Ledger: límites conocidos tras el cierre de PID/residuos",
-      "aliases": ["identidad de arranque", "marcador publish"],
+      "aliases": [
+        "identidad de arranque",
+        "marcador publish"
+      ],
       "state": "BACKLOG",
       "priority": "P3",
       "decision": "Windows/macOS sin identidad de arranque (PID reutilizado queda en store_lock_live, fail-closed); residuos dudosos se conservan; el marcador .publish no se barre.",
@@ -227,7 +537,14 @@
       "version": 1,
       "updatedAt": "2026-10-17T17:52:15.000Z",
       "evidence": [
-        { "ref": "doc:docs/audits/ledger-pid-residues-20261017.md", "kind": "observation", "result": "info", "observedAt": "2026-10-17T14:25:31Z", "source": "repositorio", "summary": "Sección «Límites» de la auditoría del ledger." }
+        {
+          "ref": "doc:docs/audits/ledger-pid-residues-20261017.md",
+          "kind": "observation",
+          "result": "info",
+          "observedAt": "2026-10-17T14:25:31Z",
+          "source": "repositorio",
+          "summary": "Sección «Límites» de la auditoría del ledger."
+        }
       ]
     },
     {
@@ -235,7 +552,10 @@
       "project": "OXKIO",
       "scope": "approval",
       "title": "Approval PostgreSQL: coberturas pendientes no bloqueantes",
-      "aliases": ["tls channel binding", "migracion 005"],
+      "aliases": [
+        "tls channel binding",
+        "migracion 005"
+      ],
       "state": "BACKLOG",
       "priority": "P3",
       "decision": "Sin prueba real: TLS rejectUnauthorized + channel binding de la factory, migración 005 (quality_incidents); la precondición CREATE ON DATABASE para oxkio_mission_owner no está documentada.",
@@ -247,7 +567,14 @@
       "version": 1,
       "updatedAt": "2026-10-17T17:52:15.000Z",
       "evidence": [
-        { "ref": "phase:postgres-rls-real-20261017", "kind": "observation", "result": "info", "observedAt": "2026-10-17T15:31:26Z", "source": "informe de fase", "summary": "GAPS del informe de la fase PostgreSQL/RLS real." }
+        {
+          "ref": "phase:postgres-rls-real-20261017",
+          "kind": "observation",
+          "result": "info",
+          "observedAt": "2026-10-17T15:31:26Z",
+          "source": "informe de fase",
+          "summary": "GAPS del informe de la fase PostgreSQL/RLS real."
+        }
       ]
     },
     {
@@ -255,7 +582,9 @@
       "project": "OXKIO",
       "scope": "approval",
       "title": "run-approval-scoped-transaction no descarta la conexión tras BEGIN/ROLLBACK fallido",
-      "aliases": ["run approval scoped transaction"],
+      "aliases": [
+        "run approval scoped transaction"
+      ],
       "state": "BACKLOG",
       "priority": "P2",
       "decision": "Observación de lectura, no demostrada: a diferencia del helper de Mission Queue, no descarta el cliente si BEGIN o ROLLBACK fallan.",
@@ -267,15 +596,294 @@
       "version": 1,
       "updatedAt": "2026-10-17T17:52:15.000Z",
       "evidence": [
-        { "ref": "read:backend/repositories/postgres/run-approval-scoped-transaction.js", "kind": "observation", "result": "info", "observedAt": "2026-10-17T15:31:26Z", "source": "lectura de código", "summary": "Sin descarte de conexión en BEGIN/ROLLBACK fallido (solo lectura)." }
+        {
+          "ref": "read:backend/repositories/postgres/run-approval-scoped-transaction.js",
+          "kind": "observation",
+          "result": "info",
+          "observedAt": "2026-10-17T15:31:26Z",
+          "source": "lectura de código",
+          "summary": "Sin descarte de conexión en BEGIN/ROLLBACK fallido (solo lectura)."
+        }
       ]
+    },
+    {
+      "aliases": [
+        "roadmap desactualizado",
+        "tasks desactualizado"
+      ],
+      "evidence": [
+        {
+          "ref": "git:orchestration/ROADMAP.md@2ecc600",
+          "kind": "observation",
+          "result": "info",
+          "observedAt": "2026-10-17T17:20:00Z",
+          "source": "git log",
+          "summary": "Último commit de ROADMAP.md/TASKS.md: 2ecc600 (2026-09-09)."
+        }
+      ],
+      "id": "CZ-ROADMAP-STALE",
+      "project": "OXKIO",
+      "scope": "continuidad",
+      "title": "ROADMAP/TASKS de orchestration desactualizados respecto al registro",
+      "priority": "P2",
+      "decision": "orchestration/ROADMAP.md y TASKS.md no cambian desde 2026-09-09 (último hito publicado 5C.7B.3B); el Ecosystem Observer deriva de ahí nextRecommendedStep. El estado vigente vive en el registro de continuidad, que el observer ya expone en «continuity».",
+      "reopenCondition": "n/a",
+      "nextAction": "Decisión de José Antonio: que nextRecommendedStep del observer priorice el registro, o actualizar ROADMAP/TASKS.",
+      "changes": "Alta como defecto de continuidad detectado en el dogfooding.",
+      "confidence": "high",
+      "state": "BACKLOG",
+      "version": 1,
+      "updatedAt": "2026-10-17T18:00:08.618Z"
+    },
+    {
+      "aliases": [
+        "ubuntu 26",
+        "node 20 deprecation"
+      ],
+      "evidence": [
+        {
+          "ref": "annotations:ci-39053864531",
+          "kind": "observation",
+          "result": "info",
+          "observedAt": "2026-10-17T17:28:33Z",
+          "source": "github check-run annotations",
+          "summary": "Avisos de migración de ubuntu-latest (19/10) y de deprecación de Node 20 en acciones."
+        }
+      ],
+      "id": "CZ-CI-RUNNER-MIGRATION",
+      "project": "OXKIO",
+      "scope": "ci",
+      "title": "Runners de GitHub: ubuntu-latest a Ubuntu 26 y acciones en Node 20",
+      "priority": "P2",
+      "decision": "Anotaciones de GitHub: ubuntu-latest migra a Ubuntu 26 desde el 2026-10-19; actions/checkout@v4 y setup-node@v4 apuntan a Node 20 y se fuerzan a Node 24.",
+      "reopenCondition": "n/a",
+      "nextAction": "Observar los runs de main tras el 2026-10-19; si fallan docker-image-build o approval-postgres-integration, abrir frente P1.",
+      "changes": "Alta desde las anotaciones del run 39053864531.",
+      "confidence": "high",
+      "state": "BACKLOG",
+      "version": 1,
+      "updatedAt": "2026-10-17T18:00:08.618Z"
+    },
+    {
+      "aliases": [
+        "automatizaciones chatgpt",
+        "parte diario xantalal",
+        "oxkio autonomo supervisado"
+      ],
+      "evidence": [
+        {
+          "ref": "issue:49#automatizaciones",
+          "kind": "observation",
+          "result": "info",
+          "observedAt": "2026-10-17T16:58:16Z",
+          "source": "github issue comment",
+          "summary": "Estado transitorio ya activado en ChatGPT para ambas automatizaciones."
+        }
+      ],
+      "id": "CZ-AUTOMATION-MIGRATION",
+      "project": "OXKIO",
+      "scope": "automatizaciones",
+      "title": "Migración progresiva de automatizaciones internas de ChatGPT a OXKIO",
+      "priority": "P2",
+      "decision": "Inventario conocido (Issue #49): «OXKIO Autónomo Supervisado» y «Parte Diario XANTALAL», en ChatGPT, ya usan OXKIO como fuente primaria con fallback. Equivalentes en OXKIO hoy: estado de PR/CI (observe), control de hitos (registro), auditoría de cierres (audit) y Parte Diario (daily). Personales y transitorias siguen en ChatGPT.",
+      "reopenCondition": "n/a",
+      "nextAction": "No desactivar nada. Equivalencia = Partes Diarios de OXKIO auditados por Xatai sin discrepancia material durante una ventana que fije José Antonio; entonces migrar el Parte Diario.",
+      "changes": "Alta con el inventario del Issue #49.",
+      "confidence": "medium",
+      "state": "BACKLOG",
+      "version": 1,
+      "updatedAt": "2026-10-17T18:00:08.618Z"
     }
   ],
   "events": [
-    { "type": "human_decision", "at": "2026-10-17T14:25:31.000Z", "by": "cuenta propietaria xantalal-bit", "entry": "CZ-LEDGER-PID", "note": "Merge de la PR #46." },
-    { "type": "human_decision", "at": "2026-10-17T15:10:57.000Z", "by": "cuenta propietaria xantalal-bit", "entry": "CZ-CI-NODE22-24", "note": "Merge de la PR #47." },
-    { "type": "human_decision", "at": "2026-10-17T16:31:42.000Z", "by": "cuenta propietaria xantalal-bit", "entry": "CZ-PG-RLS-REAL", "note": "Merge de la PR #48 (incluye el arreglo bigint 091bba7)." },
-    { "type": "human_decision", "at": "2026-10-17T16:58:16.000Z", "by": "José Antonio (vía Xatai)", "entry": "CZ-CONTINUITY-PREFLIGHT", "note": "Issue #49: canon obligatorio antes de cada misión; hitos Node 22/24, Ledger, PostgreSQL/RLS y bigint declarados CLOSED." },
-    { "type": "created", "at": "2026-10-17T17:52:15.000Z", "note": "Registro sembrado con el estado declarado por el Issue #49 y el canon, con evidencia verificada en GitHub." }
+    {
+      "type": "human_decision",
+      "at": "2026-10-17T14:25:31.000Z",
+      "by": "cuenta propietaria xantalal-bit",
+      "entry": "CZ-LEDGER-PID",
+      "note": "Merge de la PR #46."
+    },
+    {
+      "type": "human_decision",
+      "at": "2026-10-17T15:10:57.000Z",
+      "by": "cuenta propietaria xantalal-bit",
+      "entry": "CZ-CI-NODE22-24",
+      "note": "Merge de la PR #47."
+    },
+    {
+      "type": "human_decision",
+      "at": "2026-10-17T16:31:42.000Z",
+      "by": "cuenta propietaria xantalal-bit",
+      "entry": "CZ-PG-RLS-REAL",
+      "note": "Merge de la PR #48 (incluye el arreglo bigint 091bba7)."
+    },
+    {
+      "type": "human_decision",
+      "at": "2026-10-17T16:58:16.000Z",
+      "by": "José Antonio (vía Xatai)",
+      "entry": "CZ-CONTINUITY-PREFLIGHT",
+      "note": "Issue #49: canon obligatorio antes de cada misión; hitos Node 22/24, Ledger, PostgreSQL/RLS y bigint declarados CLOSED."
+    },
+    {
+      "type": "created",
+      "at": "2026-10-17T17:52:15.000Z",
+      "note": "Registro sembrado con el estado declarado por el Issue #49 y el canon, con evidencia verificada en GitHub."
+    },
+    {
+      "type": "preflight",
+      "at": "2026-10-17T17:57:18.397Z",
+      "missionDigest": "037cfdd6c168a737",
+      "targets": [
+        "CZ-PG-RLS-REAL"
+      ],
+      "verdict": "REFUSE_REOPEN",
+      "canonSha256": "cf166bed5a3ae2dcdf1c47c21cacb2517b06bef0646421c3ef1e944f87628a15"
+    },
+    {
+      "type": "reopen_refused",
+      "at": "2026-10-17T17:57:18.397Z",
+      "entry": "CZ-PG-RLS-REAL",
+      "note": "closed_without_new_material_evidence"
+    },
+    {
+      "type": "continuity_defect",
+      "at": "2026-10-17T17:57:33.699Z",
+      "entry": "CZ-PG-RLS-REAL",
+      "ref": "ci:39049802907#approval-postgres-integration",
+      "note": "CLOSED contradicho por evidencia más reciente"
+    },
+    {
+      "type": "reopened_by_evidence",
+      "at": "2026-10-17T17:57:33.699Z",
+      "entry": "CZ-PG-RLS-REAL",
+      "from": "CLOSED",
+      "to": "PENDING",
+      "ref": "ci:39049802907#approval-postgres-integration"
+    },
+    {
+      "type": "evidence_added",
+      "at": "2026-10-17T17:57:33.699Z",
+      "entry": "CZ-CI-NODE22-24",
+      "ref": "ci:39049802907#backend-tests (node 22)"
+    },
+    {
+      "type": "evidence_added",
+      "at": "2026-10-17T17:57:33.699Z",
+      "entry": "CZ-CI-NODE22-24",
+      "ref": "ci:39049802907#backend-tests (node 24)"
+    },
+    {
+      "type": "superseded_evidence",
+      "at": "2026-10-17T17:57:33.699Z",
+      "entry": "CZ-CI-NODE22-24",
+      "ref": "ci:39043920387#backend-tests (node 24)"
+    },
+    {
+      "type": "evidence_added",
+      "at": "2026-10-17T17:57:33.699Z",
+      "entry": "CZ-CI-NODE22-24",
+      "ref": "ci:39053864531#backend-tests (node 24)"
+    },
+    {
+      "type": "evidence_added",
+      "at": "2026-10-17T17:57:33.699Z",
+      "entry": "CZ-PG-RLS-REAL",
+      "ref": "ci:39053864531#approval-postgres-integration"
+    },
+    {
+      "type": "superseded_evidence",
+      "at": "2026-10-17T17:57:33.699Z",
+      "entry": "CZ-CI-NODE22-24",
+      "ref": "ci:39053864531#backend-tests (node 22)"
+    },
+    {
+      "type": "automation_run",
+      "at": "2026-10-17T17:57:33.699Z",
+      "name": "observe-github-ci",
+      "result": "ok",
+      "note": "4 runs, 8 observaciones: {\"reopened\":1,\"evidence_added\":4,\"superseded\":2,\"duplicate\":1}"
+    },
+    {
+      "type": "preflight",
+      "at": "2026-10-17T17:59:16.354Z",
+      "missionDigest": "8460e198261f8198",
+      "targets": [
+        "CZ-PG-RLS-REAL"
+      ],
+      "verdict": "PROCEED",
+      "canonSha256": "cf166bed5a3ae2dcdf1c47c21cacb2517b06bef0646421c3ef1e944f87628a15"
+    },
+    {
+      "type": "human_decision",
+      "at": "2026-10-17T17:40:00.000Z",
+      "by": "José Antonio (vía Xatai)",
+      "entry": "CZ-CONTINUITY-PREFLIGHT",
+      "note": "Misión Cliente Cero encargada a Claude: integrar el canon en el flujo real; sin merge, deploy, producción, Neon, secretos, IAM ni gasto."
+    },
+    {
+      "type": "merged_duplicate",
+      "at": "2026-10-17T18:00:08.618Z",
+      "entry": "CZ-PG-RLS-REAL",
+      "duplicateId": "CZ-PR50-CI-RED"
+    },
+    {
+      "type": "state_changed",
+      "at": "2026-10-17T18:00:08.618Z",
+      "entry": "CZ-PG-RLS-REAL",
+      "from": "PENDING",
+      "to": "BLOCKED",
+      "note": "Autorreparación, una ronda: pg-pool end() resuelve antes de cerrar los sockets y DROP DATABASE ... WITH (FORCE) mataba una conexión (57P01) que node:test reportaba como uncaughtException; 19/19 aserciones verdes en el run rojo. Arreglo solo en el teardown del test."
+    },
+    {
+      "type": "created",
+      "at": "2026-10-17T18:00:08.618Z",
+      "entry": "CZ-ROADMAP-STALE",
+      "to": "BACKLOG"
+    },
+    {
+      "type": "continuity_defect",
+      "entry": "CZ-ROADMAP-STALE",
+      "note": "El observer recomienda desde un roadmap del 09/09; prevalece el registro de continuidad.",
+      "at": "2026-10-17T18:00:08.618Z"
+    },
+    {
+      "type": "created",
+      "at": "2026-10-17T18:00:08.618Z",
+      "entry": "CZ-CI-RUNNER-MIGRATION",
+      "to": "BACKLOG"
+    },
+    {
+      "type": "created",
+      "at": "2026-10-17T18:00:08.618Z",
+      "entry": "CZ-AUTOMATION-MIGRATION",
+      "to": "BACKLOG"
+    },
+    {
+      "type": "automation_run",
+      "at": "2026-10-17T18:00:17.463Z",
+      "name": "audit-closures-github",
+      "result": "verified",
+      "note": "3/3 cierres verificados contra GitHub"
+    },
+    {
+      "type": "state_changed",
+      "at": "2026-10-17T18:04:16.331Z",
+      "entry": "CZ-CONTINUITY-PREFLIGHT",
+      "from": "PENDING",
+      "to": "BLOCKED",
+      "note": "Implementación y dogfooding completos en local; cierre pendiente de puerta humana."
+    },
+    {
+      "type": "daily_report",
+      "at": "2026-10-17T18:04:16.397Z",
+      "name": "orchestration/PARTE-DIARIO/2026-10-17.md",
+      "result": "ok"
+    },
+    {
+      "type": "daily_report",
+      "at": "2026-10-17T18:05:16.450Z",
+      "name": "orchestration/PARTE-DIARIO/2026-10-17.md",
+      "result": "ok"
+    }
   ]
 }
