@@ -13,9 +13,14 @@ permissions:
   contents: read
 
 jobs:
-  backend-tests:
-    name: backend-tests
+  backend-tests-node:
+    name: backend-tests (node ${{ matrix.node-version }})
     runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # 22: runtime of the Docker image (node:22-alpine). 24: current coverage.
+        node-version: ['22', '24']
     steps:
       - name: Preserve repository line endings on Windows
         run: git config --global core.autocrlf false
@@ -26,14 +31,29 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '24'
+          node-version: ${{ matrix.node-version }}
           cache: 'npm'
+
+      - name: Show Node.js version
+        run: node --version
 
       - name: Install dependencies
         run: npm ci
 
       - name: Run backend test suite
         run: node --test
+
+  # Required status check on main: passes only if every Node version passed.
+  backend-tests:
+    name: backend-tests
+    needs: backend-tests-node
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require every Node.js version to pass
+        env:
+          RESULT: ${{ needs.backend-tests-node.result }}
+        run: test "$RESULT" = "success"
 
   docker-image-build:
     name: docker-image-build
