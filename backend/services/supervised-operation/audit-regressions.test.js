@@ -69,21 +69,21 @@ test('A2 planner budget is persisted per owner: a restart cannot re-spend it (wa
   try {
     const counter = { calls: 0 };
     // Each call is estimated at ~0.0014 USD and really costs 0.002 USD
-    // (1000+1000 tokens at 1 USD/M); 0.0045 USD/day therefore allows two.
+    // (1000+1000 tokens at 1 USD/M). Overcharge blocks after the first call.
     const make = () => createSupervisedRuntime({ membershipProvider: provider, storeFactory: sealed(root), catalog: CATALOG,
       planner: createAdaptivePlanner({ provider: reasoning(counter, undefined, { inputTokens: 1000, outputTokens: 1000 }), privacyPolicy: CONFIDENTIAL_OK, approvedDailyBudgetUsd: 0.0045 }).plan });
     let r = make(); let a = await session(r, A);
     await r.start(a, { text: 'Recuerda xyzzy nota de A', conversationId: 'conv-0001' });
     for (let i = 0; i < 4; i++) await r.start(a, { text: 'Resuelve xyzzy ' + i, conversationId: 'conv-0001' });
-    assert.equal(counter.calls, 2);
+    assert.equal(counter.calls, 1);
     r = make(); a = await session(r, A);
     for (let i = 0; i < 4; i++) await r.start(a, { text: 'Resuelve otra ' + i, conversationId: 'conv-0001' });
-    assert.equal(counter.calls, 2, 'no extra paid call after restart');
+    assert.equal(counter.calls, 1, 'no extra paid call after restart');
     const b = await session(r, B);
     await r.start(b, { text: 'Recuerda xyzzy nota de B', conversationId: 'conv-0001' });
     const other = await r.start(b, { text: 'Resuelve xyzzy B', conversationId: 'conv-0001' });
     assert.equal(other.status, 'COMPLETED', 'another owner keeps an independent budget');
-    assert.equal(counter.calls, 3);
+    assert.equal(counter.calls, 2);
   } finally { fs.rmSync(root, { recursive: true, force: true }); }
 });
 

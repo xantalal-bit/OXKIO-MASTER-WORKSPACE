@@ -18,7 +18,7 @@ const EVENT_ITEM = () => ({ text: inDays(3) + ' · Comité semanal', signals: { 
 const POLICY = { publicExternalAllowed: true, internalProviders: [{ providerId: 'fixture' }], confidentialProviders: [] };
 
 // --- Decider contract -------------------------------------------------------
-const ctx = () => ({ missionId: 'fixture', spend: { estimate: () => 0.001, reserve: () => ({}), settle: () => 0.001 } });
+const ctx = () => ({ missionId: 'fixture', spend: { estimate: () => 0.001, reserve: () => ({}), claimCall:()=>true,markCallUnknown:()=>true,settle: () => 0.001 } });
 function planner(content) { const calls = []; return { calls, p: createAdaptivePlanner({ provider: { status: 'ready', provider: 'fixture', region: 'eu', modelId: 'fixture:luna', reason: async r => { calls.push(r); return { status: 'ok', content }; } }, privacyPolicy: POLICY, approvedDailyBudgetUsd: 1, requestFloor: 'INTERNAL' }) }; }
 const VIEW = [{ id: 'gmail.read', status: 'NEEDS_CONNECTION' }, { id: 'memory.search', status: 'AVAILABLE_NOW' }, { id: 'documents.read', status: 'UNAVAILABLE' }];
 const input = { intention: 'Busca en mi correo el último mensaje de la gestoría', capabilities: ['gmail.read', 'memory.search'], capabilityStatus: VIEW };

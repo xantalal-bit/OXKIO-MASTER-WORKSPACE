@@ -26,7 +26,7 @@ const OLD_FALSE_CLOSURE = 'No he encontrado resultados en tus fuentes.';
 const PRIVATE_TEXT = /Modelo 303|Comité semanal/;
 
 // --- Decider contract -------------------------------------------------------
-const ctx = () => ({ missionId: 'fixture', spend: { estimate: () => 0.001, reserve: () => ({}), settle: () => 0.001 } });
+const ctx = () => ({ missionId: 'fixture', spend: { estimate: () => 0.001, reserve: () => ({}), claimCall:()=>true,markCallUnknown:()=>true,settle: () => 0.001 } });
 function planner(content) { const calls = []; return { calls, p: createAdaptivePlanner({ provider: { status: 'ready', provider: 'fixture', region: 'eu', modelId: 'fixture:luna', reason: async r => { calls.push(r); return { status: 'ok', content }; } }, privacyPolicy: POLICY, approvedDailyBudgetUsd: 1, requestFloor: 'INTERNAL' }) }; }
 test('contract: personal current matters plan their relevant personal sources plus the analysis; advice, ideas and templates need none', async () => {
  const x = planner({ action: 'plan', plan: [{ key: 'a', capability: 'memory.search', dependsOn: [] }] });

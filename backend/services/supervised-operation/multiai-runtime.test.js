@@ -31,12 +31,13 @@ const catalogOf = (...ps) => Object.assign({}, ...ps.map(p => p.catalog));
 function fakeStore() {
  const rows = new Map(); let n = 0;
  return { rows,
+  async transaction(h,op){const before=structuredClone(rows);try{return await op(this);}catch(e){rows.clear();for(const [k,v] of before)rows.set(k,v);throw e;}},
   get(h, kind, id) { const k = kind + '/' + id; if (!rows.has(k)) throw Object.assign(new Error('resource_not_found'), { code: 'resource_not_found' }); return structuredClone(rows.get(k)); },
   put(h, kind, id, value) { rows.set(kind + '/' + id, structuredClone(value)); return value; },
   list(h, kind) { return [...rows].filter(([k]) => k.startsWith(kind + '/')).map(([, v]) => structuredClone(v)); },
   newId() { n += 1; return 'id-' + n; } };
 }
-const spendOf = (ledger, h = 'owner') => ({ estimate: ledger.estimate, reserve: o => ledger.reserve(h, o), settle: (r, u) => ledger.settle(h, r, u), budget: () => ledger.budget(h), recordExecution: e => ledger.recordExecution(h, e) });
+const spendOf = (ledger, h = 'owner') => ({ estimate: ledger.estimate, claimCall: r=>ledger.claimCall(h,r), markCallUnknown:r=>ledger.markCallUnknown(h,r), reserve: o => ledger.reserve(h, o), settle: (r, u) => ledger.settle(h, r, u), budget: () => ledger.budget(h), recordExecution: e => ledger.recordExecution(h, e) });
 const INTERNAL_BOTH = { publicExternalAllowed: true, internalProviders: [{ providerId: 'openai' }, { providerId: 'anthropic' }], confidentialProviders: [] };
 const PUBLIC_TEXT = 'Compara dos proveedores de alojamiento web para una tienda online';
 function reasoner(providers, options = {}) { return createGovernedReasoner({ providers, privacyPolicy: INTERNAL_BOTH, approvedDailyBudgetUsd: 1, requestFloor: 'INTERNAL', ...options }); }
@@ -44,7 +45,7 @@ const ask = (r, spend, extra = {}) => r.reason({ objective: PUBLIC_TEXT, egressT
 const candidate = (id, providerId, estimatedUsd, extra = {}) => ({ id, providerId, region: 'eu', tier: 'small_model', estimatedUsd, ...extra });
 
 // 1, 2, 7: deterministic routing, cheapest eligible first, unreviewed price out.
-test('router: deterministic order over 2+ fake providers, cheapest eligible first, unreviewed pricing excluded', () => {
+test('router: deterministic order over 2+ fake providers, cheapest eligible first, unreviewed pricing excluded', async () => {
  const input = { privacyClass: 'INTERNAL', policy: INTERNAL_BOTH, candidates: [candidate('openai:a', 'openai', 0.004), candidate('anthropic:b', 'anthropic', 0.001), candidate('anthropic:c', 'anthropic', null), candidate('openai:d', 'openai', 0.001)] };
  const first = routeReasoning(input);
  for (let i = 0; i < 5; i++) assert.deepEqual(routeReasoning(input), first);
@@ -57,7 +58,7 @@ test('router: deterministic order over 2+ fake providers, cheapest eligible firs
 });
 
 // 3: explicit preference wins when valid, never over an exclusion.
-test('router: an explicit preference goes first when eligible and is ignored when it is not', () => {
+test('router: an explicit preference goes first when eligible and is ignored when it is not', async () => {
  const candidates = [candidate('openai:cheap', 'openai', 0.001), candidate('anthropic:pricey', 'anthropic', 0.009)];
  assert.deepEqual(routeReasoning({ privacyClass: 'INTERNAL', policy: INTERNAL_BOTH, candidates, preference: ['anthropic'] }).candidates, ['anthropic:pricey', 'openai:cheap']);
  assert.deepEqual(routeReasoning({ privacyClass: 'INTERNAL', policy: INTERNAL_BOTH, candidates, preference: ['anthropic:pricey'] }).candidates, ['anthropic:pricey', 'openai:cheap']);
@@ -71,7 +72,7 @@ test('router: an explicit preference goes first when eligible and is ignored whe
 });
 
 // 5, 6: SECRET is BLOCKED; nothing eligible is LOCAL_ONLY; tier and circuit.
-test('router: SECRET or unknown class is BLOCKED; no eligible candidate is LOCAL_ONLY; tier and circuit exclude', () => {
+test('router: SECRET or unknown class is BLOCKED; no eligible candidate is LOCAL_ONLY; tier and circuit exclude', async () => {
  const candidates = [candidate('openai:a', 'openai', 0.001)];
  assert.equal(routeReasoning({ privacyClass: 'SECRET', policy: INTERNAL_BOTH, candidates }).route, ROUTES.BLOCKED);
  assert.equal(routeReasoning({ privacyClass: 'WHATEVER', policy: INTERNAL_BOTH, candidates }).route, ROUTES.BLOCKED);
@@ -103,7 +104,7 @@ test('privacy: a provider the policy does not approve never receives the context
  assert.deepEqual(result.attempts.map(a => [a.resource, a.failure]), [['anthropic:cheap', 'PRIVACY_BLOCKED']]);
 });
 
-test('privacy: a new provider never inherits the INTERNAL authorization of the configured one', () => {
+test('privacy: a new provider never inherits the INTERNAL authorization of the configured one', async () => {
  const primary = provider('openai', 'primary', ok);
  const egress = reasoningEgressFromEnv({ OXKIO_V3_REASONING_INTERNAL_EGRESS: 'true' }, primary);
  assert.deepEqual(egress.privacyPolicy.internalProviders.map(p => p.providerId), ['openai']);
@@ -122,7 +123,7 @@ test('budget: 40 EUR stays 40 EUR; without a reviewed FX policy every paid call 
  // An FX object without source/review date is not a policy.
  assert.equal(resolveBudget({ human: { amount: 40, currency: 'EUR' }, fx: { from: 'EUR', to: 'USD', rate: 2 } }).status, 'FX_POLICY_REQUIRED');
  const a = provider('openai', 'a', ok); const ledger = createCostLedger({ store: fakeStore(), catalog: catalogOf(a), budget: { human: { amount: 40, currency: 'EUR' }, providers: { openai: { amount: 25, currency: 'EUR' } } }, now: () => NOW });
- assert.throws(() => ledger.reserve('owner', { missionId: 'm', modelId: 'openai:a', estimatedUsd: 0.001, approvedDailyBudgetUsd: 1 }), e => e.code === 'planning_budget_gate' && e.detail === 'fx_policy_required');
+ await assert.rejects(() => ledger.reserve('owner', { missionId: 'm', modelId: 'openai:a', estimatedUsd: 0.001, approvedDailyBudgetUsd: 1 }), e => e.code === 'planning_budget_gate' && e.detail === 'fx_policy_required');
  await assert.rejects(ask(reasoner([a]), spendOf(ledger)), e => e.attempts[0].failure === 'BUDGET_POLICY_REQUIRED' && e.transient === false);
  assert.equal(a.calls.length, 0);
  // Fictitious, explicit rate injected by the test (never a built-in value).
@@ -135,39 +136,39 @@ test('budget: 40 EUR stays 40 EUR; without a reviewed FX policy every paid call 
 });
 
 const usdBudget = (monthly, providers) => ({ human: { amount: monthly, currency: 'USD' }, providers: Object.fromEntries(Object.entries(providers).map(([k, v]) => [k, { amount: v, currency: 'USD' }])) });
-const call = (ledger, modelId = 'openai:a', usage = BASIS) => { const r = ledger.reserve('owner', { missionId: 'm-' + Math.random().toString(36).slice(2), modelId, estimatedUsd: 0.002, approvedDailyBudgetUsd: 1 }); return ledger.settle('owner', r, usage); };
+const call = async (ledger, modelId = 'openai:a', usage = BASIS) => { const r = await ledger.reserve('owner', { missionId: 'm-' + Math.random().toString(36).slice(2), modelId, estimatedUsd: 0.002, approvedDailyBudgetUsd: 1 }); await ledger.claimCall('owner', r); return ledger.settle('owner', r, usage); };
 
 // 8, 9, 10: monthly and per-provider hard stops; warnings never block.
-test('budget: monthly and per-provider hard stops; a provider without its own limit gets nothing', () => {
+test('budget: monthly and per-provider hard stops; a provider without its own limit gets nothing', async () => {
  const a = provider('openai', 'a', ok); const b = provider('anthropic', 'b', ok);
  const monthly = createCostLedger({ store: fakeStore(), catalog: catalogOf(a, b), budget: usdBudget(0.005, { openai: 1, anthropic: 1 }), now: () => NOW });
- call(monthly); call(monthly, 'anthropic:b');
- assert.throws(() => call(monthly), e => e.detail === 'monthly_budget');
+ await call(monthly); await call(monthly, 'anthropic:b');
+ await assert.rejects(() => call(monthly), e => e.detail === 'monthly_budget');
  const perProvider = createCostLedger({ store: fakeStore(), catalog: catalogOf(a, b), budget: usdBudget(1, { openai: 0.003, anthropic: 1 }), now: () => NOW });
- call(perProvider);
- assert.throws(() => call(perProvider), e => e.detail === 'provider_budget');
- assert.equal(call(perProvider, 'anthropic:b'), 0.002);
+ await call(perProvider);
+ await assert.rejects(() => call(perProvider), e => e.detail === 'provider_budget');
+ assert.equal(await call(perProvider, 'anthropic:b'), 0.002);
  const unset = createCostLedger({ store: fakeStore(), catalog: catalogOf(a, b), budget: usdBudget(1, { openai: 1 }), now: () => NOW });
- assert.throws(() => call(unset, 'anthropic:b'), e => e.detail === 'provider_budget_unset');
+ await assert.rejects(() => call(unset, 'anthropic:b'), e => e.detail === 'provider_budget_unset');
  // An open (unsettled) reservation counts toward the hard stop.
  const open = createCostLedger({ store: fakeStore(), catalog: catalogOf(a), budget: usdBudget(0.003, { openai: 1 }), now: () => NOW });
- open.reserve('owner', { missionId: 'm', modelId: 'openai:a', estimatedUsd: 0.002, approvedDailyBudgetUsd: 1 });
- assert.throws(() => open.reserve('owner', { missionId: 'm2', modelId: 'openai:a', estimatedUsd: 0.002, approvedDailyBudgetUsd: 1 }), e => e.detail === 'monthly_budget');
+ await open.reserve('owner', { missionId: 'm', modelId: 'openai:a', estimatedUsd: 0.002, approvedDailyBudgetUsd: 1 });
+ await assert.rejects(async () => await open.reserve('owner', { missionId: 'm2', modelId: 'openai:a', estimatedUsd: 0.002, approvedDailyBudgetUsd: 1 }), e => e.detail === 'monthly_budget');
  // A per-call reservation limit is its own hard stop.
  const perCall = createCostLedger({ store: fakeStore(), catalog: catalogOf(a), budget: { perCallMaxUsd: 0.001 }, now: () => NOW });
- assert.throws(() => call(perCall), e => e.detail === 'per_call_limit');
+ await assert.rejects(() => call(perCall), e => e.detail === 'per_call_limit');
 });
 
-test('budget: warnings at 70 % and 90 % never block before the hard stop; another month does not count', () => {
+test('budget: warnings at 70 % and 90 % never block before the hard stop; another month does not count', async () => {
  const a = provider('openai', 'a', ok); const store = fakeStore();
  store.put('owner', 'cost', 'day-2026-09-30', { date: '2026-09-30', reservedUsd: 0, chargedUsd: 5, knownActualUsd: 5, calls: 1, tokens: 0, models: { 'openai:a': { calls: 1, usd: 5 } }, tools: {}, reservations: {} });
  const ledger = createCostLedger({ store, catalog: catalogOf(a), budget: usdBudget(0.01, { openai: 0.0125 }), now: () => NOW });
  const levels = [];
- for (let i = 0; i < 5; i++) { call(ledger); levels.push(ledger.budget('owner').monthly.warning); }
+ for (let i = 0; i < 5; i++) { await call(ledger); levels.push(ledger.budget('owner').monthly.warning); }
  assert.deepEqual(levels, [null, null, null, 'WARN_70', 'WARN_90']);
  // 0.01 of 0.0125 = 80 %: the provider line warns on its own threshold.
  assert.equal(ledger.budget('owner').monthly.spentUsd, 0.01); assert.equal(ledger.budget('owner').providers.openai.warning, 'WARN_70');
- assert.throws(() => call(ledger), e => e.detail === 'monthly_budget');
+ await assert.rejects(() => call(ledger), e => e.detail === 'monthly_budget');
 });
 
 // 11, 12, 15: failover, single charge per call, roles in the records.
@@ -191,9 +192,10 @@ test('failover: primary QUOTA_EXHAUSTED -> second provider, each call charged on
  for (const e of executions) { assert.equal(e.missionId, 'mission-1'); assert.equal(e.taskId, 'mission-1:analizar'); assert.equal(e.accountingCurrency, 'USD'); assert.equal(e.reviewer, ROLES.REVIEWER); assert.equal(e.privacyClass, 'INTERNAL'); assert.equal(e.estimatedCost, 0.002); }
  assert.equal(executions[1].responseId, 'resp_fixture_1'); assert.equal(executions[0].responseId, null);
  // A settled reservation cannot be settled again.
- const reservation = ledger.reserve('owner', { missionId: 'm-x', modelId: 'openai:primary', estimatedUsd: 0.002, approvedDailyBudgetUsd: 1 });
- ledger.settle('owner', reservation, BASIS);
- assert.throws(() => ledger.settle('owner', reservation, BASIS), e => e.code === 'reservation_unknown');
+ const reservation = await ledger.reserve('owner', { missionId: 'm-x', modelId: 'openai:primary', estimatedUsd: 0.002, approvedDailyBudgetUsd: 1 });
+ await ledger.claimCall('owner', reservation);
+ await ledger.settle('owner', reservation, BASIS);
+ assert.equal(await ledger.settle('owner', reservation, BASIS),0.002);
 });
 
 // 13: exhausted budget -> zero calls.
@@ -216,7 +218,7 @@ test('telemetry: execution records never hold the prompt, private text or secret
  const saved = JSON.stringify([...store.rows.values()]);
  assert.ok(!saved.includes('PRIVMARK')); assert.ok(!saved.includes('alojamiento'));
  // Even a careless caller cannot store free text through a record.
- const entry = ledger.recordExecution('owner', { missionId: 'mission-1', provider: 'openai', status: 'Texto libre con espacios', responseId: 'x'.repeat(300), prompt: 'PRIVMARK', latencyMs: -5 });
+ const entry = await ledger.recordExecution('owner', { missionId: 'mission-1', provider: 'openai', status: 'Texto libre con espacios', responseId: 'x'.repeat(300), prompt: 'PRIVMARK', latencyMs: -5 });
  assert.equal(entry.status, null); assert.equal(entry.responseId, null); assert.equal(entry.latencyMs, null); assert.equal('prompt' in entry, false);
  assert.ok(!JSON.stringify([...store.rows.values()]).includes('PRIVMARK'));
 });
@@ -255,11 +257,11 @@ test('persistence: a restart keeps monthly spend, open reservations and executio
   const open = () => createCostLedger({ store: createMemoryStoreFactory({ root, integrity: createHmacIntegrity({ key }) })(sessions), catalog: catalogOf(a), budget, now: () => NOW });
   const before = open();
   await ask(reasoner([a]), spendOf(before));
-  before.reserve('owner', { missionId: 'm-open', modelId: 'openai:a', estimatedUsd: 0.002, approvedDailyBudgetUsd: 1 });
+  await before.reserve('owner', { missionId: 'm-open', modelId: 'openai:a', estimatedUsd: 0.002, approvedDailyBudgetUsd: 1 });
   const after = open();
   assert.equal(after.budget('owner').monthly.spentUsd, 0.004);
   assert.equal(after.mission('owner', 'mission-1').executions.length, 1);
-  assert.throws(() => after.reserve('owner', { missionId: 'm-3', modelId: 'openai:a', estimatedUsd: 0.002, approvedDailyBudgetUsd: 1 }), e => e.detail === 'monthly_budget');
+  await assert.rejects(() => after.reserve('owner', { missionId: 'm-3', modelId: 'openai:a', estimatedUsd: 0.002, approvedDailyBudgetUsd: 1 }), e => e.detail === 'monthly_budget');
  } finally { fs.rmSync(root, { recursive: true, force: true }); }
 });
 
