@@ -1,7 +1,7 @@
 {
   "schema": "oxkio.continuity-registry/v1",
-  "revision": 19,
-  "updatedAt": "2026-10-17T18:19:36.474Z",
+  "revision": 25,
+  "updatedAt": "2026-10-17T18:44:23.294Z",
   "canon": {
     "path": "KNOWLEDGE-CURATOR/CLIENT-ZERO/XATAI-CLIENT-ZERO-CANON.md",
     "issue": "issue:49",
@@ -96,8 +96,8 @@
         "backend-tests (node 22)",
         "backend-tests (node 24)"
       ],
-      "version": 6,
-      "updatedAt": "2026-10-17T17:57:33.699Z",
+      "version": 10,
+      "updatedAt": "2026-10-17T18:44:01.641Z",
       "evidence": [
         {
           "ref": "ci:39041516033#backend-tests (node 22)",
@@ -170,6 +170,38 @@
           "observedAt": "2026-10-17T17:33:13Z",
           "source": "github-actions:docs/client-zero-xatai-canon-20261017@6dc4afc",
           "summary": "backend-tests (node 22) success en pull_request docs/client-zero-xatai-canon-20261017 @ 6dc4afc"
+        },
+        {
+          "ref": "ci:39058158893#backend-tests (node 24)",
+          "kind": "ci_green",
+          "result": "success",
+          "observedAt": "2026-10-17T18:43:19Z",
+          "source": "github-actions:fix/oxkio-approval-pg-teardown-20261017@20ee80a",
+          "summary": "backend-tests (node 24) success en pull_request fix/oxkio-approval-pg-teardown-20261017 @ 20ee80a"
+        },
+        {
+          "ref": "ci:39058158893#backend-tests (node 22)",
+          "kind": "ci_green",
+          "result": "success",
+          "observedAt": "2026-10-17T18:35:34Z",
+          "source": "github-actions:fix/oxkio-approval-pg-teardown-20261017@20ee80a",
+          "summary": "backend-tests (node 22) success en pull_request fix/oxkio-approval-pg-teardown-20261017 @ 20ee80a"
+        },
+        {
+          "ref": "ci:39058177785#backend-tests (node 24)",
+          "kind": "ci_green",
+          "result": "success",
+          "observedAt": "2026-10-17T18:36:40Z",
+          "source": "github-actions:feat/oxkio-client-zero-continuity-20261017@d5cfc6e",
+          "summary": "backend-tests (node 24) success en pull_request feat/oxkio-client-zero-continuity-20261017 @ d5cfc6e"
+        },
+        {
+          "ref": "ci:39058177785#backend-tests (node 22)",
+          "kind": "ci_green",
+          "result": "success",
+          "observedAt": "2026-10-17T18:33:15Z",
+          "source": "github-actions:feat/oxkio-client-zero-continuity-20261017@d5cfc6e",
+          "summary": "backend-tests (node 22) success en pull_request feat/oxkio-client-zero-continuity-20261017 @ d5cfc6e"
         }
       ]
     },
@@ -303,15 +335,15 @@
       "priority": "P1",
       "decision": "Migraciones 001-004, RLS ENABLED+FORCED con política NULLIF, privilegios mínimos del rol runtime, ciclo de vida, rollback y concurrencia validados contra PostgreSQL 18 efímero; job no requerido approval-postgres-integration en CI.",
       "reopenCondition": "Fallo de approval-postgres-integration en main (o en una PR sin cambios en approval) posterior a la última ejecución verde.",
-      "nextAction": "Autorizar push y PR del arreglo 20ee80a; con approval-postgres-integration verde en main y la prueba real registrada, cerrar con continuity.js apply (close).",
-      "changes": "Autorreparación, una ronda: pg-pool end() resuelve antes de cerrar los sockets y DROP DATABASE ... WITH (FORCE) mataba una conexión (57P01) que node:test reportaba como uncaughtException; 19/19 aserciones verdes en el run rojo. Arreglo solo en el teardown del test.",
+      "nextAction": "Merge de la PR #51 = decisión humana. Tras el merge, observe sobre main: con approval-postgres-integration verde en main y su prueba real registrada, cerrar con apply (close).",
+      "changes": "PR #51 con CI completo verde (run 39058158893, intento 2: el intento 1 falló en Node lifecycle de Windows, test intermitente conocido, sin relación con el cambio).",
       "confidence": "high",
       "requiresRealTest": true,
       "signals": [
         "approval-postgres-integration"
       ],
-      "version": 5,
-      "updatedAt": "2026-10-17T18:00:08.618Z",
+      "version": 8,
+      "updatedAt": "2026-10-17T18:44:23.227Z",
       "evidence": [
         {
           "ref": "ci:39048856582#approval-postgres-integration",
@@ -384,9 +416,33 @@
           "observedAt": "2026-10-17T17:45:00Z",
           "source": "PostgreSQL 18.6 efímero local en 127.0.0.1:55432 (initdb en scratchpad)",
           "summary": "8 de 8 ejecuciones 19/19 con el arreglo; 0 uncaughtException, 0 bases residuales, 0 credenciales en la salida."
+        },
+        {
+          "ref": "ci:39058158893#approval-postgres-integration",
+          "kind": "ci_green",
+          "result": "success",
+          "observedAt": "2026-10-17T18:28:13Z",
+          "source": "github-actions:fix/oxkio-approval-pg-teardown-20261017@20ee80a",
+          "summary": "approval-postgres-integration success en pull_request fix/oxkio-approval-pg-teardown-20261017 @ 20ee80a"
+        },
+        {
+          "ref": "ci:39058177785#approval-postgres-integration",
+          "kind": "ci_failure",
+          "result": "failure",
+          "observedAt": "2026-10-17T18:28:26Z",
+          "source": "github-actions:feat/oxkio-client-zero-continuity-20261017@d5cfc6e",
+          "summary": "approval-postgres-integration failure en pull_request feat/oxkio-client-zero-continuity-20261017 @ d5cfc6e"
+        },
+        {
+          "ref": "pr:51",
+          "kind": "observation",
+          "result": "info",
+          "observedAt": "2026-10-17T18:31:00Z",
+          "source": "github",
+          "summary": "PR #51 abierta, head 20ee80a; 5/5 checks verdes en el intento 2; approval-postgres-integration 19/19, 0 uncaughtException."
         }
       ],
-      "blockedBy": "puerta humana: push + PR de fix/oxkio-approval-pg-teardown-20261017 (20ee80a)"
+      "blockedBy": "puerta humana: merge de la PR #51 (lista para decisión de merge)"
     },
     {
       "id": "CZ-CONTINUITY-PREFLIGHT",
@@ -404,12 +460,12 @@
       "priority": "P1",
       "decision": "Una sola fuente: orchestration/CONTINUITY-REGISTRY.json (Project Registry), proyectada por ProjectManagerService al Ecosystem Observer; preflight, cierre, auditoría y Parte Diario por scripts/client-zero/continuity.js.",
       "reopenCondition": "Una misión se planifica sin preflight, o se reabre un CLOSED sin evidencia material nueva.",
-      "nextAction": "Autorizar push y PR; con CI verde y merge, cerrar con continuity.js apply (close). Después, misión separada CZ-RUNTIME-SYNC.",
-      "changes": "Implementación y dogfooding completos en local; cierre pendiente de puerta humana.",
+      "nextAction": "Merge de la PR #52 = decisión humana, después de la PR #51; tras el merge, cerrar con CI verde en main. Luego, misión separada CZ-RUNTIME-SYNC.",
+      "changes": "PR #52: Node 22, Node 24, gate y docker verdes; approval-postgres-integration rojo solo por el teardown que corrige la PR #51 (la rama no toca approval).",
       "confidence": "medium",
       "requiresRealTest": true,
-      "version": 2,
-      "updatedAt": "2026-10-17T18:04:16.331Z",
+      "version": 3,
+      "updatedAt": "2026-10-17T18:44:23.227Z",
       "evidence": [
         {
           "ref": "issue:49",
@@ -450,9 +506,17 @@
           "observedAt": "2026-10-17T18:06:00Z",
           "source": "registro vivo + GitHub real",
           "summary": "preflight (REFUSE_REOPEN, exit 3) → observe (reapertura por evidencia más reciente) → preflight (PROCEED) → apply (fusión de duplicado, BLOCKED, cierre prematuro rechazado) → audit (3/3 verificados)."
+        },
+        {
+          "ref": "pr:52",
+          "kind": "observation",
+          "result": "info",
+          "observedAt": "2026-10-17T18:32:00Z",
+          "source": "github",
+          "summary": "PR #52 abierta, head d5cfc6e; 4/5 checks verdes; el rojo es el mismo 57P01 de teardown (19 pass, 1 fail a nivel de fichero)."
         }
       ],
-      "blockedBy": "puerta humana: push + PR de feat/oxkio-client-zero-continuity-20261017"
+      "blockedBy": "puerta humana: merge de la PR #52 (después de la PR #51)"
     },
     {
       "id": "CZ-CANON-PR50",
@@ -923,6 +987,77 @@
     {
       "type": "daily_report",
       "at": "2026-10-17T18:19:36.474Z",
+      "name": "orchestration/PARTE-DIARIO/2026-10-17.md",
+      "result": "ok"
+    },
+    {
+      "type": "evidence_added",
+      "at": "2026-10-17T18:44:01.641Z",
+      "entry": "CZ-CI-NODE22-24",
+      "ref": "ci:39058158893#backend-tests (node 24)"
+    },
+    {
+      "type": "evidence_added",
+      "at": "2026-10-17T18:44:01.641Z",
+      "entry": "CZ-PG-RLS-REAL",
+      "ref": "ci:39058158893#approval-postgres-integration"
+    },
+    {
+      "type": "superseded_evidence",
+      "at": "2026-10-17T18:44:01.641Z",
+      "entry": "CZ-CI-NODE22-24",
+      "ref": "ci:39058158893#backend-tests (node 22)"
+    },
+    {
+      "type": "evidence_added",
+      "at": "2026-10-17T18:44:01.641Z",
+      "entry": "CZ-PG-RLS-REAL",
+      "ref": "ci:39058177785#approval-postgres-integration"
+    },
+    {
+      "type": "superseded_evidence",
+      "at": "2026-10-17T18:44:01.641Z",
+      "entry": "CZ-CI-NODE22-24",
+      "ref": "ci:39058177785#backend-tests (node 24)"
+    },
+    {
+      "type": "superseded_evidence",
+      "at": "2026-10-17T18:44:01.641Z",
+      "entry": "CZ-CI-NODE22-24",
+      "ref": "ci:39058177785#backend-tests (node 22)"
+    },
+    {
+      "type": "automation_run",
+      "at": "2026-10-17T18:44:01.641Z",
+      "name": "observe-github-ci",
+      "result": "ok",
+      "note": "2 runs, 6 observaciones: {\"evidence_added\":2,\"closable\":1,\"superseded\":3}"
+    },
+    {
+      "type": "human_decision",
+      "at": "2026-10-17T18:30:00.000Z",
+      "by": "José Antonio (vía Xatai)",
+      "note": "Autorizado push y PR de fix/oxkio-approval-pg-teardown-20261017 (20ee80a) y de feat/oxkio-client-zero-continuity-20261017, separados; sin merge ni deploy."
+    },
+    {
+      "type": "state_changed",
+      "at": "2026-10-17T18:44:23.227Z",
+      "entry": "CZ-PG-RLS-REAL",
+      "from": "BLOCKED",
+      "to": "BLOCKED",
+      "note": "PR #51 con CI completo verde (run 39058158893, intento 2: el intento 1 falló en Node lifecycle de Windows, test intermitente conocido, sin relación con el cambio)."
+    },
+    {
+      "type": "state_changed",
+      "at": "2026-10-17T18:44:23.227Z",
+      "entry": "CZ-CONTINUITY-PREFLIGHT",
+      "from": "BLOCKED",
+      "to": "BLOCKED",
+      "note": "PR #52: Node 22, Node 24, gate y docker verdes; approval-postgres-integration rojo solo por el teardown que corrige la PR #51 (la rama no toca approval)."
+    },
+    {
+      "type": "daily_report",
+      "at": "2026-10-17T18:44:23.294Z",
       "name": "orchestration/PARTE-DIARIO/2026-10-17.md",
       "result": "ok"
     }
