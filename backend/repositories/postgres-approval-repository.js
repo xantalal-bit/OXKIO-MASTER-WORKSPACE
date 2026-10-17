@@ -259,7 +259,7 @@ class PostgresApprovalRepository {
     );
     if (current.rows.length === 0) return conflict(ERROR_CODES.NOT_FOUND);
     const row = current.rows[0];
-    if (row.version !== expectedVersion) return conflict(ERROR_CODES.STALE_VERSION);
+    if (asPositiveInteger(row.version, 'version') !== expectedVersion) return conflict(ERROR_CODES.STALE_VERSION);
     if (expectedStatus !== undefined && row.status !== expectedStatus) {
       return conflict(ERROR_CODES.STATUS_CONFLICT, { currentStatus: row.status });
     }
