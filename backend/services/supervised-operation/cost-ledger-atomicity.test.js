@@ -158,8 +158,9 @@ test('P1-B an unreadable or foreign lock is not reclaimed automatically',async t
  const f=fixture(t,{},{lockLeaseMs:50,acquireMs:150});await f.reserve(f.ledger,'seed');const lock=lockFile(f.root);
  fs.writeFileSync(lock,JSON.stringify({id:'x',pid:1,host:'another-host',acquiredAt:0,expiresAt:0,state:'held'}));
  assert.throws(()=>f.openStore().put('owner','conversation','conv-1',{x:1}),{code:'store_busy'});
- assert.throws(()=>f.openStore().recover('owner',{decidedBy:'owner'}),{code:'store_lock_live'});
- assert.deepEqual(f.openStore().recover('owner',{decidedBy:'supervisor'}),{recovered:true,previousState:'held'});
+ // A holder on another host may be alive: nobody here breaks it (external review).
+ for(const decidedBy of ['owner','supervisor'])assert.throws(()=>f.openStore().recover('owner',{decidedBy}),{code:'store_lock_live'});
+ assert.equal(JSON.parse(fs.readFileSync(lock,'utf8')).host,'another-host');
  fs.writeFileSync(lock,'');const old=new Date(Date.now()-10000);fs.utimesSync(lock,old,old);
  assert.throws(()=>f.openStore().put('owner','conversation','conv-1',{x:1}),{code:'store_recovery_required'});
  assert.deepEqual(f.openStore().recover('owner',{decidedBy:'owner'}),{recovered:true,previousState:'corrupt'});

@@ -62,12 +62,12 @@ test('a live guard (crash-free reclaimer still running) is never broken; once th
  holder.kill('SIGKILL'); await new Promise(r => holder.on('exit', r)); // the reclaimer crashed mid-reclaim
  assert.equal(code(() => s.put('owner', 'note', 'n-2', {})), 'ok'); assert.ok(!fs.existsSync(lockFile(f.root) + '.reclaim'));
 });
-test('a guard of another host: never automatic, never the owner; a supervisor clears it once its lease ended', async t => {
+test('a guard of another host: its holder may be alive, so nobody breaks it (external review)', async t => {
  const f = fixture(t, { acquireMs: 200 }); const s = f.openStore(); s.put('owner', 'note', 'n-1', {});
  fs.writeFileSync(lockFile(f.root), meta(await deadPid())); fs.writeFileSync(lockFile(f.root) + '.reclaim', meta(4242, { host: 'other-host' }));
  assert.equal(code(() => s.put('owner', 'note', 'n-2', {})), 'store_busy');
- assert.equal(code(() => s.recover('owner', { decidedBy: 'owner' })), 'store_lock_live');
- assert.equal(s.recover('owner', SUPERVISOR).recovered, true); assert.equal(code(() => s.put('owner', 'note', 'n-2', {})), 'ok');
+ for (const who of ['owner', 'supervisor']) assert.equal(code(() => s.recover('owner', { decidedBy: who })), 'store_lock_live', who);
+ assert.ok(fs.existsSync(lockFile(f.root) + '.reclaim')); assert.equal(f.openStore().list('owner', 'note').length, 1);
 });
 test('a guard whose unlink keeps failing (EPERM/EBUSY) never blocks: it is cleared by evidence after its lease', async t => {
  const f = fixture(t, { lockLeaseMs: 200, retryMs: 50 }); const s = f.openStore(); s.put('owner', 'note', 'n-1', {});
@@ -91,28 +91,18 @@ test('concurrent recoverers in several processes: each lock/guard removed at mos
  const runs = await Promise.all([1, 2, 3, 4].map(p => new Promise(r => { const c = spawn(process.execPath, ['-e', src(p)]); let o = ''; c.stdout.on('data', d => { o += d; }); c.stderr.on('data', d => { o += d; }); c.on('exit', () => r(JSON.parse(o.trim()))); })));
  for (const r of runs) { assert.equal(r.put, 10); assert.ok(r.recover.every(v => [true, false, 'store_lock_live'].includes(v)), JSON.stringify(r.recover)); }
  assert.equal(f.openStore().list('owner', 'note').length, 41);
- assert.deepEqual(fs.readdirSync(f.root).filter(n => /\.(lock|reclaim|stale)/.test(n) && !n.endsWith('.won')), []);
- assert.equal(fs.readdirSync(f.root).filter(n => n.endsWith('.won')).length, 1, 'the stale guard was cleared by exactly one process');
+ assert.deepEqual(fs.readdirSync(f.root).filter(n => /\.(lock|reclaim|stale|won)/.test(n)), [], 'no lock, guard or claim left');
 });
 
-// ---------- P2 reused pid ----------
-test('reused pid: never automatic, never the owner; a supervisor naming the exact lock id with evidence clears it', async t => {
+// ---------- P2 reused pid (identity rules: ledger-holder-identity.test.js) ----------
+test('a live pid with an expired lease is never broken: lock id + evidence prove nothing', async t => {
  const f = fixture(t, { lockLeaseMs: 200, acquireMs: 200 }); const s = f.openStore(); s.put('owner', 'note', 'n-1', {});
  const other = sleeper(t); const lock = JSON.parse(meta(other.pid)); fs.writeFileSync(lockFile(f.root), JSON.stringify(lock));
  assert.equal(code(() => s.put('owner', 'note', 'n-2', {})), 'store_busy');
- assert.equal(code(() => s.recover('owner', { decidedBy: 'owner', lockId: lock.id, evidenceRef: 'pid-reused-check' })), 'store_lock_live');
- assert.equal(code(() => s.recover('owner', { ...SUPERVISOR, evidenceRef: 'pid-reused-check' })), 'store_lock_live', 'lock id required');
- assert.equal(code(() => s.recover('owner', { ...SUPERVISOR, lockId: randomUUID(), evidenceRef: 'pid-reused-check' })), 'store_lock_live', 'another lock id');
- assert.equal(code(() => s.recover('owner', { ...SUPERVISOR, lockId: lock.id })), 'store_lock_live', 'evidence required');
- const done = s.recover('owner', { ...SUPERVISOR, lockId: lock.id, evidenceRef: 'pid-reused-check' });
- assert.equal(done.recovered, true); assert.equal(done.reason, 'pid_reused'); assert.equal(code(() => s.put('owner', 'note', 'n-2', {})), 'ok');
+ for (const who of ['owner', 'supervisor']) assert.equal(code(() => s.recover('owner', { decidedBy: who, lockId: lock.id, evidenceRef: 'pid-reused-check' })), 'store_lock_live', who);
+ assert.equal(JSON.parse(fs.readFileSync(lockFile(f.root), 'utf8')).id, lock.id);
 });
-test('reused-pid recovery refuses a lease that ended less than a whole lease ago', async t => {
- const f = fixture(t, { lockLeaseMs: 60000 }); const s = f.openStore(); s.put('owner', 'note', 'n-1', {});
- const other = sleeper(t); const lock = JSON.parse(meta(other.pid, { expiresAt: Date.now() - 1000 })); fs.writeFileSync(lockFile(f.root), JSON.stringify(lock));
- assert.equal(code(() => s.recover('owner', { ...SUPERVISOR, lockId: lock.id, evidenceRef: 'x-1' })), 'store_lock_live');
-});
-test('a live holder awaiting past its lease renews it: even a supervisor with its lock id cannot break it', { timeout: 30000 }, async t => {
+test('a live holder awaiting past its lease renews it: nobody can break it', { timeout: 30000 }, async t => {
  const f = fixture(t, { lockLeaseMs: 300 }); const s = f.openStore(); s.put('owner', 'note', 'n-1', {});
  const src = `const path=require('node:path');const so=${JSON.stringify(__dirname)};const {createMemoryStoreFactory}=require(path.join(so,'memory-store'));const {createHmacIntegrity}=require(path.join(so,'integrity'));
  const s=createMemoryStoreFactory({root:${JSON.stringify(f.root)},integrity:createHmacIntegrity({key:Buffer.from('${f.key.toString('hex')}','hex')}),lockLeaseMs:300})({key:h=>h});
@@ -121,7 +111,7 @@ test('a live holder awaiting past its lease renews it: even a supervisor with it
  const end = Date.now() + 10000; while (!out.includes('held')) { if (Date.now() > end) throw new Error('child'); await wait(20); }
  await wait(1500);
  const held = JSON.parse(fs.readFileSync(lockFile(f.root), 'utf8')); assert.ok(held.expiresAt > Date.now() - 300, 'lease renewed');
- assert.equal(code(() => s.recover('owner', { ...SUPERVISOR, lockId: held.id, evidenceRef: 'x-1' })), 'store_lock_live');
+ for (const who of ['owner', 'supervisor']) assert.equal(code(() => s.recover('owner', { decidedBy: who, lockId: held.id, evidenceRef: 'x-1' })), 'store_lock_live', who);
 });
 
 // ---------- P1-2 ACCEPTED_FINAL ----------
@@ -146,7 +136,10 @@ test('ACCEPTED_FINAL: an accepted, settled step is never asked nor paid again (3
 test('ACCEPTED_FINAL survives receipt compaction, a month change and a restart', async t => {
  const f = fixture(t, { maxRecords: 60 }); const a = prov('a', OK);
  await ask(reasoner([a]), f.open()); const l = f.open();
- for (let i = 0; i < 150; i++) { const r = await l.reserve('owner', { idempotencyKey: 'k-' + i, missionId: 'mission-y', modelId: 'openai:a', estimatedUsd: 0.001, approvedDailyBudgetUsd: 1000 }); await l.claimCall('owner', r); await l.settle('owner', r, {}); }
+ // Each receipt closes 1 ms later (still 31/10): the oldest-first order never
+ // depends on the random token tie-break, so mission-x's receipt (closed at
+ // .000) is always among the compacted ones.
+ for (let i = 0; i < 150; i++) { f.setDate(new Date(Date.parse('2026-10-31T23:59:59.000Z') + i + 1).toISOString()); const r = await l.reserve('owner', { idempotencyKey: 'k-' + i, missionId: 'mission-y', modelId: 'openai:a', estimatedUsd: 0.001, approvedDailyBudgetUsd: 1000 }); await l.claimCall('owner', r); await l.settle('owner', r, {}); }
  assert.ok(!f.openStore().list('owner', 'cost-call').some(e => e.missionId === 'mission-x'), 'detailed receipt compacted');
  f.setDate('2026-11-01T08:00:00.000Z');
  await assert.rejects(ask(reasoner([a]), f.open(f.openStore())), { code: 'step_already_accepted' }); assert.equal(a.calls, 1);
