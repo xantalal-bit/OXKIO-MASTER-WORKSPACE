@@ -13,6 +13,8 @@ const { copy, fail } = require('./scope-session');
 const TRANSIENT_FS = new Set(['EPERM', 'EBUSY', 'EACCES']);
 const pause = ms => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
 const digest = text => createHash('sha256').update(text).digest('hex');
+const UUID = '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}';
+const literal = text => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 function retrying(fn, budgetMs) { const end = Date.now() + budgetMs; for (let i = 0; ; i++) { try { return fn(); } catch (e) { if (!TRANSIENT_FS.has(e.code) || Date.now() >= end) throw e; pause(Math.min(2 ** i, 50)); } } }
 const storageError = (code, error) => Object.assign(new Error(code), { code, storageCode: (error && (error.code || error.name)) || null });
 // Reuses the existing MemoryEngine/repository. One server-derived owner maps to
@@ -62,7 +64,12 @@ const holding = PROCESS.holding;
 // Owners whose lock is held across an await (a synchronous writer cannot wait
 // for those without blocking the very holder it waits for).
 const asyncHolders = new Map();
-function alive(pid) { try { process.kill(pid, 0); return true; } catch (e) { return e.code === 'EPERM'; } }
+// A pid answers for a holder only as a positive int32 (what kill() takes; on
+// Windows a negative one reads as ESRCH, one beyond int32 as a type error).
+// Only ESRCH proves it gone: EPERM (someone else's live process) or any other
+// answer cannot tell it apart from the holder.
+const validPid = pid => Number.isInteger(pid) && pid > 0 && pid <= 0x7fffffff;
+function alive(pid) { try { process.kill(pid, 0); return true; } catch (e) { return e.code !== 'ESRCH'; } }
 // Linux: boot id + start time in clock ticks since boot, exact and immune to
 // clock changes. Elsewhere there is no safe synchronous source: null.
 const BOOT = (() => { try { return fs.readFileSync('/proc/sys/kernel/random/boot_id', 'utf8').trim() || null; } catch { return null; } })();
@@ -73,7 +80,7 @@ const OWN_START = startOf(process.pid);
 // nonce on the main thread: an earlier process that had this pid), or the
 // live pid has another start identity. Anything else may be the holder.
 function gone(m) {
- if (m.host !== HOST || !Number.isInteger(m.pid)) return false;
+ if (m.host !== HOST || !validPid(m.pid)) return false;
  if (m.pid === process.pid) return m.instance === PROCESS.instance ? !holding.has(m.id) : typeof m.instance === 'string' && m.thread === 0 && threadId === 0;
  if (!alive(m.pid)) return true;
  const now = startOf(m.pid); return !!(m.start && now && now !== m.start);
@@ -185,22 +192,50 @@ function createMemoryStoreFactory({ root, integrity, maxRecords = 2000, lockLeas
    for (let i = n; i >= 0; i--) try { retrying(() => fs.unlinkSync(base + i + '.won'), retryMs); } catch { /* inert; swept later */ }
    return true;
   }
-  // Leftovers of a crash: claims whose holder is proven gone.
+  // Leftovers of a crash, run under the guard (so no lock is being moved
+  // aside meanwhile), each removed only with evidence: a claim, a claim temp
+  // file or a lock moved aside whose recorded holder is proven gone (lease
+  // ended); a guard moved aside likewise, and only while no claim of that
+  // guard instance may still be moving it. Anything unreadable, unknown or of
+  // a holder that may be alive stays: it is never read as a lock.
   function sweep(file) {
-   const dir = path.dirname(file); const name = path.basename(file) + '.reclaim-'; let names = [];
-   try { names = fs.readdirSync(dir).filter(n => n.startsWith(name) && n.endsWith('.won')); } catch { return; }
-   for (const n of names) if (abandoned(readLock(path.join(dir, n)), Date.now())) try { fs.unlinkSync(path.join(dir, n)); } catch { /* next sweep */ }
+   const dir = path.dirname(file); const lock = path.basename(file); const guard = lock + '.reclaim'; let names = [];
+   try { names = fs.readdirSync(dir).filter(n => n.startsWith(lock + '.')); } catch { return; }
+   const at = n => path.join(dir, n); const now = Date.now(); const dead = n => abandoned(readLock(at(n)), now);
+   const drop = n => { try { fs.unlinkSync(at(n)); } catch { /* next sweep */ } };
+   const claim = new RegExp('^' + literal(guard) + '-[0-9a-f]{32}\\.\\d+\\.won$');
+   const claimTemp = new RegExp('^' + literal(guard) + '-[0-9a-f]{32}\\.\\d+\\.won\\.' + UUID + '\\.tmp$');
+   const lockAside = new RegExp('^' + literal(lock) + '\\.' + UUID + '\\.stale$');
+   const guardAside = new RegExp('^' + literal(guard) + '\\.' + UUID + '\\.stale$');
+   for (const n of names) if (claim.test(n) && dead(n)) drop(n);
+   const moving = g => names.some(n => claim.test(n) && n.startsWith(guard + '-' + digest('id:' + g.id).slice(0, 32) + '.') && (c => !!c && !abandoned(c, now))(readLock(at(n))));
+   for (const n of names) {
+    if (claimTemp.test(n) || lockAside.test(n)) { if (dead(n)) drop(n); }
+    else if (guardAside.test(n)) { const g = readLock(at(n)); if (abandoned(g, now) && !moving(g)) drop(n); }
+   }
+  }
+  // The owner's snapshot and lease-renewal temp files are written only by the
+  // owner lock holder: while this process holds that lock none is in flight,
+  // so any left is a crash leftover (never read). Called only under it.
+  function sweepTemps(handle) {
+   const file = fileOf(handle); const dir = path.dirname(file); let names = [];
+   const temp = new RegExp('^' + literal(path.basename(file)) + '(\\.lock)?\\.' + UUID + '\\.tmp$');
+   try { names = fs.readdirSync(dir).filter(n => temp.test(n)); } catch { return; }
+   for (const n of names) try { fs.unlinkSync(path.join(dir, n)); } catch { /* next sweep */ }
   }
   // Reclaiming is serialized by the guard, and the lock is removed only if it
   // is still the same abandoned one: a fresh lock is never removed.
   function reclaim(file, expected, authority = null) {
-   const guard = file + '.reclaim'; let own = create(guard);
-   if (!own) { if (!clearGuard(guard, authority)) return false; own = create(guard); if (!own) return false; }
-   holding.add(own.id);
    // Judged again under the guard: what was evaluated before may already be
    // gone and replaced by a live writer's lock, which is left untouched. An
    // abandoned lock cannot change while the guard is held.
-   try { const current = readLock(file); if (!current || !expected(current, file)) return false; const removed = removeIfStill(file, expected); if (removed) sweep(file); return removed; }
+   return underGuard(file, authority, () => { const current = readLock(file); if (!current || !expected(current, file)) return false; const removed = removeIfStill(file, expected); if (removed) sweep(file); return removed; });
+  }
+  function underGuard(file, authority, fn) {
+   const guard = file + '.reclaim'; let own = create(guard);
+   if (!own) { if (!clearGuard(guard, authority)) return false; own = create(guard); if (!own) return false; }
+   holding.add(own.id);
+   try { return fn(); }
    finally {
     holding.delete(own.id);
     // Only this guard, never one taken by another process meanwhile. A guard
@@ -212,8 +247,18 @@ function createMemoryStoreFactory({ root, integrity, maxRecords = 2000, lockLeas
    const file = lockOf(handle); const meta = create(file); if (meta) { holding.add(meta.id); return meta; }
    const held = readLock(file); if (!held) return null;
    blocked(file, held);
-   if (abandoned(held, Date.now())) reclaim(file, again => again.id === held.id && abandoned(again, Date.now()));
+   // A reclaimed lock left a crash behind: whoever takes the lock next here
+   // also clears that crash's temp files.
+   if (abandoned(held, Date.now()) && reclaim(file, again => again.id === held.id && abandoned(again, Date.now()))) { const won = create(file); if (won) { holding.add(won.id); sweepTemps(handle); return won; } }
    return null;
+  }
+  // Leftovers cleared on an explicit recover(): the owner's temp files under
+  // the owner lock, then the rest under the guard. Skipped if either is taken;
+  // a recovery already done is never turned into an error by this.
+  function tidy(handle) {
+   const file = lockOf(handle); const own = create(file); if (!own) return; holding.add(own.id);
+   try { sweepTemps(handle); try { underGuard(file, null, () => sweep(file)); } catch { /* left for a later sweep */ } }
+   finally { try { release(handle, own); } catch { /* this process no longer holds it: reclaimable by evidence */ } }
   }
   function release(handle, meta) { holding.delete(meta.id); const file = lockOf(handle); const held = readLock(file); if (held && held.id === meta.id) retrying(() => fs.unlinkSync(file), retryMs); }
   // The lock stays, marked: nobody reclaims it automatically.
@@ -266,7 +311,7 @@ function createMemoryStoreFactory({ root, integrity, maxRecords = 2000, lockLeas
   function recover(handle, { decidedBy } = {}) {
    if (!['owner', 'supervisor'].includes(decidedBy)) fail('recovery_authority_required');
    const file = lockOf(handle); const held = readLock(file);
-   if (!held) return Object.freeze({ recovered: false, reason: 'no_lock' });
+   if (!held) { tidy(handle); return Object.freeze({ recovered: false, reason: 'no_lock' }); }
    if (held.corrupt && age(file) <= lockLeaseMs) fail('store_lock_live');
    const live = m => !m.corrupt && m.state === 'held' && !gone(m);
    if (live(held)) fail('store_lock_live');
@@ -274,6 +319,7 @@ function createMemoryStoreFactory({ root, integrity, maxRecords = 2000, lockLeas
    // An unreadable lock is removed only while it is still an old one: a lock
    // being written right now is briefly empty too.
    const removed = reclaim(file, (again, aside) => same(held, again) && (again.corrupt ? age(aside) > lockLeaseMs : !live(again)), decidedBy);
+   if (removed) tidy(handle);
    return Object.freeze({ recovered: removed, previousState: held.corrupt ? 'corrupt' : held.state, ...(!held.corrupt && held.state === 'held' && reusedPid(held) ? { reason: 'pid_reused' } : {}) });
   }
   return Object.freeze({
