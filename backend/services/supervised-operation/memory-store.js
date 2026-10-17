@@ -226,6 +226,18 @@ function createMemoryStoreFactory({ root, integrity, maxRecords = 2000, lockLeas
    for (let i = 0; !(meta = tryAcquire(handle)); i++) { if (asyncHolders.get(lockOf(handle)) || Date.now() >= end) fail('store_busy'); pause(Math.min(2 ** i, 20)); }
    let failure = null; try { const state = load(handle); const result = operation(view(handle, state)); save(state); return result; } catch (e) { failure = e; throw e; } finally { finish(handle, meta, failure); }
   }
+  // A renewal never rewrites the live lock in place: the renewed record is
+  // written and synced aside, then renamed over the lock only while it is
+  // still exactly this holder's (nobody else changes a live holder's lock
+  // meanwhile). Any failure leaves the previous, valid lock untouched.
+  function renewLease(file, meta) {
+   const temp = file + '.' + randomUUID() + '.tmp';
+   try {
+    const fd = fs.openSync(temp, 'wx'); try { fs.writeFileSync(fd, JSON.stringify({ ...meta, expiresAt: Date.now() + lockLeaseMs })); fs.fsyncSync(fd); } finally { fs.closeSync(fd); }
+    const held = readLock(file);
+    if (held && !held.corrupt && held.id === meta.id && held.pid === meta.pid && held.instance === meta.instance && held.thread === meta.thread) fs.renameSync(temp, file);
+   } catch { /* the previous lease stands */ } finally { try { if (fs.existsSync(temp)) fs.unlinkSync(temp); } catch { /* a leftover temp file is never read */ } }
+  }
   // A synchronous operation runs without yielding while the lock is held, so
   // writers of this same process never find it taken by an unfinished await.
   async function transaction(handle,operation){
@@ -238,7 +250,7 @@ function createMemoryStoreFactory({ root, integrity, maxRecords = 2000, lockLeas
      // A holder awaiting keeps its lease fresh (informative: an expired lease
      // alone never lets anyone break a holder that may be alive).
      const file = lockOf(handle); asyncHolders.set(file, (asyncHolders.get(file) || 0) + 1);
-     const renew = setInterval(() => { const held = readLock(file); if (held && held.id === meta.id) { try { fs.writeFileSync(file, JSON.stringify({ ...meta, expiresAt: Date.now() + lockLeaseMs })); } catch { /* the previous lease stands */ } } }, Math.max(20, Math.floor(lockLeaseMs / 3)));
+     const renew = setInterval(() => renewLease(file, meta), Math.max(20, Math.floor(lockLeaseMs / 3)));
      try { result = await result; } finally { clearInterval(renew); asyncHolders.set(file, asyncHolders.get(file) - 1); }
     }
     save(state); return result;

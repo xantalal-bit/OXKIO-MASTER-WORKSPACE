@@ -155,10 +155,10 @@ test('auditor probe: live child in a synchronous transaction past its lease; rec
  assert.equal(code(() => s.recover('owner', { decidedBy: 'supervisor', lockId: lock.id, evidenceRef: 'pid-reused-check' })), 'store_lock_live');
  assert.equal(code(() => s.recover('owner', { decidedBy: 'owner' })), 'store_lock_live');
  assert.equal(code(() => s.put('owner', 'note', 'intruder', {})), 'store_busy', 'no second writer while the holder lives');
- const second = child(f, `s.put('owner','note','second',{order:2});console.log('WROTE '+Date.now());`, { lockLeaseMs: 200, acquireMs: 20000 });
+ const second = child(f, `await s.transaction('owner',tx=>{const seen=tx.list('owner','note').map(n=>n.order).sort();tx.put('owner','note','second',{order:2});console.log('SEEN '+JSON.stringify(seen));});`, { lockLeaseMs: 200, acquireMs: 20000 });
  const [h, w] = await Promise.all([holder.done, second.done]);
- const released = Number(/RELEASED (\d+)/.exec(h.out)[1]); const wrote = Number(/WROTE (\d+)/.exec(w.out)[1]);
- assert.ok(wrote >= released, 'the second writer entered only after the holder ended');
+ assert.match(h.out, /RELEASED/);
+ assert.equal(/SEEN (.*)/.exec(w.out)[1], '[0,1]', 'the second writer entered only after the holder committed');
  assert.deepEqual(f.openStore().list('owner', 'note').map(n => n.order).sort(), [0, 1, 2], 'zero lost update after restart');
  assert.deepEqual(leftovers(f.root), []);
 });
@@ -170,9 +170,9 @@ test('long async holder: recovery refused, the second writer waits, both writes 
  const s = f.openStore({ lockLeaseMs: 200, acquireMs: 300 });
  for (const who of ['owner', 'supervisor']) assert.equal(code(() => s.recover('owner', { decidedBy: who })), 'store_lock_live');
  assert.equal(code(() => s.put('owner', 'note', 'intruder', {})), 'store_busy');
- const second = child(f, `s.put('owner','note','second',{order:2});console.log('WROTE '+Date.now());`, { lockLeaseMs: 200, acquireMs: 20000 });
+ const second = child(f, `await s.transaction('owner',tx=>{const seen=tx.list('owner','note').map(n=>n.order).sort();tx.put('owner','note','second',{order:2});console.log('SEEN '+JSON.stringify(seen));});`, { lockLeaseMs: 200, acquireMs: 20000 });
  const [h, w] = await Promise.all([holder.done, second.done]);
- assert.ok(Number(/WROTE (\d+)/.exec(w.out)[1]) >= Number(/RELEASED (\d+)/.exec(h.out)[1]));
+ assert.match(h.out, /RELEASED/); assert.equal(/SEEN (.*)/.exec(w.out)[1], '[0,1]', 'the second writer entered only after the holder committed');
  assert.deepEqual(f.openStore().list('owner', 'note').map(n => n.order).sort(), [0, 1, 2]);
 });
 test('a holder really dead: recovered by evidence (no pid_reused), writes resume, restart sees them', { timeout: 30000 }, async t => {

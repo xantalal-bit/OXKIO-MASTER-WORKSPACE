@@ -68,3 +68,24 @@ Medición: el test antiguo dio 59/60 y el nuevo 60/60.
 - Un lock heredado sin identidad, en el PID de este mismo proceso, queda fail-closed.
 - Los archivos movidos aparte (`.stale`) y los temporales de un crash no se barren. Son inertes: nunca se leen como lock.
 - PostgreSQL real, Node 22 y CI: sin probar.
+
+## P2 de la reauditoría de 82a06d2: renovación atómica del lease
+
+Hallazgo: una transacción async renovaba su lease reescribiendo el lock en su sitio (`writeFileSync`). Si esa escritura fallaba a medias (por ejemplo ENOSPC), el lock quedaba truncado. Pasado un lease, `recover()` lo trataba como ilegible y antiguo, rompía al holder vivo, y el segundo writer perdía su escritura.
+
+Era latente: el ledger solo usa transacciones síncronas, que no renuevan.
+
+Corrección (`renewLease`):
+- el registro renovado se escribe y sincroniza aparte (`<lock>.<uuid>.tmp`);
+- se publica con `rename` solo si el lock sigue siendo exactamente del mismo holder (id, pid, instance, thread);
+- cualquier fallo deja intacto el lock anterior, que sigue siendo válido;
+- el lock vivo nunca se escribe en su sitio.
+
+Pruebas (`ledger-lease-renewal.test.js`):
+- ENOSPC, EPERM, EBUSY y EACCES en cada renovación, al escribir y al publicar;
+- el vector original (escritura en su sitio que trunca);
+- crash durante la escritura del temporal, antes de publicar y después de publicar;
+- renovaciones consecutivas, siempre íntegras y con el lease avanzando;
+- ABA: no publica sobre otro id, instance, thread o pid.
+
+Control negativo: con el `memory-store.js` de 82a06d2 fallan el vector original (lost update) y el ABA.
