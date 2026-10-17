@@ -108,22 +108,33 @@ function latestContradictionAt(entry) {
 
 const PROOF_KINDS = new Set(["ci_green", "real_test"]);
 
-// Latest proof that keeps a front CLOSED (green CI or a real test).
-function latestProofAt(entry) {
+// The CI job a ref speaks for ("ci:123#backend-tests (node 22)"), or null.
+function signalOf(ref) {
+  const match = /^ci:\d+#(.+)$/.exec(ref);
+  return match ? match[1] : null;
+}
+
+// Latest proof that keeps a front CLOSED (green CI or a real test). With a
+// signal, only a proof of that same job counts: a green Node 24 run never
+// outweighs a newer Node 22 failure.
+function latestProofAt(entry, signal = null) {
   return entry.evidence
-    .filter((item) => PROOF_KINDS.has(item.kind) && item.result === "success")
+    .filter((item) => PROOF_KINDS.has(item.kind) && item.result === "success" && (!signal || signalOf(item.ref) === signal))
     .reduce((latest, item) => Math.max(latest, time(item.observedAt)), 0);
 }
 
-// Kinds still missing for CLOSED. The merge is a one-time fact; green CI and
-// the real test (when it applies) must be newer than the most recent
-// contradicting evidence of the same front.
+// Kinds still missing for CLOSED. The merge is a one-time fact; green CI must
+// be newer than every contradiction (of the same job when it names one) and
+// the real test, when it applies, newer than the most recent contradiction.
 function closureGaps(entry) {
-  const after = latestContradictionAt(entry);
   const gaps = entry.evidence.some((item) => item.kind === "pr_merged" && item.result === "success") ? [] : ["pr_merged"];
-  ["ci_green", ...(entry.requiresRealTest ? ["real_test"] : [])].forEach((kind) => {
-    if (!entry.evidence.some((item) => item.kind === kind && item.result === "success" && time(item.observedAt) > after)) gaps.push(kind);
-  });
+  const green = entry.evidence.filter((item) => item.kind === "ci_green" && item.result === "success");
+  const contradictions = entry.evidence.filter(contradicts);
+  const answered = (failure) => green.some((item) => time(item.observedAt) > time(failure.observedAt)
+    && (!signalOf(failure.ref) || signalOf(item.ref) === signalOf(failure.ref)));
+  if (green.length === 0 || !contradictions.every(answered)) gaps.push("ci_green");
+  const after = latestContradictionAt(entry);
+  if (entry.requiresRealTest && !entry.evidence.some((item) => item.kind === "real_test" && item.result === "success" && time(item.observedAt) > after)) gaps.push("real_test");
   return gaps;
 }
 
@@ -318,7 +329,7 @@ function frontView(entry) {
 function isMaterial(entry, item) {
   return Boolean(item && typeof item.ref === "string"
     && !entry.evidence.some((known) => known.ref === item.ref)
-    && validDate(item.observedAt) && time(item.observedAt) > latestProofAt(entry)
+    && validDate(item.observedAt) && time(item.observedAt) > latestProofAt(entry, signalOf(item.ref))
     && contradicts(item));
 }
 

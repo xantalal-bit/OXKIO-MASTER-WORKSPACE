@@ -193,6 +193,36 @@ test('deduplication: one front per topic, one evidence per ref, two failing runs
   assert.deepEqual(matchEntries(twice.registry, 'el job de RLS en PostgreSQL/RLS real').map((e) => e.id), ['CZ-PG-RLS']);
 });
 
+test('multi-signal fronts: a green job never outweighs a newer failure of another job', () => {
+  const matrix = closedFront({
+    id: 'CZ-MATRIX', title: 'Matriz Node', aliases: ['node 22'], requiresRealTest: false,
+    signals: ['backend-tests (node 22)', 'backend-tests (node 24)'],
+    evidence: [
+      ev('pr:47', 'pr_merged', 'success', T0),
+      ev('ci:1#backend-tests (node 22)', 'ci_green', 'success', T0),
+      ev('ci:1#backend-tests (node 24)', 'ci_green', 'success', T0),
+    ],
+  });
+  const registry = fixture([matrix]);
+  const run = observationsFromRuns(registry, [{
+    id: 2, branch: 'main', event: 'push', sha: 'abcdef1234567', updatedAt: T3,
+    jobs: [
+      { name: 'backend-tests (node 24)', conclusion: 'success', completedAt: T3 },
+      { name: 'backend-tests (node 22)', conclusion: 'failure', completedAt: T2 },
+    ],
+  }]);
+  const { registry: next, changes } = reconcile({ registry, observations: run, now: NOW });
+  assert.deepEqual(changes.map((c) => c.type), ['evidence_added', 'reopened']);
+  const front = findEntry(next, 'CZ-MATRIX');
+  assert.equal(front.state, 'PENDING');
+  // Only a newer green of the same job answers the failure.
+  assert.deepEqual(closureGaps(front), ['ci_green']);
+  const healed = reconcile({ registry: next, now: NOW, observations: [
+    { entry: 'CZ-MATRIX', ...ev('ci:3#backend-tests (node 22)', 'ci_green', 'success', NOW) },
+  ] });
+  assert.deepEqual(healed.changes.map((c) => c.type), ['closable']);
+});
+
 test('authorization already granted is not asked again; human gates need an exact scope', () => {
   const registry = fixture();
   assert.equal(authorizationFor(registry, 'test_only_fix', {}, NOW).status, 'GRANTED');
