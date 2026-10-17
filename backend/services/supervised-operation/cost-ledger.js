@@ -24,6 +24,10 @@ function budgetGate(detail) { throw Object.assign(new Error('planning_budget_gat
 // A call or ledger that needs a human decision: its own code, never a budget
 // condition (not transient, so nothing waits for it to clear by itself).
 function reconciliationGate(code, detail) { throw Object.assign(new Error(code), { code, detail, reconciliation: true }); }
+// A step whose paid answer was settled and accepted is final: no model is
+// asked again for it (never a budget nor a reconciliation condition).
+function acceptedGate(detail) { throw Object.assign(new Error('step_already_accepted'), { code: 'step_already_accepted', detail, accepted: true }); }
+const ACCEPTED_FINAL = 'accepted_final';
 function money(value) {
  return value && typeof value === 'object' && Number.isFinite(value.amount) && value.amount >= 0 && typeof value.currency === 'string' && CURRENCY.test(value.currency)
   ? freeze({ amount: value.amount, currency: value.currency }) : null;
@@ -108,12 +112,17 @@ function createCostLedger({ store, catalog = {}, policy = {}, budget = {}, now =
  const OPEN_CALL = ['claimed', 'call_unknown'];
  const scopeBusy = (handle, scope, token) => store.list(handle, 'cost-call').some(e => e.scope === scope && e.token !== token && OPEN_CALL.includes(e.status));
  const overcharged = handle => read(handle, 'cost-control', 'owner-control', () => ({})).blocked === true;
+ // The ACCEPTED_FINAL marker of a step lives in its mission's own cost record
+ // (never compacted, not tied to a day or month), so it outlives the detailed
+ // receipt, a restart and a period change. Every model of the step shares it.
+ const acceptedStep = (handle, missionId, scope) => { const steps = read(handle, 'cost-mission', missionId, emptyMission).steps || {}; return steps[scope] && steps[scope].status === ACCEPTED_FINAL ? steps[scope] : null; };
  function reserve(handle, { missionId, modelId, estimatedUsd, approvedDailyBudgetUsd, idempotencyKey, scopeKey }) {
   if (!Number.isFinite(estimatedUsd) || estimatedUsd < 0 || !Number.isFinite(approvedDailyBudgetUsd) || approvedDailyBudgetUsd <= 0) fail('planning_budget_gate');
   units(estimatedUsd); units(approvedDailyBudgetUsd);
   const key = idempotencyKey || store.newId(); const scopeText = scopeKey || key;
   for (const value of [key, scopeText]) if (typeof value !== 'string' || !/^[A-Za-z0-9:._-]{1,512}$/.test(value)) fail('reservation_key_invalid');
   const keyId = hashId('k-', key); const scope = hashId('s-', scopeText);
+  if (acceptedStep(handle, missionId, scope)) acceptedGate('scope_accepted');
   const index = read(handle, 'cost-key', keyId, () => null);
   const prior = index ? read(handle, 'cost-call', index.token, () => null) : null;
   if (prior) {
@@ -201,16 +210,52 @@ function createCostLedger({ store, catalog = {}, policy = {}, budget = {}, now =
  // Only a claimed call is settled: a reservation that never reached the
  // provider is released through reconcileCall, never charged as a call. A
  // durable receipt makes repeated settlement return the original charge.
- function settle(handle, reservation, usage = {}) {
+ // accepted: the caller's deterministic verifier accepted this answer. The
+ // charge and the step's ACCEPTED_FINAL marker are written in this same
+ // transaction: there is no state where one exists without the other.
+ // Otherwise the receipt says SETTLED_BUT_NOT_ACCEPTED and the step may be
+ // tried again (a refused output, a rate limit, a definitive rejection).
+ function settle(handle, reservation, usage = {}, { accepted = false } = {}) {
   const entry = read(handle,'cost-call',reservation.token,()=>null);
   if(!entry||entry.day!==reservation.day)fail('reservation_unknown');
   if(entry.status==='settled')return entry.chargedUsd;
   if(entry.status==='reserved')fail('call_not_claimed');
   if(entry.status!=='claimed')reconciliationGate('call_reconciliation_required','call_uncertain');
   const charged = book(handle, reservation.token, entry, usage);
-  store.put(handle,'cost-call',reservation.token,{...entry,status:'settled',chargedUsd:charged,closedAt:now()});
+  store.put(handle,'cost-call',reservation.token,{...entry,status:'settled',outcome:accepted===true?'accepted':'not_accepted',chargedUsd:charged,closedAt:now()});
+  if (accepted === true) {
+   const mission = read(handle, 'cost-mission', entry.missionId, emptyMission);
+   mission.steps = { ...(mission.steps || {}), [entry.scope]: { status: ACCEPTED_FINAL, token: reservation.token, modelId: entry.modelId, at: now() } };
+   store.put(handle, 'cost-mission', entry.missionId, mission);
+  }
   compact(handle);
   return charged;
+ }
+ // The state of one step (mission + task or phase): ACCEPTED_FINAL,
+ // CALL_UNKNOWN (claimed or uncertain: never repeated), SETTLED_BUT_NOT_ACCEPTED
+ // (may be tried again), NOT_EXECUTED (released) or NONE.
+ function step(handle, { missionId, scopeKey } = {}) {
+  if (typeof scopeKey !== 'string' || !/^[A-Za-z0-9:._-]{1,512}$/.test(scopeKey)) fail('reservation_key_invalid');
+  const scope = hashId('s-', scopeKey);
+  if (acceptedStep(handle, missionId, scope)) return 'ACCEPTED_FINAL';
+  const calls = store.list(handle, 'cost-call').filter(e => e.scope === scope);
+  if (calls.some(e => OPEN_CALL.includes(e.status))) return 'CALL_UNKNOWN';
+  if (calls.some(e => e.status === 'settled')) return 'SETTLED_BUT_NOT_ACCEPTED';
+  if (calls.some(e => e.status === 'released')) return 'NOT_EXECUTED';
+  return 'NONE';
+ }
+ // Explicit decision by the owner or a supervisor, with an evidence code, to
+ // allow one new attempt of an accepted step. Never reachable from a model.
+ function reopenStep(handle, { missionId, scopeKey, decidedBy, evidenceRef } = {}) {
+  if (!['owner', 'supervisor'].includes(decidedBy)) fail('reconciliation_authority_required');
+  if (typeof evidenceRef !== 'string' || !CODE.test(evidenceRef)) fail('reconciliation_evidence_required');
+  if (typeof scopeKey !== 'string' || !/^[A-Za-z0-9:._-]{1,512}$/.test(scopeKey)) fail('reservation_key_invalid');
+  const scope = hashId('s-', scopeKey); const marker = acceptedStep(handle, missionId, scope);
+  if (!marker) return freeze({ status: 'not_accepted' });
+  const mission = read(handle, 'cost-mission', missionId, emptyMission);
+  mission.steps = { ...mission.steps, [scope]: { ...marker, status: 'reopened', reopened: { decidedBy, evidenceRef, at: now() } } };
+  store.put(handle, 'cost-mission', missionId, mission);
+  return freeze({ status: 'reopened' });
  }
  // One sealed entry per model call, inside the mission's own cost record
  // (bounded; beyond MAX_EXECUTIONS only a counter grows). The budget warning
@@ -237,6 +282,8 @@ function createCostLedger({ store, catalog = {}, policy = {}, budget = {}, now =
  function claimCall(handle,reservation){
   const entry=read(handle,'cost-call',reservation.token,()=>null);
   if(!entry||entry.day!==reservation.day)fail('reservation_unknown');
+  // Another attempt of the step (another process, another model) was accepted meanwhile.
+  if(acceptedStep(handle,entry.missionId,entry.scope))acceptedGate('scope_accepted');
   if(entry.status!=='reserved')reconciliationGate('call_reconciliation_required','call_not_reserved');
   if(overcharged(handle))reconciliationGate('ledger_reconciliation_required','overcharge');
   if(scopeBusy(handle,entry.scope,reservation.token))reconciliationGate('call_reconciliation_required','scope_uncertain');
@@ -297,8 +344,8 @@ function createCostLedger({ store, catalog = {}, policy = {}, budget = {}, now =
   store.put(handle, 'cost-control', 'owner-control', { blocked: false, reason: control.reason, clearedBy: decidedBy, evidenceRef, at: now() });
   return freeze({ blocked: false });
  }
- const api={estimate,reserve,settle,claimCall,markCallUnknown,reconcileCall,clearOvercharge,recordTool,recordExecution,budget:budgetState,mission,owner};
- if(!_transaction) for(const name of ['reserve','settle','claimCall','markCallUnknown','reconcileCall','clearOvercharge','recordTool','recordExecution']){
+ const api={estimate,reserve,settle,claimCall,markCallUnknown,reconcileCall,clearOvercharge,reopenStep,step,recordTool,recordExecution,budget:budgetState,mission,owner};
+ if(!_transaction) for(const name of ['reserve','settle','claimCall','markCallUnknown','reconcileCall','clearOvercharge','reopenStep','recordTool','recordExecution']){
   api[name]=async(handle,...args)=>{
    if(typeof store.transaction!=='function')fail('ledger_transaction_required');
    return store.transaction(handle,tx=>{const timestamp=now();return createCostLedger({store:tx,catalog,policy,budget,now:()=>timestamp,retainSettledReceipts,_transaction:true})[name](handle,...args);});

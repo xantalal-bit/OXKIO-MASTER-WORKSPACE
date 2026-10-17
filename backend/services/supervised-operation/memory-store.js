@@ -92,20 +92,65 @@ function createMemoryStoreFactory({ root, integrity, maxRecords = 2000, lockLeas
   function abandoned(m, now) { return !!m && !m.corrupt && m.state === 'held' && now > m.expiresAt && gone(m); }
   function create(file) {
    const now = Date.now(); const meta = { id: randomUUID(), pid: process.pid, host: HOST, acquiredAt: now, expiresAt: now + lockLeaseMs, state: 'held' };
-   let fd; try { fd = fs.openSync(file, 'wx'); } catch (e) { if (e.code === 'EEXIST') return null; throw e; }
+   // Windows refuses to create a name still pending deletion (EPERM): busy.
+   let fd; try { fd = fs.openSync(file, 'wx'); } catch (e) { if (e.code === 'EEXIST' || TRANSIENT_FS.has(e.code)) return null; throw e; }
    try { fs.writeFileSync(fd, JSON.stringify(meta)); fs.fsyncSync(fd); } finally { fs.closeSync(fd); }
    return meta;
   }
   // A lock being written is briefly empty; only an old unreadable one is stuck.
   function blocked(file, held) { if (held.state === 'uncertain' || (held.corrupt && age(file) > lockLeaseMs)) fail('store_recovery_required'); }
-  // Reclaiming is serialized by a guard file, and the lock is removed only if
-  // it is still the same abandoned one: a fresh lock is never removed.
-  function reclaim(file, expected) {
-   const guard = file + '.reclaim'; const own = create(guard);
-   if (!own) { const g = readLock(guard); if (g && (g.corrupt ? age(guard) > lockLeaseMs : abandoned(g, Date.now()))) fail('store_recovery_required'); return false; }
+  const same = (a, b) => (a.corrupt ? !!b.corrupt : !b.corrupt && b.id === a.id);
+  // Moves a lock or guard aside atomically and deletes it only if what was
+  // moved is still the one judged stale; anything else (a fresh one created
+  // meanwhile) goes back unchanged, so a remover never deletes a fresh one.
+  function removeIfStill(file, expected) {
+   const aside = file + '.' + randomUUID() + '.stale';
+   try { retrying(() => fs.renameSync(file, aside), retryMs); } catch (e) { if (e.code === 'ENOENT') return false; throw e; }
+   let text = ''; try { text = retrying(() => fs.readFileSync(aside, 'utf8'), retryMs); } catch { /* judged as unreadable */ }
+   let moved; try { moved = JSON.parse(text); } catch { moved = { corrupt: true }; }
+   if (expected(moved, aside)) { try { retrying(() => fs.unlinkSync(aside), retryMs); } catch { /* an aside file is never read as a lock */ } return true; }
+   // Put back: if the name was taken meanwhile, keep the aside copy and stop.
+   try { const fd = fs.openSync(file, 'wx'); try { fs.writeFileSync(fd, text); fs.fsyncSync(fd); } finally { fs.closeSync(fd); } } catch { fail('store_recovery_required'); }
+   try { fs.unlinkSync(aside); } catch { /* never read as a lock */ }
+   return false;
+  }
+  // The guard that serializes reclaiming follows the lock's own evidence: an
+  // abandoned guard (lease expired, holder gone on this host) is cleared
+  // automatically; an unreadable one older than a lease only by recover(); one
+  // of another host only by a supervisor; a live one never.
+  function guardStale(g, file, authority) {
+   if (g.corrupt) return !!authority && age(file) > lockLeaseMs;
+   if (abandoned(g, Date.now())) return true;
+   return authority === 'supervisor' && g.host !== HOST && g.state === 'held' && Date.now() > g.expiresAt;
+  }
+  // One stale guard instance is cleared by exactly one process: the one that
+  // creates its claim file (exclusive create). Losers never touch the guard,
+  // so the fresh guard the winner then takes cannot be moved by them. Claims
+  // stay (one tiny file per incident) so a late loser cannot claim it again.
+  function stamp(file) { try { const s = fs.statSync(file); return s.mtimeMs + ':' + s.size; } catch { return null; } }
+  function clearGuard(guard, authority) {
+   const before = stamp(guard); const g = readLock(guard); if (!g || !before || stamp(guard) !== before) return false;
+   if (!guardStale(g, guard, authority)) { if (g.corrupt && age(guard) > lockLeaseMs) fail('store_recovery_required'); if (authority) fail('store_lock_live'); return false; }
+   const claim = guard + '-' + digest(g.corrupt ? 'corrupt:' + before : 'id:' + g.id).slice(0, 32) + '.won';
+   try { fs.closeSync(fs.openSync(claim, 'wx')); } catch (e) { if (e.code === 'EEXIST' || TRANSIENT_FS.has(e.code)) return false; throw e; }
+   removeIfStill(guard, (again, aside) => same(g, again) && guardStale(again, aside, authority));
+   return true;
+  }
+  // Reclaiming is serialized by the guard, and the lock is removed only if it
+  // is still the same abandoned one: a fresh lock is never removed.
+  function reclaim(file, expected, authority = null) {
+   const guard = file + '.reclaim'; let own = create(guard);
+   if (!own) { if (!clearGuard(guard, authority)) return false; own = create(guard); if (!own) return false; }
    holding.add(own.id);
-   try { const again = readLock(file); if (again && expected(again)) { retrying(() => fs.unlinkSync(file), retryMs); return true; } return false; }
-   finally { holding.delete(own.id); retrying(() => fs.unlinkSync(guard), retryMs); }
+   // Judged again under the guard: what was evaluated before may already be
+   // gone and replaced by a live writer's lock, which is left untouched. An
+   // abandoned lock cannot change while the guard is held.
+   try { const current = readLock(file); if (!current || !expected(current, file)) return false; return removeIfStill(file, expected); }
+   finally {
+    holding.delete(own.id);
+    // A guard left behind (unlink refused) is abandoned once its lease ends.
+    try { retrying(() => fs.unlinkSync(guard), retryMs); } catch { /* reclaimed by evidence later */ }
+   }
   }
   function tryAcquire(handle) {
    const file = lockOf(handle); const meta = create(file); if (meta) { holding.add(meta.id); return meta; }
@@ -133,7 +178,13 @@ function createMemoryStoreFactory({ root, integrity, maxRecords = 2000, lockLeas
    let failure = null;
    try {
     const state = load(handle); let result = operation(view(handle, state));
-    if (result && typeof result.then === 'function') { const file = lockOf(handle); asyncHolders.set(file, (asyncHolders.get(file) || 0) + 1); try { result = await result; } finally { asyncHolders.set(file, asyncHolders.get(file) - 1); } }
+    if (result && typeof result.then === 'function') {
+     // A holder awaiting keeps its lease fresh, so an expired lease on this
+     // host is evidence that whoever holds that pid is not this holder.
+     const file = lockOf(handle); asyncHolders.set(file, (asyncHolders.get(file) || 0) + 1);
+     const renew = setInterval(() => { const held = readLock(file); if (held && held.id === meta.id) { try { fs.writeFileSync(file, JSON.stringify({ ...meta, expiresAt: Date.now() + lockLeaseMs })); } catch { /* the previous lease stands */ } } }, Math.max(20, Math.floor(lockLeaseMs / 3)));
+     try { result = await result; } finally { clearInterval(renew); asyncHolders.set(file, asyncHolders.get(file) - 1); }
+    }
     save(state); return result;
    } catch (e) { failure = e; throw e; } finally { finish(handle, meta, failure); }
   }
@@ -141,15 +192,24 @@ function createMemoryStoreFactory({ root, integrity, maxRecords = 2000, lockLeas
   // commit or an unreadable or foreign lock. A live holder on this host is
   // never broken; the lock is removed only once the snapshot on disk loads and
   // every seal verifies (a rename publishes the old or the new one, whole).
-  function recover(handle, { decidedBy } = {}) {
+  // A reused pid: the lock's pid is alive but its lease ran out more than a
+  // whole lease ago (a live holder renews it). Only a supervisor, naming the
+  // exact lock id it inspected and an evidence code, may clear it; never this
+  // process's own held lock, never automatically, never the owner.
+  function recover(handle, { decidedBy, lockId = null, evidenceRef = null } = {}) {
    if (!['owner', 'supervisor'].includes(decidedBy)) fail('recovery_authority_required');
    const file = lockOf(handle); const held = readLock(file);
    if (!held) return Object.freeze({ recovered: false, reason: 'no_lock' });
+   if (held.corrupt && age(file) <= lockLeaseMs) fail('store_lock_live');
    const live = m => !m.corrupt && m.state === 'held' && (m.host === HOST ? !gone(m) : decidedBy !== 'supervisor');
-   if (live(held)) fail('store_lock_live');
+   const reused = m => decidedBy === 'supervisor' && !m.corrupt && m.state === 'held' && m.host === HOST && lockId === m.id
+    && typeof evidenceRef === 'string' && /^[A-Za-z0-9:._-]{1,128}$/.test(evidenceRef) && Date.now() > m.expiresAt + lockLeaseMs && !(m.pid === process.pid && holding.has(m.id));
+   if (live(held) && !reused(held)) fail('store_lock_live');
    load(handle);
-   const removed = reclaim(file, again => (held.corrupt ? !!again.corrupt : again.id === held.id) && !live(again));
-   return Object.freeze({ recovered: removed, previousState: held.corrupt ? 'corrupt' : held.state });
+   // An unreadable lock is removed only while it is still an old one: a lock
+   // being written right now is briefly empty too.
+   const removed = reclaim(file, (again, aside) => same(held, again) && (again.corrupt ? age(aside) > lockLeaseMs : !live(again) || reused(again)), decidedBy);
+   return Object.freeze({ recovered: removed, previousState: held.corrupt ? 'corrupt' : held.state, ...(live(held) ? { reason: 'pid_reused' } : {}) });
   }
   return Object.freeze({
    get:(h,k,id)=>view(h,load(h)).get(h,k,id),list:(h,k)=>view(h,load(h)).list(h,k),
