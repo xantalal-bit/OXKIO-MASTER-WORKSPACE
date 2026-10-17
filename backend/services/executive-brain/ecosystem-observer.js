@@ -118,6 +118,39 @@ function evidenceRisks(input) {
   return Object.freeze(risks.slice(0, MAX_ITEMS));
 }
 
+// Cliente Cero (Issue #49): the canonical state of each front, read from the
+// continuity registry that ProjectManagerService projects. Readonly and
+// advisory like the rest of the observer; an unavailable registry is shown
+// as such, never as an empty "all clear".
+function buildContinuity(projectStateView) {
+  const view = projectStateView.continuity && typeof projectStateView.continuity === 'object'
+    ? projectStateView.continuity : null;
+  if (!view || view.available !== true) {
+    return Object.freeze({ available: false, reason: safeText(view && view.reason, 60) || 'not_projected', counts: Object.freeze({}), open: Object.freeze([]), nextAction: null });
+  }
+  const counts = {};
+  ['CLOSED', 'PENDING', 'BLOCKED', 'BACKLOG'].forEach((state) => {
+    counts[state] = Number.isInteger(view.counts && view.counts[state]) ? view.counts[state] : 0;
+  });
+  const open = (Array.isArray(view.open) ? view.open : []).slice(0, MAX_ITEMS).map((front) => Object.freeze({
+    id: safeText(front && front.id, 64),
+    title: safeText(front && front.title),
+    state: safeText(front && front.state, 10),
+    priority: safeText(front && front.priority, 4),
+    nextAction: safeText(front && front.nextAction),
+  })).filter((front) => front.id);
+  const next = view.nextAction && typeof view.nextAction === 'object'
+    ? Object.freeze({ id: safeText(view.nextAction.id, 64), state: safeText(view.nextAction.state, 10), action: safeText(view.nextAction.action) })
+    : null;
+  return Object.freeze({
+    available: true,
+    revision: Number.isInteger(view.revision) ? view.revision : null,
+    counts: Object.freeze(counts),
+    open: Object.freeze(open),
+    nextAction: next,
+  });
+}
+
 function relevantReminders(governanceStateView) {
   return Object.freeze(safeList(
     governanceStateView && governanceStateView.reminders,
@@ -530,6 +563,7 @@ function buildEcosystemObserver(input = {}) {
     consolidatedCapabilities,
     progressMessage,
     intelligenceCommitteePreparation,
+    continuity: buildContinuity(projectStateView),
     generatedAt,
   });
 }
