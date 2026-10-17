@@ -1,7 +1,7 @@
 {
   "schema": "oxkio.continuity-registry/v1",
-  "revision": 17,
-  "updatedAt": "2026-10-17T18:05:16.450Z",
+  "revision": 19,
+  "updatedAt": "2026-10-17T18:19:36.474Z",
   "canon": {
     "path": "KNOWLEDGE-CURATOR/CLIENT-ZERO/XATAI-CLIENT-ZERO-CANON.md",
     "issue": "issue:49",
@@ -693,6 +693,35 @@
       "state": "BACKLOG",
       "version": 1,
       "updatedAt": "2026-10-17T18:00:08.618Z"
+    },
+    {
+      "aliases": [
+        "cc1 concurrencia",
+        "flaky local"
+      ],
+      "evidence": [
+        {
+          "ref": "suite:local-full@3695123-vs-base",
+          "kind": "observation",
+          "result": "info",
+          "observedAt": "2026-10-17T18:20:00Z",
+          "source": "node --test local, Node 24.15.0",
+          "summary": "Rama: 2025/2003/4 fail (2 hash 003 CRLF + 2 de tiempos); base: 2010/1989/3 fail (2 hash 003 + CC1)."
+        }
+      ],
+      "id": "CZ-LOCAL-TIMING-FLAKES",
+      "project": "OXKIO",
+      "scope": "tests",
+      "title": "Tests de tiempos intermitentes en la suite local completa",
+      "priority": "P3",
+      "decision": "CC1 (audit-regressions) y dos tests de lease/claim del ledger (ledger-holder-identity) fallan de forma intermitente en la suite local completa bajo carga, también en la base 67b8fe9; aislados 73/73 en 3 ejecuciones y verdes en CI de main.",
+      "reopenCondition": "Fallo en CI de main o aislado en local.",
+      "nextAction": "Ninguna mientras CI siga verde; si se repite en CI, abrir frente P1.",
+      "changes": "Alta al validar la rama de continuidad.",
+      "confidence": "medium",
+      "state": "BACKLOG",
+      "version": 1,
+      "updatedAt": "2026-10-17T18:19:36.424Z"
     }
   ],
   "events": [
@@ -882,6 +911,18 @@
     {
       "type": "daily_report",
       "at": "2026-10-17T18:05:16.450Z",
+      "name": "orchestration/PARTE-DIARIO/2026-10-17.md",
+      "result": "ok"
+    },
+    {
+      "type": "created",
+      "at": "2026-10-17T18:19:36.424Z",
+      "entry": "CZ-LOCAL-TIMING-FLAKES",
+      "to": "BACKLOG"
+    },
+    {
+      "type": "daily_report",
+      "at": "2026-10-17T18:19:36.474Z",
       "name": "orchestration/PARTE-DIARIO/2026-10-17.md",
       "result": "ok"
     }
