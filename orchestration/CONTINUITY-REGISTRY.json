@@ -1,7 +1,7 @@
 {
   "schema": "oxkio.continuity-registry/v1",
-  "revision": 25,
-  "updatedAt": "2026-10-17T18:44:23.294Z",
+  "revision": 33,
+  "updatedAt": "2026-10-18T13:51:44.866Z",
   "canon": {
     "path": "KNOWLEDGE-CURATOR/CLIENT-ZERO/XATAI-CLIENT-ZERO-CANON.md",
     "issue": "issue:49",
@@ -96,8 +96,8 @@
         "backend-tests (node 22)",
         "backend-tests (node 24)"
       ],
-      "version": 10,
-      "updatedAt": "2026-10-17T18:44:01.641Z",
+      "version": 20,
+      "updatedAt": "2026-10-18T13:49:34.589Z",
       "evidence": [
         {
           "ref": "ci:39041516033#backend-tests (node 22)",
@@ -202,6 +202,86 @@
           "observedAt": "2026-10-17T18:33:15Z",
           "source": "github-actions:feat/oxkio-client-zero-continuity-20261017@d5cfc6e",
           "summary": "backend-tests (node 22) success en pull_request feat/oxkio-client-zero-continuity-20261017 @ d5cfc6e"
+        },
+        {
+          "ref": "ci:39124465439#backend-tests (node 22)",
+          "kind": "ci_green",
+          "result": "success",
+          "observedAt": "2026-10-18T11:49:49Z",
+          "source": "github-actions:main@9b05eb5",
+          "summary": "backend-tests (node 22) success en push main @ 9b05eb5"
+        },
+        {
+          "ref": "ci:39124465439#backend-tests (node 24)",
+          "kind": "ci_green",
+          "result": "success",
+          "observedAt": "2026-10-18T11:51:56Z",
+          "source": "github-actions:main@9b05eb5",
+          "summary": "backend-tests (node 24) success en push main @ 9b05eb5"
+        },
+        {
+          "ref": "ci:39114997044#backend-tests (node 24)",
+          "kind": "ci_green",
+          "result": "success",
+          "observedAt": "2026-10-18T09:26:45Z",
+          "source": "github-actions:main@498e722",
+          "summary": "backend-tests (node 24) success en push main @ 498e722"
+        },
+        {
+          "ref": "ci:39114997044#backend-tests (node 22)",
+          "kind": "ci_green",
+          "result": "success",
+          "observedAt": "2026-10-18T09:27:05Z",
+          "source": "github-actions:main@498e722",
+          "summary": "backend-tests (node 22) success en push main @ 498e722"
+        },
+        {
+          "ref": "ci:39113926826#backend-tests (node 24)",
+          "kind": "ci_green",
+          "result": "success",
+          "observedAt": "2026-10-18T09:14:41Z",
+          "source": "github-actions:main@29a6546",
+          "summary": "backend-tests (node 24) success en push main @ 29a6546"
+        },
+        {
+          "ref": "ci:39113926826#backend-tests (node 22)",
+          "kind": "ci_green",
+          "result": "success",
+          "observedAt": "2026-10-18T09:10:12Z",
+          "source": "github-actions:main@29a6546",
+          "summary": "backend-tests (node 22) success en push main @ 29a6546"
+        },
+        {
+          "ref": "ci:39109919092#backend-tests (node 22)",
+          "kind": "ci_green",
+          "result": "success",
+          "observedAt": "2026-10-18T08:08:39Z",
+          "source": "github-actions:main@f97910b",
+          "summary": "backend-tests (node 22) success en push main @ f97910b"
+        },
+        {
+          "ref": "ci:39109919092#backend-tests (node 24)",
+          "kind": "ci_green",
+          "result": "success",
+          "observedAt": "2026-10-18T08:10:10Z",
+          "source": "github-actions:main@f97910b",
+          "summary": "backend-tests (node 24) success en push main @ f97910b"
+        },
+        {
+          "ref": "ci:39060483193#backend-tests (node 24)",
+          "kind": "ci_green",
+          "result": "success",
+          "observedAt": "2026-10-17T19:05:27Z",
+          "source": "github-actions:main@30717ee",
+          "summary": "backend-tests (node 24) success en push main @ 30717ee"
+        },
+        {
+          "ref": "ci:39060483193#backend-tests (node 22)",
+          "kind": "ci_green",
+          "result": "success",
+          "observedAt": "2026-10-17T19:12:08Z",
+          "source": "github-actions:main@30717ee",
+          "summary": "backend-tests (node 22) success en push main @ 30717ee"
         }
       ]
     },
@@ -331,19 +411,19 @@
         "postgresql real",
         "pr 50 ci rojo"
       ],
-      "state": "BLOCKED",
+      "state": "CLOSED",
       "priority": "P1",
-      "decision": "Migraciones 001-004, RLS ENABLED+FORCED con política NULLIF, privilegios mínimos del rol runtime, ciclo de vida, rollback y concurrencia validados contra PostgreSQL 18 efímero; job no requerido approval-postgres-integration en CI.",
+      "decision": "Cerrado: approval-postgres-integration verde en todos los push a main desde el merge de la PR #51 (30717ee, f97910b, 29a6546, 498e722, 9b05eb5) y prueba real 19/19 contra postgres:18 en main, posterior al último fallo registrado.",
       "reopenCondition": "Fallo de approval-postgres-integration en main (o en una PR sin cambios en approval) posterior a la última ejecución verde.",
-      "nextAction": "Merge de la PR #51 = decisión humana. Tras el merge, observe sobre main: con approval-postgres-integration verde en main y su prueba real registrada, cerrar con apply (close).",
-      "changes": "PR #51 con CI completo verde (run 39058158893, intento 2: el intento 1 falló en Node lifecycle de Windows, test intermitente conocido, sin relación con el cambio).",
+      "nextAction": "Ninguna. Reabrir solo si approval-postgres-integration falla en main tras su última ejecución verde.",
+      "changes": "Cerrado con ci:39060483193#approval-postgres-integration, pr:51#merge, realpg:ci-39124465439",
       "confidence": "high",
       "requiresRealTest": true,
       "signals": [
         "approval-postgres-integration"
       ],
-      "version": 8,
-      "updatedAt": "2026-10-17T18:44:23.227Z",
+      "version": 14,
+      "updatedAt": "2026-10-18T13:51:44.737Z",
       "evidence": [
         {
           "ref": "ci:39048856582#approval-postgres-integration",
@@ -440,9 +520,64 @@
           "observedAt": "2026-10-17T18:31:00Z",
           "source": "github",
           "summary": "PR #51 abierta, head 20ee80a; 5/5 checks verdes en el intento 2; approval-postgres-integration 19/19, 0 uncaughtException."
+        },
+        {
+          "ref": "ci:39124465439#approval-postgres-integration",
+          "kind": "ci_green",
+          "result": "success",
+          "observedAt": "2026-10-18T11:45:33Z",
+          "source": "github-actions:main@9b05eb5",
+          "summary": "approval-postgres-integration success en push main @ 9b05eb5"
+        },
+        {
+          "ref": "ci:39114997044#approval-postgres-integration",
+          "kind": "ci_green",
+          "result": "success",
+          "observedAt": "2026-10-18T09:22:11Z",
+          "source": "github-actions:main@498e722",
+          "summary": "approval-postgres-integration success en push main @ 498e722"
+        },
+        {
+          "ref": "ci:39113926826#approval-postgres-integration",
+          "kind": "ci_green",
+          "result": "success",
+          "observedAt": "2026-10-18T09:05:45Z",
+          "source": "github-actions:main@29a6546",
+          "summary": "approval-postgres-integration success en push main @ 29a6546"
+        },
+        {
+          "ref": "ci:39109919092#approval-postgres-integration",
+          "kind": "ci_green",
+          "result": "success",
+          "observedAt": "2026-10-18T08:03:20Z",
+          "source": "github-actions:main@f97910b",
+          "summary": "approval-postgres-integration success en push main @ f97910b"
+        },
+        {
+          "ref": "ci:39060483193#approval-postgres-integration",
+          "kind": "ci_green",
+          "result": "success",
+          "observedAt": "2026-10-17T19:00:14Z",
+          "source": "github-actions:main@30717ee",
+          "summary": "approval-postgres-integration success en push main @ 30717ee"
+        },
+        {
+          "ref": "pr:51#merge",
+          "kind": "pr_merged",
+          "result": "success",
+          "observedAt": "2026-10-17T18:59:20Z",
+          "source": "github",
+          "summary": "PR #51 mergeada en 30717ee (head 20ee80a)."
+        },
+        {
+          "ref": "realpg:ci-39124465439",
+          "kind": "real_test",
+          "result": "success",
+          "observedAt": "2026-10-18T11:45:31Z",
+          "source": "github-actions:main@9b05eb5",
+          "summary": "approval-postgres-integration en main: 19/19 contra postgres:18 efímero, 0 fail, 0 skipped (leído del log del job)."
         }
-      ],
-      "blockedBy": "puerta humana: merge de la PR #51 (lista para decisión de merge)"
+      ]
     },
     {
       "id": "CZ-CONTINUITY-PREFLIGHT",
@@ -456,16 +591,16 @@
         "issue 49",
         "parte diario oxkio"
       ],
-      "state": "BLOCKED",
+      "state": "CLOSED",
       "priority": "P1",
-      "decision": "Una sola fuente: orchestration/CONTINUITY-REGISTRY.json (Project Registry), proyectada por ProjectManagerService al Ecosystem Observer; preflight, cierre, auditoría y Parte Diario por scripts/client-zero/continuity.js.",
+      "decision": "Cerrado: preflight, registro, cierre, auditoría y Parte Diario están en main (PR #52) con CI verde en el push del merge; la prueba real del dogfooding del 17/10 sigue sin contradicción posterior.",
       "reopenCondition": "Una misión se planifica sin preflight, o se reabre un CLOSED sin evidencia material nueva.",
-      "nextAction": "Merge de la PR #52 = decisión humana, después de la PR #51; tras el merge, cerrar con CI verde en main. Luego, misión separada CZ-RUNTIME-SYNC.",
-      "changes": "PR #52: Node 22, Node 24, gate y docker verdes; approval-postgres-integration rojo solo por el teardown que corrige la PR #51 (la rama no toca approval).",
+      "nextAction": "Ninguna. Reabrir si una misión se planifica sin preflight o si se reabre un CLOSED sin evidencia material nueva.",
+      "changes": "Cerrado con pr:52, pr:52#merge, ci:39109919092#backend-tests",
       "confidence": "medium",
       "requiresRealTest": true,
-      "version": 3,
-      "updatedAt": "2026-10-17T18:44:23.227Z",
+      "version": 4,
+      "updatedAt": "2026-10-18T13:51:44.737Z",
       "evidence": [
         {
           "ref": "issue:49",
@@ -514,9 +649,24 @@
           "observedAt": "2026-10-17T18:32:00Z",
           "source": "github",
           "summary": "PR #52 abierta, head d5cfc6e; 4/5 checks verdes; el rojo es el mismo 57P01 de teardown (19 pass, 1 fail a nivel de fichero)."
+        },
+        {
+          "ref": "pr:52#merge",
+          "kind": "pr_merged",
+          "result": "success",
+          "observedAt": "2026-10-18T08:02:25Z",
+          "source": "github",
+          "summary": "PR #52 mergeada en f97910b (head 75aea4c), después de la PR #51."
+        },
+        {
+          "ref": "ci:39109919092#backend-tests",
+          "kind": "ci_green",
+          "result": "success",
+          "observedAt": "2026-10-18T08:10:16Z",
+          "source": "github-actions:main@f97910b",
+          "summary": "Push a main del merge de la PR #52: los 5 jobs en success (Node 22, Node 24, gate, docker y approval-postgres-integration)."
         }
-      ],
-      "blockedBy": "puerta humana: merge de la PR #52 (después de la PR #51)"
+      ]
     },
     {
       "id": "CZ-CANON-PR50",
@@ -527,17 +677,16 @@
         "pr 50",
         "xatai client zero canon"
       ],
-      "state": "BLOCKED",
+      "state": "CLOSED",
       "priority": "P1",
-      "decision": "El canon vive en KNOWLEDGE-CURATOR/CLIENT-ZERO/XATAI-CLIENT-ZERO-CANON.md; la rama de integración incluye el mismo commit (6dc4afc) sin cambios.",
+      "decision": "Cerrado como incluido: el canon de la PR #50 está en main, byte a byte, mediante la PR #52; la PR #50 se cerró sin merge.",
       "reopenCondition": "No aplica mientras esté abierta.",
-      "nextAction": "Merge = decisión humana. Si se mergea antes la integración (que contiene 6dc4afc), cerrar la PR #50 como incluida.",
-      "changes": "Alta con la PR abierta.",
+      "nextAction": "Ninguna.",
+      "changes": "Cerrado con pr:50, pr:52, ci:39109919092#backend-tests",
       "confidence": "high",
       "requiresRealTest": false,
-      "blockedBy": "puerta humana: merge de la PR #50",
-      "version": 1,
-      "updatedAt": "2026-10-17T17:52:15.000Z",
+      "version": 2,
+      "updatedAt": "2026-10-18T13:51:44.737Z",
       "evidence": [
         {
           "ref": "pr:50",
@@ -546,6 +695,22 @@
           "observedAt": "2026-10-17T17:27:48Z",
           "source": "github",
           "summary": "PR #50 abierta, head 6dc4afc, solo añade el canon."
+        },
+        {
+          "ref": "pr:52",
+          "kind": "pr_merged",
+          "result": "success",
+          "observedAt": "2026-10-18T08:02:25Z",
+          "source": "github + git",
+          "summary": "PR #52 mergeada en f97910b; contiene XATAI-CLIENT-ZERO-CANON.md con el mismo blob (3d70d8f) que la PR #50 en 6dc4afc."
+        },
+        {
+          "ref": "ci:39109919092#backend-tests",
+          "kind": "ci_green",
+          "result": "success",
+          "observedAt": "2026-10-18T08:10:16Z",
+          "source": "github-actions:main@f97910b",
+          "summary": "Push a main del merge de la PR #52 (que contiene el canon): 5/5 jobs en success."
         }
       ]
     },
@@ -563,13 +728,13 @@
       "priority": "P1",
       "decision": "Misión separada: parada controlada → actualización → arranque → smoke test → cierre. No se mezcla con la integración del canon.",
       "reopenCondition": "No aplica mientras esté abierta.",
-      "nextAction": "Tras validar CZ-CONTINUITY-PREFLIGHT, abrir la misión de sincronización con su propia autorización.",
-      "changes": "Alta: el checkout principal sigue en adef97a con el runtime vivo.",
+      "nextAction": "El owner repite en /executive-chat.html las preguntas de continuidad y una lectura de Approval. Si todo va bien, registrar la prueba real y cerrar; si algo falla, recuperar con R1 (commit anterior y copia fría verificada).",
+      "changes": "Dos ventanas locales autorizadas ejecutadas; la verificación técnica pasa; falta la prueba autenticada.",
       "confidence": "high",
       "requiresRealTest": true,
-      "blockedBy": "validación de CZ-CONTINUITY-PREFLIGHT y autorización humana de la ventana de sincronización",
-      "version": 1,
-      "updatedAt": "2026-10-17T17:52:15.000Z",
+      "blockedBy": "puerta humana: prueba autenticada de Cliente Cero en el chat ejecutivo (memoria, continuidad y lectura de Approval)",
+      "version": 2,
+      "updatedAt": "2026-10-18T13:51:44.737Z",
       "evidence": [
         {
           "ref": "git:local-main@adef97a",
@@ -578,6 +743,30 @@
           "observedAt": "2026-10-17T17:52:15Z",
           "source": "git local",
           "summary": "Checkout principal en adef97a; origin/main en 67b8fe9."
+        },
+        {
+          "ref": "local:window-20261018-1300",
+          "kind": "observation",
+          "result": "info",
+          "observedAt": "2026-10-18T11:01:02Z",
+          "source": "ventana local autorizada (informe privado)",
+          "summary": "Runtime local sincronizado a 498e722: paro controlado, copia fría con SHA256 verificado, arranque canónico, listener único, /health y /ready 200, API 401 sin token, datos sin cambios. Prueba autenticada no ejecutada."
+        },
+        {
+          "ref": "local:window-20261018-1534",
+          "kind": "observation",
+          "result": "info",
+          "observedAt": "2026-10-18T13:34:44Z",
+          "source": "ventana local autorizada (informe privado)",
+          "summary": "Runtime local sincronizado a 9b05eb5 (PR #55): misma secuencia y verificaciones; SHA efectivo acreditado; datos sin cambios. Prueba autenticada pendiente."
+        },
+        {
+          "ref": "ci:39124465439#backend-tests",
+          "kind": "ci_green",
+          "result": "success",
+          "observedAt": "2026-10-18T11:52:02Z",
+          "source": "github-actions:main@9b05eb5",
+          "summary": "La versión desplegada en local (9b05eb5) tiene los 5 jobs de CI en success en main."
         }
       ]
     },
@@ -786,6 +975,54 @@
       "state": "BACKLOG",
       "version": 1,
       "updatedAt": "2026-10-17T18:19:36.424Z"
+    },
+    {
+      "aliases": [
+        "continuidad en el chat",
+        "memoria operativa",
+        "he consultado tu memoria"
+      ],
+      "evidence": [
+        {
+          "ref": "pr:55#defect",
+          "kind": "defect",
+          "result": "failure",
+          "observedAt": "2026-10-18T11:30:52Z",
+          "source": "prueba real informada por Xatai; documentada en la PR #55",
+          "summary": "Las preguntas de estado de Cliente Cero y por CZ-PG-RLS-REAL / CZ-CONTINUITY-PREFLIGHT terminaban en una búsqueda de memoria vacía."
+        },
+        {
+          "ref": "pr:55",
+          "kind": "pr_merged",
+          "result": "success",
+          "observedAt": "2026-10-18T11:44:38Z",
+          "source": "github",
+          "summary": "PR #55 mergeada en 9b05eb5."
+        },
+        {
+          "ref": "ci:39124465439#backend-tests",
+          "kind": "ci_green",
+          "result": "success",
+          "observedAt": "2026-10-18T11:52:02Z",
+          "source": "github-actions:main@9b05eb5",
+          "summary": "Push a main del merge de la PR #55: 5/5 jobs en success."
+        }
+      ],
+      "id": "CZ-V3-CHAT-CONTINUITY",
+      "project": "OXKIO",
+      "scope": "cliente-cero",
+      "title": "Chat ejecutivo V3: continuidad del proyecto desde el registro, no desde la memoria personal",
+      "state": "BLOCKED",
+      "priority": "P1",
+      "decision": "El chat V3 responde la continuidad del proyecto desde este registro (estado registrado más evidencia), solo a Cliente Cero, sin memoria personal ni modelo.",
+      "reopenCondition": "No aplica mientras esté abierta.",
+      "nextAction": "Prueba autenticada del owner con las dos preguntas reales; si la respuesta sale del registro y no de la memoria, registrar la prueba real y cerrar.",
+      "changes": "Alta tras el defecto de la prueba real: la respuesta «He consultado tu memoria y no he encontrado resultados» a preguntas sobre continuidad.",
+      "confidence": "high",
+      "requiresRealTest": true,
+      "blockedBy": "puerta humana: prueba autenticada de Cliente Cero",
+      "version": 1,
+      "updatedAt": "2026-10-18T13:51:44.737Z"
     }
   ],
   "events": [
@@ -1060,6 +1297,145 @@
       "at": "2026-10-17T18:44:23.294Z",
       "name": "orchestration/PARTE-DIARIO/2026-10-17.md",
       "result": "ok"
+    },
+    {
+      "type": "evidence_added",
+      "at": "2026-10-18T13:49:34.589Z",
+      "entry": "CZ-CI-NODE22-24",
+      "ref": "ci:39124465439#backend-tests (node 22)"
+    },
+    {
+      "type": "evidence_added",
+      "at": "2026-10-18T13:49:34.589Z",
+      "entry": "CZ-CI-NODE22-24",
+      "ref": "ci:39124465439#backend-tests (node 24)"
+    },
+    {
+      "type": "evidence_added",
+      "at": "2026-10-18T13:49:34.589Z",
+      "entry": "CZ-PG-RLS-REAL",
+      "ref": "ci:39124465439#approval-postgres-integration"
+    },
+    {
+      "type": "superseded_evidence",
+      "at": "2026-10-18T13:49:34.589Z",
+      "entry": "CZ-PG-RLS-REAL",
+      "ref": "ci:39114997044#approval-postgres-integration"
+    },
+    {
+      "type": "superseded_evidence",
+      "at": "2026-10-18T13:49:34.589Z",
+      "entry": "CZ-CI-NODE22-24",
+      "ref": "ci:39114997044#backend-tests (node 24)"
+    },
+    {
+      "type": "superseded_evidence",
+      "at": "2026-10-18T13:49:34.589Z",
+      "entry": "CZ-CI-NODE22-24",
+      "ref": "ci:39114997044#backend-tests (node 22)"
+    },
+    {
+      "type": "superseded_evidence",
+      "at": "2026-10-18T13:49:34.589Z",
+      "entry": "CZ-CI-NODE22-24",
+      "ref": "ci:39113926826#backend-tests (node 24)"
+    },
+    {
+      "type": "superseded_evidence",
+      "at": "2026-10-18T13:49:34.589Z",
+      "entry": "CZ-PG-RLS-REAL",
+      "ref": "ci:39113926826#approval-postgres-integration"
+    },
+    {
+      "type": "superseded_evidence",
+      "at": "2026-10-18T13:49:34.589Z",
+      "entry": "CZ-CI-NODE22-24",
+      "ref": "ci:39113926826#backend-tests (node 22)"
+    },
+    {
+      "type": "superseded_evidence",
+      "at": "2026-10-18T13:49:34.589Z",
+      "entry": "CZ-PG-RLS-REAL",
+      "ref": "ci:39109919092#approval-postgres-integration"
+    },
+    {
+      "type": "superseded_evidence",
+      "at": "2026-10-18T13:49:34.589Z",
+      "entry": "CZ-CI-NODE22-24",
+      "ref": "ci:39109919092#backend-tests (node 22)"
+    },
+    {
+      "type": "superseded_evidence",
+      "at": "2026-10-18T13:49:34.589Z",
+      "entry": "CZ-CI-NODE22-24",
+      "ref": "ci:39109919092#backend-tests (node 24)"
+    },
+    {
+      "type": "superseded_evidence",
+      "at": "2026-10-18T13:49:34.589Z",
+      "entry": "CZ-PG-RLS-REAL",
+      "ref": "ci:39060483193#approval-postgres-integration"
+    },
+    {
+      "type": "superseded_evidence",
+      "at": "2026-10-18T13:49:34.589Z",
+      "entry": "CZ-CI-NODE22-24",
+      "ref": "ci:39060483193#backend-tests (node 24)"
+    },
+    {
+      "type": "superseded_evidence",
+      "at": "2026-10-18T13:49:34.589Z",
+      "entry": "CZ-CI-NODE22-24",
+      "ref": "ci:39060483193#backend-tests (node 22)"
+    },
+    {
+      "type": "automation_run",
+      "at": "2026-10-18T13:49:34.589Z",
+      "name": "observe-github-ci",
+      "result": "ok",
+      "note": "10 runs, 20 observaciones: {\"evidence_added\":3,\"superseded\":12,\"duplicate\":5}"
+    },
+    {
+      "type": "closed",
+      "at": "2026-10-18T13:51:44.737Z",
+      "entry": "CZ-PG-RLS-REAL",
+      "from": "BLOCKED",
+      "to": "CLOSED"
+    },
+    {
+      "type": "closed",
+      "at": "2026-10-18T13:51:44.737Z",
+      "entry": "CZ-CONTINUITY-PREFLIGHT",
+      "from": "BLOCKED",
+      "to": "CLOSED"
+    },
+    {
+      "type": "closed",
+      "at": "2026-10-18T13:51:44.737Z",
+      "entry": "CZ-CANON-PR50",
+      "from": "BLOCKED",
+      "to": "CLOSED"
+    },
+    {
+      "type": "state_changed",
+      "at": "2026-10-18T13:51:44.737Z",
+      "entry": "CZ-RUNTIME-SYNC",
+      "from": "BLOCKED",
+      "to": "BLOCKED",
+      "note": "Dos ventanas locales autorizadas ejecutadas; la verificación técnica pasa; falta la prueba autenticada."
+    },
+    {
+      "type": "created",
+      "at": "2026-10-18T13:51:44.737Z",
+      "entry": "CZ-V3-CHAT-CONTINUITY",
+      "to": "BLOCKED"
+    },
+    {
+      "type": "automation_run",
+      "at": "2026-10-18T13:51:44.866Z",
+      "name": "audit-closures-github",
+      "result": "verified",
+      "note": "7/7 cierres verificados contra GitHub"
     }
   ]
 }
