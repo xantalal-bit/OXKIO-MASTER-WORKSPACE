@@ -132,6 +132,16 @@ if (!INTEGRATION_READY) {
     await Promise.allSettled(pools.map((pool) => pool.end()));
     if (admin) await admin.end();
     if (serverAdmin) {
+      // pool.end() resolves once the pool forgets its clients, not once their
+      // sockets close: a FORCE drop could still terminate one (57P01) and
+      // surface as an uncaughtException. Wait until no backend is left.
+      for (let i = 0; i < 200; i++) {
+        const { rows: [left] } = await serverAdmin.query(
+          'SELECT count(*)::int AS n FROM pg_stat_activity WHERE datname = $1', [database],
+        );
+        if (left.n === 0) break;
+        await new Promise((resolve) => setTimeout(resolve, 25));
+      }
       await serverAdmin.query(`DROP DATABASE IF EXISTS ${database} WITH (FORCE)`);
       await serverAdmin.end();
     }
