@@ -1,5 +1,6 @@
 'use strict';
 
+const crypto = require('crypto');
 const fs = require('fs');
 
 const supportedExtensions = new Set([
@@ -10,6 +11,11 @@ const supportedExtensions = new Set([
 
 function normalizeExtension(extension) {
   return String(extension || '').toLowerCase();
+}
+
+// Mismo algoritmo que github-releases-connector: sha256 hex del contenido textual.
+function hashContent(content) {
+  return crypto.createHash('sha256').update(String(content || '')).digest('hex');
 }
 
 function curateDocument(document) {
@@ -42,7 +48,7 @@ function curateDocument(document) {
         path: document.path,
         name: document.name,
         extension: document.extension,
-        hash: document.contentHash || null,
+        hash: document.contentHash || hashContent(content),
         version: '2.0',
       },
       technical: {
