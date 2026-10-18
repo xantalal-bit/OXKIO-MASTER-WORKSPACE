@@ -703,11 +703,60 @@ function getContinuityView(registryPath = REGISTRY_PATH) {
   });
 }
 
+// Executive chat (Cliente Cero, 18/10/2026): project continuity answered from
+// the registry exactly as recorded. Each front says its recorded state and
+// date, decision, blocker, next action and latest evidence; a front the
+// registry lacks is named as missing. It is a record, not a live check: an
+// outdated registry is flagged, and nothing newer is ever certified.
+const STATE_LABELS = { CLOSED: "cerrado", PENDING: "pendiente", BLOCKED: "bloqueado", BACKLOG: "en backlog" };
+const CONFIDENCE_LABELS = { high: "alta", medium: "media", low: "baja" };
+const DAY_MS = 24 * 60 * 60 * 1000;
+const day = (value) => new Date(value).toLocaleDateString("es-ES", { day: "2-digit", month: "2-digit", year: "numeric", timeZone: "Europe/Madrid" });
+const plural = (count, one, many) => `${count} ${count === 1 ? one : many}`;
+
+function describeFront(entry) {
+  const evidence = entry.evidence.slice(-3).map((item) => `${item.ref} (${item.kind}, ${item.result}, ${day(item.observedAt)})`);
+  return [
+    `${entry.id} — ${entry.title}: ${STATE_LABELS[entry.state]} (${entry.priority}, confianza ${CONFIDENCE_LABELS[entry.confidence] || entry.confidence}), registrado el ${day(entry.updatedAt)}.`,
+    entry.blockedBy ? `Bloqueado por: ${entry.blockedBy}.` : null,
+    `Decisión: ${entry.decision}`,
+    `Siguiente acción: ${entry.nextAction}`,
+    evidence.length ? `Evidencia: ${evidence.join("; ")}.` : "Sin evidencia registrada.",
+  ].filter(Boolean).join(" ");
+}
+
+function answerContinuityQuery({ registry, query = "", now = new Date().toISOString() } = {}) {
+  if (!registry || !Array.isArray(registry.entries)) fail("registry_required");
+  const named = [...new Set(String(query).toUpperCase().match(/\bCZ-[A-Z0-9-]{2,60}\b/g) || [])];
+  // Naming the registry itself is not asking about the front that has
+  // "registro de continuidad" among its aliases.
+  const topic = normalize(query).replace(/\bregistro de continuidad\b/g, " ");
+  const fronts = [...new Set([...named.map((id) => findEntry(registry, id)).filter(Boolean), ...matchEntries(registry, topic)])];
+  const missing = named.filter((id) => !findEntry(registry, id));
+  const general = fronts.length === 0 && missing.length === 0;
+  const open = registry.entries.filter((entry) => entry.state === "PENDING" || entry.state === "BLOCKED").sort(byPriority);
+  const shown = general ? open.slice(0, 5) : fronts;
+  const age = time(now) - time(registry.updatedAt);
+  const stale = age > DAY_MS;
+  const lines = [`Según el registro de continuidad (revisión ${registry.revision}, actualizado el ${day(registry.updatedAt)}):`];
+  if (general) {
+    const count = (state) => registry.entries.filter((entry) => entry.state === state).length;
+    lines.push(`${plural(count("CLOSED"), "cerrado", "cerrados")}, ${plural(count("PENDING"), "pendiente", "pendientes")}, ${plural(count("BLOCKED"), "bloqueado", "bloqueados")} y ${count("BACKLOG")} en backlog.`);
+    lines.push(open.length ? "Frentes abiertos:" : "No hay frentes abiertos registrados.");
+  }
+  shown.forEach((entry) => lines.push(`- ${describeFront(entry)}`));
+  missing.forEach((id) => lines.push(`${id} no figura en el registro de continuidad.`));
+  if (stale) lines.push(`El registro no se actualiza desde hace ${plural(Math.floor(age / DAY_MS), "día", "días")}: puede estar desactualizado.`);
+  lines.push("Es el estado registrado, no una comprobación en vivo: lo ocurrido después (merges, CI, cambios en el runtime) no aparece hasta que se registre. No he consultado tu memoria personal ni he cambiado nada.");
+  return deepFreeze({ text: lines.join("\n"), revision: registry.revision, updatedAt: registry.updatedAt, ids: shown.map((entry) => entry.id), missing, stale });
+}
+
 module.exports = {
   CANON_PATH,
   REGISTRY_PATH,
   SCHEMA,
   STATES,
+  answerContinuityQuery,
   auditClosures,
   authorizationFor,
   buildDailyReport,
