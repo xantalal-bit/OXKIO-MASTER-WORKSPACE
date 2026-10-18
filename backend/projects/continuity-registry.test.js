@@ -362,3 +362,25 @@ test('the repository registry is valid, uses the real canon and keeps the declar
     assert.equal(authorizationFor(registry, gate).status, 'HUMAN_GATE', gate);
   });
 });
+
+test('a merge recorded after an observation of the same PR is refused aloud, kept as pr:N#merge and audited', () => {
+  const observed = closedFront({
+    id: 'CZ-PREFLIGHT', title: 'Preflight', aliases: ['preflight'], state: 'BLOCKED', blockedBy: 'merge de la PR #52',
+    requiresRealTest: false, signals: undefined,
+    evidence: [ev('pr:52', 'observation', 'info', T0, 'PR #52 abierta')],
+  });
+  const registry = fixture([observed]);
+  // The same ref with another kind used to be dropped silently, leaving the
+  // front without its merge and the audit without anything to verify.
+  assert.throws(() => close({ registry, id: 'CZ-PREFLIGHT', now: NOW, evidence: [ev('pr:52', 'pr_merged', 'success', T2, 'PR #52 mergeada en f97910b')] }),
+    (error) => error.code === 'evidence_ref_conflict');
+  const closed = close({ registry, id: 'CZ-PREFLIGHT', now: NOW, evidence: [
+    ev('pr:52#merge', 'pr_merged', 'success', T2, 'PR #52 mergeada en f97910b'),
+    ev('ci:200#backend-tests', 'ci_green', 'success', T3),
+  ] });
+  assert.equal(findEntry(closed, 'CZ-PREFLIGHT').state, 'CLOSED');
+  // The same fact again is a no-op, not a conflict.
+  assert.doesNotThrow(() => transition({ registry: fixture([observed]), id: 'CZ-PREFLIGHT', state: 'PENDING', now: NOW, evidence: [ev('pr:52', 'observation', 'info', T0, 'PR #52 abierta')] }));
+  assert.deepEqual(auditClosures(closed, { 52: { state: 'MERGED', mergeCommit: 'f97910bdeadbeef' } }).map((f) => [f.ref, f.status]), [['pr:52#merge', 'verified']]);
+  assert.deepEqual(auditClosures(closed, { 52: { state: 'CLOSED', mergeCommit: null } }).map((f) => f.status), ['contradicted']);
+});

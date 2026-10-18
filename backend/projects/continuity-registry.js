@@ -447,7 +447,12 @@ function addEvidence(entry, items) {
     const errors = [];
     validateEvidence(item, item.ref || "evidence", errors);
     if (errors.length) fail("evidence_invalid", errors.join("; "));
-    if (!entry.evidence.some((known) => known.ref === item.ref)) {
+    // A ref is unique per front. The same fact again is a no-op; a different
+    // fact under a known ref (a merge after an observation "pr:52") is refused
+    // instead of silently dropped: record it as "pr:52#merge".
+    const known = entry.evidence.find((candidate) => candidate.ref === item.ref);
+    if (known && known.kind !== item.kind) fail("evidence_ref_conflict", `${entry.id} ${item.ref}: ${known.kind} ≠ ${item.kind}`);
+    if (!known) {
       entry.evidence.push({ ref: item.ref, kind: item.kind, result: item.result, observedAt: item.observedAt, source: item.source, summary: item.summary });
     }
   });
@@ -557,11 +562,13 @@ function observationsFromRuns(registry, runs) {
 
 // Audit of CLOSED fronts against an independent source (GitHub PR facts):
 // every pr_merged evidence must name a PR that is MERGED at that commit.
+// "pr:52#merge" is the same PR when "pr:52" already holds an observation.
+const PR_MERGE_REF = /^pr:(\d+)(?:#merge)?$/;
 function auditClosures(registry, prFacts) {
   const findings = [];
   registry.entries.filter((entry) => entry.state === "CLOSED").forEach((entry) => {
     entry.evidence.filter((item) => item.kind === "pr_merged").forEach((item) => {
-      const number = (item.ref.match(/^pr:(\d+)$/) || [])[1];
+      const number = (item.ref.match(PR_MERGE_REF) || [])[1];
       const fact = number ? prFacts[number] : null;
       const sha = (item.summary.match(/\b[0-9a-f]{7,40}\b/) || [])[0];
       if (!fact) findings.push({ entry: entry.id, ref: item.ref, status: "unverified" });
@@ -704,25 +711,69 @@ function getContinuityView(registryPath = REGISTRY_PATH) {
 }
 
 // Executive chat (Cliente Cero, 18/10/2026): project continuity answered from
-// the registry exactly as recorded. Each front says its recorded state and
-// date, decision, blocker, next action and latest evidence; a front the
-// registry lacks is named as missing. It is a record, not a live check: an
-// outdated registry is flagged, and nothing newer is ever certified.
+// the registry in two layers that are never merged. The recorded state is
+// the decision (state, decision, blocker, next action); the latest verified
+// evidence is what was observed (merge, CI, real tests, failures), with its
+// date and source. When they disagree (criteria met but not closed, or a
+// failure after a closure) the answer says so and certifies neither. A
+// summary comes first; decisions, evidence and refs follow when a front is
+// named or the detail is asked for. It is a record, not a live check.
 const STATE_LABELS = { CLOSED: "cerrado", PENDING: "pendiente", BLOCKED: "bloqueado", BACKLOG: "en backlog" };
+const STATE_PHRASES = { CLOSED: "está cerrado", PENDING: "está pendiente", BLOCKED: "sigue bloqueado", BACKLOG: "está en backlog" };
 const CONFIDENCE_LABELS = { high: "alta", medium: "media", low: "baja" };
+const KIND_LABELS = {
+  pr_merged: "merge", ci_green: "CI en verde", real_test: "prueba real superada", commit: "commit",
+  ci_failure: "fallo de CI", test_failure: "fallo de prueba", regression: "regresión", defect: "defecto",
+};
+const GAP_LABELS = { pr_merged: "el merge", ci_green: "CI en verde", real_test: "una prueba real" };
+const VERIFIED_KINDS = new Set(["pr_merged", "ci_green", "real_test", ...CONTRADICTING]);
+const DETAIL = /\b(detalle|detalles|detallado|detallada|evidencia|evidencias|por que|referencias|traza|trazabilidad|fuentes|pruebas)\b/;
 const DAY_MS = 24 * 60 * 60 * 1000;
 const day = (value) => new Date(value).toLocaleDateString("es-ES", { day: "2-digit", month: "2-digit", year: "numeric", timeZone: "Europe/Madrid" });
 const plural = (count, one, many) => `${count} ${count === 1 ? one : many}`;
+const listOf = (items) => (items.length > 1 ? `${items.slice(0, -1).join(", ")} y ${items.at(-1)}` : items[0] || "");
 
-function describeFront(entry) {
-  const evidence = entry.evidence.slice(-3).map((item) => `${item.ref} (${item.kind}, ${item.result}, ${day(item.observedAt)})`);
+// Where the observed evidence disagrees with the recorded state.
+function layerConflict(entry, gaps) {
+  if (entry.state !== "CLOSED") return gaps.length === 0 ? "closable" : null;
+  const reopening = entry.evidence.some((item) => contradicts(item) && time(item.observedAt) > latestProofAt(entry, signalOf(item.ref)));
+  return reopening ? "contradicted" : null;
+}
+
+function frontLayers(entry) {
+  const gaps = closureGaps(entry);
+  const verified = entry.evidence.filter((item) => VERIFIED_KINDS.has(item.kind))
+    .sort((a, b) => time(b.observedAt) - time(a.observedAt)).slice(0, 2);
+  // "after the last failure" only when the front has one to answer.
+  const after = latestContradictionAt(entry) > 0 ? " posterior al último fallo" : "";
+  const missing = (entry.state === "CLOSED" ? [] : gaps).map((gap) => (gap === "pr_merged" ? GAP_LABELS[gap] : GAP_LABELS[gap] + after));
+  return { entry, gaps: entry.state === "CLOSED" ? [] : gaps, missing, conflict: layerConflict(entry, gaps), verified };
+}
+
+const CONFLICT_NOTES = {
+  closable: "su evidencia ya cumple los criterios de cierre y el registro aún no lo ha cerrado: queda pendiente de reconciliar",
+  contradicted: "hay un fallo posterior a su cierre que el registro todavía no ha reconciliado",
+};
+
+function headline(layer) {
+  const { entry, missing, conflict } = layer;
+  const gap = missing.length ? ` (falta ${listOf(missing)})` : "";
+  return `${entry.id} ${STATE_PHRASES[entry.state]}${conflict ? `, aunque ${CONFLICT_NOTES[conflict]}` : gap}`;
+}
+
+function detailOf(layer) {
+  const { entry, missing, conflict, verified } = layer;
+  const recorded = `Estado registrado (${day(entry.updatedAt)}): ${STATE_LABELS[entry.state]}, prioridad ${entry.priority}, confianza ${CONFIDENCE_LABELS[entry.confidence] || entry.confidence}.`
+    + (entry.blockedBy ? ` Bloqueado por: ${entry.blockedBy}.` : "") + ` Decisión: ${entry.decision} Siguiente acción: ${entry.nextAction}`;
+  const observed = verified.length
+    ? `Evidencia verificada más reciente: ${verified.map((item) => `${KIND_LABELS[item.kind]} el ${day(item.observedAt)} (${item.ref}; ${item.source})`).join("; ")}.`
+    : "Evidencia verificada más reciente: ninguna registrada (solo observaciones o decisiones).";
   return [
-    `${entry.id} — ${entry.title}: ${STATE_LABELS[entry.state]} (${entry.priority}, confianza ${CONFIDENCE_LABELS[entry.confidence] || entry.confidence}), registrado el ${day(entry.updatedAt)}.`,
-    entry.blockedBy ? `Bloqueado por: ${entry.blockedBy}.` : null,
-    `Decisión: ${entry.decision}`,
-    `Siguiente acción: ${entry.nextAction}`,
-    evidence.length ? `Evidencia: ${evidence.join("; ")}.` : "Sin evidencia registrada.",
-  ].filter(Boolean).join(" ");
+    `${entry.id} — ${entry.title}`,
+    `· ${recorded}`,
+    `· ${observed}`,
+    conflict ? `· Atención: ${CONFLICT_NOTES[conflict]}.` : missing.length ? `· Para cerrarlo falta ${listOf(missing)}.` : null,
+  ].filter(Boolean).join("\n");
 }
 
 function answerContinuityQuery({ registry, query = "", now = new Date().toISOString() } = {}) {
@@ -734,25 +785,53 @@ function answerContinuityQuery({ registry, query = "", now = new Date().toISOStr
   const fronts = [...new Set([...named.map((id) => findEntry(registry, id)).filter(Boolean), ...matchEntries(registry, topic)])];
   const missing = named.filter((id) => !findEntry(registry, id));
   const general = fronts.length === 0 && missing.length === 0;
+  const detail = !general || DETAIL.test(normalize(query));
   const open = registry.entries.filter((entry) => entry.state === "PENDING" || entry.state === "BLOCKED").sort(byPriority);
-  const shown = general ? open.slice(0, 5) : fronts;
+  const layers = (general ? open.slice(0, 5) : fronts).map(frontLayers);
+  // Disagreements anywhere in the registry are worth one sentence even in a
+  // general answer: a front waiting to be reconciled is not "all clear".
+  const conflicts = registry.entries.map(frontLayers).filter((layer) => layer.conflict);
   const age = time(now) - time(registry.updatedAt);
   const stale = age > DAY_MS;
-  const lines = [`Según el registro de continuidad (revisión ${registry.revision}, actualizado el ${day(registry.updatedAt)}):`];
+  const lines = [];
   if (general) {
-    const count = (state) => registry.entries.filter((entry) => entry.state === state).length;
-    lines.push(`${plural(count("CLOSED"), "cerrado", "cerrados")}, ${plural(count("PENDING"), "pendiente", "pendientes")}, ${plural(count("BLOCKED"), "bloqueado", "bloqueados")} y ${count("BACKLOG")} en backlog.`);
-    lines.push(open.length ? "Frentes abiertos:" : "No hay frentes abiertos registrados.");
+    const blocked = open.filter((entry) => entry.state === "BLOCKED").length;
+    const kinds = [blocked ? plural(blocked, "bloqueado", "bloqueados") : null, open.length - blocked ? plural(open.length - blocked, "pendiente", "pendientes") : null].filter(Boolean);
+    // The first front says what it waits for, in one clause; its full next
+    // action belongs to the detail.
+    const first = open[0];
+    const gate = first && first.blockedBy && /^puerta humana:\s*/i.test(first.blockedBy);
+    const waits = !first ? "" : first.state === "BLOCKED"
+      ? (gate ? `que espera una acción tuya: ${first.blockedBy.replace(/^puerta humana:\s*/i, "")}` : `que está bloqueado por ${first.blockedBy}`)
+      : `cuyo siguiente paso es: ${first.nextAction}`;
+    lines.push(open.length
+      ? `En resumen: hay ${plural(open.length, "frente abierto", "frentes abiertos")} (${listOf(kinds)}). Lo más prioritario es ${first.id} (${first.title}), ${waits.replace(/[.\s]+$/, "")}.`
+      : "En resumen: no hay frentes abiertos en el registro.");
+  } else {
+    const parts = [...layers.map(headline), ...missing.map((id) => `${id} no figura en el registro`)];
+    lines.push(`En resumen: ${listOf(parts)}.`);
   }
-  shown.forEach((entry) => lines.push(`- ${describeFront(entry)}`));
-  missing.forEach((id) => lines.push(`${id} no figura en el registro de continuidad.`));
+  const unmentioned = conflicts.filter((layer) => !layers.some((shown) => shown.entry.id === layer.entry.id));
+  if (unmentioned.length) lines.push(`Además, ${listOf(unmentioned.map(headline))}.`);
+  if (detail) layers.forEach((layer) => lines.push("", detailOf(layer)));
+  else if (layers.length) {
+    lines.push("", ...layers.map((layer) => `- ${layer.entry.id} — ${layer.entry.title}: ${STATE_LABELS[layer.entry.state]}${layer.missing.length ? `; falta ${listOf(layer.missing)}` : ""}.`));
+    lines.push(`Si quieres el detalle de un frente, con sus evidencias y fuentes, pregúntame por su código (por ejemplo, ${layers[0].entry.id}).`);
+  }
+  lines.push("");
   if (stale) lines.push(`El registro no se actualiza desde hace ${plural(Math.floor(age / DAY_MS), "día", "días")}: puede estar desactualizado.`);
-  lines.push("Es el estado registrado, no una comprobación en vivo: lo ocurrido después (merges, CI, cambios en el runtime) no aparece hasta que se registre. No he consultado tu memoria personal ni he cambiado nada.");
-  return deepFreeze({ text: lines.join("\n"), revision: registry.revision, updatedAt: registry.updatedAt, ids: shown.map((entry) => entry.id), missing, stale });
+  lines.push(`Fuente: registro de continuidad (revisión ${registry.revision}, actualizado el ${day(registry.updatedAt)}). Es conocimiento operativo registrado, no tu memoria personal ni una comprobación en vivo: lo ocurrido después no aparece hasta que se registre. No he cambiado nada.`);
+  return deepFreeze({
+    text: lines.join("\n"), summary: lines[0], revision: registry.revision, updatedAt: registry.updatedAt,
+    ids: layers.map((layer) => layer.entry.id), missing, stale, detail,
+    fronts: layers.map((layer) => ({ id: layer.entry.id, state: layer.entry.state, gaps: layer.gaps, conflict: layer.conflict })),
+    conflicts: conflicts.map((layer) => ({ id: layer.entry.id, conflict: layer.conflict })),
+  });
 }
 
 module.exports = {
   CANON_PATH,
+  PR_MERGE_REF,
   REGISTRY_PATH,
   SCHEMA,
   STATES,

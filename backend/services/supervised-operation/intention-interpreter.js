@@ -149,4 +149,5 @@ function interpretIntention(text) {
  // paths; a private source picked from vocabulary is a reading to confirm.
  return result(OUTCOMES.CAN_EXECUTE, { capabilities: unique, plan: composePlan(unique), searchTerms, semantic: !agendaQuestion && unique.some(id => PRIVATE_SOURCES.includes(id)) });
 }
-module.exports = { OUTCOMES, DECLARED, interpretIntention, rememberConsent, normalize, tokensOf };
+const personalRecall = text => typeof text === 'string' && PERSONAL_RECALL.test(normalize(text));
+module.exports = { OUTCOMES, DECLARED, interpretIntention, rememberConsent, personalRecall, normalize, tokensOf };
