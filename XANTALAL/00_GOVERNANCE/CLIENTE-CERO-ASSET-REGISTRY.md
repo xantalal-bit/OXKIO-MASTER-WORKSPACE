@@ -49,7 +49,7 @@ Las pruebas se realizaron fuera de OneDrive pero en el mismo portátil. No resta
 | OXKIO | Plataforma central; hito G0001-A1 `a253615…` |
 | Business Hunter | Producto local verificado |
 | Xose | Nombre vigente; ruta física `PROFESOR-IA` clasificada como legacy |
-| XANTALALSHOP | Repositorio recuperable; no hay web pública confirmada |
+| XANTALALSHOP | Repositorio recuperable; web pública operativa en LucusHost según soporte (2026-10-17); el 2026-08-01 no había web pública confirmada |
 | Knowledge Curator | Capacidad integrada en OXKIO |
 | GIU | Reservado |
 
@@ -59,11 +59,12 @@ Las pruebas se realizaron fuera de OneDrive pero en el mismo portátil. No resta
 
 | Elemento | Estado declarado |
 |---|---|
-| LucusHost | Contrato activo; cuenta y cPanel accesibles |
+| LucusHost | Contrato activo; cuenta y cPanel accesibles; plan Hosting SSD Senior, sin Node.js |
+| Plan Node.js para CMS XANTALALSHOP | Propuesto (Node.js 1, 9,95 €/mes sin IVA); NO CONTRATADO · NO DESPLEGADO. Detalle, procedencia y pendientes en G0001-A1, sección 12.1 |
 | Backups de hosting | Desconocidos; restore no probado |
 | WordPress | Desconocido |
-| DNS efectivo | Desconocido |
-| Web pública actual | No existente según Cliente Cero |
+| DNS efectivo | Desconocido (2026-08-01). Notas de 2026-10-17 sin evidencia archivada: certificado comodín `*.xantalalshop.com` y subdominio `cms` inexistente; pendiente de auditoría (G0001-A1, sección 12) |
+| Web pública actual | XANTALALSHOP operativa según soporte LucusHost (2026-10-17); el 2026-08-01 el Cliente Cero la declaró no existente |
 | Renovación | Automática, declarada por Cliente Cero |
 
 Dominios declarados, sin verificación externa:

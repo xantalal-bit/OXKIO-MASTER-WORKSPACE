@@ -37,10 +37,19 @@ El bloque técnico 5C.7B.2 continúa cerrado. PostgreSQL gestionado permanece ra
 - OpenAI está bajo control; MFA y recuperación siguen desconocidos.
 - LucusHost está activo y cPanel es accesible; backups desconocidos y restore no probado.
 - Cinco dominios fueron declarados con LucusHost como registrador y renovación automática; DNS efectivo desconocido.
-- No existe una web pública actual confirmada.
+- No existe una web pública actual confirmada. *(Estado a 01/08/2026; superado el 17/10/2026, ver la actualización siguiente.)*
 - Google One 5 TB es candidato prioritario de continuidad, sin configuración ni copia ejecutadas.
 
 No se registran direcciones de correo, contraseñas, tokens, claves ni recovery codes.
+
+### Actualización 18/10/2026 — XANTALALSHOP, LucusHost y DNS/TLS
+
+Fuente: [G0001-A1](./G0001-A1-MAPA-MAESTRO-ACTIVOS-LOCALIZACION-CUSTODIA-RECUPERACION-XANTALAL.md) revisión 0.3.0 (secciones 11, 12 y 12.1) y [Asset Registry](./CLIENTE-CERO-ASSET-REGISTRY.md), commit local `c39de9b`. Las confirmaciones de 01/08/2026 anteriores se conservan como historial.
+
+- **Declarado por soporte de LucusHost (17/10/2026):** plan Hosting SSD Senior, sin Node.js, con la web pública XANTALALSHOP y el correo operativos. No hay verificación técnica propia de disponibilidad ni de la versión publicada.
+- **DNS/TLS:** sigue **DESCONOCIDO**. Las notas del 17/10/2026 (certificado comodín `*.xantalalshop.com`, subdominio `cms` inexistente) están **DOCUMENTADAS** sin evidencia técnica archivada y **PENDIENTES DE AUDITORÍA**.
+- **CMS de XANTALALSHOP:** la opción preferida es alojarlo en LucusHost (`cms.xantalalshop.com`, plan Hosting Node.js 1 propuesto), con Tailscale como plan B. **NO CONTRATADO · NO DESPLEGADO**; pendientes y procedencia en G0001-A1, sección 12.1.
+- Backups y restore del hosting siguen desconocidos.
 
 ## RTO internos
 
