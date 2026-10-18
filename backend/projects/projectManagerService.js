@@ -1,5 +1,6 @@
 const fs = require("fs");
 const path = require("path");
+const { getContinuityView } = require("./continuity-registry");
 
 const PROJECT_ORDER = [
   "OXKIO",
@@ -268,7 +269,8 @@ function getProjectStateView(projectName = "OXKIO") {
       sessionAchievements: Object.freeze([]),
       consolidatedCapabilities: Object.freeze([]),
       closureEvidence: buildClosureEvidence(""),
-      sessionSummary: ""
+      sessionSummary: "",
+      continuity: getContinuityView()
     });
   }
 
@@ -328,7 +330,10 @@ function getProjectStateView(projectName = "OXKIO") {
     sessionAchievements,
     consolidatedCapabilities,
     closureEvidence,
-    sessionSummary
+    sessionSummary,
+    // Cliente Cero (Issue #49): estado canónico CLOSED/PENDING/BLOCKED/BACKLOG
+    // del registro de continuidad, junto al estado documental del roadmap.
+    continuity: getContinuityView()
   });
 }
 

@@ -16,6 +16,7 @@ const { createCostLedger } = require('./cost-ledger');
 const { classified, diagnose, createLearning } = require('./self-repair');
 const REGISTRAR = 'tool:supervised-operation';
 const TERMINAL = ['COMPLETED','FAILED','CANCELLED'];
+const stepResultId=taskId=>'sr-'+createHash('sha256').update(String(taskId)).digest('hex').slice(0,40);
 const PUBLIC_PROVENANCE = ['PUBLIC_DISCOVERY','PUBLIC_WEB'];
 // Sources are the reads of a plan, the places where information can be found;
 // an analysis, a proposal or a memory write is not one. Labels are plain words.
@@ -107,7 +108,7 @@ function createSupervisedRuntime({membershipProvider,planner=null,conversationDe
  function check(m){ if(m.cancelled)fail('cancelled');if(m.paused)fail('paused'); }
  function snapshot(m){const cost=ledger.mission(m.handle,m.id);return freeze(copy({id:m.id,conversationId:m.conversationId,status:m.status,outcome:m.status==='COMPLETED'?OUTCOMES.CAN_EXECUTE:m.status,result:m.result||null,approvalId:m.approvalId||null,connectionRequests:m.gaps||[],diagnosis:m.diagnosis||null,planSources:labelsOf((m.plan||[]).map(s=>s.capability)),executionEnabled:false,estimatedCostUsd:cost.chargedUsd,actualCostUsd:null,cost,trace:m.trace||[]}));}
  function trace(m,event,fields={}){m.trace.push({event,at:now(),...fields});if(m.trace.length>150)m.trace.shift();}
- function spendFor(handle){return freeze({estimate:ledger.estimate,reserve:options=>ledger.reserve(handle,options),settle:(reservation,usage)=>ledger.settle(handle,reservation,usage),budget:()=>ledger.budget(handle),recordExecution:execution=>ledger.recordExecution(handle,execution)});}
+ function spendFor(handle){return freeze({estimate:ledger.estimate,claimCall:r=>ledger.claimCall(handle,r),markCallUnknown:r=>ledger.markCallUnknown(handle,r),reserve:options=>ledger.reserve(handle,options),settle:(reservation,usage,options)=>ledger.settle(handle,reservation,usage,options),budget:()=>ledger.budget(handle),recordExecution:execution=>ledger.recordExecution(handle,execution)});}
  function engineFor(m){
   const evidence=createEvidenceRegistry({trustedRegistrars:[REGISTRAR],now});const registrar=evidence.registrar(REGISTRAR);
   const additions=Object.entries(DEFINITIONS).filter(([id])=>!AGENT_DECLARATIONS.some(a=>a.capabilities.includes(id))).map(([id,d])=>declaration('v3-'+id.replace(/\./g,'-'),d.role,id));
@@ -124,7 +125,7 @@ function createSupervisedRuntime({membershipProvider,planner=null,conversationDe
   }
   let sequence=m.state.tasks.reduce((n,t)=>n+t.evidenceRefs.length,0);
   async function readSource(step,d,contract,dependencies,scope){
-   const adapter=connections.capture(m.handle,d.provider,d.scope);metric(m.handle,'toolCalls');ledger.recordTool(m.handle,m.id,step.capability);
+   const adapter=connections.capture(m.handle,d.provider,d.scope);metric(m.handle,'toolCalls');await ledger.recordTool(m.handle,m.id,step.capability);
    let query='';let urls=[];
    if(step.capability==='web.search'){
     // Only a minimized query (topic words, never source content) may leave,
@@ -167,6 +168,13 @@ function createSupervisedRuntime({membershipProvider,planner=null,conversationDe
    // Public page text is classified as public (secrets and identifiers only);
    // the request and any private source carry the full personal-data rules.
    const isPublic=v=>PUBLIC_PROVENANCE.includes(v.provenance);
+   // A paid, accepted analysis is checkpointed at once (not at the end of the
+   // run): a replay of this same step over the very same request reuses it and
+   // asks no model again. Another request for an accepted step is refused by
+   // the ledger (step_already_accepted) and the mission stops for review.
+   const stepId=stepResultId(taskId);const requestDigest=createHash('sha256').update(JSON.stringify(request)).digest('hex');
+   let saved=null;try{saved=store.get(m.handle,'step-result',stepId);}catch(error){if(error.code!=='resource_not_found')throw error;}
+   if(saved&&saved.requestDigest===requestDigest&&saved.synthesis){trace(m,'COGNITION_REUSED',{resource:saved.synthesis.resource});return saved.synthesis;}
    const r=await reasoner.reason({objective:m.intention,egressText:[m.intention,...sources.filter(v=>!isPublic(v)).map(v=>v.text)].join('\n'),publicText:sources.filter(isPublic).map(v=>v.text).join('\n'),derivedFromPrivate:sources.some(v=>!PUBLIC_PROVENANCE.includes(v.provenance)),
     request,basis:{inputTokens:Math.ceil(JSON.stringify(request).length/3)+200,outputTokens:SYNTHESIS_MAX_OUTPUT_TOKENS},spend:spendFor(m.handle),missionId:m.id,taskId,taskType:'data.analyze',accept:content=>{const v=verifyPartial(content,issued);return v.accepted||v.verdict;},
     onAttempt:a=>trace(m,'RESOURCE_FAILED',{resource:a.resource,failure:a.failure,detail:a.detail})});
@@ -175,9 +183,12 @@ function createSupervisedRuntime({membershipProvider,planner=null,conversationDe
    // audit as index + fixed code, never as content.
    const v=verifyPartial(r.content,issued);const c=v.content;
    trace(m,'SYNTHESIS_VERIFIED',{proposed:v.proposed,kept:c.findings.length,discarded:v.discarded.map(d=>d.code),conclusion:v.conclusionKind});
-   return {findings:c.findings.map(f=>({claim:f.claim,quote:f.quote,sourceIds:[...f.sourceIds]})),comparison:c.comparison,conclusion:c.conclusion,conclusionKind:v.conclusionKind,
+   const synthesis={findings:c.findings.map(f=>({claim:f.claim,quote:f.quote,sourceIds:[...f.sourceIds]})),comparison:c.comparison,conclusion:c.conclusion,conclusionKind:v.conclusionKind,
     proposedFindings:v.proposed,discarded:v.discarded.map(d=>({index:d.index,code:d.code})),
     resource:r.resource,region:r.region,privacyClass:r.privacyClass,usage:r.usage,chargedUsd:r.chargedUsd,call:{responseId:r.evidence.responseId||null,responseModel:r.evidence.responseModel||null},sourceIds:[...new Set(c.findings.flatMap(f=>f.sourceIds))],failover:r.attempts.map(a=>({resource:a.resource,failure:a.failure,...(a.detail?{detail:a.detail}:{})}))};
+   // Without this checkpoint a replay stops (never pays again): fail closed.
+   try{store.put(m.handle,'step-result',stepId,{taskId,requestDigest,synthesis,at:now()});}catch{trace(m,'CHECKPOINT_FAILED',{reason:'step_result'});}
+   return synthesis;
   }
   async function execute(contract,context){
    if(m.cancelled)fail('cancelled');await sessions.current(m.handle);const step=m.plan.find(s=>context.taskId===m.id+':'+s.key);const d=DEFINITIONS[step.capability];const scope=sessions.scope(m.handle);
@@ -209,6 +220,12 @@ function createSupervisedRuntime({membershipProvider,planner=null,conversationDe
       // No resource available now (limit, quota, budget, provider fault): the
       // task waits at this checkpoint, sources already sealed, and resumes later.
       if(error.code==='reasoning_resource_unavailable'&&error.transient&&!m.cancelled){m.waitingResource=error.attempts;trace(m,'CHECKPOINT',{reason:'resource_unavailable'});return {waitingFor:'tool'};}
+      // A paid call needs a human reconciliation: the task stops at this
+      // checkpoint (never retried, never waiting) until it is reconciled.
+      if(error.status==='CALL_RECONCILIATION_REQUIRED'&&!m.cancelled){m.reconciliation={code:error.code,detail:error.detail||null,attempts:error.attempts||[]};trace(m,'CHECKPOINT',{reason:'call_reconciliation_required'});return {waitingFor:'tool'};}
+      // Already answered, paid and accepted, but no checkpoint matches this
+      // request: nothing is asked again; the task stops for review.
+      if(error.code==='step_already_accepted'&&!m.cancelled){m.acceptedStep={attempts:error.attempts||[]};trace(m,'CHECKPOINT',{reason:'step_already_accepted'});return {waitingFor:'tool'};}
       if(!['reasoning_resource_unavailable','secret_context'].includes(error.code))throw classified(error);
       // No resource may receive this context (privacy, unreviewed price), or
       // every resource failed in a way waiting will not fix (credential,
@@ -284,6 +301,14 @@ function createSupervisedRuntime({membershipProvider,planner=null,conversationDe
    const attempts=m.waitingResource;m.waitingResource=null;m.status='WAITING_RESOURCE';
    m.diagnosis={class:'resource_unavailable',action:'WAIT_RESOURCE',attempts:copy(attempts)};trace(m,'WAITING_RESOURCE');return snapshot(m);
   }
+  if(m.state.engine.state==='WAITING_TOOL'&&m.reconciliation){
+   const r=m.reconciliation;m.reconciliation=null;m.status='BLOCKED';
+   m.diagnosis={class:'call_reconciliation_required',code:r.code,detail:r.detail,action:'RECONCILE_CALL',attempts:copy(r.attempts)};trace(m,'CALL_RECONCILIATION_REQUIRED',{code:r.code});return snapshot(m);
+  }
+  if(m.state.engine.state==='WAITING_TOOL'&&m.acceptedStep){
+   const a=m.acceptedStep;m.acceptedStep=null;m.status='BLOCKED';
+   m.diagnosis={class:'step_already_accepted',action:'HUMAN_REVIEW',attempts:copy(a.attempts)};trace(m,'STEP_ALREADY_ACCEPTED');return snapshot(m);
+  }
   m.status=m.state.engine.state;
   const retries=m.state.missionRetriesUsed;if(retries){metric(m.handle,'recovered');metric(m.handle,'retries');trace(m,'CHANGE_STRATEGY',{retries});}
   if(m.state.verification?.verdict==='PASS'&&m.status==='COMPLETED'){
@@ -340,8 +365,11 @@ function createSupervisedRuntime({membershipProvider,planner=null,conversationDe
   if(m.busy)fail('mission_busy');m.busy=true;
   try{return await scheduler.submit(m.owner,m.id,()=>run(m),m.priority);}
   catch(error){if(['cancelled','paused'].includes(error.code)){m.status=m.paused?'PAUSED':'CANCELLED';}else{m.status='BLOCKED';trace(m,'BLOCKED',{code:/^[a-z_]+$/.test(error.code||'')?error.code:'runtime_failure'});if(error.code==='backpressure')throw error;}return snapshot(m);}
-  finally{m.busy=false;try{await sessions.current(m.handle);persist(m);}catch{m.result=null;}release(m);}
+  finally{m.busy=false;try{await sessions.current(m.handle);persist(m);if(TERMINAL.includes(m.status))dropStepResults(m);}catch{m.result=null;}release(m);}
  }
+ // A terminal mission never runs again: its step checkpoints are no longer
+ // needed (its outputs are in the mission record; the ledger keeps the marks).
+ function dropStepResults(m){for(const s of m.plan||[]){try{store.remove(m.handle,'step-result',stepResultId(m.id+':'+s.key));}catch{/* kept: harmless */}}}
  // A run that ended without certifying its objective is closed, not waiting:
  // resuming it would only repeat the same reads.
  const closedPartial=v=>(v.status==='NEEDS_INFORMATION'&&v.diagnosis?.class==='objective_unmet')||(v.status==='NEEDS_CAPABILITY'&&v.diagnosis?.class==='analysis_unavailable');
@@ -360,7 +388,7 @@ function createSupervisedRuntime({membershipProvider,planner=null,conversationDe
   if(!conversationDecider)return {ids:[]};
   const view=capabilityView(m.handle,m.intention);
   try{
-   const decision=await conversationDecider(freeze({intention:m.intention,capabilities:view.plannable,capabilityStatus:view.capabilities,conversationContext:{objective:m.intention,lastUser:m.intention,lastResponse:'He consultado '+consulted.join(' y ')+' y no contiene información para esto.'}}),{spend:spendFor(m.handle),missionId:m.id,derivedFromPrivate:false});
+   const decision=await conversationDecider(freeze({intention:m.intention,capabilities:view.plannable,capabilityStatus:view.capabilities,conversationContext:{objective:m.intention,lastUser:m.intention,lastResponse:'He consultado '+consulted.join(' y ')+' y no contiene información para esto.'}}),{spend:spendFor(m.handle),missionId:m.id,callId:'objective-replan',derivedFromPrivate:false});
    await sessions.current(m.handle);trace(m,'CONVERSATIONAL_DECISION',{action:decision.action,evidence:decision.evidence||null});
    if(decision.action==='plan'){const plan=capabilities.validatePlan(decision.plan);return {ids:[...new Set(plan.map(s=>s.capability))].filter(id=>pending.includes(id)),analyze:plan.some(s=>s.capability==='data.analyze')};}
    if(decision.action==='clarify')return {ids:[],question:decision.message};

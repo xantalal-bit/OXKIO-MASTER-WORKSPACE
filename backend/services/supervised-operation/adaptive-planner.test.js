@@ -1,7 +1,7 @@
 'use strict';
 const test=require('node:test');const assert=require('node:assert/strict');
 const {createAdaptivePlanner}=require('./adaptive-planner');const {createCapabilityManager}=require('./capability-manager');
-const ctx=()=>({missionId:'fixture',spend:{estimate:()=>0.001,reserve:()=>({}),settle:()=>0.001}});
+const ctx=()=>({missionId:'fixture',spend:{estimate:()=>0.001,reserve:()=>({}),claimCall:()=>true,markCallUnknown:()=>true,settle:()=>0.001}});
 const input={intention:'Diseña una estrategia comercial general',capabilities:['memory.search','data.analyze']};
 const policy={internalProviders:[{providerId:'fixture'}],confidentialProviders:[]};
 function planner(content,extra={}) {const calls=[];const provider={status:'ready',provider:'fixture',region:'eu',modelId:'fixture:model',reason:async request=>{calls.push(request);return {status:'ok',content};}};return {calls,p:createAdaptivePlanner({provider,privacyPolicy:policy,approvedDailyBudgetUsd:1,requestFloor:'INTERNAL',...extra})};}

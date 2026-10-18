@@ -13,9 +13,14 @@ permissions:
   contents: read
 
 jobs:
-  backend-tests:
-    name: backend-tests
+  backend-tests-node:
+    name: backend-tests (node ${{ matrix.node-version }})
     runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # 22: runtime of the Docker image (node:22-alpine). 24: current coverage.
+        node-version: ['22', '24']
     steps:
       - name: Preserve repository line endings on Windows
         run: git config --global core.autocrlf false
@@ -26,14 +31,29 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '24'
+          node-version: ${{ matrix.node-version }}
           cache: 'npm'
+
+      - name: Show Node.js version
+        run: node --version
 
       - name: Install dependencies
         run: npm ci
 
       - name: Run backend test suite
         run: node --test
+
+  # Required status check on main: passes only if every Node version passed.
+  backend-tests:
+    name: backend-tests
+    needs: backend-tests-node
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require every Node.js version to pass
+        env:
+          RESULT: ${{ needs.backend-tests-node.result }}
+        run: test "$RESULT" = "success"
 
   docker-image-build:
     name: docker-image-build
@@ -55,3 +75,43 @@ jobs:
 
       - name: Run Linux Docker image build checks
         run: node --test deploy/dockerfile-build.test.js
+
+  # Approval on a real, ephemeral PostgreSQL 18 (Neon runs 18): migrations,
+  # RLS, privileges, lifecycle and concurrency. Throwaway container bound to
+  # loopback, random masked passwords, no secrets, nothing outside this job.
+  approval-postgres-integration:
+    name: approval-postgres-integration
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run Approval PostgreSQL/RLS integration tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          ADMIN_PW="$(openssl rand -hex 24)"
+          RUNTIME_PW="$(openssl rand -hex 24)"
+          echo "::add-mask::${ADMIN_PW}"
+          echo "::add-mask::${RUNTIME_PW}"
+          docker run -d --name oxkio-approval-pg -p 127.0.0.1:5432:5432 \
+            -e POSTGRES_USER=oxkio_test_admin -e POSTGRES_PASSWORD="${ADMIN_PW}" postgres:18 > /dev/null
+          for i in $(seq 1 60); do
+            docker exec oxkio-approval-pg pg_isready -h 127.0.0.1 -U oxkio_test_admin > /dev/null 2>&1 && break
+            sleep 1
+          done
+          docker exec oxkio-approval-pg pg_isready -h 127.0.0.1 -U oxkio_test_admin
+          export OXKIO_TEST_APPROVAL_PG_ADMIN_URL="postgresql://oxkio_test_admin:${ADMIN_PW}@127.0.0.1:5432/postgres"
+          export OXKIO_TEST_APPROVAL_PG_RUNTIME_URL="postgresql://oxkio_approval_runtime:${RUNTIME_PW}@127.0.0.1:5432/postgres"
+          node --test backend/repositories/postgres-approval-repository.pg.test.js

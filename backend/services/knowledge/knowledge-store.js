@@ -35,8 +35,20 @@ function saveKnowledgeObject(knowledgeObject) {
     storedAt: new Date().toISOString(),
   };
   const filePath = getKnowledgeObjectPath(id);
+  // Escritura atómica: el temporal no termina en .json, así los lectores del almacén nunca lo ven.
+  const tempPath = `${filePath}.${process.pid}.${crypto.randomBytes(6).toString('hex')}.tmp`;
 
-  fs.writeFileSync(filePath, JSON.stringify(storedKnowledgeObject, null, 2), 'utf8');
+  try {
+    fs.writeFileSync(tempPath, JSON.stringify(storedKnowledgeObject, null, 2), 'utf8');
+    fs.renameSync(tempPath, filePath);
+  } catch (error) {
+    try {
+      if (fs.existsSync(tempPath)) fs.rmSync(tempPath);
+    } catch (cleanupError) {
+      // best effort: el error original es el relevante
+    }
+    throw error;
+  }
 
   return {
     saved: true,

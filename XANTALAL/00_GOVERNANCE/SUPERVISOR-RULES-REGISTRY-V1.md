@@ -175,7 +175,7 @@ estructura de encabezados se mantenga.
 
 ### Canonical Reentry Policy
 
-- Consultar el historial de ChatGPT (chat de gobierno y Parte Diario) como registro canonico de decisiones y seguimiento antes de reanudar.
+- Ejecutar primero el preflight de continuidad de OXKIO (registro de continuidad); el historial de ChatGPT (chat de gobierno y Parte Diario) queda como fallback declarado si OXKIO no cubre el frente.
 - Localizar el estado canonico vigente.
 - Verificar evidencia y contexto disponibles.
 - Conciliar discrepancias detectadas.

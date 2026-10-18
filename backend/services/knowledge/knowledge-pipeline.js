@@ -62,7 +62,9 @@ function processDocumentFolder(asset, folder, options = {}) {
     .map(({ curation, document }) => enrichKnowledgeObject(document, curation.knowledgeObject));
   const persistedKnowledge = options.persist === false
     ? []
-    : knowledgeObjects.map((knowledgeObject) => persistKnowledgeObject(knowledgeObject));
+    : knowledgeObjects.map((knowledgeObject) => persistKnowledgeObject(knowledgeObject, {
+      allowUpdate: options.allowUpdate === true,
+    }));
 
   return {
     asset,

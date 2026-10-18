@@ -423,7 +423,13 @@ test('persistence fail-safe: a failed load stays ephemeral, never writes, and ne
   assert.deepEqual(errors.mock.calls.map((call) => call.arguments), [['[quality]', 'QUALITY_PERSISTENCE_EPHEMERAL']]);
 
   const hanging = createRegistry({ repository: { loadSnapshot: () => new Promise(() => {}), saveSnapshot() {} } });
-  assert.equal(await hanging.load({ timeoutMs: 10 }), 'QUALITY_PERSISTENCE_EPHEMERAL');
+  // The load timeout is unref'd by design; a ref'd handle keeps this test process alive until it fires (Node 22 runner).
+  const keepAlive = setInterval(() => {}, 1000);
+  try {
+    assert.equal(await hanging.load({ timeoutMs: 10 }), 'QUALITY_PERSISTENCE_EPHEMERAL');
+  } finally {
+    clearInterval(keepAlive);
+  }
 
   const none = createRegistry();
   assert.equal(await none.load(), 'QUALITY_PERSISTENCE_EPHEMERAL');
