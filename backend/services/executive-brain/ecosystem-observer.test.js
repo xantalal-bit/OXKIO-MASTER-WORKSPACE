@@ -132,7 +132,7 @@ test('ProjectManagerService extracts every contract field from a controlled road
         'nextPlannedPhase', 'remainingSteps', 'doNotOpenYet', 'driftEvidence',
         'reuseEvidence', 'duplicationEvidence', 'sessionAchievements',
         'consolidatedCapabilities',
-        'closureEvidence', 'sessionSummary',
+        'closureEvidence', 'sessionSummary', 'continuity',
       ]);
       assert.equal(view.project, 'OXKIO');
       assert.equal(view.blockPhase, '9Z.1');
@@ -722,4 +722,26 @@ test('has no providers, stores, persistence, endpoints, scheduling or execution 
   assert.doesNotMatch(source, /require\([^)]*(?:OperationsCoordinator|ExecutiveOrchestrator)/);
   assert.doesNotMatch(source, /\bexecute\s*\(|\brun[A-Z]\w*\s*\(/);
   assert.doesNotMatch(source, /Ecosystem Observer y fusión con fuentes propietarias|Cerrar el piloto y la auditoría/);
+});
+
+test('Cliente Cero: the continuity registry reaches the observer through the project state view', () => {
+  const projected = ProjectManagerService.getProjectStateView('OXKIO');
+  assert.equal(projected.continuity.available, true);
+  const observer = buildEcosystemObserver({ ...fixture(), projectStateView: { ...fixture().projectStateView, continuity: projected.continuity } });
+  assert.equal(observer.continuity.available, true);
+  assert.equal(observer.continuity.revision, projected.continuity.revision);
+  assert.deepEqual(Object.keys(observer.continuity.counts), ['CLOSED', 'PENDING', 'BLOCKED', 'BACKLOG']);
+  const { entries } = require('../../projects/continuity-registry').loadRegistry();
+  ['CLOSED', 'PENDING', 'BLOCKED', 'BACKLOG'].forEach((state) => {
+    assert.equal(observer.continuity.counts[state], entries.filter((entry) => entry.state === state).length, state);
+  });
+  assert.ok(observer.continuity.open.every((front) => ['PENDING', 'BLOCKED'].includes(front.state)));
+  assert.ok(observer.continuity.nextAction && observer.continuity.nextAction.action.length > 0);
+  assert.equal(Object.isFrozen(observer.continuity), true);
+
+  // Without a projected registry the observer says so instead of an empty "all clear".
+  const missing = buildEcosystemObserver(fixture());
+  assert.deepEqual(missing.continuity, { available: false, reason: 'not_projected', counts: {}, open: [], nextAction: null });
+  const broken = buildEcosystemObserver({ ...fixture(), projectStateView: { ...fixture().projectStateView, continuity: { available: false, reason: 'registry_invalid' } } });
+  assert.equal(broken.continuity.reason, 'registry_invalid');
 });
