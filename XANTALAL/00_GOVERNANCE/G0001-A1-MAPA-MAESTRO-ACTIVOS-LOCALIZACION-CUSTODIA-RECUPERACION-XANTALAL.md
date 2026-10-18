@@ -1,14 +1,14 @@
 # G0001-A1 — MAPA MAESTRO DE ACTIVOS, LOCALIZACIÓN, CUSTODIA Y RECUPERACIÓN DE XANTALAL
 
-> **Estado documental:** PROPUESTA DE CIERRE DOCUMENTAL DE LA BASELINE CANÓNICA. APROBACIÓN SUJETA A AUDITORÍA PRECOMMIT.
+> **Estado documental:** PROPUESTA DE REVISIÓN 0.3.0 SOBRE LA BASELINE CANÓNICA 0.2.0 (2026-08-01). APROBACIÓN SUJETA A AUDITORÍA PRECOMMIT.
 
 ## 1. Control documental
 
 | Campo | Valor |
 |---|---|
 | Código | G0001-A1 |
-| Versión | 0.2.0 — propuesta de cierre documental |
-| Fecha | 2026-08-01 |
+| Versión | 0.3.0 — actualización de hosting LucusHost y CMS XANTALALSHOP (propuesta sujeta a auditoría precommit) |
+| Fecha | 2026-08-01 (baseline 0.2.0); 2026-10-18 (revisión 0.3.0) |
 | Autoridad | José Antonio, CEO de XANTALAL |
 | Dirección técnica | ChatGPT |
 | Formalización técnica | Codex |
@@ -34,7 +34,7 @@ G0001-A1 establece una vista maestra para responder, de forma auditable:
 7. cómo debería demostrarse su recuperación;
 8. qué información falta antes de operar con seguridad.
 
-El mapa describe el estado verificado o documentado a 2026-08-01. No convierte una copia en backup validado, una intención en arquitectura implantada ni una referencia histórica en producto vigente.
+El mapa describe el estado verificado o documentado a 2026-08-01. La revisión 0.3.0 solo añade las entradas fechadas el 2026-10-17 de las secciones 11 y 12, cada una con su fecha y procedencia; el resto conserva la vigencia de 2026-08-01. No convierte una copia en backup validado, una intención en arquitectura implantada ni una referencia histórica en producto vigente.
 
 ## 3. Lenguaje de honestidad
 
@@ -170,7 +170,7 @@ No se registran correos, identificadores sensibles, códigos, factores, valores 
 | ACC-FB-01 | Firebase | Control de José Antonio **CONFIRMADO POR CLIENTE CERO** | Mediante Google, **CONFIRMADO POR CLIENTE CERO** | Otros administradores **DESCONOCIDOS** | Proyecto, reglas y datos reales no auditados |
 | ACC-GCP-01 | Google Cloud | Misma cuenta Google y control actual **CONFIRMADOS POR CLIENTE CERO** | MFA específico **DESCONOCIDO** | Administración adicional **DESCONOCIDA** | Infraestructura real no verificada |
 | ACC-OAI-01 | OpenAI / API / ChatGPT / Codex | Cuenta y facturación bajo control **CONFIRMADAS POR CLIENTE CERO** | **DESCONOCIDO** | **DESCONOCIDA** | Cuenta crítica de capacidad y continuidad |
-| ACC-HOST-01 | Hosting / LucusHost | Contrato activo, cuenta y cPanel accesibles **CONFIRMADOS POR CLIENTE CERO** | **DESCONOCIDO** | Backups **DESCONOCIDOS**; restore no probado | No se accedió al hosting en estas misiones |
+| ACC-HOST-01 | Hosting / LucusHost | Contrato activo, cuenta y cPanel accesibles **CONFIRMADOS POR CLIENTE CERO**; plan Hosting SSD Senior con web XANTALALSHOP y correo operativos **DECLARADOS POR SOPORTE LUCUSHOST** (2026-10-17) | **DESCONOCIDO** | Backups del plan actual **DESCONOCIDOS**; restore no probado | No se accedió al hosting en estas misiones; cambio a plan Node.js **PROPUESTO**, no contratado (ver 12.1) |
 | ACC-DNS-01 | Registrador / DNS | LucusHost y control de José Antonio **DECLARADOS POR CLIENTE CERO** | **DESCONOCIDO** | Renovación automática **DECLARADA**; DNS efectivo **DESCONOCIDO** | Propiedad no verificada externamente |
 | ACC-MAIL-ADMIN-01 | Correo administrativo | Existencia y control **CONFIRMADOS POR CLIENTE CERO** | **DESCONOCIDO** | **DESCONOCIDA** | No se registra su dirección |
 | ACC-BACKUP-01 | Continuidad adicional | Google One 5 TB, candidato prioritario **DECLARADO** | Hereda la cuenta Google confirmada | Restore **PENDIENTE** | No configurado; no es todavía backup validado |
@@ -187,10 +187,41 @@ No se registran correos, identificadores sensibles, códigos, factores, valores 
 | Cloud Run | **PROPUESTO** | No se afirma despliegue vigente |
 | Railway / Render | Alternativas **DOCUMENTADAS** | Sin elección ni contratación aprobada |
 | Registrador y renovación | **DECLARADOS POR CLIENTE CERO** | LucusHost y renovación automática; requieren verificación posterior |
-| DNS y SSL efectivos | **DESCONOCIDO** | No se realizaron consultas externas |
-| Web pública XANTALAL/XANTALALSHOP | No existente, **DECLARADO POR CLIENTE CERO** | XANTALALSHOP fue recuperado desde Git, pero no desplegado ni publicado |
+| DNS y SSL efectivos | **DESCONOCIDO**; notas de 2026-10-17 **DOCUMENTADAS** y **PENDIENTES DE AUDITORÍA** | 2026-08-01: sin consultas externas. 2026-10-17: notas de trabajo registran un certificado comodín `*.xantalalshop.com` y la ausencia del subdominio `cms`, sin evidencia técnica archivada. No se registran servidores de nombres verificados |
+| Web pública XANTALAL/XANTALALSHOP | XANTALALSHOP operativa, **DECLARADO POR SOPORTE LUCUSHOST** (2026-10-17) | Contradicción resuelta por fecha: el 2026-08-01 el Cliente Cero la declaró no existente y XANTALALSHOP solo constaba recuperado desde Git. Disponibilidad, versión publicada y correspondencia con el repositorio **PENDIENTES DE AUDITORÍA** |
 
 Las confirmaciones del Cliente Cero actualizan el estado declarado, pero no sustituyen una futura auditoría de cuenta, DNS, SSL, backups o restore de hosting.
+
+### 12.1 LucusHost — datos de soporte y propuesta de CMS para XANTALALSHOP (2026-10-17)
+
+**Estado:** NO CONTRATADO · NO DESPLEGADO · SIN AUTORIZACIÓN PARA MODIFICAR PRODUCCIÓN.
+
+Decisión de producto: priorizar el alojamiento del CMS de XANTALALSHOP en LucusHost (`cms.xantalalshop.com`, acceso privado desde ordenador y móvil), con Tailscale sobre el equipo local como plan B. Fuente de la decisión: `XANTALALSHOP/DECISIONES_EVOLUCION_XANTALALSHOP.md`, sección 10. Esta subsección registra el activo de hosting; no autoriza contratación, gasto, despliegue ni cambios de DNS, correo o producción.
+
+Procedencia: **[SOPORTE]** soporte de LucusHost, 2026-10-17, transmitido por el Cliente Cero; **[WEB]** web oficial lucushost.com consultada el 2026-10-17; **[VERIF]** notas de una comprobación de solo lectura de DNS/TLS del 2026-10-17, sin evidencia técnica archivada; equivale a **DOCUMENTADO**, no a **VERIFICADO**. No se registran credenciales.
+
+| Elemento | Dato | Estado / procedencia |
+|---|---|---|
+| Plan actual | Hosting SSD Senior; no incluye Node.js | [SOPORTE] / [WEB] |
+| Plan propuesto | Hosting Node.js 1: 9,95 €/mes o 119,40 €/año, sin IVA | **PROPUESTO** [SOPORTE] |
+| Límites Node.js 1 | 15 GB SSD NVMe (uso actual ≈ 7,5 GB), 3072 MB RAM, 2 vCore, hasta 2 dominios, tráfico ilimitado, 2 copias diarias; 10 buzones según la web | [SOPORTE]; buzones [WEB], no confirmados por soporte |
+| Alternativa superior | Hosting Node.js 2: 19,95 €/mes o 239,40 €/año, sin IVA | **PROPUESTO** como respaldo [SOPORTE] |
+| Alternativas descartadas | Hosting Elástico (desde 37,63 €/mes) y VPS no gestionado, por coste o gestión | [WEB] |
+| Cambio de plan | Misma cuenta y servidor, sin migración ni interrupciones; importe abonado prorrateable | [SOPORTE]; coste exacto **REQUIERE CONFIRMACIÓN** |
+| Node.js | Disponibles 10.24.1 a 24.20.0; recomendada 22.23.2; el CMS requiere ≥ 18 (Express 5.2.1) | [SOPORTE] |
+| Alojamiento del CMS | Aplicación Node.js/Express en carpeta privada con acceso restringido a `public_html` | [SOPORTE] |
+| Seguridad | SSL gratuito para el subdominio, autenticación propia del CMS y protección opcional desde cPanel | [SOPORTE] |
+
+Pendientes antes de cualquier cambio:
+
+1. Confirmar qué límites del plan Node.js afectan a servicios actuales (buzones, dominios).
+2. Confirmar el coste prorrateado exacto.
+3. Confirmar con soporte: Passenger o lsnode, parada por inactividad y límites de procesos.
+4. Autorización expresa de la autoridad para el cambio de plan.
+5. Adaptar y probar el CMS en Linux/cPanel (login con 2FA, publicación por sistema de archivos, rutas configurables, imágenes en espera) mediante misión propia en XANTALALSHOP.
+6. Crear subdominio `cms` y SSL solo tras el cambio de plan y con autorización sobre producción.
+7. Backups y restore del hosting siguen **DESCONOCIDOS** para el plan actual; las copias del plan propuesto no equivalen a backup validado.
+8. Auditar DNS y TLS con evidencia archivada (servidores de nombres, certificado y subdominios) antes de declararlos **VERIFICADOS**.
 
 ## 13. Frontera de datos y persistencia
 
@@ -439,9 +470,11 @@ OXKIO y XANTALALSHOP cumplen de forma demostrada la recuperación de contenido G
 
 ## 27. Limitaciones de la baseline
 
-Esta baseline se construyó con inspección estática local, declaraciones aprobadas del Cliente Cero y conexiones a GitHub limitadas a los clones autorizados de RESTORE-01 y RESTORE-05. No se realizaron conexiones a Firebase, Google APIs, Microsoft, OpenAI, hosting ni DNS. No se iniciaron servicios, ejecutaron logins, leyeron valores de secretos ni restauraron stores ignorados.
+La baseline de 2026-08-01 se construyó con inspección estática local, declaraciones aprobadas del Cliente Cero y conexiones a GitHub limitadas a los clones autorizados de RESTORE-01 y RESTORE-05. No se realizaron conexiones a Firebase, Google APIs, Microsoft, OpenAI, hosting ni DNS. No se iniciaron servicios, ejecutaron logins, leyeron valores de secretos ni restauraron stores ignorados.
 
 RESTORE-01/02/05 probaron recuperación versionada en sandboxes fuera de OneDrive, pero dentro del mismo portátil. La incidencia EOL `i/lf, w/crlf` causada por `core.autocrlf=true` queda registrada como deuda técnica no bloqueante porque blobs, árboles, `git fsck`, status y diff fueron íntegros. No se modifican ahora `core.autocrlf` ni `.gitattributes`.
+
+La revisión 0.3.0 (2026-10-18) no realizó conexiones a hosting, DNS ni otros servicios. Solo incorpora declaraciones del soporte de LucusHost del 2026-10-17, datos de la web oficial de LucusHost y notas de una comprobación DNS/TLS de solo lectura del 2026-10-17 sin evidencia técnica archivada, registradas como **DOCUMENTADO** y **PENDIENTE DE AUDITORÍA**.
 
 Los tamaños, rutas, HEAD y estados corresponden a la evidencia auditada; pueden cambiar después de la fecha de referencia. La titularidad jurídica, obligaciones regulatorias, licencias, consentimientos y fiscalidad están fuera del alcance técnico y **REQUIEREN CONFIRMACIÓN** profesional cuando proceda.
 
@@ -474,6 +507,7 @@ La auditoría precommit deberá comprobar:
 5. Documentación de gobernanza, roadmap, orquestación, arquitectura, stores y pruebas de concepto del proyecto.
 6. Decisiones posteriores expresamente aprobadas por José Antonio y consolidadas para esta misión.
 7. Informes ratificados RESTORE-01, RESTORE-02 y RESTORE-05, ejecutados el 2026-08-01.
+8. Revisión 0.3.0: declaraciones del soporte de LucusHost del 2026-10-17, transmitidas por el Cliente Cero; web oficial lucushost.com consultada el 2026-10-17; notas DNS/TLS del 2026-10-17 sin evidencia técnica archivada; decisión de producto en `XANTALALSHOP/DECISIONES_EVOLUCION_XANTALALSHOP.md`, sección 10.
 
 Las conversaciones y herramientas de IA son fuentes de procedencia y trabajo, no autoridad canónica independiente.
 
@@ -483,6 +517,7 @@ Las conversaciones y herramientas de IA son fuentes de procedencia y trabajo, no
 |---|---|---|---|
 | 0.1.0 | 2026-08-01 | Primera formalización física del mapa maestro | Baseline sujeta a auditoría precommit y aprobación |
 | 0.2.0 | 2026-08-01 | Confirmaciones del Cliente Cero, restores Git, RTO internos y enlaces mínimos de cierre | Propuesta de cierre sujeta a auditoría precommit |
+| 0.3.0 | 2026-10-18 | Datos de soporte LucusHost del 2026-10-17, web XANTALALSHOP operativa según soporte, notas DNS/TLS documentadas y pendientes de auditoría, y propuesta de CMS en hosting Node.js (12.1); actualización de ACC-HOST-01, vigencia, limitaciones, fuentes y Asset Registry | Propuesta sujeta a auditoría precommit; no contratado ni desplegado |
 
 ---
 
