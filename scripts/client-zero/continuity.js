@@ -95,7 +95,7 @@ function observe(registry, options) {
 function prFacts(registry) {
   const numbers = new Set();
   registry.entries.filter((entry) => entry.state === "CLOSED").forEach((entry) => entry.evidence.forEach((item) => {
-    const match = item.kind === "pr_merged" && item.ref.match(/^pr:(\d+)$/);
+    const match = item.kind === "pr_merged" && item.ref.match(continuity.PR_MERGE_REF);
     if (match) numbers.add(match[1]);
   }));
   const facts = {};

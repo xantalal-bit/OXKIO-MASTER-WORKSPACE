@@ -8,13 +8,13 @@ const { parsePublicUrl } = require('../executive-brain/mission-capabilities/publ
 const { containsSecretMarker, DEFAULT_PRIVACY_POLICY } = require('../executive-brain/privacy-gate');
 const { createScopeSessions, createScopedStore, copy, freeze, fail } = require('./scope-session');
 const { createCapabilityManager, createConnectionManager, DEFINITIONS } = require('./capability-manager');
-const { OUTCOMES, normalize, tokensOf, interpretIntention } = require('./intention-interpreter');
+const { OUTCOMES, normalize, tokensOf, interpretIntention, personalRecall } = require('./intention-interpreter');
 const { authorizeEgress, classifyEgress, identifiesPerson } = require('./egress-privacy');
 const { verifyPartial } = require('../executive-brain/synthesis-verifier');
 const { analyzePrivateItems, verifyLocalAnalysis } = require('./local-analysis');
 const { createCostLedger } = require('./cost-ledger');
 const { classified, diagnose, createLearning } = require('./self-repair');
-const { answerContinuityQuery } = require('../../projects/continuity-registry');
+const { answerContinuityQuery, matchEntries } = require('../../projects/continuity-registry');
 const REGISTRAR = 'tool:supervised-operation';
 const TERMINAL = ['COMPLETED','FAILED','CANCELLED'];
 const stepResultId=taskId=>'sr-'+createHash('sha256').update(String(taskId)).digest('hex').slice(0,40);
@@ -537,7 +537,14 @@ function createSupervisedRuntime({membershipProvider,planner=null,conversationDe
   if(direct.orientation)return freeze({outcome:OUTCOMES.CAN_EXECUTE,status:'COMPLETED',mode:'ORIENTATION',message:orientation(handle),executionEnabled:false});
   // Project continuity comes from the canonical registry that trusted
   // composition reads for this scope, never from personal memory or a model.
-  if(direct.projectContinuity)return continuityState(handle,text);
+  if(direct.projectContinuity)return continuityState(handle,text,readContinuity(handle));
+  // A question naming a front by its title or alias ("¿cómo va lo de postgres
+  // rls?") that no source vocabulary claimed would otherwise reach the decider,
+  // whose only internal source is personal memory.
+  if(direct.outcome===OUTCOMES.NEEDS_INFORMATION&&['no_capability','missing_source'].includes(direct.reason)&&!personalRecall(text)){
+   const registry=readContinuity(handle);
+   if(registry&&matchEntries(registry,normalize(text).replace(/\bregistro de continuidad\b/g,' ')).length)return continuityState(handle,text,registry);
+  }
   // Understanding before capabilities: when the interpreter's outcome rests on
   // vocabulary (semantic) and cognition is available, the decider reads the
   // goal against the effective capability view first. Explicit orders, consent
@@ -594,11 +601,14 @@ function createSupervisedRuntime({membershipProvider,planner=null,conversationDe
  async function business(handle,input,factory){await sessions.current(handle);if(typeof factory!=='function')fail('business_adapter_required');const adapters=await factory(freeze(copy(sessions.scope(handle))));const result=await runCompanyOpportunity({...copy(input),...adapters});await sessions.current(handle);return freeze(copy({review:result.review,executionEnabled:false}));}
  // Cliente Cero (18/10/2026): an unreadable or absent registry is said plainly,
  // never answered from memory nor as an empty all-clear.
- function continuityState(handle,text){
+ function readContinuity(handle){try{return typeof projectContinuity==='function'?projectContinuity(freeze(copy(sessions.scope(handle))))||null:null;}catch{return null;}}
+ function continuityState(handle,text,registry){
   let answer=null;
-  try{const registry=typeof projectContinuity==='function'?projectContinuity(freeze(copy(sessions.scope(handle)))):null;answer=registry?answerContinuityQuery({registry,query:text,now:now()}):null;}catch{answer=null;}
+  try{answer=registry?answerContinuityQuery({registry,query:text,now:now()}):null;}catch{answer=null;}
   if(!answer)return freeze({outcome:OUTCOMES.CAN_EXECUTE,status:'COMPLETED',mode:'PROJECT_CONTINUITY',message:'No tengo acceso al registro de continuidad del proyecto, así que no puedo darte su estado. No lo he buscado en tu memoria personal, que no es donde está.',continuity:{available:false},executionEnabled:false});
-  return freeze({outcome:OUTCOMES.CAN_EXECUTE,status:'COMPLETED',mode:'PROJECT_CONTINUITY',message:answer.text,continuity:{available:true,revision:answer.revision,updatedAt:answer.updatedAt,ids:copy(answer.ids),missing:copy(answer.missing),stale:answer.stale},executionEnabled:false});
+  // Details carry both layers apart: the recorded state of each front and the
+  // disagreements with its verified evidence; the message never fuses them.
+  return freeze({outcome:OUTCOMES.CAN_EXECUTE,status:'COMPLETED',mode:'PROJECT_CONTINUITY',message:answer.text,continuity:{available:true,source:'CONTINUITY_REGISTRY',revision:answer.revision,updatedAt:answer.updatedAt,ids:copy(answer.ids),missing:copy(answer.missing),stale:answer.stale,detail:answer.detail,fronts:copy(answer.fronts),conflicts:copy(answer.conflicts)},executionEnabled:false});
  }
  function onboarding(handle){sessions.scope(handle);const state=capabilities.describe(handle);return freeze({...state,executionEnabled:false});}
  return Object.freeze({openSession:sessions.open,start,resumeTarget,resume,pause,cancel,get,conversation,telemetry,costs,lessons,onboarding,business,

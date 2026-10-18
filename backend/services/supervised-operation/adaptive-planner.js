@@ -8,6 +8,7 @@ const { freeze, copy, fail } = require('./scope-session');
 const COMPLETED = /\b(?:he|hemos|se ha|ya (?:esta|ha sido))\s+(?:enviado|creado|modificado|aprobado|pagado|publicado|ejecutado|guardado)\b/i;
 const PRETERITE = /(?<!\p{L})(?:envié|aprobé|pagué|publiqué|ejecuté|guardé|creé|modifiqué)(?!\p{L})/iu;
 const stripAccents = v => v.normalize('NFD').replace(/\p{M}/gu, '');
+const PROJECT_FRONT = /\bCZ-[A-Z0-9]/i;
 // Reuse the governed resource chain; classify the exact outgoing request.
 function createAdaptivePlanner({ provider, providers, privacyPolicy = DEFAULT_PRIVACY_POLICY, approvedDailyBudgetUsd = 0, requestFloor = PRIVACY_CLASSES.CONFIDENTIAL } = {}) {
  const reasoner = createGovernedReasoner({ providers: providers || (provider ? [provider] : []), privacyPolicy, approvedDailyBudgetUsd, requestFloor });
@@ -72,6 +73,9 @@ function createAdaptivePlanner({ provider, providers, privacyPolicy = DEFAULT_PR
     if (!['answer','clarify'].includes(c.action)) return 'planning_unknown_action';
     if (!noPlan(c.plan)) return 'planning_plan_without_plan_action';
     if (typeof c.message === 'string' && INTERNAL_TERMS.test(c.message)) return 'planning_message_internal_terms';
+    // Project fronts are answered only from the continuity registry: a model
+    // that names one is stating a status nobody gave it (18/10/2026).
+    if (typeof c.message === 'string' && PROJECT_FRONT.test(c.message)) return 'planning_message_project_claim';
     const valid = validMessage(c.message);
     acceptedAnswer = valid && c.action === 'answer';
     return valid || 'planning_invalid_message';
