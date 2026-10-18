@@ -18,6 +18,7 @@ const systemConfig = require("../config/systemConfig");
 const WorkflowManager = require("../workflows/workflowManager");
 const SystemStateManager = require("../core/systemStateManager");
 const ProjectManagerService = require("../projects/projectManagerService");
+const { loadRegistry: loadContinuityRegistry } = require("../projects/continuity-registry");
 const { readGovernanceStateView } = require("../governance/governanceReader");
 const DashboardIntelligence = require("../services/dashboard/dashboard-intelligence");
 const { matchExecutiveQuery } = require("../services/executive/executive-query-router");
@@ -184,6 +185,9 @@ try {
     integrityKey: process.env.OXKIO_V3_ENABLED === "true" ? (() => { try { return getSecret("OXKIO_V3_INTEGRITY_KEY"); } catch (error) { return null; } })() : null,
     authorizeIdentity: authorizeFirebaseIdentity,
     privateContextReaders: (identity) => createDashboardReaders(identity),
+    // The canonical continuity registry, validated on every read; V3 shows it
+    // only to Cliente Cero and never writes it.
+    projectContinuity: () => loadContinuityRegistry(),
     // Controlled public discovery (reviewed catalogue, matched locally) plus the
     // real public fetcher; opt-in. Not a web search provider.
     publicResearch: process.env.OXKIO_V3_PUBLIC_RESEARCH === "true"

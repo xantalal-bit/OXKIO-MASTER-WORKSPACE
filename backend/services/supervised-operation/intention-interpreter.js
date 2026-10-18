@@ -69,6 +69,17 @@ const CREDENTIALS = ['contrasena', 'contrasenas', 'password', 'passwords', 'secr
 const BLOCK = ['deploy', 'despliega', 'desplegar', 'produccion', 'compra', 'comprame', 'comprar', 'paga', 'pagar', 'pagame', 'transfiere', 'transferir', 'transferencia', 'contrata', 'contratar', 'borra', 'borrar', 'borralo', 'elimina', 'eliminar', 'eliminalo'];
 const STOP = new Set(['que', 'de', 'del', 'la', 'el', 'los', 'las', 'un', 'una', 'unos', 'unas', 'y', 'o', 'en', 'mi', 'mis', 'me', 'lo', 'le', 'les', 'por', 'para', 'con', 'sobre', 'al', 'a', 'es', 'se', 'su', 'sus', 'tu', 'tus', 'te', 'hay', 'tengo', 'tienes', 'todo', 'todos', 'algo', 'dime', 'puedes', 'favor', 'esto', 'esta', 'este', 'ese', 'esa', 'hoy', 'ahora', 'he', 'has', 'ha', 'revisa', 'consulta', 'mira', 'ver', 'sabes', 'lee', 'leer']);
 const REMEMBER_CONSENT = /^(recuerda|guarda esta informacion|apunta|anota|memoriza)\b/;
+// Project continuity (18/10/2026): the state, decisions and fronts of Cliente
+// Cero / OXKIO live in the continuity registry, not in personal memory. What
+// the person told OXKIO stays personal memory unless the registry or a front
+// id is named.
+const PROJECT_CONTINUITY = [
+ /\bcz-[a-z0-9]/, /\bregistro de continuidad\b/, /\bcontinuidad (del proyecto|de oxkio|de cliente cero)\b/,
+ /\b(estado|decisiones|decision|hitos?|frentes?|bloqueos?|pendientes|siguiente paso|siguiente accion|proxima accion)\b.*\b(cliente cero|oxkio)\b/,
+ /\b(cliente cero|oxkio)\b.*\b(estado|decisiones|decision|hitos?|frentes?|bloqueos?|bloqueados?|pendientes)\b/,
+];
+const PERSONAL_RECALL = /\b(te (dije|conte|pedi|comente)|me dijiste|guardaste|apuntaste|anotaste|mi memoria|tu memoria)\b/;
+const NAMES_REGISTRY = /\bcz-[a-z0-9]|\bregistro de continuidad\b/;
 const ORDER = ['memory.remember', 'calendar.read', 'gmail.read', 'memory.search', 'documents.read', 'web.search', 'research.web', 'data.analyze', 'storage.propose'];
 const SOURCE_IDS = ['calendar.read', 'gmail.read', 'memory.search', 'documents.read', 'web.search', 'research.web'];
 function rememberConsent(text) { return typeof text === 'string' && REMEMBER_CONSENT.test(normalize(text).trim()); }
@@ -106,6 +117,8 @@ function interpretIntention(text) {
  // order; with cognition available the runtime lets understanding decide and
  // keeps this outcome as its deterministic fallback.
  if (!remember && action(tokens, EDIT, plain)) return result(OUTCOMES.NEEDS_APPROVAL, { reason: 'external_action', gate: 'HUMAN_GATE', semantic: true });
+ // Reading the project registry is read-only; changing it was gated above.
+ if (!remember && PROJECT_CONTINUITY.some(pattern => pattern.test(plain)) && (!PERSONAL_RECALL.test(plain) || NAMES_REGISTRY.test(plain))) return result(OUTCOMES.CAN_EXECUTE, { reason: 'project_continuity', projectContinuity: true });
  const declared = Object.entries(DECLARED).filter(([, d]) => has(tokens, d.cues)).map(([id]) => id);
  const futureOrder = FUTURE.test(plain);
  if (futureOrder && !declared.includes('reminders.schedule')) declared.push('reminders.schedule');
