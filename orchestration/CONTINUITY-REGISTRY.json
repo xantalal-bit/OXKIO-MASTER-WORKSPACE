@@ -1,7 +1,7 @@
 {
   "schema": "oxkio.continuity-registry/v1",
-  "revision": 33,
-  "updatedAt": "2026-10-18T13:51:44.866Z",
+  "revision": 35,
+  "updatedAt": "2026-10-19T07:50:06.480Z",
   "canon": {
     "path": "KNOWLEDGE-CURATOR/CLIENT-ZERO/XATAI-CLIENT-ZERO-CANON.md",
     "issue": "issue:49",
@@ -96,8 +96,8 @@
         "backend-tests (node 22)",
         "backend-tests (node 24)"
       ],
-      "version": 20,
-      "updatedAt": "2026-10-18T13:49:34.589Z",
+      "version": 22,
+      "updatedAt": "2026-10-19T07:50:06.480Z",
       "evidence": [
         {
           "ref": "ci:39041516033#backend-tests (node 22)",
@@ -282,6 +282,22 @@
           "observedAt": "2026-10-17T19:12:08Z",
           "source": "github-actions:main@30717ee",
           "summary": "backend-tests (node 22) success en push main @ 30717ee"
+        },
+        {
+          "ref": "ci:39135308157#backend-tests (node 22)",
+          "kind": "ci_green",
+          "result": "success",
+          "observedAt": "2026-10-18T14:22:21Z",
+          "source": "github-actions:main@8aec849",
+          "summary": "backend-tests (node 22) success en push main @ 8aec849"
+        },
+        {
+          "ref": "ci:39135308157#backend-tests (node 24)",
+          "kind": "ci_green",
+          "result": "success",
+          "observedAt": "2026-10-18T14:25:20Z",
+          "source": "github-actions:main@8aec849",
+          "summary": "backend-tests (node 24) success en push main @ 8aec849"
         }
       ]
     },
@@ -422,8 +438,8 @@
       "signals": [
         "approval-postgres-integration"
       ],
-      "version": 14,
-      "updatedAt": "2026-10-18T13:51:44.737Z",
+      "version": 15,
+      "updatedAt": "2026-10-19T07:50:06.480Z",
       "evidence": [
         {
           "ref": "ci:39048856582#approval-postgres-integration",
@@ -576,6 +592,14 @@
           "observedAt": "2026-10-18T11:45:31Z",
           "source": "github-actions:main@9b05eb5",
           "summary": "approval-postgres-integration en main: 19/19 contra postgres:18 efímero, 0 fail, 0 skipped (leído del log del job)."
+        },
+        {
+          "ref": "ci:39135308157#approval-postgres-integration",
+          "kind": "ci_green",
+          "result": "success",
+          "observedAt": "2026-10-18T14:18:09Z",
+          "source": "github-actions:main@8aec849",
+          "summary": "approval-postgres-integration success en push main @ 8aec849"
         }
       ]
     },
@@ -1436,6 +1460,31 @@
       "name": "audit-closures-github",
       "result": "verified",
       "note": "7/7 cierres verificados contra GitHub"
+    },
+    {
+      "type": "evidence_added",
+      "at": "2026-10-19T07:50:06.480Z",
+      "entry": "CZ-CI-NODE22-24",
+      "ref": "ci:39135308157#backend-tests (node 22)"
+    },
+    {
+      "type": "evidence_added",
+      "at": "2026-10-19T07:50:06.480Z",
+      "entry": "CZ-CI-NODE22-24",
+      "ref": "ci:39135308157#backend-tests (node 24)"
+    },
+    {
+      "type": "evidence_added",
+      "at": "2026-10-19T07:50:06.480Z",
+      "entry": "CZ-PG-RLS-REAL",
+      "ref": "ci:39135308157#approval-postgres-integration"
+    },
+    {
+      "type": "automation_run",
+      "at": "2026-10-19T07:50:06.480Z",
+      "name": "xatai-github-ci-observe",
+      "result": "ok",
+      "note": "GitHub conector (Xatai, no runtime OXKIO): run 39135308157, 5/5 jobs verdes, 3 observaciones nuevas; sin cambios de estado."
     }
   ]
 }
