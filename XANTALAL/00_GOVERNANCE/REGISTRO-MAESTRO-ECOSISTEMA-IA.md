@@ -214,3 +214,15 @@ OXI puede actuar como activo creativo/comercial cuando aporte valor, sin recomen
 - marcar explícitamente decisiones históricas sustituidas.
 
 Esta auditoría no se considerará completa hasta cubrir julio, agosto y septiembre hasta la fecha y clasificar cada hallazgo material.
+
+
+### NVIDIA Build / NIM
+**Estado:** PROBAR — evaluación aislada; NO ACTIVADO (2026-10-19).
+**Categoría:** proveedor sustituible de razonamiento/multimodal/RAG y microservicios de voz, OCR y media.
+**Auditoría documental:** catálogo [NVIDIA Build](https://build.nvidia.com/models) consultado el 2026-10-19: 99 modelos; 39 endpoints gratuitos y 82 descargables, categorías solapadas. No equivalen a 99 APIs gratuitas. Disponibilidad dinámica; prueba autenticada pendiente.
+**Distinción:** APIs gratuitas para prototipado; descargable requiere infraestructura propia y licencia aplicable; socios tienen condiciones/precios propios. No se certifican RPM/TPM, créditos, SLA ni gratuidad ilimitada.
+**Candidatos:** nemotron-3.5-super-vl-120b-a12b, nemotron-3.5-lightning-30b-a3b y nemotron-3-embed-1b para evaluación con datos públicos/sintéticos. OCR/parse y voz descargables se remiten a Knowledge Curator y Media Orchestrator existentes. GLM-5-3 anuncia deprecación: VIGILAR.
+**Condiciones:** [API Trial Terms](https://assets.ngc.nvidia.com/products/api-catalog/legal/NVIDIA%20API%20Trial%20Terms%20of%20Service.pdf) limitan el uso a evaluación y excluyen producción; revisar licencias de modelo y cláusula de competencia antes de adopción comercial. Prohíben información confidencial y datos personales salvo permiso expreso. Contemplan uso de contenido para mejora de modelos/servicios y excepciones de retención: no certificar privacidad UE ni zero retention.
+**Arquitectura:** ampliar únicamente el proveedor existente tras revisión. executive-reasoning-provider.js admite actualmente solo openai y URLs permitidas OpenAI; compatibilidad de protocolo no implica integración NVIDIA. No cambiar configuración ni eludir allowlist.
+**Pendiente:** contrastar calidad española, JSON/herramientas, latencia, límites efectivos y coste sin datos privados; preservar políticas de privacidad, presupuesto y evidencia. No se han usado credenciales, ejecutado inferencias, contratado ni desplegado servicios. Metadatos privados de cuenta/custodia quedan fuera del repositorio público.
+**Fuente adicional:** [FAQ oficial](https://docs.api.nvidia.com/nim/docs/product), que diferencia prototipado y producción.
