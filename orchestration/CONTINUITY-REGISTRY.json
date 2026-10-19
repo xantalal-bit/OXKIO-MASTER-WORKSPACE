@@ -1,7 +1,7 @@
 {
   "schema": "oxkio.continuity-registry/v1",
-  "revision": 35,
-  "updatedAt": "2026-10-19T07:50:06.480Z",
+  "revision": 36,
+  "updatedAt": "2026-10-19T07:51:52.758Z",
   "canon": {
     "path": "KNOWLEDGE-CURATOR/CLIENT-ZERO/XATAI-CLIENT-ZERO-CANON.md",
     "issue": "issue:49",
@@ -1485,6 +1485,13 @@
       "name": "xatai-github-ci-observe",
       "result": "ok",
       "note": "GitHub conector (Xatai, no runtime OXKIO): run 39135308157, 5/5 jobs verdes, 3 observaciones nuevas; sin cambios de estado."
+    },
+    {
+      "type": "automation_run",
+      "at": "2026-10-19T07:51:52.758Z",
+      "name": "xatai-audit-closures-github",
+      "result": "verified",
+      "note": "Xatai conector GitHub (no runtime OXKIO): 7/7 referencias PR merge verificadas; 5 PR consultadas."
     }
   ]
 }
