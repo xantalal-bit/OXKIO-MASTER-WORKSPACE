@@ -14,6 +14,9 @@ COPY --chown=node:node backend ./backend
 RUN find /app/backend -type d -exec chmod u+w {} +
 COPY --chown=node:node app ./app
 COPY --chown=node:node package.json ./
+# Registro de continuidad Cliente Cero: el chat V3 lo lee en esta ruta. Solo
+# lectura (sin --chown) y solo este archivo, no el resto de orchestration/.
+COPY orchestration/CONTINUITY-REGISTRY.json ./orchestration/CONTINUITY-REGISTRY.json
 
 # Target de backup (5C.7B.6B.3D, OFFLINE — nunca conectado a Neon en este
 # repositorio). Misma base Alpine 3.24 que el target HTTP; unica adicion es

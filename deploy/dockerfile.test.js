@@ -103,6 +103,24 @@ test('no se anadio ningun comando de push a registry ni de deploy', () => {
   assert.doesNotMatch(dockerfile, /docker\.pkg\.dev/i);
 });
 
+// Cliente Cero (22/10/2026): el chat V3 lee el registro de continuidad desde
+// <raiz>/orchestration/CONTINUITY-REGISTRY.json. Sin esta COPY la imagen
+// responde siempre «No tengo acceso al registro de continuidad» (registry_missing).
+test('la etapa "app" incluye el registro de continuidad en la ruta que lee el runtime', () => {
+  const { REGISTRY_PATH } = require('../backend/projects/continuity-registry');
+  const relative = path.relative(repositoryRoot, REGISTRY_PATH).split(path.sep).join('/');
+  assert.equal(relative, 'orchestration/CONTINUITY-REGISTRY.json');
+  const app = stageBlock('app');
+  assert.match(app, /^COPY orchestration\/CONTINUITY-REGISTRY\.json \.\/orchestration\/CONTINUITY-REGISTRY\.json$/m);
+  // Solo el registro: el resto de orchestration/ no forma parte del runtime.
+  assert.doesNotMatch(app, /^COPY .*orchestration\/? /m);
+  // Lectura: sin --chown, el usuario node no puede reescribir el registro.
+  assert.doesNotMatch(app, /COPY --chown=node:node orchestration/);
+  const ignored = fs.readFileSync(path.join(repositoryRoot, '.dockerignore'), 'utf8')
+    .split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+  assert.ok(!ignored.some((line) => /^(\/?orchestration(\/.*)?|\*\.json)$/.test(line)), '.dockerignore excluye el registro');
+});
+
 test('ambos targets terminados en usuario no root heredan de la misma etapa "app"', () => {
   assert.match(dockerfile, /^FROM node:22-alpine3\.24 AS app$/m);
   const runtimeFrom = /^FROM app AS runtime$/m.test(dockerfile);
