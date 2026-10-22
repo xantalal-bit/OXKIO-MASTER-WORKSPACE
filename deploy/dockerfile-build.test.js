@@ -68,6 +68,15 @@ test('build (skipped without Docker): runtime y backup se construyen y se inspec
     builtImages.push(backupTag);
   });
 
+  await t.test('runtime: el registro de continuidad se carga y no es escribible por node', () => {
+    const load = run('docker', ['run', '--rm', apiTag, 'node', '-e',
+      "const r=require('./backend/projects/continuity-registry');process.stdout.write(String(r.loadRegistry().revision))"]);
+    assert.equal(load.status, 0, load.stderr);
+    assert.match(load.stdout.trim(), /^\d+$/);
+    const write = run('docker', ['run', '--rm', apiTag, 'sh', '-c', 'test -w orchestration/CONTINUITY-REGISTRY.json']);
+    assert.notEqual(write.status, 0, 'el usuario node no debe poder reescribir el registro');
+  });
+
   await t.test('runtime: pg_dump/pg_restore/psql ausentes (separacion de superficie)', () => {
     for (const binary of ['pg_dump', 'pg_restore', 'psql']) {
       const check = run('docker', ['run', '--rm', apiTag, 'which', binary]);
