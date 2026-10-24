@@ -9,12 +9,15 @@ function v3MemoryRuntimeOptions(env, readSecret) {
   const host = env.OXKIO_V3_PG_HOST;
   const database = env.OXKIO_V3_PG_DATABASE;
   const user = env.OXKIO_V3_PG_USER;
-  const port = Number(env.OXKIO_V3_PG_PORT || 5432);
-  if (![host, database, user].every(x => typeof x === 'string' && /^[a-zA-Z0-9_.-]{1,128}$/.test(x))
+  const port = env.OXKIO_V3_PG_PORT === undefined || env.OXKIO_V3_PG_PORT === '' ? 5432 : Number(env.OXKIO_V3_PG_PORT);
+  const validHost = typeof host === 'string' && (host === '::1' || /^[a-zA-Z0-9_.-]{1,128}$/.test(host));
+  if (!validHost || ![database, user].every(x => typeof x === 'string' && /^[a-zA-Z0-9_.-]{1,128}$/.test(x))
       || !Number.isInteger(port) || port < 1 || port > 65535) {
     throw Object.assign(new Error('postgres_connection_required'), { code: 'postgres_connection_required' });
   }
-  // No plaintext password env variable, no Approval DB credential fallback.
+  // Dedicated registered V3 secret identifier; no Approval DB credential fallback.
+  // The current secret-runtime provider reads process.env; launcher custody and
+  // deployment are deliberately separate approval-gated phases.
   if (typeof readSecret !== 'function') throw Object.assign(new Error('postgres_credentials_required'), { code: 'postgres_credentials_required' });
   const password = readSecret('OXKIO_V3_PG_PASSWORD');
   if (typeof password !== 'string' || !password.length) throw Object.assign(new Error('postgres_credentials_required'), { code: 'postgres_credentials_required' });
