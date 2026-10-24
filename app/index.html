@@ -4,7 +4,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Oxkio Master Build v1</title>
+  <title>OXKIO — Cliente Cero</title>
   <meta name="description" content="Oxkio — asistente ejecutivo inteligente por voz para CEOs, directivos y profesionales.">
 <link rel="icon" type="image/png" href="/favicon.png">
 <link rel="apple-touch-icon" sizes="180x180" href="/icons/apple-touch-icon.png">
@@ -398,7 +398,7 @@
 <body>
   <div class="container">
     <img src="/app/logo.png" class="logo" alt="Oxkio logo">
-    <div class="title">Oxkio <span class="version-badge">MASTER v1</span></div><div id="loading" class="auth-card">
+    <div class="title">Oxkio <span class="version-badge" id="oxkio-runtime-badge" title="Identidad de runtime pendiente de comprobar">CLIENTE CERO</span></div><div id="loading" class="auth-card">
   <div class="section-title">Cargando</div>
   <div class="msg">Comprobando acceso seguro...</div>
 </div>
@@ -698,6 +698,26 @@
       const headers = new Headers(options.headers || {});
       headers.set("Authorization", `Bearer ${token}`);
       const response = await fetch(url, { ...options, headers });
+      // La interfaz no fija versiones: consulta el manifiesto de la versión del proyecto
+      // y exige evidencia del motor supervisor antes de mostrarla como activa.
+      if (String(url).split("?")[0] === "/api/executive/chat" && response.ok &&
+          response.headers.get("X-OXKIO-Handler") === "supervised-operation") {
+        try {
+          const releaseResponse = await fetch("/app/release.json", { cache: "no-store" });
+          if (releaseResponse.ok) {
+            const release = await releaseResponse.json();
+            if (typeof release.version === "string" && /^V[0-9]+(?:\.[0-9]+)*$/.test(release.version)) {
+              const runtimeBadge = document.getElementById("oxkio-runtime-badge");
+              if (runtimeBadge) {
+                runtimeBadge.textContent = `${release.version} · CLIENTE CERO`;
+                runtimeBadge.title = "Motor supervisado confirmado; versión del manifiesto del proyecto";
+              }
+            }
+          }
+        } catch (_) {
+          // Sin manifiesto válido, mantener la etiqueta conservadora CLIENTE CERO.
+        }
+      }
       if (response.status === 401 && retry) {
         return authenticatedFetch(url, options, false);
       }
