@@ -2,6 +2,7 @@
 param([ValidateRange(1,65535)][int]$Port = 3000)
 
 # Solo lectura: nunca detiene procesos, lee credenciales ni imprime argumentos.
+# Este informe no certifica el script original de arranque: solo identifica el proceso actual.
 Write-Host "[OXKIO] Diagnostico de listener TCP en puerto $Port"
 try {
     $listeners = @(Get-NetTCPConnection -LocalPort $Port -State Listen -ErrorAction Stop |
