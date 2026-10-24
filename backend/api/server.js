@@ -661,6 +661,16 @@ if (pathname === "/api/gmail/analyze" && req.method === "GET") {
 
   }
 }
+if (pathname === "/app/release.json" && req.method === "GET") {
+  // Metadatos públicos, sin secretos. Única fuente de versión visual del proyecto.
+  const releasePath = path.join(__dirname, "../../app/release.json");
+  res.writeHead(200, {
+    "Content-Type": "application/json; charset=utf-8",
+    "Cache-Control": "no-store"
+  });
+  res.end(fs.readFileSync(releasePath));
+  return;
+}
 if (req.url === "/") {
 
   const fs = require("fs");
