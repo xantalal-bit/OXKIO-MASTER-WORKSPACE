@@ -68,6 +68,15 @@ const ENVIRONMENT_VARIABLES = Object.freeze({
   OXKIO_V3_ENABLED: Object.freeze({ kind: 'governance', classifications: ['optional'], scope: 'supervised_operation' }),
   OXKIO_V3_COHORT_UIDS: Object.freeze({ kind: 'sensitive_config', classifications: ['optional'], scope: 'supervised_operation' }),
   OXKIO_V3_MEMORY_ROOT: Object.freeze({ kind: 'config', classifications: ['optional'], scope: 'supervised_operation' }),
+  // V3 SQL memory is opt-in only. Registration of a secret identifier does NOT
+  // create a secret, grant access, provision SQL, or enable any runtime.
+  OXKIO_V3_MEMORY_BACKEND: Object.freeze({ kind: 'governance', classifications: ['optional'], scope: 'supervised_operation' }),
+  OXKIO_V3_PG_HOST: Object.freeze({ kind: 'sensitive_config', classifications: ['optional'], scope: 'supervised_operation' }),
+  OXKIO_V3_PG_PORT: Object.freeze({ kind: 'config', classifications: ['optional'], scope: 'supervised_operation' }),
+  OXKIO_V3_PG_DATABASE: Object.freeze({ kind: 'sensitive_config', classifications: ['optional'], scope: 'supervised_operation' }),
+  OXKIO_V3_PG_USER: Object.freeze({ kind: 'sensitive_config', classifications: ['optional'], scope: 'supervised_operation' }),
+  OXKIO_V3_PG_SSL: Object.freeze({ kind: 'governance', classifications: ['optional'], scope: 'supervised_operation' }),
+  OXKIO_V3_PG_PASSWORD: Object.freeze({ kind: 'secret', classifications: ['optional', 'secret'], scope: 'supervised_operation' }),
   OXKIO_V3_INTEGRITY_KEY: Object.freeze({ kind: 'secret', classifications: ['optional', 'secret'], scope: 'supervised_operation' }),
   OXKIO_V3_PLANNER_DAILY_BUDGET_USD: Object.freeze({ kind: 'governance', classifications: ['optional'], scope: 'supervised_operation' }),
   // Authorization B (04/10/2026): "true" lets PUBLIC and non-sensitive INTERNAL
