@@ -115,3 +115,59 @@ jobs:
           export OXKIO_TEST_APPROVAL_PG_ADMIN_URL="postgresql://oxkio_test_admin:${ADMIN_PW}@127.0.0.1:5432/postgres"
           export OXKIO_TEST_APPROVAL_PG_RUNTIME_URL="postgresql://oxkio_approval_runtime:${RUNTIME_PW}@127.0.0.1:5432/postgres"
           node --test backend/repositories/postgres-approval-repository.pg.test.js
+
+  # V3 memory adapter on a real, ephemeral PostgreSQL 18: migration 006, RLS,
+  # runtime-role checks, transactions, multi-process recovery and composition.
+  # Throwaway container bound to loopback, one random masked password shared
+  # by the test admin and runtime roles (read by pg from PGPASSWORD), no secrets.
+  v3-memory-postgres-integration:
+    name: v3-memory-postgres-integration (node ${{ matrix.node-version }})
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        node-version: ['22', '24']
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run V3 memory PostgreSQL integration tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --version
+          PGPASSWORD="$(openssl rand -hex 24)"
+          echo "::add-mask::${PGPASSWORD}"
+          export PGPASSWORD
+          docker run -d --name oxkio-v3-pg -p 127.0.0.1:55432:5432 \
+            -e POSTGRES_USER=oxkio_v3_test -e POSTGRES_PASSWORD="${PGPASSWORD}" \
+            -e POSTGRES_DB=oxkio_v3_it postgres:18 > /dev/null
+          for i in $(seq 1 60); do
+            docker exec oxkio-v3-pg pg_isready -h 127.0.0.1 -U oxkio_v3_test -d oxkio_v3_it > /dev/null 2>&1 && break
+            sleep 1
+          done
+          docker exec oxkio-v3-pg pg_isready -h 127.0.0.1 -U oxkio_v3_test -d oxkio_v3_it
+          docker exec -i -e PGPASSWORD oxkio-v3-pg psql -h 127.0.0.1 -U oxkio_v3_test -d oxkio_v3_it \
+            -v ON_ERROR_STOP=1 -q -v pw="${PGPASSWORD}" \
+            <<< "SELECT version(); CREATE ROLE oxkio_v3_runtime LOGIN NOSUPERUSER NOBYPASSRLS PASSWORD :'pw';"
+          export OXKIO_V3_TEST_PORT=55432
+          status=0
+          node --test --test-reporter=tap backend/services/supervised-operation/postgres-memory-store.pg.test.js \
+            | tee v3-pg.tap || status=$?
+          # A skipped suite would look green: require every test to really run.
+          count() { sed -n "s/^# $1 //p" v3-pg.tap; }
+          echo "tests=$(count tests) pass=$(count pass) fail=$(count fail) skipped=$(count skipped) cancelled=$(count cancelled)"
+          test "$status" -eq 0
+          test "$(count fail)" = 0 && test "$(count skipped)" = 0 && test "$(count cancelled)" = 0
+          test "$(count pass)" = "$(count tests)" && test "$(count tests)" -ge 20
