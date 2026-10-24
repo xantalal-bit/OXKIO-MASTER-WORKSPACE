@@ -698,13 +698,24 @@
       const headers = new Headers(options.headers || {});
       headers.set("Authorization", `Bearer ${token}`);
       const response = await fetch(url, { ...options, headers });
-      // No atribuir V3 a una interfaz estática: mostrarlo solo tras la prueba del motor real.
+      // La interfaz no fija versiones: consulta el manifiesto de la versión del proyecto
+      // y exige evidencia del motor supervisor antes de mostrarla como activa.
       if (String(url).split("?")[0] === "/api/executive/chat" && response.ok &&
           response.headers.get("X-OXKIO-Handler") === "supervised-operation") {
-        const runtimeBadge = document.getElementById("oxkio-runtime-badge");
-        if (runtimeBadge) {
-          runtimeBadge.textContent = "V3 · CLIENTE CERO";
-          runtimeBadge.title = "Motor supervised-operation confirmado mediante respuesta autenticada";
+        try {
+          const releaseResponse = await fetch("/app/release.json", { cache: "no-store" });
+          if (releaseResponse.ok) {
+            const release = await releaseResponse.json();
+            if (typeof release.version === "string" && /^V[0-9]+(?:\.[0-9]+)*$/.test(release.version)) {
+              const runtimeBadge = document.getElementById("oxkio-runtime-badge");
+              if (runtimeBadge) {
+                runtimeBadge.textContent = `${release.version} · CLIENTE CERO`;
+                runtimeBadge.title = "Motor supervisado confirmado; versión del manifiesto del proyecto";
+              }
+            }
+          }
+        } catch (_) {
+          // Sin manifiesto válido, mantener la etiqueta conservadora CLIENTE CERO.
         }
       }
       if (response.status === 401 && retry) {
