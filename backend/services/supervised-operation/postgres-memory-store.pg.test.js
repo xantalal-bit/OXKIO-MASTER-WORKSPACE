@@ -15,6 +15,25 @@ const factory=(secret=key,more={})=>createPostgresMemoryStoreFactory({connection
 async function child(body){return new Promise((resolve,reject)=>{const src=`const {createPostgresMemoryStoreFactory}=require('./backend/services/supervised-operation/postgres-memory-store');const {createHmacIntegrity}=require('./backend/services/supervised-operation/integrity');const scope={tenantId:'tenant-one',clientId:'client-one',userId:'user-one'};const h={};const sessions={scope:x=>{if(x!==h)throw Error('invalid');return scope},key:x=>JSON.stringify(scope&&[scope.tenantId,scope.clientId,scope.userId])};const s=createPostgresMemoryStoreFactory({connection:JSON.parse(process.env.TEST_DB_CONFIG),integrity:createHmacIntegrity({key:Buffer.from(process.env.TEST_HMAC,'hex')})})(sessions);(async()=>{try{${body}}finally{await s.close()}})().catch(()=>process.exitCode=1);`;const c=spawn(process.execPath,['-e',src],{env:{...process.env,TEST_DB_CONFIG:JSON.stringify(config),TEST_HMAC:key.toString('hex')}});let out='';c.stdout.on('data',d=>out+=d);c.stderr.on('data',d=>out+=d);c.on('error',reject);c.on('close',status=>resolve({status,out}));});}
 test('V3 PostgreSQL isolated integration',{skip:ready?false:'isolated local runner required'},async t=>{
  const admin=new Pool(adminConfig);t.after(()=>admin.end());await admin.query(fs.readFileSync(path.join(__dirname,'../../repositories/postgres/migrations/006_v3_memory_snapshots.sql'),'utf8'));await admin.query('GRANT USAGE ON SCHEMA oxkio_v3 TO oxkio_v3_runtime');await admin.query('GRANT SELECT,INSERT,UPDATE ON oxkio_v3.memory_snapshots TO oxkio_v3_runtime');
+ await t.test('runtime role keeps least privilege and forced RLS on V3 snapshots',async()=>{
+  const {rows:[r]}=await admin.query(`SELECT role.rolsuper,role.rolbypassrls,role.rolcreaterole,role.rolcreatedb,
+    pg_get_userbyid(tab.relowner) = 'oxkio_v3_runtime' AS owns_table,
+    tab.relrowsecurity,tab.relforcerowsecurity,
+    has_schema_privilege('oxkio_v3_runtime','oxkio_v3','USAGE') AS schema_usage,
+    has_schema_privilege('oxkio_v3_runtime','oxkio_v3','CREATE') AS schema_create,
+    has_table_privilege('oxkio_v3_runtime','oxkio_v3.memory_snapshots','SELECT') AS can_select,
+    has_table_privilege('oxkio_v3_runtime','oxkio_v3.memory_snapshots','INSERT') AS can_insert,
+    has_table_privilege('oxkio_v3_runtime','oxkio_v3.memory_snapshots','UPDATE') AS can_update,
+    has_table_privilege('oxkio_v3_runtime','oxkio_v3.memory_snapshots','DELETE') AS can_delete,
+    has_table_privilege('oxkio_v3_runtime','oxkio_v3.memory_snapshots','TRUNCATE') AS can_truncate,
+    has_table_privilege('oxkio_v3_runtime','oxkio_v3.memory_snapshots','REFERENCES') AS can_reference,
+    has_table_privilege('oxkio_v3_runtime','oxkio_v3.memory_snapshots','TRIGGER') AS can_trigger
+   FROM pg_roles role JOIN pg_class tab ON tab.oid='oxkio_v3.memory_snapshots'::regclass
+   WHERE role.rolname='oxkio_v3_runtime'`);
+  assert.ok(r,'runtime role and V3 table must exist');
+  for(const k of ['rolsuper','rolbypassrls','rolcreaterole','rolcreatedb','owns_table','schema_create','can_delete','can_truncate','can_reference','can_trigger'])assert.equal(r[k],false,k);
+  for(const k of ['relrowsecurity','relforcerowsecurity','schema_usage','can_select','can_insert','can_update'])assert.equal(r[k],true,k);
+ });
  const h=await sessions.open('user-one'),other=await sessions.open('user-two'),client=await sessions.open('user-three'),tenant=await sessions.open('user-four');const s=factory();t.after(()=>s.close());
  await t.test('synchronous V3 contract persists sealed records in SQL',()=>{s.put(h,'note','note-one',{text:'synthetic',z:1,a:{z:2,a:3}});assert.deepEqual(s.get(h,'note','note-one'),{text:'synthetic',z:1,a:{z:2,a:3}});assert.equal(s.persistence,'POSTGRESQL_MEMORY_SEALED');});
  await t.test('recomposition reads the same database without filesystem snapshots',async()=>{const s2=factory();try{assert.equal(s2.get(h,'note','note-one').text,'synthetic')}finally{await s2.close()}});
