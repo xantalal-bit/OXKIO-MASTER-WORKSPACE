@@ -65,3 +65,21 @@ test('does not enable login if Secret Manager returns unexpected payload', async
   await assert.rejects(provision({db,secrets,makePassword:()=>goodPassword}), /custody verification/);
   assert.equal(calls.some(x=>x.startsWith('ALTER ROLE')),false);
 });
+
+test('database failure after secret custody requests NOLOGIN rollback', async () => {
+  const calls=[];
+  const db={query:async (sql)=>{
+    calls.push(sql);
+    if (sql.startsWith('SELECT rolname')) return {rows:[safeRole()]};
+    if (sql.includes(' PASSWORD ')) throw new Error('synthetic DB failure');
+    return {rows:[]};
+  }};
+  const secrets={
+    getSecret:async()=>{const e=new Error();e.code=5;throw e;},
+    createSecret:async()=>{},
+    addSecretVersion:async()=>{},
+    accessSecretVersion:async()=>[{payload:{data:Buffer.from(goodPassword)}}]
+  };
+  await assert.rejects(provision({db,secrets,makePassword:()=>goodPassword}), /Database provisioning failed/);
+  assert.equal(calls.some(x=>x==='ALTER ROLE oxkio_v3_runtime NOLOGIN'),true);
+});
