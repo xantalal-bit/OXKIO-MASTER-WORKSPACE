@@ -226,6 +226,17 @@ if ([Environment]::GetEnvironmentVariable('OXKIO_V3_ENABLED', 'Process') -eq 'tr
     Write-CheckOk 'Clave de integridad V3 cargada de forma segura en Process.'
 }
 
+# V3 SQL memory: independent opt-in secret, fetched through the existing
+# Google Secret Manager custody. Never borrow Approval's database credentials.
+# The PostgreSQL selector validates TLS and configuration in Node itself.
+if ([Environment]::GetEnvironmentVariable('OXKIO_V3_ENABLED', 'Process') -eq 'true' -and
+    [Environment]::GetEnvironmentVariable('OXKIO_V3_MEMORY_BACKEND', 'Process') -eq 'postgres') {
+    $v3PgPassword = Get-OxkioOptInSecret -GcloudPath $gcloudPath -Name 'OXKIO_V3_PG_PASSWORD' -Version 'latest' -MinimumLength 24 -Guidance 'Provisionar y autorizar el secreto V3 dedicado en Secret Manager; no reutilizar Approval.'
+    [Environment]::SetEnvironmentVariable('OXKIO_V3_PG_PASSWORD', $v3PgPassword, 'Process')
+    $v3PgPassword = $null
+    Write-CheckOk 'Credencial PostgreSQL V3 dedicada cargada solo en Process.'
+}
+
 # Reasoning: when a provider is configured in Process (shared or V3's own), its
 # API key comes from Secret Manager ("latest": an API key may rotate without
 # data loss). The key alone enables nothing: each provider needs its config.
