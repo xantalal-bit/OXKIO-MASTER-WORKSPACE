@@ -51,6 +51,26 @@ test('a secret-like or unknown variable in the config is refused before the laun
   }
 });
 
+test('PG V3 nonsecret options are allowed but credentials are never allowed in config', (t) => {
+  if (powershellBlocked) { t.skip('powershell.exe no disponible.'); return; }
+  const env = { ...CONFIG.environment, OXKIO_V3_MEMORY_BACKEND: 'postgres', OXKIO_V3_PG_HOST: 'pg.example.org', OXKIO_V3_PG_PORT: '5432', OXKIO_V3_PG_DATABASE: 'neondb', OXKIO_V3_PG_USER: 'oxkio_v3_runtime', OXKIO_V3_PG_SSL: 'true' };
+  const accepted = run(env);
+  assert.equal(accepted.status, 0, accepted.output);
+  assert.match(accepted.output, /STUB validateOnly=True/);
+  const rejected = run({ ...env, OXKIO_V3_PG_PASSWORD: 'DO-NOT-PERSIST-SECRET' });
+  assert.notEqual(rejected.status, 0);
+  assert.match(rejected.output, /Variable no permitida/);
+  assert.doesNotMatch(rejected.output, /DO-NOT-PERSIST-SECRET|STUB/);
+});
+
+test('canonical launcher loads V3 PG password exclusively from named Secret Manager when selected', () => {
+  const launcher = fs.readFileSync(path.join(__dirname, '../../scripts/Start-Oxkio.ps1'), 'utf8');
+  assert.match(launcher, /OXKIO_V3_MEMORY_BACKEND', 'Process'\) -eq 'postgres'/);
+  assert.match(launcher, /-Name 'OXKIO_V3_PG_PASSWORD' -Version 'latest'/);
+  assert.match(launcher, /SetEnvironmentVariable\('OXKIO_V3_PG_PASSWORD', \$v3PgPassword, 'Process'\)/);
+  assert.doesNotMatch(launcher, /SetEnvironmentVariable\('OXKIO_V3_PG_PASSWORD',[^\n]*'User'\)/);
+});
+
 // Supervision (04/10/2026): the task also fires periodically, so a start in
 // service mode must be idempotent and must never rotate the live logs.
 const net = require('node:net');
