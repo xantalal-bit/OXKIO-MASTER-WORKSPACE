@@ -2,6 +2,7 @@ require("dotenv").config();
 
 const http = require("http");
 const { createServerComposition, reasoningEgressFromEnv, v3ReasoningEnv } = require("../services/supervised-operation/server-composition");
+const { v3MemoryRuntimeOptions } = require("../services/supervised-operation/v3-memory-runtime-config");
 const { dispatchExecutiveChat } = require("./executive-chat-routing");
 const { createPublicResearchAdapters, createCuratedDiscovery } = require("../services/supervised-operation/resource-adapters");
 const EmailWorkflow = require("../workflows/emailWorkflow");
@@ -182,6 +183,7 @@ try {
     enabled: process.env.OXKIO_V3_ENABLED === "true",
     cohortUids: process.env.OXKIO_V3_COHORT_UIDS,
     memoryRoot: process.env.OXKIO_V3_MEMORY_ROOT,
+    ...v3MemoryRuntimeOptions(process.env, getSecret),
     integrityKey: process.env.OXKIO_V3_ENABLED === "true" ? (() => { try { return getSecret("OXKIO_V3_INTEGRITY_KEY"); } catch (error) { return null; } })() : null,
     authorizeIdentity: authorizeFirebaseIdentity,
     privateContextReaders: (identity) => createDashboardReaders(identity),
