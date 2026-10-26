@@ -1,7 +1,7 @@
 {
   "schema": "oxkio.continuity-registry/v1",
-  "revision": 38,
-  "updatedAt": "2026-10-26T18:53:30.417Z",
+  "revision": 39,
+  "updatedAt": "2026-10-26T19:37:54.806Z",
   "canon": {
     "path": "KNOWLEDGE-CURATOR/CLIENT-ZERO/XATAI-CLIENT-ZERO-CANON.md",
     "issue": "issue:49",
@@ -752,13 +752,13 @@
       "priority": "P1",
       "decision": "Misión separada: parada controlada → actualización → arranque → smoke test → cierre. No se mezcla con la integración del canon.",
       "reopenCondition": "No aplica mientras esté abierta.",
-      "nextAction": "Validar esta rama en CI Windows; conservar CI PostgreSQL existente. Continuar prueba sintetica tras reinicio solo si PostgreSQL efimero queda operativo. Cualquier acceso productivo, secretos o despliegue mantiene puerta humana.",
-      "changes": "Conciliacion 26/10: main de95d751 y PR62-66 integradas no equivalen a runtime actualizado ni memoria Cloud.",
+      "nextAction": "Tras integrar PR #67 y #68: sincronizar el runtime local con main (parada controlada → actualización → arranque → smoke test) y repetir la prueba autenticada del owner en /executive-chat.html. Activar la memoria PostgreSQL V3 (rol NOLOGIN, migración 006 y GRANT en Neon; secreto en Secret Manager; prueba escritura sintética → reinicio → recuperación → aislamiento → auditoría) requiere una puerta humana específica.",
+      "changes": "Corrección 26/10: se sustituyen los textos ligados a la rama de PR #68 y se restablece la puerta de prueba autenticada del owner.",
       "confidence": "high",
       "requiresRealTest": true,
-      "blockedBy": "Runtime local/Cloud actual no acreditado. PostgreSQL efimero local no inicializa; enlaces duros y consultas TCP/CIM denegados. Custodia GCP/Neon pendiente segun Drive, sin inspeccion productiva en esta auditoria.",
-      "version": 4,
-      "updatedAt": "2026-10-26T18:53:30.417Z",
+      "blockedBy": "Puerta humana: prueba autenticada de Cliente Cero en el chat ejecutivo (memoria, continuidad y lectura de Approval) sobre un runtime sincronizado con main. El runtime local sigue en 8aec849, sin actualizar a main. Memoria V3 PostgreSQL en Cloud no acreditada: OXKIO_V3_PG_PASSWORD no existe en Secret Manager, y la migración 006 y el rol oxkio_v3_runtime no constan aplicados en Neon (lectura del 25/10).",
+      "version": 5,
+      "updatedAt": "2026-10-26T19:37:54.806Z",
       "evidence": [
         {
           "ref": "git:local-main@adef97a",
@@ -847,6 +847,22 @@
           "observedAt": "2026-10-26T18:53:30.417Z",
           "source": "GitHub connector read 2026-10-26",
           "summary": "PR67 DRAFT/OPEN; CI 40296108781 seven SUCCESS; not merged."
+        },
+        {
+          "ref": "audit:local-host-20261026",
+          "kind": "observation",
+          "result": "info",
+          "observedAt": "2026-10-26T19:37:54.806Z",
+          "source": "Claude Code, máquina local fuera del sandbox de Work, merge de prueba #67+#68 sobre de95d751",
+          "summary": "Pruebas de registro, lanzador y arranque: 58/58 PASS, 0 SKIP. Ledger (3 archivos): 61 PASS, 0 FAIL, 1 SKIP (SIGSTOP en Windows); los 34 EPERM son del entorno de Work."
+        },
+        {
+          "ref": "gcp:oxkio-runtime-prod#secret-metadata-20261026",
+          "kind": "observation",
+          "result": "info",
+          "observedAt": "2026-10-26T19:37:54.806Z",
+          "source": "gcloud, solo metadatos, sin acceso a valores",
+          "summary": "Proyecto ACTIVE y Secret Manager habilitado; OXKIO_V3_PG_PASSWORD no existe."
         }
       ]
     },
@@ -1561,6 +1577,14 @@
       "at": "2026-10-26T18:53:30.417Z",
       "entry": "CZ-RUNTIME-SYNC",
       "note": "Conciliado rev33 con PR62-66, main de95d751, PR67 draft y CI siete SUCCESS. Drive V1 contrastado. Checkpoint 26/10 preservado pero captura 8aec849; no restaura main actual. Sin cambios de estados CLOSED/BACKLOG."
+    },
+    {
+      "type": "state_changed",
+      "at": "2026-10-26T19:37:54.806Z",
+      "entry": "CZ-RUNTIME-SYNC",
+      "from": "BLOCKED",
+      "to": "BLOCKED",
+      "note": "Corrección 26/10: se sustituyen los textos ligados a la rama de PR #68 y se restablece la puerta de prueba autenticada del owner."
     }
   ]
 }
