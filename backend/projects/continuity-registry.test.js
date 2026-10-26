@@ -290,6 +290,32 @@ test('continuity record round-trips through the repository file and fails closed
   }
 });
 
+test('feature and PR CI cannot reopen canonical CLOSED fronts', () => {
+  const registry = fixture();
+  const run = (id, branch, event, conclusion) => ({
+    id, branch, event, sha: 'abcdef1234567890', updatedAt: T2,
+    jobs: [{ name: 'approval-postgres-integration', conclusion, completedAt: T2 }],
+  });
+  const diagnostic = [
+    run(600, 'agent/ci-fix', 'pull_request', 'failure'),
+    run(601, 'main', 'pull_request', 'failure'),
+    run(602, 'agent/ci-fix', 'push', 'failure'),
+  ];
+  const ignored = observationsFromRuns(registry, diagnostic);
+  assert.deepEqual(ignored, []);
+  assert.equal(findEntry(reconcile({ registry, observations: ignored, now: NOW }).registry, 'CZ-PG-RLS').state, 'CLOSED');
+
+  const trusted = observationsFromRuns(registry, [
+    ...diagnostic,
+    run(603, 'main', 'workflow_dispatch', 'success'),
+    run(604, 'main', 'push', 'failure'),
+  ]);
+  assert.deepEqual(trusted.map((item) => item.ref), [
+    'ci:603#approval-postgres-integration',
+    'ci:604#approval-postgres-integration',
+  ]);
+});
+
 test('GitHub CI runs become evidence for their fronts, and CLOSED fronts are audited against PR facts', () => {
   const registry = fixture();
   const observations = observationsFromRuns(registry, [{
