@@ -98,7 +98,14 @@ function Write-Supervisor {
 $launcherFull = (Resolve-Path -LiteralPath $LauncherPath).ProviderPath.ToLowerInvariant()
 $port = 0
 if (-not [int]::TryParse([string][Environment]::GetEnvironmentVariable('PORT', 'Process'), [ref]$port) -or $port -le 0) { $port = 3000 }
-$listener = Get-NetTCPConnection -State Listen -LocalPort $port -ErrorAction SilentlyContinue | Select-Object -First 1
+try {
+    # Query before filtering: denial is not evidence that the port is free.
+    # Stop before rotating live logs or starting another instance.
+    $listener = Get-NetTCPConnection -ErrorAction Stop | Where-Object { $_.State -eq 'Listen' -and $_.LocalPort -eq $port } | Select-Object -First 1
+} catch {
+    Write-Supervisor 'port-check-unavailable'
+    Stop-V3Start 'No se puede comprobar el puerto; no se inicia OXKIO.'
+}
 if ($listener) {
     $owner = Get-CimInstance Win32_Process -Filter "ProcessId=$($listener.OwningProcess)" -ErrorAction SilentlyContinue
     $parent = if ($owner) { Get-CimInstance Win32_Process -Filter "ProcessId=$($owner.ParentProcessId)" -ErrorAction SilentlyContinue } else { $null }

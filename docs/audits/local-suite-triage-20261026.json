@@ -1,0 +1,711 @@
+{
+  "schema": "oxkio.local-suite-triage/v1",
+  "observedAt": "2026-10-26T18:53:30.417Z",
+  "base": {
+    "main": "de95d751a4fc3730274ef7e12dcd5c47f5030e6d",
+    "pr67": "2df3e0fc706b034bc8e89fcb7d712fdf68cd0dbe",
+    "branch": "agent/local-suite-triage-20261026",
+    "includesUnmergedPR67": false,
+    "branchBase": "main de95d751; PR67 retained as separate draft"
+  },
+  "original": {
+    "tests": 2068,
+    "pass": 2012,
+    "fail": 37,
+    "skip": 19
+  },
+  "summary": {
+    "environmentLedger": 34,
+    "mixedEnvironmentAndLauncherDefect": 2,
+    "testHelperDefect": 1,
+    "skipCategories": {
+      "postgres": 6,
+      "firestore": 11,
+      "docker": 1,
+      "windowsSignals": 1
+    }
+  },
+  "failures": [
+    {
+      "originalId": 474,
+      "name": "Job Object (dinamico, terminacion forzada): el hijo Node muere automaticamente cuando el launcher desaparece, sin kill explicito del hijo",
+      "file": "backend/security/firebase-startup-config.test.js:573:1",
+      "category": "TEST_CODE_AND_ENVIRONMENT",
+      "cause": "CIM-denied lookup reported a live child as absent. Test helper corrected to process.kill(pid,0); ESRCH only means exit.",
+      "reproduced": true,
+      "disposition": "PASS after test-helper correction"
+    },
+    {
+      "originalId": 546,
+      "name": "a foreign process on the port: nothing starts and the live logs are not rotated",
+      "file": "backend/security/start-oxkio-v3.test.js:114:1",
+      "category": "PRODUCT_CODE_AND_ENVIRONMENT",
+      "cause": "Denied TCP/CIM query was suppressed; launcher started and rotated logs despite unknown occupancy. Fail-closed fix and synthetic denied/empty/foreign regressions.",
+      "reproduced": true,
+      "disposition": "PASS synthetic regression; real TCP/CIM scenarios BLOCKED locally"
+    },
+    {
+      "originalId": 547,
+      "name": "OXKIO already running from this launcher: exits 0 without starting another instance or rotating logs",
+      "file": "backend/security/start-oxkio-v3.test.js:129:1",
+      "category": "PRODUCT_CODE_AND_ENVIRONMENT",
+      "cause": "Denied TCP/CIM query was suppressed; launcher started and rotated logs despite unknown occupancy. Fail-closed fix and synthetic denied/empty/foreign regressions.",
+      "reproduced": true,
+      "disposition": "PASS synthetic regression; real TCP/CIM scenarios BLOCKED locally"
+    },
+    {
+      "originalId": 1791,
+      "name": "guard of a dead process next to an abandoned lock is cleared automatically; the store writes again",
+      "file": "backend/services/supervised-operation/ledger-accepted-final.test.js:35:1",
+      "category": "ENVIRONMENT",
+      "cause": "fs.linkSync returns EPERM in scratch directory; guard claim cannot be atomically hard-linked. No ledger production defect established.",
+      "reproduced": true,
+      "disposition": "BLOCKED locally; preserve locking algorithm and existing Windows CI evidence"
+    },
+    {
+      "originalId": 1792,
+      "name": "an empty guard older than its lease needs recover(); owner and supervisor clear it, then writes resume",
+      "file": "backend/services/supervised-operation/ledger-accepted-final.test.js:42:71",
+      "category": "ENVIRONMENT",
+      "cause": "fs.linkSync returns EPERM in scratch directory; guard claim cannot be atomically hard-linked. No ledger production defect established.",
+      "reproduced": true,
+      "disposition": "BLOCKED locally; preserve locking algorithm and existing Windows CI evidence"
+    },
+    {
+      "originalId": 1793,
+      "name": "an corrupt guard older than its lease needs recover(); owner and supervisor clear it, then writes resume",
+      "file": "backend/services/supervised-operation/ledger-accepted-final.test.js:42:71",
+      "category": "ENVIRONMENT",
+      "cause": "fs.linkSync returns EPERM in scratch directory; guard claim cannot be atomically hard-linked. No ledger production defect established.",
+      "reproduced": true,
+      "disposition": "BLOCKED locally; preserve locking algorithm and existing Windows CI evidence"
+    },
+    {
+      "originalId": 1795,
+      "name": "a live guard (crash-free reclaimer still running) is never broken; once that process dies it is reclaimed by evidence",
+      "file": "backend/services/supervised-operation/ledger-accepted-final.test.js:57:1",
+      "category": "ENVIRONMENT",
+      "cause": "fs.linkSync returns EPERM in scratch directory; guard claim cannot be atomically hard-linked. No ledger production defect established.",
+      "reproduced": true,
+      "disposition": "BLOCKED locally; preserve locking algorithm and existing Windows CI evidence"
+    },
+    {
+      "originalId": 1797,
+      "name": "a guard whose unlink keeps failing (EPERM/EBUSY) never blocks: it is cleared by evidence after its lease",
+      "file": "backend/services/supervised-operation/ledger-accepted-final.test.js:72:1",
+      "category": "ENVIRONMENT",
+      "cause": "fs.linkSync returns EPERM in scratch directory; guard claim cannot be atomically hard-linked. No ledger production defect established.",
+      "reproduced": true,
+      "disposition": "BLOCKED locally; preserve locking algorithm and existing Windows CI evidence"
+    },
+    {
+      "originalId": 1798,
+      "name": "concurrent recoverers in several processes: each lock/guard removed at most once, no write lost",
+      "file": "backend/services/supervised-operation/ledger-accepted-final.test.js:84:1",
+      "category": "ENVIRONMENT",
+      "cause": "fs.linkSync returns EPERM in scratch directory; guard claim cannot be atomically hard-linked. No ledger production defect established.",
+      "reproduced": true,
+      "disposition": "BLOCKED locally; preserve locking algorithm and existing Windows CI evidence"
+    },
+    {
+      "originalId": 1811,
+      "name": "probe A: stale lock + stale guard, claim taken, recoverer killed before the rename; a new process recovers, writes, restart confirms",
+      "file": "backend/services/supervised-operation/ledger-holder-identity.test.js:54:1",
+      "category": "ENVIRONMENT",
+      "cause": "fs.linkSync returns EPERM in scratch directory; guard claim cannot be atomically hard-linked. No ledger production defect established.",
+      "reproduced": true,
+      "disposition": "BLOCKED locally; preserve locking algorithm and existing Windows CI evidence"
+    },
+    {
+      "originalId": 1812,
+      "name": "crash after_claim while clearing a stale guard; then automatic write: converges, no write lost",
+      "file": "backend/services/supervised-operation/ledger-holder-identity.test.js:68:2",
+      "category": "ENVIRONMENT",
+      "cause": "fs.linkSync returns EPERM in scratch directory; guard claim cannot be atomically hard-linked. No ledger production defect established.",
+      "reproduced": true,
+      "disposition": "BLOCKED locally; preserve locking algorithm and existing Windows CI evidence"
+    },
+    {
+      "originalId": 1813,
+      "name": "crash after_claim while clearing a stale guard; then owner recover: converges, no write lost",
+      "file": "backend/services/supervised-operation/ledger-holder-identity.test.js:68:2",
+      "category": "ENVIRONMENT",
+      "cause": "fs.linkSync returns EPERM in scratch directory; guard claim cannot be atomically hard-linked. No ledger production defect established.",
+      "reproduced": true,
+      "disposition": "BLOCKED locally; preserve locking algorithm and existing Windows CI evidence"
+    },
+    {
+      "originalId": 1814,
+      "name": "crash after_claim while clearing a stale guard; then supervisor recover: converges, no write lost",
+      "file": "backend/services/supervised-operation/ledger-holder-identity.test.js:68:2",
+      "category": "ENVIRONMENT",
+      "cause": "fs.linkSync returns EPERM in scratch directory; guard claim cannot be atomically hard-linked. No ledger production defect established.",
+      "reproduced": true,
+      "disposition": "BLOCKED locally; preserve locking algorithm and existing Windows CI evidence"
+    },
+    {
+      "originalId": 1815,
+      "name": "crash before_rename while clearing a stale guard; then automatic write: converges, no write lost",
+      "file": "backend/services/supervised-operation/ledger-holder-identity.test.js:68:2",
+      "category": "ENVIRONMENT",
+      "cause": "fs.linkSync returns EPERM in scratch directory; guard claim cannot be atomically hard-linked. No ledger production defect established.",
+      "reproduced": true,
+      "disposition": "BLOCKED locally; preserve locking algorithm and existing Windows CI evidence"
+    },
+    {
+      "originalId": 1816,
+      "name": "crash before_rename while clearing a stale guard; then owner recover: converges, no write lost",
+      "file": "backend/services/supervised-operation/ledger-holder-identity.test.js:68:2",
+      "category": "ENVIRONMENT",
+      "cause": "fs.linkSync returns EPERM in scratch directory; guard claim cannot be atomically hard-linked. No ledger production defect established.",
+      "reproduced": true,
+      "disposition": "BLOCKED locally; preserve locking algorithm and existing Windows CI evidence"
+    },
+    {
+      "originalId": 1817,
+      "name": "crash before_rename while clearing a stale guard; then supervisor recover: converges, no write lost",
+      "file": "backend/services/supervised-operation/ledger-holder-identity.test.js:68:2",
+      "category": "ENVIRONMENT",
+      "cause": "fs.linkSync returns EPERM in scratch directory; guard claim cannot be atomically hard-linked. No ledger production defect established.",
+      "reproduced": true,
+      "disposition": "BLOCKED locally; preserve locking algorithm and existing Windows CI evidence"
+    },
+    {
+      "originalId": 1818,
+      "name": "crash after_rename while clearing a stale guard; then automatic write: converges, no write lost",
+      "file": "backend/services/supervised-operation/ledger-holder-identity.test.js:68:2",
+      "category": "ENVIRONMENT",
+      "cause": "fs.linkSync returns EPERM in scratch directory; guard claim cannot be atomically hard-linked. No ledger production defect established.",
+      "reproduced": true,
+      "disposition": "BLOCKED locally; preserve locking algorithm and existing Windows CI evidence"
+    },
+    {
+      "originalId": 1819,
+      "name": "crash after_rename while clearing a stale guard; then owner recover: converges, no write lost",
+      "file": "backend/services/supervised-operation/ledger-holder-identity.test.js:68:2",
+      "category": "ENVIRONMENT",
+      "cause": "fs.linkSync returns EPERM in scratch directory; guard claim cannot be atomically hard-linked. No ledger production defect established.",
+      "reproduced": true,
+      "disposition": "BLOCKED locally; preserve locking algorithm and existing Windows CI evidence"
+    },
+    {
+      "originalId": 1820,
+      "name": "crash after_rename while clearing a stale guard; then supervisor recover: converges, no write lost",
+      "file": "backend/services/supervised-operation/ledger-holder-identity.test.js:68:2",
+      "category": "ENVIRONMENT",
+      "cause": "fs.linkSync returns EPERM in scratch directory; guard claim cannot be atomically hard-linked. No ledger production defect established.",
+      "reproduced": true,
+      "disposition": "BLOCKED locally; preserve locking algorithm and existing Windows CI evidence"
+    },
+    {
+      "originalId": 1821,
+      "name": "crash before_unlink while clearing a stale guard; then automatic write: converges, no write lost",
+      "file": "backend/services/supervised-operation/ledger-holder-identity.test.js:68:2",
+      "category": "ENVIRONMENT",
+      "cause": "fs.linkSync returns EPERM in scratch directory; guard claim cannot be atomically hard-linked. No ledger production defect established.",
+      "reproduced": true,
+      "disposition": "BLOCKED locally; preserve locking algorithm and existing Windows CI evidence"
+    },
+    {
+      "originalId": 1822,
+      "name": "crash before_unlink while clearing a stale guard; then owner recover: converges, no write lost",
+      "file": "backend/services/supervised-operation/ledger-holder-identity.test.js:68:2",
+      "category": "ENVIRONMENT",
+      "cause": "fs.linkSync returns EPERM in scratch directory; guard claim cannot be atomically hard-linked. No ledger production defect established.",
+      "reproduced": true,
+      "disposition": "BLOCKED locally; preserve locking algorithm and existing Windows CI evidence"
+    },
+    {
+      "originalId": 1823,
+      "name": "crash before_unlink while clearing a stale guard; then supervisor recover: converges, no write lost",
+      "file": "backend/services/supervised-operation/ledger-holder-identity.test.js:68:2",
+      "category": "ENVIRONMENT",
+      "cause": "fs.linkSync returns EPERM in scratch directory; guard claim cannot be atomically hard-linked. No ledger production defect established.",
+      "reproduced": true,
+      "disposition": "BLOCKED locally; preserve locking algorithm and existing Windows CI evidence"
+    },
+    {
+      "originalId": 1824,
+      "name": "crash before_claim_cleanup while clearing a stale guard; then automatic write: converges, no write lost",
+      "file": "backend/services/supervised-operation/ledger-holder-identity.test.js:68:2",
+      "category": "ENVIRONMENT",
+      "cause": "fs.linkSync returns EPERM in scratch directory; guard claim cannot be atomically hard-linked. No ledger production defect established.",
+      "reproduced": true,
+      "disposition": "BLOCKED locally; preserve locking algorithm and existing Windows CI evidence"
+    },
+    {
+      "originalId": 1825,
+      "name": "crash before_claim_cleanup while clearing a stale guard; then owner recover: converges, no write lost",
+      "file": "backend/services/supervised-operation/ledger-holder-identity.test.js:68:2",
+      "category": "ENVIRONMENT",
+      "cause": "fs.linkSync returns EPERM in scratch directory; guard claim cannot be atomically hard-linked. No ledger production defect established.",
+      "reproduced": true,
+      "disposition": "BLOCKED locally; preserve locking algorithm and existing Windows CI evidence"
+    },
+    {
+      "originalId": 1826,
+      "name": "crash before_claim_cleanup while clearing a stale guard; then supervisor recover: converges, no write lost",
+      "file": "backend/services/supervised-operation/ledger-holder-identity.test.js:68:2",
+      "category": "ENVIRONMENT",
+      "cause": "fs.linkSync returns EPERM in scratch directory; guard claim cannot be atomically hard-linked. No ledger production defect established.",
+      "reproduced": true,
+      "disposition": "BLOCKED locally; preserve locking algorithm and existing Windows CI evidence"
+    },
+    {
+      "originalId": 1827,
+      "name": "a live claim (its recoverer still running) is never passed over; once that process dies it is",
+      "file": "backend/services/supervised-operation/ledger-holder-identity.test.js:81:1",
+      "category": "ENVIRONMENT",
+      "cause": "fs.linkSync returns EPERM in scratch directory; guard claim cannot be atomically hard-linked. No ledger production defect established.",
+      "reproduced": true,
+      "disposition": "BLOCKED locally; preserve locking algorithm and existing Windows CI evidence"
+    },
+    {
+      "originalId": 1828,
+      "name": "a dead claim is passed over at once (next generation)",
+      "file": "backend/services/supervised-operation/ledger-holder-identity.test.js:90:1",
+      "category": "ENVIRONMENT",
+      "cause": "fs.linkSync returns EPERM in scratch directory; guard claim cannot be atomically hard-linked. No ledger production defect established.",
+      "reproduced": true,
+      "disposition": "BLOCKED locally; preserve locking algorithm and existing Windows CI evidence"
+    },
+    {
+      "originalId": 1829,
+      "name": "a corrupt claim: never passed over automatically; recover() passes over it once older than a lease",
+      "file": "backend/services/supervised-operation/ledger-holder-identity.test.js:95:1",
+      "category": "ENVIRONMENT",
+      "cause": "fs.linkSync returns EPERM in scratch directory; guard claim cannot be atomically hard-linked. No ledger production defect established.",
+      "reproduced": true,
+      "disposition": "BLOCKED locally; preserve locking algorithm and existing Windows CI evidence"
+    },
+    {
+      "originalId": 1831,
+      "name": "Windows EPERM on the claim (create, guard move, cleanup) never blocks for good",
+      "file": "backend/services/supervised-operation/ledger-holder-identity.test.js:113:51",
+      "category": "ENVIRONMENT",
+      "cause": "fs.linkSync returns EPERM in scratch directory; guard claim cannot be atomically hard-linked. No ledger production defect established.",
+      "reproduced": true,
+      "disposition": "BLOCKED locally; preserve locking algorithm and existing Windows CI evidence"
+    },
+    {
+      "originalId": 1832,
+      "name": "Windows EBUSY on the claim (create, guard move, cleanup) never blocks for good",
+      "file": "backend/services/supervised-operation/ledger-holder-identity.test.js:113:51",
+      "category": "ENVIRONMENT",
+      "cause": "fs.linkSync returns EPERM in scratch directory; guard claim cannot be atomically hard-linked. No ledger production defect established.",
+      "reproduced": true,
+      "disposition": "BLOCKED locally; preserve locking algorithm and existing Windows CI evidence"
+    },
+    {
+      "originalId": 1833,
+      "name": "Windows EACCES on the claim (create, guard move, cleanup) never blocks for good",
+      "file": "backend/services/supervised-operation/ledger-holder-identity.test.js:113:51",
+      "category": "ENVIRONMENT",
+      "cause": "fs.linkSync returns EPERM in scratch directory; guard claim cannot be atomically hard-linked. No ledger production defect established.",
+      "reproduced": true,
+      "disposition": "BLOCKED locally; preserve locking algorithm and existing Windows CI evidence"
+    },
+    {
+      "originalId": 1834,
+      "name": "a guard move refused beyond the retry budget keeps the claims (no early cleanup); once possible, it converges",
+      "file": "backend/services/supervised-operation/ledger-holder-identity.test.js:128:1",
+      "category": "ENVIRONMENT",
+      "cause": "fs.linkSync returns EPERM in scratch directory; guard claim cannot be atomically hard-linked. No ledger production defect established.",
+      "reproduced": true,
+      "disposition": "BLOCKED locally; preserve locking algorithm and existing Windows CI evidence"
+    },
+    {
+      "originalId": 1835,
+      "name": "2 concurrent recoverers (processes) over a stale lock, stale guard and dead claim: each writes, nothing lost",
+      "file": "backend/services/supervised-operation/ledger-holder-identity.test.js:137:28",
+      "category": "ENVIRONMENT",
+      "cause": "fs.linkSync returns EPERM in scratch directory; guard claim cannot be atomically hard-linked. No ledger production defect established.",
+      "reproduced": true,
+      "disposition": "BLOCKED locally; preserve locking algorithm and existing Windows CI evidence"
+    },
+    {
+      "originalId": 1836,
+      "name": "4 concurrent recoverers (processes) over a stale lock, stale guard and dead claim: each writes, nothing lost",
+      "file": "backend/services/supervised-operation/ledger-holder-identity.test.js:137:28",
+      "category": "ENVIRONMENT",
+      "cause": "fs.linkSync returns EPERM in scratch directory; guard claim cannot be atomically hard-linked. No ledger production defect established.",
+      "reproduced": true,
+      "disposition": "BLOCKED locally; preserve locking algorithm and existing Windows CI evidence"
+    },
+    {
+      "originalId": 1837,
+      "name": "8 concurrent recoverers (processes) over a stale lock, stale guard and dead claim: each writes, nothing lost",
+      "file": "backend/services/supervised-operation/ledger-holder-identity.test.js:137:28",
+      "category": "ENVIRONMENT",
+      "cause": "fs.linkSync returns EPERM in scratch directory; guard claim cannot be atomically hard-linked. No ledger production defect established.",
+      "reproduced": true,
+      "disposition": "BLOCKED locally; preserve locking algorithm and existing Windows CI evidence"
+    },
+    {
+      "originalId": 1860,
+      "name": "pid reused by another live process (no start identity on Windows): lock, guard and claim untouched while it lives; reclaimed once it exits",
+      "file": "backend/services/supervised-operation/ledger-pid-residues.test.js:90:1",
+      "category": "ENVIRONMENT",
+      "cause": "fs.linkSync returns EPERM in scratch directory; guard claim cannot be atomically hard-linked. No ledger production defect established.",
+      "reproduced": true,
+      "disposition": "BLOCKED locally; preserve locking algorithm and existing Windows CI evidence"
+    },
+    {
+      "originalId": 1865,
+      "name": "real crash after moving a dead lock aside, before deleting it: the lock name is free, the aside and guard stay inert; recover() clears both",
+      "file": "backend/services/supervised-operation/ledger-pid-residues.test.js:165:1",
+      "category": "ENVIRONMENT",
+      "cause": "fs.linkSync returns EPERM in scratch directory; guard claim cannot be atomically hard-linked. No ledger production defect established.",
+      "reproduced": true,
+      "disposition": "BLOCKED locally; preserve locking algorithm and existing Windows CI evidence"
+    }
+  ],
+  "skips": [
+    {
+      "originalId": 299,
+      "name": "Firestore engine executes the common POC when the emulator is available",
+      "reason": "BLOQUEADA POR ENTORNO: FIRESTORE_EMULATOR_HOST/Firebase Emulator no disponibles.",
+      "category": "FIRESTORE_EMULATOR_UNAVAILABLE",
+      "disposition": "BLOCKED locally; no production service substituted"
+    },
+    {
+      "originalId": 300,
+      "name": "PostgreSQL engine executes the common POC when the isolated cluster is available",
+      "reason": "BLOQUEADA POR ENTORNO: servidor PostgreSQL, OXKIO_POC_POSTGRES_URL y pg no disponibles.",
+      "category": "POSTGRES_LOCAL_UNAVAILABLE",
+      "disposition": "BLOCKED locally; no production service substituted"
+    },
+    {
+      "originalId": 310,
+      "name": "PostgresApprovalRepository real PostgreSQL/RLS integration",
+      "reason": "isolated PostgreSQL URLs are not configured",
+      "category": "POSTGRES_LOCAL_UNAVAILABLE",
+      "disposition": "BLOCKED locally; no production service substituted"
+    },
+    {
+      "originalId": 1352,
+      "name": "PostgresConfirmedMissionCommitter integration",
+      "reason": "isolated PostgreSQL URLs are not configured",
+      "category": "POSTGRES_LOCAL_UNAVAILABLE",
+      "disposition": "BLOCKED locally; no production service substituted"
+    },
+    {
+      "originalId": 1354,
+      "name": "PostgresMissionConfirmationRepository integration and Red Team",
+      "reason": "isolated PostgreSQL URLs are not configured",
+      "category": "POSTGRES_LOCAL_UNAVAILABLE",
+      "disposition": "BLOCKED locally; no production service substituted"
+    },
+    {
+      "originalId": 1366,
+      "name": "PostgresMissionRepository V1 integration and Red Team",
+      "reason": "isolated PostgreSQL URLs are not configured",
+      "category": "POSTGRES_LOCAL_UNAVAILABLE",
+      "disposition": "BLOCKED locally; no production service substituted"
+    },
+    {
+      "originalId": 1842,
+      "name": "suspend/resume: a stopped holder is alive; nothing breaks it; on resume it ends and the next writer follows",
+      "reason": "SIGSTOP/SIGCONT do not exist on Windows; a frozen holder is covered by the synchronous holder probe",
+      "category": "WINDOWS_UNSUPPORTED_SIGNAL",
+      "disposition": "BLOCKED locally; no production service substituted"
+    },
+    {
+      "originalId": 1930,
+      "name": "V3 PostgreSQL isolated integration",
+      "reason": "isolated local runner required",
+      "category": "POSTGRES_LOCAL_UNAVAILABLE",
+      "disposition": "BLOCKED locally; no production service substituted"
+    },
+    {
+      "originalId": 1992,
+      "name": "build (skipped without Docker): runtime y backup se construyen y se inspeccionan",
+      "reason": "Docker Linux no disponible (no instalado, daemon apagado o en modo Windows containers) en esta maquina.",
+      "category": "DOCKER_UNAVAILABLE",
+      "disposition": "BLOCKED locally; no production service substituted"
+    },
+    {
+      "originalId": 2004,
+      "name": "1. Cliente no autenticado -> DENY",
+      "reason": "TEST CODE PRESENT / RUNTIME NOT EXECUTED: FIRESTORE_EMULATOR_HOST no disponible.",
+      "category": "FIRESTORE_EMULATOR_UNAVAILABLE",
+      "disposition": "BLOCKED locally; no production service substituted"
+    },
+    {
+      "originalId": 2005,
+      "name": "2. Autenticado SIN claim oxkio_member -> DENY",
+      "reason": "TEST CODE PRESENT / RUNTIME NOT EXECUTED: FIRESTORE_EMULATOR_HOST no disponible.",
+      "category": "FIRESTORE_EMULATOR_UNAVAILABLE",
+      "disposition": "BLOCKED locally; no production service substituted"
+    },
+    {
+      "originalId": 2006,
+      "name": "3. oxkio_member=false -> DENY",
+      "reason": "TEST CODE PRESENT / RUNTIME NOT EXECUTED: FIRESTORE_EMULATOR_HOST no disponible.",
+      "category": "FIRESTORE_EMULATOR_UNAVAILABLE",
+      "disposition": "BLOCKED locally; no production service substituted"
+    },
+    {
+      "originalId": 2007,
+      "name": "4-6. member A: crea, lee y actualiza su propio documento",
+      "reason": "TEST CODE PRESENT / RUNTIME NOT EXECUTED: FIRESTORE_EMULATOR_HOST no disponible.",
+      "category": "FIRESTORE_EMULATOR_UNAVAILABLE",
+      "disposition": "BLOCKED locally; no production service substituted"
+    },
+    {
+      "originalId": 2008,
+      "name": "7-8. member A no puede crear para B ni leer un documento de B",
+      "reason": "TEST CODE PRESENT / RUNTIME NOT EXECUTED: FIRESTORE_EMULATOR_HOST no disponible.",
+      "category": "FIRESTORE_EMULATOR_UNAVAILABLE",
+      "disposition": "BLOCKED locally; no production service substituted"
+    },
+    {
+      "originalId": 2009,
+      "name": "9. member B no accede a los documentos de A",
+      "reason": "TEST CODE PRESENT / RUNTIME NOT EXECUTED: FIRESTORE_EMULATOR_HOST no disponible.",
+      "category": "FIRESTORE_EMULATOR_UNAVAILABLE",
+      "disposition": "BLOCKED locally; no production service substituted"
+    },
+    {
+      "originalId": 2010,
+      "name": "10-11. admin accede a lo suyo pero no a lo de otro por defecto",
+      "reason": "TEST CODE PRESENT / RUNTIME NOT EXECUTED: FIRESTORE_EMULATOR_HOST no disponible.",
+      "category": "FIRESTORE_EMULATOR_UNAVAILABLE",
+      "disposition": "BLOCKED locally; no production service substituted"
+    },
+    {
+      "originalId": 2011,
+      "name": "12. Una coleccion no listada en las reglas queda denegada por defecto",
+      "reason": "TEST CODE PRESENT / RUNTIME NOT EXECUTED: FIRESTORE_EMULATOR_HOST no disponible.",
+      "category": "FIRESTORE_EMULATOR_UNAVAILABLE",
+      "disposition": "BLOCKED locally; no production service substituted"
+    },
+    {
+      "originalId": 2012,
+      "name": "Los tres familiares (A, B, C) quedan aislados entre si en las 7 colecciones",
+      "reason": "TEST CODE PRESENT / RUNTIME NOT EXECUTED: FIRESTORE_EMULATOR_HOST no disponible.",
+      "category": "FIRESTORE_EMULATOR_UNAVAILABLE",
+      "disposition": "BLOCKED locally; no production service substituted"
+    },
+    {
+      "originalId": 2013,
+      "name": "Un miembro no puede reasignar el propietario de su propio documento a otro uid",
+      "reason": "TEST CODE PRESENT / RUNTIME NOT EXECUTED: FIRESTORE_EMULATOR_HOST no disponible.",
+      "category": "FIRESTORE_EMULATOR_UNAVAILABLE",
+      "disposition": "BLOCKED locally; no production service substituted"
+    }
+  ],
+  "local": {
+    "ledger": {
+      "tests": 62,
+      "pass": 27,
+      "fail": 34,
+      "skip": 1,
+      "verdict": "BLOCKED: hard-link capability denied, all original 34 failures reproduced"
+    },
+    "jobObject": {
+      "tests": 1,
+      "pass": 1,
+      "fail": 0,
+      "skip": 0
+    },
+    "wrapper": {
+      "tests": 10,
+      "pass": 7,
+      "fail": 0,
+      "skip": 3
+    },
+    "postgres18": {
+      "verdict": "BLOCKED",
+      "reason": "Fresh initdb --no-sync --locale=C stalls selecting max_connections=20; cancelled; no server started. No Neon access."
+    },
+    "capabilities": {
+      "observedAt": "2026-10-26T18:53:44.983Z",
+      "node": "v24.15.0",
+      "platform": "win32",
+      "tests": {
+        "link": {
+          "code": "EPERM"
+        },
+        "rename": "PASS",
+        "deadPid": "ESRCH",
+        "tcp": {
+          "status": 1,
+          "result": "CimException"
+        },
+        "cim": {
+          "status": 1,
+          "result": "Microsoft.Management.Infrastructure.CimException,Microsoft.Management.Infrastructure.CimCmdlets.GetCimInstanceCommand"
+        }
+      }
+    },
+    "changedSuite": {
+      "tests": 60,
+      "pass": 57,
+      "fail": 0,
+      "skip": 3,
+      "note": "Before rebasing onto main; includes one unchanged PR67 regression test."
+    },
+    "reconciliation": {
+      "tests": 16,
+      "pass": 16,
+      "fail": 0,
+      "skip": 0
+    },
+    "finalMainBaseSuite": {
+      "tests": 59,
+      "pass": 56,
+      "fail": 0,
+      "skip": 3
+    }
+  },
+  "existingCI": {
+    "main": {
+      "run": 40214451847,
+      "jobs": [
+        {
+          "id": 121232457162,
+          "name": "approval-postgres-integration",
+          "conclusion": "success"
+        },
+        {
+          "id": 121232457264,
+          "name": "backend-tests (node 24)",
+          "conclusion": "success"
+        },
+        {
+          "id": 121232457287,
+          "name": "docker-image-build",
+          "conclusion": "success"
+        },
+        {
+          "id": 121232457327,
+          "name": "v3-memory-postgres-integration (node 24)",
+          "conclusion": "success"
+        },
+        {
+          "id": 121232457336,
+          "name": "backend-tests (node 22)",
+          "conclusion": "success"
+        },
+        {
+          "id": 121232457394,
+          "name": "v3-memory-postgres-integration (node 22)",
+          "conclusion": "success"
+        },
+        {
+          "id": 121233885922,
+          "name": "backend-tests",
+          "conclusion": "success"
+        }
+      ]
+    },
+    "pr67": {
+      "run": 40296108781,
+      "jobs": [
+        {
+          "id": 121482451703,
+          "name": "docker-image-build",
+          "conclusion": "success"
+        },
+        {
+          "id": 121482452001,
+          "name": "v3-memory-postgres-integration (node 24)",
+          "conclusion": "success"
+        },
+        {
+          "id": 121482452007,
+          "name": "v3-memory-postgres-integration (node 22)",
+          "conclusion": "success"
+        },
+        {
+          "id": 121482452048,
+          "name": "approval-postgres-integration",
+          "conclusion": "success"
+        },
+        {
+          "id": 121482452079,
+          "name": "backend-tests (node 22)",
+          "conclusion": "success"
+        },
+        {
+          "id": 121482452098,
+          "name": "backend-tests (node 24)",
+          "conclusion": "success"
+        },
+        {
+          "id": 121484850389,
+          "name": "backend-tests",
+          "conclusion": "success"
+        }
+      ]
+    },
+    "rerun": false
+  },
+  "checkpoint": {
+    "sha256": "665b1a50822a5197c627d90f53aea579e5cae4dd51dd133179667d29d35ac285",
+    "capturedHead": "8aec849",
+    "preserved": true,
+    "restoresCurrentMain": false
+  },
+  "boundaries": {
+    "production": false,
+    "secrets": false,
+    "iam": false,
+    "accounts": false,
+    "deploy": false,
+    "merge": false,
+    "spend": false
+  },
+  "sources": [
+    {
+      "file": "audit-20261026-evidence.json",
+      "sha256": "014893d0444a205670e6f4ee07e48a456d5384c9a2c5a15822742ca6c509ac4c"
+    },
+    {
+      "file": "audit-20261026-full-workspace.tap",
+      "sha256": "e41c606b270512ba9cabd7ae0c91e3ce50f23ad0d4618896d66643af8cdcf4e5"
+    },
+    {
+      "file": "triage-ledger.tap",
+      "sha256": "1f82c804a951c86cbb4cc832d2c6629687ff58cf33260f8e1e8fc8ba4bcdcac1"
+    },
+    {
+      "file": "triage-wrapper-before.tap",
+      "sha256": "03ce817f6a8d704c7eee0a2174b2bd7291283686841d547fdd6d97fc83867388"
+    },
+    {
+      "file": "triage-wrapper.tap",
+      "sha256": "aa5b367f37f3d6265431062c62d2b515c059d69163fc4192d7e045bc33853267"
+    },
+    {
+      "file": "triage-job-object.tap",
+      "sha256": "b075e8226f14346946b20e0ca553f46051b307942fe08ec7e224305307211d44"
+    },
+    {
+      "file": "triage-pg18-init.log",
+      "sha256": "c53bc011c07b8954ea744c45f4a002a1fd2038e0cba0b913e2e0ba46127c4cf1"
+    },
+    {
+      "file": "triage-capabilities.json",
+      "sha256": "d98588c0dff0a616f31c9f30887b871ebb0fea34f24bd45a91f3e6bc89357ae8"
+    },
+    {
+      "file": "triage-changed-suite.tap",
+      "sha256": "f3f5bf3b0c23760afd5eced850e4abc162865de5086044fcc3e98276ff3e5baf"
+    },
+    {
+      "file": "triage-reconciliation-tests.tap",
+      "sha256": "718557c7f857e4373d4dcfdd21f1db98dd8e751efd7b3a671435361e2fd3689a"
+    },
+    {
+      "file": "triage-final-main-base.tap",
+      "sha256": "89b0039821d0921e06c65d5fe6eab8478631e9212adbe8df7bde1528104d8f0f"
+    }
+  ],
+  "drive": {
+    "url": "https://docs.google.com/document/d/1qfgljb17ZqOnqtdrNXXtmRqcgSPLFnr07FdmXckMmj8",
+    "modifiedAt": "2026-10-26T18:40:42.547Z",
+    "scope": "Read and contrasted; no remote edits; prior status not proof of current Cloud or Neon."
+  }
+}

@@ -1,6 +1,21 @@
 ﻿# OXKIO TASKS
 
-## Estado operativo vigente
+## Corte vigente auditado — 26/10/2026
+
+Proyeccion del registro unico [CONTINUITY-REGISTRY.json](CONTINUITY-REGISTRY.json), revision 38; el historial inferior se conserva como antecedente.
+
+- Main verificado: de95d751; PR62-66 fusionadas. Preparacion PostgreSQL V3 integrada; no acredita activacion Cloud.
+- PR67: DRAFT/OPEN, head 2df3e0fc, CI 40296108781 7/7 SUCCESS; sin merge. Main CI 40214451847 7/7 SUCCESS.
+- Auditoria local: 37 FAIL clasificados (34 por enlaces duros EPERM; dos por consulta de puerto denegada con arranque permisivo; un helper de test dependiente de CIM). 19 SKIP: seis PostgreSQL, once Firestore, uno Docker y uno senales Windows.
+- Correccion del lanzador y helper implementada en esta rama; integracion y nueva CI pendientes. Ningun defecto del algoritmo del ledger demostrado.
+- PostgreSQL 18 efimero: inicializacion bloqueada; prueba local tras reinicio NO ejecutada. CI SQL anterior conservada. Cliente Cero Cloud BLOCKED/no acreditado.
+- Checkpoint 26/10 preservado, hash 665b1a50822a5197c627d90f53aea579e5cae4dd51dd133179667d29d35ac285; captura 8aec849 y no restaura main actual.
+- Siguiente: validar rama en CI y revisar PR sin merge. Sin produccion, secretos, IAM, nuevas cuentas, despliegue ni gasto.
+- Evidencia: [clasificacion individual y hashes](../docs/audits/local-suite-triage-20261026.json); Drive V1 contrastado en lectura, sin certificar estado Cloud actual.
+
+## Historial anterior (no usar como estado actual)
+
+### Estado operativo registrado anteriormente
 
 - **Reconciliación 4F — 08/09/2026:** B6 / 5C.7B.3F CERRADA — PASS REAL
   (07/09/2026); 5C.7B.4 validada hasta 4E — PASS REAL en staging Cloud Run
