@@ -71,6 +71,7 @@ const ENVIRONMENT_VARIABLES = Object.freeze({
   // V3 SQL memory is opt-in only. Registration of a secret identifier does NOT
   // create a secret, grant access, provision SQL, or enable any runtime.
   OXKIO_V3_MEMORY_BACKEND: Object.freeze({ kind: 'governance', classifications: ['optional'], scope: 'supervised_operation' }),
+  OXKIO_V3_APPROVAL_BACKEND: Object.freeze({ kind: 'governance', classifications: ['optional'], scope: 'supervised_operation' }),
   OXKIO_V3_PG_HOST: Object.freeze({ kind: 'sensitive_config', classifications: ['optional'], scope: 'supervised_operation' }),
   OXKIO_V3_PG_PORT: Object.freeze({ kind: 'config', classifications: ['optional'], scope: 'supervised_operation' }),
   OXKIO_V3_PG_DATABASE: Object.freeze({ kind: 'sensitive_config', classifications: ['optional'], scope: 'supervised_operation' }),

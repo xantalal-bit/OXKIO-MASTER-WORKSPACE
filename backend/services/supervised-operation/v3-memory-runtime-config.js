@@ -31,3 +31,13 @@ function v3MemoryRuntimeOptions(env, readSecret) {
   }};
 }
 module.exports = { v3MemoryRuntimeOptions };
+// V3 approvals: explicit selection, reusing the Approval PostgreSQL pool
+// (same secret and role). Never a silent fallback to ephemeral files.
+function v3ApprovalPool(env, approvalPool) {
+  const backend = env.OXKIO_V3_APPROVAL_BACKEND || 'local';
+  if (env.OXKIO_V3_ENABLED !== 'true' || backend === 'local') return null;
+  if (backend !== 'postgres') throw Object.assign(new Error('approval_backend_invalid'), { code: 'approval_backend_invalid' });
+  if (!approvalPool) throw Object.assign(new Error('approval_postgres_required'), { code: 'approval_postgres_required' });
+  return approvalPool;
+}
+module.exports.v3ApprovalPool = v3ApprovalPool;

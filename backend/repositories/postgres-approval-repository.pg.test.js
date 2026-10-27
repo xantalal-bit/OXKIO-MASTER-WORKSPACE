@@ -393,6 +393,26 @@ if (!INTEGRATION_READY) {
     }
   });
 
+  test('V3 scoped approvals persist in approval_items, survive recomposition and stay per owner', async () => {
+    const { createScopedApprovalFactory } = require('../services/supervised-operation/approval-factory');
+    const ownerA = { tenantId: 'cliente-cero', clientId: 'cliente-cero', userId: 'uid-a' };
+    const ownerB = { tenantId: 'cliente-cero', clientId: 'cliente-cero', userId: 'uid-b' };
+    const first = await createScopedApprovalFactory({ pool: runtimePool(2) })(ownerA);
+    const item = await first.queue.add({ actionType: 'prepare-storage-proposal', summary: 'Propuesta sintetica V3.',
+      proposal: { synthetic: true }, requiresApproval: true, executionEnabled: false }, { interactionId: 'v3:mission-a' });
+    // A new process (fresh pool and factory) recovers the pending approval: nothing lived on disk.
+    const recomposed = createScopedApprovalFactory({ pool: runtimePool(2) });
+    const again = await recomposed(ownerA);
+    assert.deepEqual((await again.queue.listPending()).map((x) => x.id), [item.id]);
+    assert.deepEqual(await (await recomposed(ownerB)).queue.listPending(), []);
+    const legacy = await repositoryFor(SCOPE_A).listPending(SCOPE_A);
+    assert.equal(legacy.some((x) => x.id === item.id), false, 'classic cliente-cero queue never sees V3 rows');
+    const row = await admin.query('SELECT client_id FROM oxkio.approval_items WHERE id = $1', [item.id]);
+    assert.match(row.rows[0].client_id, /^v3-owner-[0-9a-f]{64}$/);
+    assert.equal(await codeOf(asRuntime(runtimePool(1), row.rows[0].client_id.replace(/.$/, '0'), (c) =>
+      c.query('SELECT 1 FROM oxkio.approval_items WHERE id = $1', [item.id]).then((r) => { if (r.rowCount) throw Object.assign(Error('leak'), { code: 'leak' }); }))), 'ok');
+  });
+
   // The shared ApprovalRepositoryV2 contract, unchanged, against real PostgreSQL.
   runApprovalRepositoryV2ContractTests(async () => repositoryFor(SCOPE_A), { label: 'postgres real' });
 }
