@@ -44,38 +44,52 @@ function scramVerifier(password, salt = randomBytes(16), iterations = SCRAM_ITER
   return `SCRAM-SHA-256$${iterations}:${salt.toString('base64')}$${storedKey}:${serverKey}`;
 }
 
-async function provision({ db, secrets, connectAsRuntime,
+async function provision({ db, secrets, connectAsRuntime, resume = false,
   makePassword = () => randomBytes(48).toString('base64url') }) {
   if (typeof connectAsRuntime !== 'function') throw new Error('Runtime login verifier required');
   checkRole((await db.query(ROLE_STATE_SQL, [ROLE])).rows[0]);
   // Fail closed if the secret is already present: never overwrite or rotate.
+  // --resume only completes an interrupted run: the role is still NOLOGIN
+  // (checked above) and version 1 already holds the custodied password.
+  let exists = true;
   try {
     await secrets.getSecret({ name: NAME });
-    throw new Error('Secret already exists; refusing overwrite');
   } catch (e) {
     if (e.code !== 5 && e.code !== 'NOT_FOUND') throw e;
+    exists = false;
   }
-  const password = makePassword();
-  if (!/^[A-Za-z0-9_-]{64}$/.test(password)) throw new Error('Password generator failed');
+  if (exists && !resume) throw new Error('Secret already exists; refusing overwrite');
+  if (!exists && resume) throw new Error('Nothing to resume: secret does not exist');
+  let password;
+  if (resume) {
+    const [v] = await secrets.accessSecretVersion({ name: `${NAME}/versions/1` });
+    password = v?.payload?.data ? Buffer.from(v.payload.data).toString('utf8') : '';
+    if (!/^[A-Za-z0-9_-]{64}$/.test(password)) throw new Error('Custodied password is not a provisioned value; refusing resume');
+  } else {
+    password = makePassword();
+    if (!/^[A-Za-z0-9_-]{64}$/.test(password)) throw new Error('Password generator failed');
+  }
   const verifier = scramVerifier(password);
   if (!/^SCRAM-SHA-256\$4096:[A-Za-z0-9+/=]+\$[A-Za-z0-9+/=]+:[A-Za-z0-9+/=]+$/.test(verifier)) {
     throw new Error('Password verifier failed');
   }
-  // Secret payload travels directly through authenticated API requests,
-  // never console/logs/files/command arguments.
-  await secrets.createSecret({
-    parent: `projects/${PROJECT}`, secretId: SECRET,
-    secret: { replication: { automatic: {} } }
-  });
-  await secrets.addSecretVersion({
-    parent: NAME,
-    payload: { data: Buffer.from(password, 'utf8') }
-  });
-  // Verify custody before allowing PostgreSQL LOGIN.
-  const [v] = await secrets.accessSecretVersion({ name: `${NAME}/versions/1` });
-  const stored = v?.payload?.data;
-  if (!stored || !Buffer.from(stored).equals(Buffer.from(password))) {
-    throw new Error('Secret custody verification failed; role remains NOLOGIN');
+  if (!resume) {
+    // Secret payload travels directly through authenticated API requests,
+    // never console/logs/files/command arguments.
+    await secrets.createSecret({
+      parent: `projects/${PROJECT}`, secretId: SECRET,
+      secret: { replication: { automatic: {} } }
+    });
+    await secrets.addSecretVersion({
+      parent: NAME,
+      payload: { data: Buffer.from(password, 'utf8') }
+    });
+    // Verify custody before allowing PostgreSQL LOGIN.
+    const [v] = await secrets.accessSecretVersion({ name: `${NAME}/versions/1` });
+    const stored = v?.payload?.data;
+    if (!stored || !Buffer.from(stored).equals(Buffer.from(password))) {
+      throw new Error('Secret custody verification failed; role remains NOLOGIN');
+    }
   }
   // Verifier alphabet is strictly validated above and the role literal is fixed.
   try {
@@ -109,17 +123,19 @@ function runtimeConnector(adminUrl) {
 }
 
 async function main() {
-  if (process.argv.length !== 3 || process.argv[2] !== '--execute' ||
+  const args = process.argv.slice(2);
+  const resume = args.length === 2 && args[1] === '--resume';
+  if (args[0] !== '--execute' || (args.length !== 1 && !resume) ||
       process.env.OXKIO_V3_SECRET_PROVISION_APPROVED !== 'YES' ||
       !process.env.OXKIO_V3_PG_ADMIN_URL) {
-    throw new Error('Explicit --execute, approval flag and admin connection required');
+    throw new Error('Explicit --execute [--resume], approval flag and admin connection required');
   }
   const { SecretManagerServiceClient } = require('@google-cloud/secret-manager');
   const db = new Client({ connectionString: process.env.OXKIO_V3_PG_ADMIN_URL,
     ssl: { rejectUnauthorized: true } });
   await db.connect();
   try {
-    const result = await provision({ db, secrets: new SecretManagerServiceClient(),
+    const result = await provision({ db, secrets: new SecretManagerServiceClient(), resume,
       connectAsRuntime: runtimeConnector(process.env.OXKIO_V3_PG_ADMIN_URL) });
     process.stdout.write(`Verified dedicated role and secret: ${result.secretName}\n`);
   } finally {
