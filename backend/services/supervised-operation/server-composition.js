@@ -17,7 +17,7 @@ const { createGovernedReasoner } = require('./governed-reasoning');
 const parseCohort = value => new Set(String(value || '').split(',').map(v => v.trim()).filter(v => /^[A-Za-z0-9:_-]{3,128}$/.test(v)));
 const HANDLER = 'supervised-operation';
 const STATUS = { membership_not_available: 403, permission_denied: 403, authenticated_identity_required: 403, session_authority_changed: 403, backpressure: 429, mission_capacity: 429, store_capacity: 429, mission_busy: 409, stored_integrity_invalid: 409, stored_scope_invalid: 409 };
-function createServerComposition({enabled=false,cohortUids='',memoryRoot,integrityKey,memoryBackend='local',postgresMemoryConnection,authorizeIdentity,adapterFactory=null,privateContextReaders=null,publicResearch=null,projectContinuity=null,reasoning=null}={}){
+function createServerComposition({enabled=false,cohortUids='',memoryRoot,integrityKey,memoryBackend='local',postgresMemoryConnection,approvalPool=null,authorizeIdentity,adapterFactory=null,privateContextReaders=null,publicResearch=null,projectContinuity=null,reasoning=null}={}){
  if(!enabled)return null;
  const cohort=parseCohort(cohortUids);
  if(cohort.size===0)return null;
@@ -43,7 +43,7 @@ function createServerComposition({enabled=false,cohortUids='',memoryRoot,integri
  // Public research adapters (search + fetch) are added per owner scope next to
  // the private ones; they carry no credential and read only public pages.
  const factory=privateFactory||typeof publicResearch==='function'?async(identity,scope)=>({...(privateFactory?await privateFactory(identity,scope):{}),...(typeof publicResearch==='function'?publicResearch(scope):{})}):null;
- const gateway=createChatGateway({approvalFactory:createScopedApprovalFactory({root:memoryRoot}),storeFactory,adapterFactory:factory,planner,conversationDecider,reasoner,
+ const gateway=createChatGateway({approvalFactory:createScopedApprovalFactory({root:memoryRoot,pool:approvalPool}),storeFactory,adapterFactory:factory,planner,conversationDecider,reasoner,
   catalog,budget:reasoning&&reasoning.budget||{},privacyPolicy:reasoning&&reasoning.privacyPolicy,
   // Only Cliente Cero has a connection flow today (its existing Google OAuth).
   connectable:(scope,provider)=>scope.clientId==='cliente-cero'&&['mail','calendar'].includes(provider),

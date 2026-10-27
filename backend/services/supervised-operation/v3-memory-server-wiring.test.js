@@ -31,3 +31,34 @@ test('enabled PostgreSQL cannot start without explicit connection and dedicated 
   assert.throws(() => v3MemoryRuntimeOptions(env, () => ''), { code: 'postgres_credentials_required' });
   assert.throws(() => v3MemoryRuntimeOptions({ ...env, OXKIO_V3_PG_SSL: 'false' }, () => 'synthetic-test-only'), { code: 'postgres_tls_required' });
 });
+
+test('HTTP server forwards the V3 approval selector with the Approval PostgreSQL pool', () => {
+  const source = fs.readFileSync(path.join(__dirname, '../../api/server.js'), 'utf8');
+  const composition = source.match(/v3Chat\s*=\s*createServerComposition\(\{([\s\S]*?)\n\s*\}\);/);
+  assert.match(composition[1], /approvalPool:\s*v3ApprovalPool\(process\.env,\s*approvalPersistence\.postgresPool\)/);
+});
+
+test('V3 approvals stay local unless PostgreSQL is selected, and never fall back silently', () => {
+  const { v3ApprovalPool } = require('./v3-memory-runtime-config');
+  const pool = { query: async () => ({ rows: [] }) };
+  assert.equal(v3ApprovalPool({}, pool), null);
+  assert.equal(v3ApprovalPool({ OXKIO_V3_ENABLED: 'true' }, pool), null);
+  assert.equal(v3ApprovalPool({ OXKIO_V3_ENABLED: 'false', OXKIO_V3_APPROVAL_BACKEND: 'postgres' }, null), null);
+  assert.equal(v3ApprovalPool({ OXKIO_V3_ENABLED: 'true', OXKIO_V3_APPROVAL_BACKEND: 'postgres' }, pool), pool);
+  assert.throws(() => v3ApprovalPool({ OXKIO_V3_ENABLED: 'true', OXKIO_V3_APPROVAL_BACKEND: 'postgres' }, null), { code: 'approval_postgres_required' });
+  assert.throws(() => v3ApprovalPool({ OXKIO_V3_ENABLED: 'true', OXKIO_V3_APPROVAL_BACKEND: 'files' }, pool), { code: 'approval_backend_invalid' });
+});
+
+test('scoped approval factory gives each V3 owner its own opaque durable client_id', async () => {
+  const { createScopedApprovalFactory } = require('./approval-factory');
+  const pool = { query: async () => ({ rows: [] }), connect: async () => { throw Error('not used'); } };
+  const factory = createScopedApprovalFactory({ pool });
+  const a = await factory({ tenantId: 't', clientId: 'cliente-cero', userId: 'uid-a' });
+  const b = await factory({ tenantId: 't', clientId: 'cliente-cero', userId: 'uid-b' });
+  assert.match(a.queue.scope.clientId, /^v3-owner-[0-9a-f]{64}$/);
+  assert.notEqual(a.queue.scope.clientId, b.queue.scope.clientId);
+  assert.notEqual(a.queue.scope.clientId, 'cliente-cero');
+  assert.equal(await factory({ tenantId: 't', clientId: 'cliente-cero', userId: 'uid-a' }).then(x => x.queue), a.queue);
+  assert.deepEqual(a.scope, { tenantId: 't', clientId: 'cliente-cero', userId: 'uid-a' });
+  assert.throws(() => createScopedApprovalFactory({}), { code: 'approval_root_invalid' });
+});
