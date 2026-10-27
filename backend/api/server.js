@@ -665,6 +665,8 @@ if (pathname === "/api/gmail/analyze" && req.method === "GET") {
 }
 if (pathname === "/app/release.json" && req.method === "GET") {
   // Metadatos públicos, sin secretos. Única fuente de versión visual del proyecto.
+  const fs = require("fs");
+  const path = require("path");
   const releasePath = path.join(__dirname, "../../app/release.json");
   res.writeHead(200, {
     "Content-Type": "application/json; charset=utf-8",
