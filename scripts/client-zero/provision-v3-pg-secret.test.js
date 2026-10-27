@@ -134,6 +134,8 @@ test('real PostgreSQL: non-superuser admin provisions a hashed, login-verified r
   // Neon-like topology: the provisioning admin is CREATEROLE but not superuser.
   await su.query('DROP SCHEMA IF EXISTS oxkio_v3 CASCADE');
   await su.query('DROP ROLE IF EXISTS oxkio_v3_runtime');
+  // Idempotent on a reused cluster: a previous run leaves a database grant behind.
+  await su.query("DO $$BEGIN IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname='oxkio_neon_like_owner') THEN EXECUTE 'DROP OWNED BY oxkio_neon_like_owner'; END IF; END$$");
   await su.query('DROP ROLE IF EXISTS oxkio_neon_like_owner');
   await su.query('CREATE ROLE oxkio_neon_like_owner LOGIN CREATEROLE');
   await su.query('GRANT CREATE ON DATABASE oxkio_v3_it TO oxkio_neon_like_owner');
@@ -160,6 +162,35 @@ test('real PostgreSQL: non-superuser admin provisions a hashed, login-verified r
   await assert.rejects(connectAsRuntime('wrong-' + password));
   const runtime = await connectAsRuntime(password);
   try { await assert.rejects(runtime.query('DELETE FROM oxkio_v3.memory_snapshots'), { code:'42501' }); } finally { await runtime.end(); }
+  // Interrupted run: custody done, ALTER/login fails -> NOLOGIN; plain rerun refuses; --resume completes it.
+  await su.query('ALTER ROLE oxkio_v3_runtime NOLOGIN');
+  let held; const store = { getSecret: missing, createSecret: async () => {}, addSecretVersion: async ({ payload }) => { held = Buffer.from(payload.data); store.getSecret = async () => ({}); },
+    accessSecretVersion: async () => [{ payload:{ data:held } }] };
+  await assert.rejects(provision({ db: owner, secrets: store, connectAsRuntime: async () => { throw new Error('network'); } }), /Database provisioning failed/);
+  assert.equal((await su.query("SELECT rolcanlogin FROM pg_roles WHERE rolname='oxkio_v3_runtime'")).rows[0].rolcanlogin, false);
+  await assert.rejects(provision({ db: owner, secrets: store, connectAsRuntime }), /already exists/);
+  assert.equal((await provision({ db: owner, secrets: store, connectAsRuntime, resume: true })).verified, true);
+  const resumed = await connectAsRuntime(held.toString('utf8')); await resumed.end();
   // A second run on a provisioned role refuses: role already LOGIN.
   await assert.rejects(provision({ db: owner, secrets, connectAsRuntime }), /preconditions/);
+});
+
+test('resume completes an interrupted run with the custodied password, never creating or adding', async () => {
+  const calls = [];
+  const secrets = { getSecret: async () => ({}), createSecret: async () => { calls.push('CREATE_SECRET'); },
+    addSecretVersion: async () => { calls.push('ADD_VERSION'); },
+    accessSecretVersion: async () => [{ payload:{ data:Buffer.from(goodPassword) } }] };
+  const result = await provision({ db: fakeDb(calls), secrets, resume: true, connectAsRuntime: runtimeLogin(calls),
+    makePassword: () => { throw new Error('must not generate'); } });
+  assert.equal(result.verified, true);
+  assert.equal(calls.includes('CREATE_SECRET') || calls.includes('ADD_VERSION'), false);
+  assert.deepEqual(calls.slice(-2), ['LOGIN:true', 'LOGOUT']);
+});
+
+test('resume refuses a missing secret, a non-provisioned payload or a role already LOGIN', async () => {
+  await assert.rejects(provision({ db: fakeDb([]), secrets: goodSecrets(), resume: true, connectAsRuntime: runtimeLogin() }), /Nothing to resume/);
+  const odd = { getSecret: async () => ({}), accessSecretVersion: async () => [{ payload:{ data:Buffer.from('short') } }] };
+  await assert.rejects(provision({ db: fakeDb([]), secrets: odd, resume: true, connectAsRuntime: runtimeLogin() }), /refusing resume/);
+  const loginDb = { query: async () => ({ rows:[safeRole(true)] }) };
+  await assert.rejects(provision({ db: loginDb, secrets: { getSecret: async () => ({}) }, resume: true, connectAsRuntime: runtimeLogin() }), /preconditions/);
 });
