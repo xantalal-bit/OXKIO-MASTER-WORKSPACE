@@ -19,7 +19,9 @@ param([ValidateSet('Validate','Simulate','ProveIsolation','Check','CheckReal','C
       [ValidatePattern('^([a-z0-9.-]{1,253})?$')][string]$PgHost='',
       [ValidatePattern('^[a-z0-9_]{1,63}$')][string]$PgDatabase='neondb',
       [ValidatePattern('^(latest|[1-9][0-9]*)$')][string]$IntegrityKeyVersion='latest',
-      [ValidatePattern('^[1-9][0-9]*$')][string]$PgPasswordVersion='1')
+      [ValidatePattern('^[1-9][0-9]*$')][string]$PgPasswordVersion='1',
+      # Cloud/Rollback: Synthetic (sin secretos) o Real (PostgreSQL + Secret Manager, requiere CheckReal en verde).
+      [ValidateSet('Synthetic','Real')][string]$Variant='Synthetic')
 Set-StrictMode -Version Latest
 $ErrorActionPreference='Stop'
 $script:RepoLocal=(Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..\..\..')).ProviderPath
@@ -47,6 +49,10 @@ $script:Evidence=Join-Path $EvidenceRoot 'evidencia'
 $script:JournalPath=Join-Path $script:Evidence 'journal.json'
 $script:IsolationProofPath=Join-Path $script:Evidence ('isolation-'+$script:ShortCommit+'.json')
 $script:CheckPath=Join-Path $script:Evidence ('check-'+$script:ShortCommit+'.json')
+$script:CheckRealPath=Join-Path $script:Evidence ('check-real-'+$script:ShortCommit+'.json')
+# La variante Real reutiliza la secuencia 0..6 con su propia revision, etiqueta y journal.
+$script:Variant=$Variant
+if($script:Variant -ceq 'Real'){ $script:TestTag=$script:RealTag; $script:TestRevision=$script:RealRevision; $script:JournalPath=Join-Path $script:Evidence 'journal-real.json' }
 $script:BuildContextFiles=@('Dockerfile','.dockerignore','package.json','package-lock.json','backend','app','orchestration/CONTINUITY-REGISTRY.json')
 
 function Assert-True([bool]$Condition,[string]$Message) { if(-not $Condition){throw $Message} }
@@ -131,6 +137,18 @@ function Assert-IsolatedRevision($Revision) {
         Assert-True ($name -notmatch '^OXKIO_REASONING_|^OXKIO_V3_REASONING_|OXKIO_GOOGLE_OAUTH_TOKEN|DATABASE|POSTGRES|_PG_') 'Variable de acceso real prohibida'
     }
     Assert-True ($Revision.IsolationProvenAtCommit -ceq $script:ExpectedCommit) 'Falta prueba de aislamiento en commit exacto'
+}
+# Revision real: V3 durable para la cohorte del owner, credenciales solo por referencia.
+function Assert-RealRevision($Revision) {
+    Assert-True ($Revision.Commit -ceq $script:ExpectedCommit) 'Commit incorrecto'
+    Assert-True ($Revision.Name -ceq $script:RealRevision -and $Revision.Name -cne $script:ExpectedRevision) 'Revision real inesperada'
+    Assert-True ($Revision.Digest -cmatch '^sha256:[0-9a-f]{64}$') 'Digest inmutable requerido'
+    Assert-True ($Revision.Percent -eq 0) 'Revision real con trafico'
+    Assert-True ($Revision.Env.OXKIO_V3_ENABLED -ceq 'true' -and $Revision.Env.OXKIO_V3_COHORT_UIDS -ceq $script:OwnerUid) 'Cohorte distinta del owner'
+    Assert-True ($Revision.Env.OXKIO_V3_MEMORY_BACKEND -ceq 'postgres' -and $Revision.Env.OXKIO_V3_APPROVAL_BACKEND -ceq 'postgres') 'Memoria o aprobaciones no durables'
+    Assert-True ($Revision.Env.OXKIO_V3_PG_USER -ceq 'oxkio_v3_runtime' -and $Revision.Env.OXKIO_V3_PG_HOST -ceq $script:PgHost) 'Conexion PostgreSQL inesperada'
+    foreach($s in $script:RealV3Secrets){ Assert-True ($s -in @($Revision.SecretMounts)) "Falta la referencia $s" }
+    foreach($name in $Revision.Env.Keys){ Assert-True ($name -notin $script:RealV3Secrets -and $name -notmatch '^OXKIO_V3_REASONING_') "Variable no permitida en claro: $name" }
 }
 function Assert-TestResult($Test) {
     Assert-True ($Test.Authenticated -and $Test.ExistingIAM -and $Test.SyntheticOnly) 'Identidad o datos no permitidos'
@@ -443,6 +461,12 @@ function Assert-IsolationProof {
     Assert-True ($proof.Commit -ceq $script:ExpectedCommit -and $proof.Passed) 'Prueba de aislamiento no valida para el commit'
     return $proof
 }
+function Assert-RecentCheckReal {
+    Assert-True (Test-Path -LiteralPath $script:CheckRealPath) 'Falta Mode CheckReal'
+    $check=Get-Content -LiteralPath $script:CheckRealPath -Raw | ConvertFrom-Json
+    Assert-True ($check.Commit -ceq $script:ExpectedCommit -and $check.Passed -and @($check.Blockers).Count -eq 0) 'CheckReal no esta en verde'
+    Assert-True (([datetime]::UtcNow-(ConvertTo-UtcDate $check.AtUtc)).TotalHours -lt 6) 'CheckReal caducado (>6 h)'
+}
 function Assert-RecentCheck {
     Assert-True (Test-Path -LiteralPath $script:CheckPath) 'Falta Mode Check'
     $check=Get-Content -LiteralPath $script:CheckPath -Raw | ConvertFrom-Json
@@ -564,7 +588,8 @@ $script:CloudAdapter={param($Operation,$Payload)
         'CreateZeroTrafficRevision' {
             $proof=Assert-IsolationProof
             $current=Invoke-Gcloud @('run','services','describe',$script:Service,$loc,'--format=json') | ConvertFrom-Json
-            $document=New-SyntheticServiceDocument $current "$($script:ImageRepo)@$($Payload.Digest)" (New-IntegrityKey)
+            $imageRef="$($script:ImageRepo)@$($Payload.Digest)"
+            $document=if($script:Variant -ceq 'Real'){ Assert-RecentCheckReal; New-RealV3ServiceDocument $current $imageRef } else { New-SyntheticServiceDocument $current $imageRef (New-IntegrityKey) }
             Invoke-ServiceReplace $document -DryRun | Out-Null
             Invoke-ServiceReplace $document | Out-Null
             $document=$null
@@ -643,7 +668,7 @@ function Invoke-PreparedStep($State,[int]$Step,[scriptblock]$Adapter) {
             Assert-True $saved 'Reserva no preservada'
             $operation=@{1='BuildExactCommit';2='VerifyRegisteredDigest';3='CreateZeroTrafficRevision';4='AuthenticatedSyntheticTest';5='VerifyRevisionAndTest';6='RemoveTestTag'}[$Step]
             $result=Assert-NativeResult (& $Adapter $operation $State)
-            if($Step -in @(3,5)){Assert-IsolatedRevision $result.Revision}
+            if($Step -in @(3,5)){ if($script:Variant -ceq 'Real'){ Assert-RealRevision $result.Revision } else { Assert-IsolatedRevision $result.Revision } }
             if($Step -in @(4,5)){Assert-TestResult $result.Test}
         }
         $post=Assert-NativeResult (& $Adapter 'ReadState' $null)
@@ -681,6 +706,7 @@ function Invoke-CloudStep([int]$Step) {
         Assert-True (-not (Test-Path -LiteralPath $script:JournalPath)) 'Ya existe journal: la secuencia no se reinicia'
         Assert-IsolationProof | Out-Null
         Assert-RecentCheck
+        if($script:Variant -ceq 'Real'){ Assert-RecentCheckReal }
         $state=New-CloudState
     } else {
         $state=Read-Journal

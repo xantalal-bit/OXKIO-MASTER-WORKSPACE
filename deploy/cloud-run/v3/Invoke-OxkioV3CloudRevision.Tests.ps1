@@ -215,5 +215,26 @@ Check 'Real V3 document refuses a tag instead of a digest' {New-RealV3ServiceDoc
 Check 'Real V3 document refuses a missing Neon host' {$saved=$script:PgHost;$script:PgHost='';try{New-RealV3ServiceDocument (New-RealServiceJson) $realDigest}finally{$script:PgHost=$saved}} $true
 Check 'Operational modes refuse a missing or malformed owner UID' {$saved=$script:OwnerUid;$script:OwnerUid='';try{Assert-OwnerUid}finally{$script:OwnerUid=$saved}} $true
 Check 'Synthetic env never carries the real OAuth client id' {$e=New-SyntheticEnv ('k'*64);Assert-True ($e.GOOGLE_CLIENT_ID -like 'disabled-synthetic-*' -and $e.GOOGLE_CLIENT_SECRET -ceq 'disabled-synthetic-test') 'oauth'}
+function New-RealRevisionModel([scriptblock]$Mutate={param($d)}) {
+    $d=New-RealV3ServiceDocument (New-RealServiceJson) $realDigest; & $Mutate $d
+    $rev=[pscustomobject]@{metadata=$d.spec.template.metadata;spec=$d.spec.template.spec;status=[pscustomobject]@{imageDigest=$realDigest}}
+    $traffic=@($d.spec.traffic | ForEach-Object { [pscustomobject]@{revisionName=$_.revisionName;percent=[int]$_.percent;latestRevision=$false;tag=(Get-Prop $_ 'tag' '')} })
+    ConvertTo-RevisionModel $rev $traffic $script:ExpectedCommit
+}
+Check 'Real revision model passes the real-variant guard' {Assert-RealRevision (New-RealRevisionModel)}
+Check 'Real-variant guard refuses traffic on the new revision' {Assert-RealRevision (New-RealRevisionModel {param($d) $d.spec.traffic[1].percent=10})} $true
+Check 'Real-variant guard refuses a missing secret reference' {Assert-RealRevision (New-RealRevisionModel {param($d) $c=@($d.spec.template.spec.containers)[0]; $c.env=@($c.env | Where-Object { $_.name -cne 'OXKIO_V3_PG_PASSWORD' })})} $true
+Check 'Real-variant guard refuses a plaintext V3 secret' {Assert-RealRevision (New-RealRevisionModel {param($d) $c=@($d.spec.template.spec.containers)[0]; $c.env=@($c.env | Where-Object { $_.name -cne 'OXKIO_V3_INTEGRITY_KEY' })+@([pscustomobject]@{name='OXKIO_V3_INTEGRITY_KEY';value=('k'*64)})})} $true
+Check 'Real-variant guard refuses a cohort other than the owner' {Assert-RealRevision (New-RealRevisionModel {param($d) $c=@($d.spec.template.spec.containers)[0]; ($c.env | Where-Object { $_.name -ceq 'OXKIO_V3_COHORT_UIDS' }).value='SomeoneElse000000000000'})} $true
+Check 'Real deployment refuses a CheckReal that still lists blockers' {
+    $saved=$script:CheckRealPath;$script:CheckRealPath=Join-Path $env:TEMP ('check-real-'+[guid]::NewGuid().ToString('N')+'.json')
+    try{Write-PrivateFile $script:CheckRealPath (ConvertTo-Json @{Commit=$script:ExpectedCommit;AtUtc=[datetime]::UtcNow.ToString('o');Passed=$false;Blockers=@('secret_missing:OXKIO_V3_PG_PASSWORD')});Assert-RecentCheckReal}
+    finally{Remove-Item -LiteralPath $script:CheckRealPath -ErrorAction SilentlyContinue;$script:CheckRealPath=$saved}
+} $true
+Check 'Real deployment accepts a fresh green CheckReal for this commit' {
+    $saved=$script:CheckRealPath;$script:CheckRealPath=Join-Path $env:TEMP ('check-real-'+[guid]::NewGuid().ToString('N')+'.json')
+    try{Write-PrivateFile $script:CheckRealPath (ConvertTo-Json @{Commit=$script:ExpectedCommit;AtUtc=[datetime]::UtcNow.ToString('o');Passed=$true;Blockers=@()});Assert-RecentCheckReal}
+    finally{Remove-Item -LiteralPath $script:CheckRealPath -ErrorAction SilentlyContinue;$script:CheckRealPath=$saved}
+}
 Check 'Evidence lives outside the repository' {Assert-True (-not $script:Evidence.StartsWith($script:RepoLocal,[StringComparison]::OrdinalIgnoreCase)) 'evidence in repo'}
 [pscustomobject]@{Kind='LOCAL_SYNTHETIC_ONLY';Passed=$script:Results.Count;Failed=0;CloudCommandsExecuted=0;Tests=$script:Results} | ConvertTo-Json -Depth 8
