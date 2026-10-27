@@ -46,19 +46,38 @@ function scramVerifier(password, salt = randomBytes(16), iterations = SCRAM_ITER
 
 // Neon rejects pre-hashed passwords ("Passwords must be supplied in plain text
 // but are encrypted when stored. Hashed passwords are not supported." -
-// neon.com/docs/manage/roles). 'plaintext-tls' sends the password itself, so
-// this read-only gate runs first and refuses unless the session is TLS and no
-// setting would record the statement text of a successful ALTER ROLE.
+// neon.com/docs/manage/roles). 'plaintext-tls' must send the password itself,
+// but never inside the text of any statement: statement text can be recorded
+// by log_statement, log_min_error_statement (on failure), error CONTEXT lines
+// and pg_stat_statements (track_utility cannot be disabled by Neon's owner).
+// The password travels only as a bind parameter into a transaction-local
+// setting; a DO block builds the ALTER ROLE and re-raises any failure with a
+// fixed message and the SQLSTATE only.
+const PASSWORD_GUC = 'oxkio.v3_runtime_password';
+const SET_PASSWORD_GUC_SQL = 'SELECT set_config($1, $2, true)';
+const ALTER_FROM_GUC_SQL = `DO $oxkio$
+BEGIN
+  EXECUTE format('ALTER ROLE ${ROLE} PASSWORD %L LOGIN', current_setting('${PASSWORD_GUC}'));
+EXCEPTION WHEN OTHERS THEN
+  RAISE EXCEPTION 'oxkio_v3_runtime password change failed' USING ERRCODE = SQLSTATE;
+END
+$oxkio$`;
+
+// Read-only gate, before any write. What could still record the password:
+// bind parameters (log_statement=all, log_min_duration_statement>=0,
+// log_parameter_max_length_on_error<>0) and nested statements
+// (pg_stat_statements.track=all). TLS is required for the transport itself.
 const PLAINTEXT_SAFETY_SQL = `SELECT
     (SELECT ssl FROM pg_stat_ssl WHERE pid = pg_backend_pid()) AS tls,
     current_setting('log_statement') AS log_statement,
     current_setting('log_min_duration_statement') AS log_min_duration_statement,
+    current_setting('log_parameter_max_length_on_error') AS log_parameter_max_length_on_error,
     EXISTS (SELECT 1 FROM pg_extension WHERE extname = 'pg_stat_statements') AS pgss,
-    current_setting('pg_stat_statements.track_utility', true) AS pgss_track_utility`;
+    current_setting('pg_stat_statements.track', true) AS pgss_track`;
 
 function checkPlaintextSafety(row) {
   if (!row || row.tls !== true || row.log_statement !== 'none' || row.log_min_duration_statement !== '-1' ||
-      (row.pgss && row.pgss_track_utility !== 'off')) {
+      row.log_parameter_max_length_on_error !== '0' || (row.pgss && row.pgss_track === 'all')) {
     throw new Error('Plaintext password transport is not safe on this session; role remains NOLOGIN');
   }
 }
@@ -114,11 +133,22 @@ async function provision({ db, secrets, connectAsRuntime, resume = false,
   }
   // Before any ALTER ROLE: a failed gate leaves the role exactly as it was (NOLOGIN).
   if (passwordTransport === 'plaintext-tls') checkPlaintextSafety((await db.query(PLAINTEXT_SAFETY_SQL)).rows[0]);
-  // Both literals come from strictly validated alphabets (base64url password,
-  // SCRAM verifier) without quotes, and the role literal is fixed.
-  const literal = passwordTransport === 'plaintext-tls' ? password : verifier;
   try {
-    await db.query(`ALTER ROLE ${ROLE} PASSWORD '${literal}' LOGIN`);
+    if (passwordTransport === 'plaintext-tls') {
+      // The password is only a bind parameter; it never appears in statement text.
+      await db.query('BEGIN');
+      try {
+        await db.query(SET_PASSWORD_GUC_SQL, [PASSWORD_GUC, password]);
+        await db.query(ALTER_FROM_GUC_SQL);
+        await db.query('COMMIT');
+      } catch (e) {
+        await db.query('ROLLBACK').catch(() => {});
+        throw e;
+      }
+    } else {
+      // The verifier alphabet is strictly validated above and the role literal is fixed.
+      await db.query(`ALTER ROLE ${ROLE} PASSWORD '${verifier}' LOGIN`);
+    }
     checkRole((await db.query(ROLE_STATE_SQL, [ROLE])).rows[0], { login: true });
     // Prove the custodied password actually authenticates as the runtime role.
     const runtime = await connectAsRuntime(password);
@@ -180,4 +210,4 @@ if (require.main === module) {
   });
 }
 
-module.exports = { checkRole, checkPlaintextSafety, provision, scramVerifier, ROLE_STATE_SQL, PLAINTEXT_SAFETY_SQL };
+module.exports = { checkRole, checkPlaintextSafety, provision, scramVerifier, ROLE_STATE_SQL, PLAINTEXT_SAFETY_SQL, ALTER_FROM_GUC_SQL };
