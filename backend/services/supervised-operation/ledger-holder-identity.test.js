@@ -94,10 +94,12 @@ test('a dead claim is passed over at once (next generation)', async t => {
 });
 test('a corrupt claim: never passed over automatically; recover() passes over it once older than a lease', async t => {
  for (const who of ['owner', 'supervisor']) {
-  const f = fixture(t, { lockLeaseMs: 200, acquireMs: 300 }); const s = f.openStore(); s.put('owner', 'note', 'n-0', {}); await staleLockAndGuard(f);
+  // A 200 ms lease can expire while a saturated CI runner schedules this test.
+  // Give the fresh corrupt claim a realistic lease; make the stale case explicit.
+  const f = fixture(t, { lockLeaseMs: 10000, acquireMs: 300 }); const s = f.openStore(); s.put('owner', 'note', 'n-0', {}); await staleLockAndGuard(f);
   const claim = claimFile(f.root); fs.writeFileSync(claim, '{"id":');
   assert.equal(code(() => s.recover('owner', { decidedBy: who })), 'store_lock_live', 'a recent unreadable claim is not passed over');
-  const old = new Date(Date.now() - 10000); fs.utimesSync(claim, old, old);
+  const old = new Date(Date.now() - 60000); fs.utimesSync(claim, old, old);
   assert.equal(code(() => s.put('owner', 'note', 'n-1', {})), 'store_recovery_required', 'never automatic');
   assert.equal(s.recover('owner', { decidedBy: who }).recovered, true, who);
   assert.equal(code(() => s.put('owner', 'note', 'n-1', {})), 'ok'); assert.equal(notes(f), 2);
