@@ -194,3 +194,86 @@ test('resume refuses a missing secret, a non-provisioned payload or a role alrea
   const loginDb = { query: async () => ({ rows:[safeRole(true)] }) };
   await assert.rejects(provision({ db: loginDb, secrets: { getSecret: async () => ({}) }, resume: true, connectAsRuntime: runtimeLogin() }), /preconditions/);
 });
+
+// Neon: "Hashed passwords are not supported" -> plaintext over TLS behind a read-only gate.
+const { checkPlaintextSafety } = require('./provision-v3-pg-secret');
+const safeSession = { tls: true, log_statement: 'none', log_min_duration_statement: '-1', pgss: false, pgss_track_utility: null };
+const plaintextDb = (calls, session = safeSession) => {
+  const base = fakeDb(calls);
+  return { query: async (sql, p) => (/pg_stat_ssl/.test(sql) ? (calls.push('SAFETY_GATE'), { rows: [session] }) : base.query(sql, p)) };
+};
+
+test('plaintext-tls: read-only gate runs before ALTER ROLE, which then carries the custodied password', async () => {
+  const calls = [];
+  const result = await provision({ db: plaintextDb(calls), secrets: goodSecrets(calls), passwordTransport: 'plaintext-tls',
+    connectAsRuntime: runtimeLogin(calls), makePassword: () => goodPassword });
+  assert.equal(result.verified, true);
+  const gate = calls.indexOf('SAFETY_GATE'); const alter = calls.findIndex((x) => /^ALTER ROLE .* LOGIN$/.test(x));
+  assert.ok(gate > calls.indexOf('READ_VERSION') && gate < alter, calls.join(' > '));
+  assert.equal(calls[alter], `ALTER ROLE oxkio_v3_runtime PASSWORD '${goodPassword}' LOGIN`);
+  assert.deepEqual(calls.slice(-2), ['LOGIN:true', 'LOGOUT']);
+});
+
+test('plaintext-tls: any session setting that could record the statement aborts before writing', async () => {
+  for (const unsafe of [{ tls: false }, { tls: null }, { log_statement: 'ddl' }, { log_statement: 'mod' }, { log_statement: 'all' },
+    { log_min_duration_statement: '0' }, { pgss: true, pgss_track_utility: 'on' }, { pgss: true, pgss_track_utility: null }]) {
+    const calls = [];
+    await assert.rejects(provision({ db: plaintextDb(calls, { ...safeSession, ...unsafe }), secrets: goodSecrets(), passwordTransport: 'plaintext-tls',
+      connectAsRuntime: runtimeLogin(), makePassword: () => goodPassword }), /not safe on this session/, JSON.stringify(unsafe));
+    assert.equal(calls.some((x) => x.startsWith('ALTER ROLE')), false, JSON.stringify(unsafe));
+  }
+  checkPlaintextSafety({ ...safeSession, pgss: true, pgss_track_utility: 'off' });
+});
+
+test('plaintext-tls resume reuses version 1 and default transport stays the SCRAM verifier', async () => {
+  const calls = [];
+  const secrets = { getSecret: async () => ({}), accessSecretVersion: async () => [{ payload:{ data:Buffer.from(goodPassword) } }],
+    createSecret: async () => { calls.push('CREATE_SECRET'); }, addSecretVersion: async () => { calls.push('ADD_VERSION'); } };
+  await provision({ db: plaintextDb(calls), secrets, resume: true, passwordTransport: 'plaintext-tls', connectAsRuntime: runtimeLogin(calls) });
+  assert.equal(calls.includes('CREATE_SECRET') || calls.includes('ADD_VERSION'), false);
+  assert.ok(calls.includes(`ALTER ROLE oxkio_v3_runtime PASSWORD '${goodPassword}' LOGIN`));
+  await assert.rejects(provision({ db: fakeDb([]), secrets: goodSecrets(), passwordTransport: 'md5', connectAsRuntime: runtimeLogin() }), /Unknown password transport/);
+});
+
+const tlsPort = Number(process.env.OXKIO_V3_TEST_TLS_PORT);
+test('real PostgreSQL over TLS: gate blocks statement logging, plaintext ALTER then logs in without leaking the password', { skip: Number.isInteger(tlsPort) ? false : 'isolated TLS runner required' }, async (t) => {
+  const { Client } = require('pg');
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const base = { host:'127.0.0.1', port: tlsPort, database:'oxkio_v3_it', ssl: { rejectUnauthorized: false } };
+  const su = new Client({ ...base, user:'oxkio_v3_test' }); await su.connect();
+  // Every session is closed even when an assertion fails (an open client keeps the runner alive).
+  const sessions = []; t.after(async () => { await Promise.allSettled(sessions.map((c) => c.end())); await su.query('ALTER DATABASE oxkio_v3_it RESET log_statement').catch(() => {}); await su.end(); });
+  // A previous interrupted run may have left the database-level override behind.
+  await su.query('ALTER DATABASE oxkio_v3_it RESET log_statement');
+  await su.query('DROP SCHEMA IF EXISTS oxkio_v3 CASCADE');
+  await su.query('DROP ROLE IF EXISTS oxkio_v3_runtime');
+  await su.query("DO $$BEGIN IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname='oxkio_neon_like_owner') THEN EXECUTE 'DROP OWNED BY oxkio_neon_like_owner'; END IF; END$$");
+  await su.query('DROP ROLE IF EXISTS oxkio_neon_like_owner');
+  await su.query('CREATE ROLE oxkio_neon_like_owner LOGIN CREATEROLE');
+  await su.query('GRANT CREATE ON DATABASE oxkio_v3_it TO oxkio_neon_like_owner');
+  const ownerSession = async () => { const c = new Client({ ...base, user:'oxkio_neon_like_owner' }); sessions.push(c); await c.connect(); return c; };
+  let owner = await ownerSession();
+  await owner.query('CREATE ROLE oxkio_v3_runtime NOLOGIN');
+  await owner.query(fs.readFileSync(path.join(__dirname, '../../backend/repositories/postgres/migrations/006_v3_memory_snapshots.sql'), 'utf8'));
+  await owner.query('GRANT USAGE ON SCHEMA oxkio_v3 TO oxkio_v3_runtime');
+  await owner.query('GRANT SELECT,INSERT,UPDATE ON oxkio_v3.memory_snapshots TO oxkio_v3_runtime');
+  let held; const store = { getSecret: missing, createSecret: async () => {}, accessSecretVersion: async () => [{ payload:{ data:held } }],
+    addSecretVersion: async ({ payload }) => { held = Buffer.from(payload.data); store.getSecret = async () => ({}); } };
+  const connectAsRuntime = async (password) => { const c = new Client({ ...base, user:'oxkio_v3_runtime', password }); await c.connect(); return c; };
+  // The cluster logs every statement: the gate must refuse after custody and before any ALTER.
+  await assert.rejects(provision({ db: owner, secrets: store, connectAsRuntime, passwordTransport: 'plaintext-tls' }), /not safe on this session/);
+  assert.equal((await su.query("SELECT rolcanlogin FROM pg_roles WHERE rolname='oxkio_v3_runtime'")).rows[0].rolcanlogin, false);
+  // Statement logging off for this database (like Neon's default): resume completes with the same custodied password.
+  await su.query("ALTER DATABASE oxkio_v3_it SET log_statement = 'none'");
+  owner = await ownerSession();
+  const result = await provision({ db: owner, secrets: store, connectAsRuntime, resume: true, passwordTransport: 'plaintext-tls' });
+  assert.equal(result.verified, true);
+  const password = held.toString('utf8');
+  const { rows:[stored] } = await su.query("SELECT rolcanlogin, rolpassword FROM pg_authid WHERE rolname='oxkio_v3_runtime'");
+  assert.equal(stored.rolcanlogin, true);
+  assert.match(stored.rolpassword, /^SCRAM-SHA-256\$/); // the server hashed the plaintext itself
+  const runtime = await connectAsRuntime(password); await runtime.end();
+  const logDir = process.env.OXKIO_V3_TEST_PG_LOG;
+  if (logDir) assert.equal(fs.readFileSync(logDir, 'utf8').includes(password), false, 'password reached the server log');
+});

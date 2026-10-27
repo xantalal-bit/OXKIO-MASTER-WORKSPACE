@@ -44,9 +44,30 @@ function scramVerifier(password, salt = randomBytes(16), iterations = SCRAM_ITER
   return `SCRAM-SHA-256$${iterations}:${salt.toString('base64')}$${storedKey}:${serverKey}`;
 }
 
+// Neon rejects pre-hashed passwords ("Passwords must be supplied in plain text
+// but are encrypted when stored. Hashed passwords are not supported." -
+// neon.com/docs/manage/roles). 'plaintext-tls' sends the password itself, so
+// this read-only gate runs first and refuses unless the session is TLS and no
+// setting would record the statement text of a successful ALTER ROLE.
+const PLAINTEXT_SAFETY_SQL = `SELECT
+    (SELECT ssl FROM pg_stat_ssl WHERE pid = pg_backend_pid()) AS tls,
+    current_setting('log_statement') AS log_statement,
+    current_setting('log_min_duration_statement') AS log_min_duration_statement,
+    EXISTS (SELECT 1 FROM pg_extension WHERE extname = 'pg_stat_statements') AS pgss,
+    current_setting('pg_stat_statements.track_utility', true) AS pgss_track_utility`;
+
+function checkPlaintextSafety(row) {
+  if (!row || row.tls !== true || row.log_statement !== 'none' || row.log_min_duration_statement !== '-1' ||
+      (row.pgss && row.pgss_track_utility !== 'off')) {
+    throw new Error('Plaintext password transport is not safe on this session; role remains NOLOGIN');
+  }
+}
+
 async function provision({ db, secrets, connectAsRuntime, resume = false,
+  passwordTransport = 'scram-verifier',
   makePassword = () => randomBytes(48).toString('base64url') }) {
   if (typeof connectAsRuntime !== 'function') throw new Error('Runtime login verifier required');
+  if (!['scram-verifier', 'plaintext-tls'].includes(passwordTransport)) throw new Error('Unknown password transport');
   checkRole((await db.query(ROLE_STATE_SQL, [ROLE])).rows[0]);
   // Fail closed if the secret is already present: never overwrite or rotate.
   // --resume only completes an interrupted run: the role is still NOLOGIN
@@ -91,9 +112,13 @@ async function provision({ db, secrets, connectAsRuntime, resume = false,
       throw new Error('Secret custody verification failed; role remains NOLOGIN');
     }
   }
-  // Verifier alphabet is strictly validated above and the role literal is fixed.
+  // Before any ALTER ROLE: a failed gate leaves the role exactly as it was (NOLOGIN).
+  if (passwordTransport === 'plaintext-tls') checkPlaintextSafety((await db.query(PLAINTEXT_SAFETY_SQL)).rows[0]);
+  // Both literals come from strictly validated alphabets (base64url password,
+  // SCRAM verifier) without quotes, and the role literal is fixed.
+  const literal = passwordTransport === 'plaintext-tls' ? password : verifier;
   try {
-    await db.query(`ALTER ROLE ${ROLE} PASSWORD '${verifier}' LOGIN`);
+    await db.query(`ALTER ROLE ${ROLE} PASSWORD '${literal}' LOGIN`);
     checkRole((await db.query(ROLE_STATE_SQL, [ROLE])).rows[0], { login: true });
     // Prove the custodied password actually authenticates as the runtime role.
     const runtime = await connectAsRuntime(password);
@@ -124,11 +149,14 @@ function runtimeConnector(adminUrl) {
 
 async function main() {
   const args = process.argv.slice(2);
-  const resume = args.length === 2 && args[1] === '--resume';
-  if (args[0] !== '--execute' || (args.length !== 1 && !resume) ||
+  const flags = new Set(args.slice(1));
+  const resume = flags.has('--resume');
+  const plaintextTls = flags.has('--plaintext-tls'); // Neon: hashed passwords are not supported
+  if (args[0] !== '--execute' || flags.size !== args.length - 1 ||
+      [...flags].some((f) => !['--resume', '--plaintext-tls'].includes(f)) ||
       process.env.OXKIO_V3_SECRET_PROVISION_APPROVED !== 'YES' ||
       !process.env.OXKIO_V3_PG_ADMIN_URL) {
-    throw new Error('Explicit --execute [--resume], approval flag and admin connection required');
+    throw new Error('Explicit --execute [--resume] [--plaintext-tls], approval flag and admin connection required');
   }
   const { SecretManagerServiceClient } = require('@google-cloud/secret-manager');
   const db = new Client({ connectionString: process.env.OXKIO_V3_PG_ADMIN_URL,
@@ -136,6 +164,7 @@ async function main() {
   await db.connect();
   try {
     const result = await provision({ db, secrets: new SecretManagerServiceClient(), resume,
+      passwordTransport: plaintextTls ? 'plaintext-tls' : 'scram-verifier',
       connectAsRuntime: runtimeConnector(process.env.OXKIO_V3_PG_ADMIN_URL) });
     process.stdout.write(`Verified dedicated role and secret: ${result.secretName}\n`);
   } finally {
@@ -151,4 +180,4 @@ if (require.main === module) {
   });
 }
 
-module.exports = { checkRole, provision, scramVerifier, ROLE_STATE_SQL };
+module.exports = { checkRole, checkPlaintextSafety, provision, scramVerifier, ROLE_STATE_SQL, PLAINTEXT_SAFETY_SQL };
