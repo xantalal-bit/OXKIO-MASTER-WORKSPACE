@@ -1,85 +1,165 @@
 'use strict';
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { checkRole, provision } = require('./provision-v3-pg-secret');
+const { createHmac } = require('node:crypto');
+const { checkRole, provision, scramVerifier, ROLE_STATE_SQL } = require('./provision-v3-pg-secret');
 
-const safeRole = () => ({
-  rolname:'oxkio_v3_runtime', rolcanlogin:false, rolsuper:false,
+const safeRole = (login = false) => ({
+  rolname:'oxkio_v3_runtime', rolcanlogin:login, rolsuper:false,
   rolbypassrls:false, rolcreaterole:false, rolcreatedb:false,
-  password_set:false, can_read:true, can_write:true, can_delete:false,
-  can_schema_create:false
+  schema_usage:true, can_schema_create:false, can_read:true, can_write:true,
+  can_update:true, can_delete:false, can_truncate:false
 });
 const goodPassword = 'A'.repeat(64);
+const missing = async () => { const e = new Error('not found'); e.code = 5; throw e; };
+const runtimeLogin = (calls = [], name = 'oxkio_v3_runtime') => async (password) => {
+  calls.push('LOGIN:' + (password === goodPassword));
+  return { query: async () => ({ rows:[{ name }] }), end: async () => { calls.push('LOGOUT'); } };
+};
+// Fake DB whose role state follows the issued ALTER ROLE statements.
+const fakeDb = (calls, { failOn } = {}) => {
+  let login = false;
+  return { query: async (sql) => {
+    calls.push(sql);
+    if (failOn && failOn(sql)) throw new Error('synthetic DB failure');
+    if (sql.startsWith('ALTER ROLE')) { login = / LOGIN$/.test(sql); return { rows:[] }; }
+    return { rows:[safeRole(login)] };
+  } };
+};
+const goodSecrets = (calls = []) => ({
+  getSecret: missing,
+  createSecret: async () => { calls.push('CREATE_SECRET'); },
+  addSecretVersion: async () => { calls.push('ADD_VERSION'); },
+  accessSecretVersion: async () => { calls.push('READ_VERSION'); return [{ payload:{ data:Buffer.from(goodPassword) } }]; }
+});
 
-test('rejects elevated privileges, existing passwords and login', () => {
+test('rejects elevated privileges, missing least privileges and unexpected login', () => {
   for (const field of ['rolcanlogin','rolsuper','rolbypassrls','rolcreaterole',
-    'rolcreatedb','password_set','can_delete','can_schema_create']) {
+    'rolcreatedb','can_delete','can_truncate','can_schema_create']) {
     assert.throws(() => checkRole({ ...safeRole(), [field]: true }));
   }
+  for (const field of ['schema_usage','can_read','can_write','can_update']) {
+    assert.throws(() => checkRole({ ...safeRole(), [field]: false }));
+  }
   assert.throws(() => checkRole(null));
-  assert.throws(() => checkRole({...safeRole(), can_read:false}));
+  assert.throws(() => checkRole(safeRole(false), { login: true }));
+  checkRole(safeRole(true), { login: true });
+});
+
+test('role inspection never depends on superuser-only pg_authid', () => {
+  assert.match(ROLE_STATE_SQL, /FROM pg_roles /);
+  assert.doesNotMatch(ROLE_STATE_SQL, /pg_authid|rolpassword/);
+});
+
+test('SCRAM verifier reproduces the RFC 7677 server signature and never embeds the password', () => {
+  const verifier = scramVerifier('pencil', Buffer.from('W22ZaJ0SNY7soEsUEjb6gQ==', 'base64'));
+  const match = /^SCRAM-SHA-256\$4096:W22ZaJ0SNY7soEsUEjb6gQ==\$([^:]+):(.+)$/.exec(verifier);
+  assert.ok(match, verifier);
+  const nonce = 'rOprNGfwEbeRWgbNEkqO%hvYDpWUa2RaTCAfuxFIlj)hNlF$k0';
+  const authMessage = `n=user,r=rOprNGfwEbeRWgbNEkqO,r=${nonce},s=W22ZaJ0SNY7soEsUEjb6gQ==,i=4096,c=biws,r=${nonce}`;
+  const signature = createHmac('sha256', Buffer.from(match[2], 'base64')).update(authMessage).digest('base64');
+  assert.equal(signature, '6rriTRBi23WpRR/wtup+mMhUZUn/dB5nLTJRsjl95G4=');
+  assert.equal(scramVerifier(goodPassword).includes(goodPassword), false);
 });
 
 test('fails closed before secret creation when preconditions are unsafe', async () => {
   let creates = 0;
-  const db = { query: async () => ({ rows:[{...safeRole(),rolbypassrls:true}] }) };
+  const db = { query: async () => ({ rows:[{ ...safeRole(), rolbypassrls:true }] }) };
   const secrets = { createSecret: async () => { creates++; } };
-  await assert.rejects(provision({ db, secrets, makePassword: () => goodPassword }));
+  await assert.rejects(provision({ db, secrets, connectAsRuntime: runtimeLogin(), makePassword: () => goodPassword }));
   assert.equal(creates, 0);
+});
+
+test('requires a runtime login verifier before touching anything', async () => {
+  const calls = [];
+  await assert.rejects(provision({ db: fakeDb(calls), secrets: goodSecrets(calls) }), /login verifier required/);
+  assert.deepEqual(calls, []);
 });
 
 test('does not overwrite existing Google secret', async () => {
   let creates = 0;
-  const db = {query: async () => ({ rows:[safeRole()] })};
-  const secrets = { getSecret:async()=>({}),createSecret:async()=>{creates++;}};
-  await assert.rejects(provision({db,secrets,makePassword:()=>goodPassword}), /already exists/);
-  assert.equal(creates,0);
+  const secrets = { getSecret: async () => ({}), createSecret: async () => { creates++; } };
+  await assert.rejects(provision({ db: fakeDb([]), secrets, connectAsRuntime: runtimeLogin(), makePassword: () => goodPassword }), /already exists/);
+  assert.equal(creates, 0);
 });
 
-test('creates secret and verifies custody before login; never returns password', async () => {
-  const calls=[];
-  const db={query:async (sql)=>{ calls.push('SQL:'+sql.slice(0,14)); return {
-    rows:[sql.startsWith('SELECT rolname')?safeRole():{rolcanlogin:true,rolbypassrls:false,password_set:true}]}; }};
-  const secrets={
-    getSecret:async()=>{const e=new Error('not found');e.code=5;throw e;},
-    createSecret:async()=>{calls.push('CREATE_SECRET');},
-    addSecretVersion:async()=>{calls.push('ADD_VERSION');},
-    accessSecretVersion:async()=>{calls.push('READ_VERSION');return [{payload:{data:Buffer.from(goodPassword)}}];}
-  };
-  const result=await provision({db,secrets,makePassword:()=>goodPassword});
-  assert.equal(result.verified,true);
-  assert.equal(JSON.stringify(result).includes(goodPassword),false);
-  assert.deepEqual(calls.slice(1,4),['CREATE_SECRET','ADD_VERSION','READ_VERSION']);
-  assert.match(calls[4],/^SQL:ALTER ROLE/);
+test('custody first, then hashed password, then real runtime login; never returns or sends the password', async () => {
+  const calls = [];
+  const result = await provision({ db: fakeDb(calls), secrets: goodSecrets(calls),
+    connectAsRuntime: runtimeLogin(calls), makePassword: () => goodPassword });
+  assert.equal(result.verified, true);
+  assert.equal(JSON.stringify(result).includes(goodPassword), false);
+  assert.deepEqual(calls.slice(1, 4), ['CREATE_SECRET', 'ADD_VERSION', 'READ_VERSION']);
+  assert.match(calls[4], /^ALTER ROLE oxkio_v3_runtime PASSWORD 'SCRAM-SHA-256\$4096:[^']+' LOGIN$/);
+  assert.equal(calls.some(x => x.includes(goodPassword)), false);
+  assert.deepEqual(calls.slice(-2), ['LOGIN:true', 'LOGOUT']);
 });
 
 test('does not enable login if Secret Manager returns unexpected payload', async () => {
-  const calls=[];
-  const db={query:async (sql)=>{calls.push(sql);return {rows:[safeRole()]};}};
-  const secrets={
-    getSecret:async()=>{const e=new Error();e.code=5;throw e;},
-    createSecret:async()=>{},
-    addSecretVersion:async()=>{},
-    accessSecretVersion:async()=>[{payload:{data:Buffer.from('different')}}]
-  };
-  await assert.rejects(provision({db,secrets,makePassword:()=>goodPassword}), /custody verification/);
-  assert.equal(calls.some(x=>x.startsWith('ALTER ROLE')),false);
+  const calls = [];
+  const secrets = { ...goodSecrets(), accessSecretVersion: async () => [{ payload:{ data:Buffer.from('different') } }] };
+  await assert.rejects(provision({ db: fakeDb(calls), secrets, connectAsRuntime: runtimeLogin(), makePassword: () => goodPassword }), /custody verification/);
+  assert.equal(calls.some(x => x.startsWith('ALTER ROLE')), false);
 });
 
 test('database failure after secret custody requests NOLOGIN rollback', async () => {
-  const calls=[];
-  const db={query:async (sql)=>{
-    calls.push(sql);
-    if (sql.startsWith('SELECT rolname')) return {rows:[safeRole()]};
-    if (sql.includes(' PASSWORD ')) throw new Error('synthetic DB failure');
-    return {rows:[]};
-  }};
-  const secrets={
-    getSecret:async()=>{const e=new Error();e.code=5;throw e;},
-    createSecret:async()=>{},
-    addSecretVersion:async()=>{},
-    accessSecretVersion:async()=>[{payload:{data:Buffer.from(goodPassword)}}]
-  };
-  await assert.rejects(provision({db,secrets,makePassword:()=>goodPassword}), /Database provisioning failed/);
-  assert.equal(calls.some(x=>x==='ALTER ROLE oxkio_v3_runtime NOLOGIN'),true);
+  const calls = [];
+  await assert.rejects(provision({ db: fakeDb(calls, { failOn: sql => sql.includes(' PASSWORD ') }),
+    secrets: goodSecrets(), connectAsRuntime: runtimeLogin(), makePassword: () => goodPassword }), /Database provisioning failed/);
+  assert.equal(calls.at(-1), 'ALTER ROLE oxkio_v3_runtime NOLOGIN');
+});
+
+test('failed or mismatched runtime login rolls back to NOLOGIN', async () => {
+  for (const connectAsRuntime of [async () => { throw new Error('password authentication failed'); },
+    runtimeLogin([], 'someone_else')]) {
+    const calls = [];
+    await assert.rejects(provision({ db: fakeDb(calls), secrets: goodSecrets(), connectAsRuntime,
+      makePassword: () => goodPassword }), /Database provisioning failed/);
+    assert.equal(calls.at(-1), 'ALTER ROLE oxkio_v3_runtime NOLOGIN');
+  }
+});
+
+// Real PostgreSQL proof: only with an isolated runner owning a throwaway
+// cluster (same convention as postgres-memory-store.pg.test.js).
+const port = Number(process.env.OXKIO_V3_TEST_PORT);
+const ready = Number.isInteger(port) && port >= 1024 && port <= 65535;
+test('real PostgreSQL: non-superuser admin provisions a hashed, login-verified runtime role', { skip: ready ? false : 'isolated local runner required' }, async (t) => {
+  const { Client } = require('pg');
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const base = { host:'127.0.0.1', port, database:'oxkio_v3_it' };
+  const su = new Client({ ...base, user:'oxkio_v3_test' });
+  await su.connect();
+  t.after(() => su.end());
+  // Neon-like topology: the provisioning admin is CREATEROLE but not superuser.
+  await su.query('DROP SCHEMA IF EXISTS oxkio_v3 CASCADE');
+  await su.query('DROP ROLE IF EXISTS oxkio_v3_runtime');
+  await su.query('DROP ROLE IF EXISTS oxkio_neon_like_owner');
+  await su.query('CREATE ROLE oxkio_neon_like_owner LOGIN CREATEROLE');
+  await su.query('GRANT CREATE ON DATABASE oxkio_v3_it TO oxkio_neon_like_owner');
+  const owner = new Client({ ...base, user:'oxkio_neon_like_owner' });
+  await owner.connect();
+  t.after(() => owner.end());
+  await owner.query('CREATE ROLE oxkio_v3_runtime NOLOGIN');
+  await owner.query(fs.readFileSync(path.join(__dirname, '../../backend/repositories/postgres/migrations/006_v3_memory_snapshots.sql'), 'utf8'));
+  await owner.query('GRANT USAGE ON SCHEMA oxkio_v3 TO oxkio_v3_runtime');
+  await owner.query('GRANT SELECT,INSERT,UPDATE ON oxkio_v3.memory_snapshots TO oxkio_v3_runtime');
+  await assert.rejects(owner.query('SELECT 1 FROM pg_authid'), { code:'42501' });
+  let custody;
+  const secrets = { getSecret: missing, createSecret: async () => {},
+    addSecretVersion: async ({ payload }) => { custody = Buffer.from(payload.data); },
+    accessSecretVersion: async () => [{ payload:{ data:custody } }] };
+  const connectAsRuntime = async (password) => { const c = new Client({ ...base, user:'oxkio_v3_runtime', password }); await c.connect(); return c; };
+  const result = await provision({ db: owner, secrets, connectAsRuntime });
+  assert.equal(result.verified, true);
+  const password = custody.toString('utf8');
+  const { rows:[stored] } = await su.query("SELECT rolcanlogin, rolpassword FROM pg_authid WHERE rolname='oxkio_v3_runtime'");
+  assert.equal(stored.rolcanlogin, true);
+  assert.match(stored.rolpassword, /^SCRAM-SHA-256\$4096:/);
+  assert.equal(stored.rolpassword.includes(password), false);
+  await assert.rejects(connectAsRuntime('wrong-' + password));
+  const runtime = await connectAsRuntime(password);
+  try { await assert.rejects(runtime.query('DELETE FROM oxkio_v3.memory_snapshots'), { code:'42501' }); } finally { await runtime.end(); }
+  // A second run on a provisioned role refuses: role already LOGIN.
+  await assert.rejects(provision({ db: owner, secrets, connectAsRuntime }), /preconditions/);
 });
