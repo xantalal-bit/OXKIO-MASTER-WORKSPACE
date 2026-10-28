@@ -54,7 +54,8 @@ function scramVerifier(password, salt = randomBytes(16), iterations = SCRAM_ITER
 // setting; a DO block builds the ALTER ROLE and re-raises any failure with a
 // fixed message and the SQLSTATE only.
 const PASSWORD_GUC = 'oxkio.v3_runtime_password';
-const SET_PASSWORD_GUC_SQL = 'SELECT set_config($1, $2, true)';
+// Return only a boolean: SELECT set_config(...) alone echoes the secret in query results.
+const SET_PASSWORD_GUC_SQL = 'SELECT set_config($1, $2, true) IS NOT NULL AS applied';
 const ALTER_FROM_GUC_SQL = `DO $oxkio$
 BEGIN
   EXECUTE format('ALTER ROLE ${ROLE} PASSWORD %L LOGIN', current_setting('${PASSWORD_GUC}'));
