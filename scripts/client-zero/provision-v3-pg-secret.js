@@ -65,19 +65,22 @@ END
 $oxkio$`;
 
 // Read-only gate, before any write. What could still record the password:
-// bind parameters (log_statement=all, log_min_duration_statement>=0,
-// log_parameter_max_length_on_error<>0) and nested statements
+// bind parameters (statement/duration/transaction sampling, or error logging)
+// and nested statements
 // (pg_stat_statements.track=all). TLS is required for the transport itself.
 const PLAINTEXT_SAFETY_SQL = `SELECT
     (SELECT ssl FROM pg_stat_ssl WHERE pid = pg_backend_pid()) AS tls,
     current_setting('log_statement') AS log_statement,
     current_setting('log_min_duration_statement') AS log_min_duration_statement,
+    current_setting('log_min_duration_sample') AS log_min_duration_sample,
+    current_setting('log_transaction_sample_rate') AS log_transaction_sample_rate,
     current_setting('log_parameter_max_length_on_error') AS log_parameter_max_length_on_error,
     EXISTS (SELECT 1 FROM pg_extension WHERE extname = 'pg_stat_statements') AS pgss,
     current_setting('pg_stat_statements.track', true) AS pgss_track`;
 
 function checkPlaintextSafety(row) {
-  if (!row || row.tls !== true || row.log_statement !== 'none' || row.log_min_duration_statement !== '-1' ||
+  if (!row || row.tls !== true || row.log_statement !== 'none' || row.log_min_duration_statement !== '-1' || row.log_min_duration_sample !== '-1' ||
+      Number(row.log_transaction_sample_rate) !== 0 ||
       row.log_parameter_max_length_on_error !== '0' || (row.pgss && row.pgss_track === 'all')) {
     throw new Error('Plaintext password transport is not safe on this session; role remains NOLOGIN');
   }
