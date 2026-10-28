@@ -197,7 +197,7 @@ test('resume refuses a missing secret, a non-provisioned payload or a role alrea
 
 // Neon: "Hashed passwords are not supported" -> plaintext over TLS behind a read-only gate.
 const { checkPlaintextSafety, ALTER_FROM_GUC_SQL } = require('./provision-v3-pg-secret');
-const safeSession = { tls: true, log_statement: 'none', log_min_duration_statement: '-1', log_parameter_max_length_on_error: '0', pgss: false, pgss_track: null };
+const safeSession = { tls: true, log_statement: 'none', log_min_duration_statement: '-1', log_min_duration_sample: '-1', log_transaction_sample_rate: '0', log_parameter_max_length_on_error: '0', pgss: false, pgss_track: null };
 // Fake that records statement TEXT and bind PARAMETERS separately; the DO block flips LOGIN.
 const plaintextDb = (calls, session = safeSession, params = [], { failAlter = false } = {}) => {
   let login = false;
@@ -241,7 +241,9 @@ test('plaintext-tls: a failed ALTER rolls back the transaction, then NOLOGIN, wi
 
 test('plaintext-tls: any setting that could record parameters or nested statements aborts before writing', async () => {
   for (const unsafe of [{ tls: false }, { tls: null }, { log_statement: 'ddl' }, { log_statement: 'mod' }, { log_statement: 'all' },
-    { log_min_duration_statement: '0' }, { log_parameter_max_length_on_error: '-1' }, { log_parameter_max_length_on_error: '64' },
+    { log_min_duration_statement: '0' }, { log_min_duration_sample: '0' }, { log_transaction_sample_rate: '0.01' },
+    { log_min_duration_sample: undefined }, { log_transaction_sample_rate: undefined },
+    { log_parameter_max_length_on_error: '-1' }, { log_parameter_max_length_on_error: '64' },
     { pgss: true, pgss_track: 'all' }]) {
     const calls = [];
     await assert.rejects(provision({ db: plaintextDb(calls, { ...safeSession, ...unsafe }), secrets: goodSecrets(), passwordTransport: 'plaintext-tls',
