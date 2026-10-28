@@ -220,7 +220,7 @@ test('plaintext-tls: gate first; the password is only a bind parameter, never st
   assert.ok(params.includes(goodPassword), 'password must travel as a parameter');
   const gate = calls.indexOf('SAFETY_GATE'); const begin = calls.indexOf('BEGIN'); const alter = calls.indexOf(ALTER_FROM_GUC_SQL);
   assert.ok(calls.indexOf('READ_VERSION') < gate && gate < begin && begin < alter && alter < calls.indexOf('COMMIT'), calls.join(' > '));
-  assert.match(calls[begin + 1], /^SELECT set_config\(\$1, \$2, true\)$/); // transaction-local, cleared at COMMIT/ROLLBACK
+  assert.match(calls[begin + 1], /^SELECT set_config\(\$1, \$2, true\) IS NOT NULL AS applied$/); // do not echo password in result rows
   assert.deepEqual(calls.slice(-2), ['LOGIN:true', 'LOGOUT']);
 });
 
