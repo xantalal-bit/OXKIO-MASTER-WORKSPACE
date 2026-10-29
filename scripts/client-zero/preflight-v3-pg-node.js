@@ -38,7 +38,7 @@ async function main() {
   const { Client } = require('pg');
   const guards = require('./provision-v3-pg-secret');
   const db = new Client({
-    connectionString: process.env.OXKIO_V3_PG_ADMIN_URL,
+    connectionString: guards.verifiedAdminConnectionString(process.env.OXKIO_V3_PG_ADMIN_URL),
     ssl: { rejectUnauthorized: true },
     application_name: 'oxkio_v3_preflight_read_only'
   });
