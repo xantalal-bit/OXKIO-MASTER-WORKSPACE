@@ -170,6 +170,23 @@ async function provision({ db, secrets, connectAsRuntime, resume = false,
   return { role: ROLE, secretName: NAME, verified: true };
 }
 
+// node-postgres replaces the explicit ssl object when a connection URL carries
+// sslmode/sslcert/sslkey/sslrootcert. Refuse unsafe modes and remove only a
+// verified TLS mode so rejectUnauthorized:true cannot be overridden.
+function verifiedAdminConnectionString(raw) {
+  const url = new URL(raw);
+  if (!['postgres:', 'postgresql:'].includes(url.protocol)) throw new Error('Invalid admin database URL');
+  if (['ssl', 'sslcert', 'sslkey', 'sslrootcert'].some(key => url.searchParams.has(key))) {
+    throw new Error('Ambiguous admin TLS options');
+  }
+  const modes = url.searchParams.getAll('sslmode');
+  if (modes.length > 1 || (modes.length === 1 && !['require', 'verify-full'].includes(modes[0]))) {
+    throw new Error('Unsafe admin TLS mode');
+  }
+  url.searchParams.delete('sslmode');
+  return url.toString();
+}
+
 function runtimeConnector(adminUrl) {
   const url = new URL(adminUrl);
   return async (password) => {
@@ -193,7 +210,7 @@ async function main() {
     throw new Error('Explicit --execute [--resume] [--plaintext-tls], approval flag and admin connection required');
   }
   const { SecretManagerServiceClient } = require('@google-cloud/secret-manager');
-  const db = new Client({ connectionString: process.env.OXKIO_V3_PG_ADMIN_URL,
+  const db = new Client({ connectionString: verifiedAdminConnectionString(process.env.OXKIO_V3_PG_ADMIN_URL),
     ssl: { rejectUnauthorized: true } });
   await db.connect();
   try {
@@ -214,4 +231,4 @@ if (require.main === module) {
   });
 }
 
-module.exports = { checkRole, checkPlaintextSafety, provision, scramVerifier, ROLE_STATE_SQL, PLAINTEXT_SAFETY_SQL, ALTER_FROM_GUC_SQL };
+module.exports = { checkRole, checkPlaintextSafety, verifiedAdminConnectionString, provision, scramVerifier, ROLE_STATE_SQL, PLAINTEXT_SAFETY_SQL, ALTER_FROM_GUC_SQL };
