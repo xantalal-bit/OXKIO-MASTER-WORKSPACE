@@ -47,10 +47,27 @@ test('admin connection URL cannot override certificate-verified TLS', () => {
     assert.throws(() => verifiedAdminConnectionString(base + '?sslmode=' + mode), /Unsafe admin TLS mode/);
   }
   assert.throws(() => verifiedAdminConnectionString(base + '?sslmode=require&sslmode=disable'), /Unsafe admin TLS mode/);
-  for (const param of ['ssl', 'sslcert', 'sslkey', 'sslrootcert']) {
-    assert.throws(() => verifiedAdminConnectionString(base + '?' + param + '=false'), /Ambiguous admin TLS options/);
+  const neon = 'postgresql://fake-admin:fake-password@ep-fake-123.eu-central-1.aws.neon.tech/neondb';
+  const neonUrl = new URL(verifiedAdminConnectionString(neon + '?sslmode=require&channel_binding=require'));
+  assert.equal(neonUrl.searchParams.has('sslmode'), false);
+  assert.equal(neonUrl.searchParams.get('channel_binding'), 'require');
+  // Allowlist: every parameter node-postgres would copy over the explicit config is refused.
+  for (const param of ['ssl', 'sslcert', 'sslkey', 'sslrootcert', 'sslnegotiation', 'uselibpqcompat',
+    'host', 'hostaddr', 'port', 'user', 'password', 'options', 'client_encoding', 'SSLMODE', 'unknown']) {
+    for (const value of ['false', '/tmp', 'direct', 'true']) {
+      assert.throws(() => verifiedAdminConnectionString(base + '?sslmode=verify-full&' + param + '=' + value),
+        /Unsupported admin connection option/);
+    }
+  }
+  try {
+    verifiedAdminConnectionString(base + '?host=attacker.example');
+    assert.fail('expected rejection');
+  } catch (err) {
+    assert.doesNotMatch(err.message, /fake-password|attacker/);
   }
   assert.throws(() => verifiedAdminConnectionString('http://localhost/db'), /Invalid admin database URL/);
+  assert.throws(() => verifiedAdminConnectionString('postgresql:///neondb?host=/tmp'), /Invalid admin database URL/);
+  assert.throws(() => verifiedAdminConnectionString(base + '#sslmode=disable'), /Invalid admin database URL/);
 });
 
 test('rejects elevated privileges, missing least privileges and unexpected login', () => {

@@ -170,14 +170,18 @@ async function provision({ db, secrets, connectAsRuntime, resume = false,
   return { role: ROLE, secretName: NAME, verified: true };
 }
 
-// node-postgres replaces the explicit ssl object when a connection URL carries
-// sslmode/sslcert/sslkey/sslrootcert. Refuse unsafe modes and remove only a
-// verified TLS mode so rejectUnauthorized:true cannot be overridden.
+// node-postgres copies every URL query parameter over the explicit config, so
+// besides sslmode/sslcert/sslkey/sslrootcert a URL could also redirect host,
+// port, user, sslnegotiation or uselibpqcompat. Accept only an allowlist and
+// remove the verified TLS mode so rejectUnauthorized:true cannot be overridden.
+const ALLOWED_ADMIN_URL_PARAMS = new Set(['sslmode', 'channel_binding', 'application_name']);
+
 function verifiedAdminConnectionString(raw) {
   const url = new URL(raw);
   if (!['postgres:', 'postgresql:'].includes(url.protocol)) throw new Error('Invalid admin database URL');
-  if (['ssl', 'sslcert', 'sslkey', 'sslrootcert'].some(key => url.searchParams.has(key))) {
-    throw new Error('Ambiguous admin TLS options');
+  if (!url.hostname || url.hash) throw new Error('Invalid admin database URL');
+  for (const key of url.searchParams.keys()) {
+    if (!ALLOWED_ADMIN_URL_PARAMS.has(key)) throw new Error('Unsupported admin connection option');
   }
   const modes = url.searchParams.getAll('sslmode');
   if (modes.length > 1 || (modes.length === 1 && !['require', 'verify-full'].includes(modes[0]))) {
