@@ -44,9 +44,53 @@ function scramVerifier(password, salt = randomBytes(16), iterations = SCRAM_ITER
   return `SCRAM-SHA-256$${iterations}:${salt.toString('base64')}$${storedKey}:${serverKey}`;
 }
 
+// Neon rejects pre-hashed passwords ("Passwords must be supplied in plain text
+// but are encrypted when stored. Hashed passwords are not supported." -
+// neon.com/docs/manage/roles). 'plaintext-tls' must send the password itself,
+// but never inside the text of any statement: statement text can be recorded
+// by log_statement, log_min_error_statement (on failure), error CONTEXT lines
+// and pg_stat_statements (track_utility cannot be disabled by Neon's owner).
+// The password travels only as a bind parameter into a transaction-local
+// setting; a DO block builds the ALTER ROLE and re-raises any failure with a
+// fixed message and the SQLSTATE only.
+const PASSWORD_GUC = 'oxkio.v3_runtime_password';
+// Return only a boolean: SELECT set_config(...) alone echoes the secret in query results.
+const SET_PASSWORD_GUC_SQL = 'SELECT set_config($1, $2, true) IS NOT NULL AS applied';
+const ALTER_FROM_GUC_SQL = `DO $oxkio$
+BEGIN
+  EXECUTE format('ALTER ROLE ${ROLE} PASSWORD %L LOGIN', current_setting('${PASSWORD_GUC}'));
+EXCEPTION WHEN OTHERS THEN
+  RAISE EXCEPTION 'oxkio_v3_runtime password change failed' USING ERRCODE = SQLSTATE;
+END
+$oxkio$`;
+
+// Read-only gate, before any write. What could still record the password:
+// bind parameters (statement/duration/transaction sampling, or error logging)
+// and nested statements
+// (pg_stat_statements.track=all). TLS is required for the transport itself.
+const PLAINTEXT_SAFETY_SQL = `SELECT
+    (SELECT ssl FROM pg_stat_ssl WHERE pid = pg_backend_pid()) AS tls,
+    current_setting('log_statement') AS log_statement,
+    current_setting('log_min_duration_statement') AS log_min_duration_statement,
+    current_setting('log_min_duration_sample') AS log_min_duration_sample,
+    current_setting('log_transaction_sample_rate') AS log_transaction_sample_rate,
+    current_setting('log_parameter_max_length_on_error') AS log_parameter_max_length_on_error,
+    EXISTS (SELECT 1 FROM pg_extension WHERE extname = 'pg_stat_statements') AS pgss,
+    current_setting('pg_stat_statements.track', true) AS pgss_track`;
+
+function checkPlaintextSafety(row) {
+  if (!row || row.tls !== true || row.log_statement !== 'none' || row.log_min_duration_statement !== '-1' || row.log_min_duration_sample !== '-1' ||
+      Number(row.log_transaction_sample_rate) !== 0 ||
+      row.log_parameter_max_length_on_error !== '0' || (row.pgss && row.pgss_track === 'all')) {
+    throw new Error('Plaintext password transport is not safe on this session; role remains NOLOGIN');
+  }
+}
+
 async function provision({ db, secrets, connectAsRuntime, resume = false,
+  passwordTransport = 'scram-verifier',
   makePassword = () => randomBytes(48).toString('base64url') }) {
   if (typeof connectAsRuntime !== 'function') throw new Error('Runtime login verifier required');
+  if (!['scram-verifier', 'plaintext-tls'].includes(passwordTransport)) throw new Error('Unknown password transport');
   checkRole((await db.query(ROLE_STATE_SQL, [ROLE])).rows[0]);
   // Fail closed if the secret is already present: never overwrite or rotate.
   // --resume only completes an interrupted run: the role is still NOLOGIN
@@ -91,9 +135,24 @@ async function provision({ db, secrets, connectAsRuntime, resume = false,
       throw new Error('Secret custody verification failed; role remains NOLOGIN');
     }
   }
-  // Verifier alphabet is strictly validated above and the role literal is fixed.
+  // Before any ALTER ROLE: a failed gate leaves the role exactly as it was (NOLOGIN).
+  if (passwordTransport === 'plaintext-tls') checkPlaintextSafety((await db.query(PLAINTEXT_SAFETY_SQL)).rows[0]);
   try {
-    await db.query(`ALTER ROLE ${ROLE} PASSWORD '${verifier}' LOGIN`);
+    if (passwordTransport === 'plaintext-tls') {
+      // The password is only a bind parameter; it never appears in statement text.
+      await db.query('BEGIN');
+      try {
+        await db.query(SET_PASSWORD_GUC_SQL, [PASSWORD_GUC, password]);
+        await db.query(ALTER_FROM_GUC_SQL);
+        await db.query('COMMIT');
+      } catch (e) {
+        await db.query('ROLLBACK').catch(() => {});
+        throw e;
+      }
+    } else {
+      // The verifier alphabet is strictly validated above and the role literal is fixed.
+      await db.query(`ALTER ROLE ${ROLE} PASSWORD '${verifier}' LOGIN`);
+    }
     checkRole((await db.query(ROLE_STATE_SQL, [ROLE])).rows[0], { login: true });
     // Prove the custodied password actually authenticates as the runtime role.
     const runtime = await connectAsRuntime(password);
@@ -111,6 +170,27 @@ async function provision({ db, secrets, connectAsRuntime, resume = false,
   return { role: ROLE, secretName: NAME, verified: true };
 }
 
+// node-postgres copies every URL query parameter over the explicit config, so
+// besides sslmode/sslcert/sslkey/sslrootcert a URL could also redirect host,
+// port, user, sslnegotiation or uselibpqcompat. Accept only an allowlist and
+// remove the verified TLS mode so rejectUnauthorized:true cannot be overridden.
+const ALLOWED_ADMIN_URL_PARAMS = new Set(['sslmode', 'channel_binding', 'application_name']);
+
+function verifiedAdminConnectionString(raw) {
+  const url = new URL(raw);
+  if (!['postgres:', 'postgresql:'].includes(url.protocol)) throw new Error('Invalid admin database URL');
+  if (!url.hostname || url.hash) throw new Error('Invalid admin database URL');
+  for (const key of url.searchParams.keys()) {
+    if (!ALLOWED_ADMIN_URL_PARAMS.has(key)) throw new Error('Unsupported admin connection option');
+  }
+  const modes = url.searchParams.getAll('sslmode');
+  if (modes.length > 1 || (modes.length === 1 && !['require', 'verify-full'].includes(modes[0]))) {
+    throw new Error('Unsafe admin TLS mode');
+  }
+  url.searchParams.delete('sslmode');
+  return url.toString();
+}
+
 function runtimeConnector(adminUrl) {
   const url = new URL(adminUrl);
   return async (password) => {
@@ -124,18 +204,22 @@ function runtimeConnector(adminUrl) {
 
 async function main() {
   const args = process.argv.slice(2);
-  const resume = args.length === 2 && args[1] === '--resume';
-  if (args[0] !== '--execute' || (args.length !== 1 && !resume) ||
+  const flags = new Set(args.slice(1));
+  const resume = flags.has('--resume');
+  const plaintextTls = flags.has('--plaintext-tls'); // Neon: hashed passwords are not supported
+  if (args[0] !== '--execute' || flags.size !== args.length - 1 ||
+      [...flags].some((f) => !['--resume', '--plaintext-tls'].includes(f)) ||
       process.env.OXKIO_V3_SECRET_PROVISION_APPROVED !== 'YES' ||
       !process.env.OXKIO_V3_PG_ADMIN_URL) {
-    throw new Error('Explicit --execute [--resume], approval flag and admin connection required');
+    throw new Error('Explicit --execute [--resume] [--plaintext-tls], approval flag and admin connection required');
   }
   const { SecretManagerServiceClient } = require('@google-cloud/secret-manager');
-  const db = new Client({ connectionString: process.env.OXKIO_V3_PG_ADMIN_URL,
+  const db = new Client({ connectionString: verifiedAdminConnectionString(process.env.OXKIO_V3_PG_ADMIN_URL),
     ssl: { rejectUnauthorized: true } });
   await db.connect();
   try {
     const result = await provision({ db, secrets: new SecretManagerServiceClient(), resume,
+      passwordTransport: plaintextTls ? 'plaintext-tls' : 'scram-verifier',
       connectAsRuntime: runtimeConnector(process.env.OXKIO_V3_PG_ADMIN_URL) });
     process.stdout.write(`Verified dedicated role and secret: ${result.secretName}\n`);
   } finally {
@@ -151,4 +235,4 @@ if (require.main === module) {
   });
 }
 
-module.exports = { checkRole, provision, scramVerifier, ROLE_STATE_SQL };
+module.exports = { checkRole, checkPlaintextSafety, verifiedAdminConnectionString, provision, scramVerifier, ROLE_STATE_SQL, PLAINTEXT_SAFETY_SQL, ALTER_FROM_GUC_SQL };
