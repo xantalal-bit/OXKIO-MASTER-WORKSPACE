@@ -2,7 +2,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { createHmac } = require('node:crypto');
-const { checkRole, provision, scramVerifier, ROLE_STATE_SQL } = require('./provision-v3-pg-secret');
+const { checkRole, provision, scramVerifier, verifiedAdminConnectionString, ROLE_STATE_SQL } = require('./provision-v3-pg-secret');
 
 const safeRole = (login = false) => ({
   rolname:'oxkio_v3_runtime', rolcanlogin:login, rolsuper:false,
@@ -31,6 +31,26 @@ const goodSecrets = (calls = []) => ({
   createSecret: async () => { calls.push('CREATE_SECRET'); },
   addSecretVersion: async () => { calls.push('ADD_VERSION'); },
   accessSecretVersion: async () => { calls.push('READ_VERSION'); return [{ payload:{ data:Buffer.from(goodPassword) } }]; }
+});
+
+test('admin connection URL cannot override certificate-verified TLS', () => {
+  const base = 'postgresql://fake-admin:fake-password@localhost:5432/neondb';
+  for (const mode of ['require', 'verify-full']) {
+    const url = verifiedAdminConnectionString(base + '?sslmode=' + mode + '&application_name=oxkio');
+    const parsed = new URL(url);
+    assert.equal(parsed.searchParams.has('sslmode'), false);
+    assert.equal(parsed.searchParams.get('application_name'), 'oxkio');
+    assert.equal(parsed.hostname, 'localhost');
+  }
+  assert.equal(verifiedAdminConnectionString(base), base);
+  for (const mode of ['disable', 'no-verify', 'prefer', 'verify-ca']) {
+    assert.throws(() => verifiedAdminConnectionString(base + '?sslmode=' + mode), /Unsafe admin TLS mode/);
+  }
+  assert.throws(() => verifiedAdminConnectionString(base + '?sslmode=require&sslmode=disable'), /Unsafe admin TLS mode/);
+  for (const param of ['ssl', 'sslcert', 'sslkey', 'sslrootcert']) {
+    assert.throws(() => verifiedAdminConnectionString(base + '?' + param + '=false'), /Ambiguous admin TLS options/);
+  }
+  assert.throws(() => verifiedAdminConnectionString('http://localhost/db'), /Invalid admin database URL/);
 });
 
 test('rejects elevated privileges, missing least privileges and unexpected login', () => {
