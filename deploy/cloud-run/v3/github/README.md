@@ -156,6 +156,32 @@ Riesgos residuales que la fase 3 debe asumir o mitigar expresamente:
   a quien ya tenga un token);
 - una política de organización (*domain restricted sharing*) puede impedir `allUsers`.
 
+## Comprobaciones sobre el código real (triage de Xatai)
+
+- **Visibilidad.** La API de GitHub devuelve `visibility: public` para este
+  repositorio: los logs de Actions son públicos y se tratan como tales.
+- **TLS hacia Neon.** Las tres conexiones de runtime (memoria V3, Approval y
+  Mission) usan `ssl: { rejectUnauthorized: true }` con host/puerto explícitos,
+  no una URL, así que ningún parámetro de cadena de conexión puede rebajar TLS;
+  memoria V3 solo admite `OXKIO_V3_PG_SSL=false` en loopback.
+- **Conexiones bajo escalado.** Por instancia: memoria V3 `max: 8` + Approval y
+  Mission (por defecto de `pg`, 10 cada uno) = 28 como máximo. El servicio tiene
+  `maxScale: 1` y `containerConcurrency: 1`, y la revisión real hereda esa
+  plantilla. El wrapper CI lo exige ahora (`Assert-ConnectionBudget`: concurrencia
+  1, `maxScale` acotado, ≤ 56 conexiones) antes de dar la revisión por buena.
+- **Secretos fuera del build y de la imagen.** El contexto de build sale de
+  `git archive` del commit (solo ficheros versionados de `Dockerfile`,
+  `.dockerignore`, `package*.json`, `backend`, `app` y el registro de
+  continuidad): el fichero de credenciales federadas que escribe
+  `google-github-actions/auth` en el runner nunca entra. `.dockerignore`
+  excluye `.env*`; el `Dockerfile` no tiene `ARG`/`ENV` con secretos; los
+  secretos llegan solo en ejecución por `secretKeyRef`. En los ficheros
+  versionados del contexto solo aparece la configuración web de Firebase
+  (`apiKey` de cliente, pública por diseño).
+- **Migraciones.** Ningún código de runtime lee ni ejecuta `migrations/*.sql`
+  al arrancar (solo las pruebas de integración): no hay migraciones
+  concurrentes entre instancias.
+
 ## Pendientes explícitos (CI verde no demuestra despliegue)
 
 Las pruebas de esta PR usan `gcloud`/`gh` simulados y procesos locales. Solo una

@@ -39,6 +39,15 @@ function ConvertTo-PublicSummary($Value) {
     foreach($p in $Value.PSObject.Properties){ if($p.Name -cnotin @('Env','ServiceExport','IAM','Baseline','Rollback','EnvNames','Traffic')){ $out[$p.Name]=ConvertTo-PublicSummary $p.Value } }
     return $out
 }
+# Presupuesto de conexiones a Neon: por instancia, memoria V3 (max 8) + Approval y
+# Mission (pg por defecto, 10 cada uno) = 28. La revision real hereda la plantilla
+# del servicio; si esa plantilla escalase, las conexiones se multiplicarian sin aviso.
+$script:MaxPgConnectionsPerInstance=28
+$script:MaxPgConnectionsTotal=56
+function Assert-ConnectionBudget($Revision) {
+    Assert-True ($Revision.MaxInstances -ge 1 -and $Revision.Concurrency -eq 1) 'Escalado sin cota: maxScale y containerConcurrency=1 requeridos'
+    Assert-True (($Revision.MaxInstances*$script:MaxPgConnectionsPerInstance) -le $script:MaxPgConnectionsTotal) 'maxScale supera el presupuesto de conexiones a Neon'
+}
 function Write-PublicSummary([string]$Title,$Value) {
     $json=ConvertTo-Json -InputObject (ConvertTo-PublicSummary $Value) -Depth 8
     Write-Output "== $Title"; Write-Output $json
@@ -95,7 +104,9 @@ function Invoke-PrivateRevision {
         $loc="--region=$script:Region"
         $service=Invoke-Gcloud @('run','services','describe',$script:Service,$loc,'--format=json') | ConvertFrom-Json
         $revision=Invoke-Gcloud @('run','revisions','describe',$script:RealRevision,$loc,'--format=json') | ConvertFrom-Json
-        Assert-RealRevision (ConvertTo-RevisionModel $revision (ConvertTo-TrafficModel $service) $script:ExpectedCommit)
+        $model=ConvertTo-RevisionModel $revision (ConvertTo-TrafficModel $service) $script:ExpectedCommit
+        Assert-RealRevision $model
+        Assert-ConnectionBudget $model
         $smoke=Invoke-PrivateSmoke
         Write-PublicSummary 'Prueba privada' $smoke
         Assert-True ([bool]$smoke.Passed) 'Prueba privada fallida'
@@ -128,6 +139,12 @@ function Invoke-SelfTest {
     }
     Assert-True ($script:Variant -ceq 'Real' -and $script:TestRevision -ceq $script:RealRevision) 'Variante Real no aplicada'
     Assert-True ($script:Evidence.StartsWith([IO.Path]::GetTempPath())) 'La evidencia debe quedar en el runner, fuera del repositorio'
+    Assert-ConnectionBudget ([pscustomobject]@{MaxInstances=1;Concurrency=1})
+    Assert-ConnectionBudget ([pscustomobject]@{MaxInstances=2;Concurrency=1})
+    foreach($bad in @(@{MaxInstances=3;Concurrency=1},@{MaxInstances=0;Concurrency=1},@{MaxInstances=1;Concurrency=80})){
+        $refused=$false; try { Assert-ConnectionBudget ([pscustomobject]$bad) } catch { $refused=$true }
+        Assert-True $refused "Presupuesto de conexiones no aplicado: $($bad.MaxInstances)/$($bad.Concurrency)"
+    }
     $secretUid='Abcdefghijklmnopqrstu12345'
     $sample=[pscustomobject]@{Passed=$true;Revision='oxkio-api-staging-v3r-abcdef0';Env=@{OXKIO_V3_COHORT_UIDS=$secretUid}
         Note="uid $secretUid";Bare=$secretUid;List=@($secretUid,'PASS');Nested=[ordered]@{ServiceExport=@{x=$secretUid};Ok='OK'};Blockers=@('secret_missing:OXKIO_V3_PG_PASSWORD')}
