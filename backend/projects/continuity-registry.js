@@ -542,6 +542,9 @@ function recordEvent({ registry, event, now = new Date().toISOString() } = {}) {
 function observationsFromRuns(registry, runs) {
   const observations = [];
   runs.forEach((run) => {
+    // Only checks on main may alter canonical CLOSED/PENDING states.
+    // PR/feature-branch failures are diagnostic, not evidence of a main regression.
+    if (run.branch !== "main" || !["push", "workflow_dispatch"].includes(run.event)) return;
     (run.jobs || []).forEach((job) => {
       if (!["success", "failure"].includes(job.conclusion)) return;
       registry.entries.filter((entry) => Array.isArray(entry.signals) && entry.signals.includes(job.name)).forEach((entry) => {
