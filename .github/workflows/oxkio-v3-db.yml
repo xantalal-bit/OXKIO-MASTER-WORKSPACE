@@ -1,0 +1,85 @@
+name: OXKIO V3 DB (Neon)
+
+# Fase 1: PostgreSQL. Solo manual, solo desde main, con aprobación humana del
+# entorno oxkio-v3-db. El repositorio es público: los logs también. Ningún
+# paso imprime ni exporta secretos; la URL admin de Neon solo existe dentro del
+# proceso Node que la lee de Secret Manager (scripts/client-zero/run-v3-db-operation.js).
+on:
+  workflow_dispatch:
+    inputs:
+      operation:
+        description: 'preflight (solo lectura) o provision-resume (activa LOGIN)'
+        type: choice
+        options: [preflight, provision-resume]
+        default: preflight
+      confirm:
+        description: 'Solo para provision-resume: ACTIVAR-LOGIN-oxkio_v3_runtime'
+        type: string
+        default: ''
+
+permissions: {}
+
+concurrency:
+  group: oxkio-v3-db
+  cancel-in-progress: false
+
+jobs:
+  guard:
+    name: guard (rama, entorno protegido, confirmación)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Exigir main, entorno con revisor obligatorio y confirmación
+        env:
+          GH_TOKEN: ${{ github.token }}
+          OPERATION: ${{ inputs.operation }}
+          CONFIRM: ${{ inputs.confirm }}
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF" = "refs/heads/main" || { echo "Solo desde main"; exit 1; }
+          env_json="$(gh api "repos/$GITHUB_REPOSITORY/environments/oxkio-v3-db")"
+          echo "$env_json" | jq -e '[.protection_rules[]? | select(.type == "required_reviewers") | .reviewers | length] | add > 0' > /dev/null \
+            || { echo "El entorno oxkio-v3-db no tiene revisor obligatorio"; exit 1; }
+          echo "$env_json" | jq -e '.deployment_branch_policy.custom_branch_policies == true' > /dev/null \
+            || { echo "El entorno oxkio-v3-db no restringe ramas"; exit 1; }
+          if [ "$OPERATION" = "provision-resume" ] && [ "$CONFIRM" != "ACTIVAR-LOGIN-oxkio_v3_runtime" ]; then
+            echo "provision-resume exige la frase de confirmación"; exit 1
+          fi
+
+  db:
+    name: ${{ inputs.operation }}
+    needs: guard
+    runs-on: ubuntu-latest
+    environment: oxkio-v3-db
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Autenticación sin claves (Workload Identity Federation)
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.OXKIO_GCP_WIF_PROVIDER }}
+          service_account: ${{ vars.OXKIO_GCP_DB_SA }}
+          project_id: oxkio-runtime-prod
+          create_credentials_file: true
+          export_environment_variables: true
+
+      - name: Ejecutar ${{ inputs.operation }}
+        env:
+          OPERATION: ${{ inputs.operation }}
+          OXKIO_V3_CONFIRM: ${{ inputs.confirm }}
+        run: node scripts/client-zero/run-v3-db-operation.js "$OPERATION"
