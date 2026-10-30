@@ -76,6 +76,28 @@ jobs:
       - name: Run Linux Docker image build checks
         run: node --test deploy/dockerfile-build.test.js
 
+  # The Cloud Shell setup script is bash (GNU date): its test only runs on Linux.
+  github-cloud-setup:
+    name: github-cloud-setup
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run GitHub Actions / Workload Identity Federation checks
+        run: node --test deploy/cloud-run/v3/github/setup-github-wif.test.js deploy/cloud-run/v3/github/github-workflows.test.js scripts/client-zero/run-v3-db-operation.test.js
+
   # Approval on a real, ephemeral PostgreSQL 18 (Neon runs 18): migrations,
   # RLS, privileges, lifecycle and concurrency. Throwaway container bound to
   # loopback, random masked passwords, no secrets, nothing outside this job.

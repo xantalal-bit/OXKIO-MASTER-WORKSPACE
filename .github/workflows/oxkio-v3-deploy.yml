@@ -1,0 +1,97 @@
+name: OXKIO V3 deploy privado (Cloud Run)
+
+# Fase 2: revision real de OXKIO V3 en Cloud Run con 0 % de trafico y etiqueta
+# privada (IAM). No cambia la exposicion del servicio: la cuenta de despliegue
+# no tiene setIamPolicy. Reutiliza deploy/cloud-run/v3/Invoke-OxkioV3CloudRevision.ps1
+# (necesita gcloud.cmd: windows-latest) mediante deploy/cloud-run/v3/ci/Invoke-OxkioV3CloudCi.ps1.
+# Repositorio publico: el wrapper solo imprime un resumen saneado.
+on:
+  workflow_dispatch:
+    inputs:
+      operation:
+        description: 'check-real (solo lectura), private-revision (crea la revision privada) o remove-tag (reversion)'
+        type: choice
+        options: [check-real, private-revision, remove-tag]
+        default: check-real
+      confirm:
+        description: 'Para private-revision: CREAR-REVISION-PRIVADA. Para remove-tag: QUITAR-ETIQUETA'
+        type: string
+        default: ''
+
+permissions: {}
+
+concurrency:
+  group: oxkio-v3-deploy
+  cancel-in-progress: false
+
+jobs:
+  guard:
+    name: guard (rama, entorno protegido, confirmación)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Exigir main, entorno con revisor obligatorio y confirmación
+        env:
+          GH_TOKEN: ${{ github.token }}
+          OPERATION: ${{ inputs.operation }}
+          CONFIRM: ${{ inputs.confirm }}
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF" = "refs/heads/main" || { echo "Solo desde main"; exit 1; }
+          env_json="$(gh api "repos/$GITHUB_REPOSITORY/environments/oxkio-v3-deploy")"
+          echo "$env_json" | jq -e '[.protection_rules[]? | select(.type == "required_reviewers") | .reviewers | length] | add > 0' > /dev/null \
+            || { echo "El entorno oxkio-v3-deploy no tiene revisor obligatorio"; exit 1; }
+          echo "$env_json" | jq -e '.deployment_branch_policy.custom_branch_policies == true' > /dev/null \
+            || { echo "El entorno oxkio-v3-deploy no restringe ramas"; exit 1; }
+          case "$OPERATION" in
+            private-revision) test "$CONFIRM" = "CREAR-REVISION-PRIVADA" || { echo "Falta la frase de confirmación"; exit 1; } ;;
+            remove-tag) test "$CONFIRM" = "QUITAR-ETIQUETA" || { echo "Falta la frase de confirmación"; exit 1; } ;;
+          esac
+
+  deploy:
+    name: ${{ inputs.operation }}
+    needs: guard
+    runs-on: windows-latest
+    environment: oxkio-v3-deploy
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Preserve repository line endings on Windows
+        run: git config --global core.autocrlf false
+
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Autenticación sin claves (Workload Identity Federation)
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.OXKIO_GCP_WIF_PROVIDER }}
+          service_account: ${{ vars.OXKIO_GCP_DEPLOY_SA }}
+          project_id: oxkio-runtime-prod
+          create_credentials_file: true
+          export_environment_variables: true
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - name: Ejecutar ${{ inputs.operation }}
+        shell: pwsh
+        env:
+          OPERATION: ${{ inputs.operation }}
+          OXKIO_V3_PG_HOST: ${{ vars.OXKIO_V3_PG_HOST }}
+          OXKIO_V3_OWNER_UID: ${{ secrets.OXKIO_V3_OWNER_UID }}
+        run: |
+          $map=@{'check-real'='CheckReal';'private-revision'='PrivateRevision';'remove-tag'='RemoveTag'}
+          & ./deploy/cloud-run/v3/ci/Invoke-OxkioV3CloudCi.ps1 -Operation $map[$env:OPERATION]
