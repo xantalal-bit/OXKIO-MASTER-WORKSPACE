@@ -29,8 +29,24 @@ bash deploy/cloud-run/v3/github/setup-github-wif.sh verify    # PASS/FAIL por el
 - La URL admin de Neon se pide con `read -s` solo si `OXKIO_V3_PG_ADMIN_URL` no
   tiene versión habilitada, se valida su forma sin mostrarla y viaja a Secret
   Manager por stdin. Nunca está en argumentos, historial ni salida.
-- `apply` es idempotente. `rollback` lo deshace todo (pide escribir `REVERTIR`)
-  y deshabilita, sin destruir, las versiones de la URL admin.
+- `plan` y `verify` solo leen: no cambian ni la configuración local de `gcloud`
+  (cada llamada lleva `--project`).
+- **Propiedad.** Todo lo que crea el script lleva la marca `oxkio-setup-github-wif`
+  (descripción de cuentas, pool y proveedor; etiqueta del secreto) y las versiones
+  de `OXKIO_V3_PG_ADMIN_URL` que añade quedan anotadas en `oxkio-setup-versions`.
+  Antes del primer cambio, `apply` comprueba la propiedad de pool, proveedor y
+  cuentas: si alguno ya existe sin la marca, se detiene (código 68) sin modificar
+  nada. Una versión de la URL admin que ya existía no se sobrescribe ni pasa a ser propia.
+- `apply` es idempotente sobre sus propios recursos. `rollback` (pide escribir
+  `REVERTIR`) revierte solo lo propio: permisos y cuentas marcadas, proveedor y
+  pool marcados, y deshabilita (sin destruir) solo las versiones anotadas. Las
+  APIs habilitadas se dejan como están.
+- `verify` falla si no hay una ventana DB vigente (≤ 24 h y sin caducar), si la
+  cuenta DB tiene cualquier permiso fuera de sus 3 concesiones condicionadas, si
+  la cuenta de despliegue puede leer el valor de algún secreto o tiene roles de
+  más, si el servicio tiene `allUsers`, o si en GitHub faltan los entornos con
+  revisor obligatorio y solo `main`, las variables o el secreto del UID (lo lee
+  con `gh`; sin `gh auth login` el apartado GitHub falla).
 
 Después, en GitHub (Settings), sin secretos salvo el UID:
 
@@ -140,12 +156,20 @@ Riesgos residuales que la fase 3 debe asumir o mitigar expresamente:
   a quien ya tenga un token);
 - una política de organización (*domain restricted sharing*) puede impedir `allUsers`.
 
-## No verificado todavía (se verá en la primera ejecución)
+## Pendientes explícitos (CI verde no demuestra despliegue)
 
-- Si el build exige `iam.serviceAccountUser` sobre la cuenta de Cloud Build
-  (depende de la configuración del proyecto); `verify` no puede comprobarlo sin
-  lanzar un build.
-- `gcloud auth print-identity-token --audiences` con credenciales federadas en
-  Windows; si falla, la prueba privada falla y se restaura el servicio.
-- Las acciones van fijadas por versión mayor (`@v4`, `@v2`), como el CI actual;
-  fijarlas por SHA es una mejora posible.
+Las pruebas de esta PR usan `gcloud`/`gh` simulados y procesos locales. Solo una
+ejecución real puede demostrar lo siguiente, y hasta entonces sigue **pendiente**:
+
+1. **Permisos reales del primer build.** Si `gcloud builds submit` exige además
+   `iam.serviceAccountUser` sobre la cuenta con la que corre Cloud Build, o si el
+   bucket `oxkio-runtime-prod_cloudbuild` no existe todavía. `verify` no puede
+   saberlo sin lanzar un build.
+2. **Autenticación WIF en Windows.** Que `google-github-actions/auth` + `gcloud.cmd`
+   funcionen con credenciales federadas en `windows-latest`, incluido
+   `gcloud auth print-identity-token --audiences` para la prueba privada (si falla,
+   la prueba falla y el job restaura el servicio).
+3. **Rollback real.** Ni el `rollback` del script de Cloud Shell ni la
+   restauración en el mismo job ni `remove-tag` se han ejecutado contra el proyecto.
+4. Las acciones van fijadas por versión mayor (`@v4`, `@v2`), como el CI actual;
+   fijarlas por SHA es una mejora posible.
