@@ -233,12 +233,20 @@ test('resume refuses a missing secret, a non-provisioned payload or a role alrea
 });
 
 // Neon: "Hashed passwords are not supported" -> plaintext over TLS behind a read-only gate.
-const { checkPlaintextSafety, ALTER_FROM_GUC_SQL } = require('./provision-v3-pg-secret');
-const safeSession = { tls: true, log_statement: 'none', log_min_duration_statement: '-1', log_min_duration_sample: '-1', log_transaction_sample_rate: '0', log_parameter_max_length_on_error: '0', pgss: false, pgss_track: null };
+const tls = require('node:tls');
+const { checkPlaintextSafety, loggingBlockers, verifyClientTls, ALTER_FROM_GUC_SQL } = require('./provision-v3-pg-secret');
+const NEON_HOST = 'ep-fake-123.eu-central-1.aws.neon.tech';
+// Stand-in for node-postgres' TLSSocket after a verified handshake.
+const verifiedSocket = (over = {}) => Object.assign(Object.create(tls.TLSSocket.prototype), {
+  encrypted: true, authorized: true, getProtocol: () => 'TLSv1.3',
+  getPeerCertificate: () => ({ raw: Buffer.from('fake-der'), subject: { CN: NEON_HOST }, subjectaltname: 'DNS:*.eu-central-1.aws.neon.tech' })
+}, over);
+// Neon's proxy terminates TLS: the server reports no TLS for a verified client socket.
+const safeSession = { server_tls: false, log_statement: 'none', log_min_duration_statement: '-1', log_min_duration_sample: '-1', log_transaction_sample_rate: '0', log_parameter_max_length_on_error: '0', pgss: false, pgss_track: null };
 // Fake that records statement TEXT and bind PARAMETERS separately; the DO block flips LOGIN.
-const plaintextDb = (calls, session = safeSession, params = [], { failAlter = false } = {}) => {
+const plaintextDb = (calls, session = safeSession, params = [], { failAlter = false, stream = verifiedSocket() } = {}) => {
   let login = false;
-  return { query: async (sql, p) => {
+  return { connection: { stream }, query: async (sql, p) => {
     calls.push(sql); if (p) params.push(...p);
     if (/pg_stat_ssl/.test(sql)) { calls.push('SAFETY_GATE'); return { rows: [session] }; }
     if (sql === ALTER_FROM_GUC_SQL) { if (failAlter) { const e = new Error('oxkio_v3_runtime password change failed'); e.code = '42501'; throw e; } login = true; return { rows: [] }; }
@@ -250,7 +258,7 @@ const plaintextDb = (calls, session = safeSession, params = [], { failAlter = fa
 
 test('plaintext-tls: gate first; the password is only a bind parameter, never statement text', async () => {
   const calls = []; const params = [];
-  const result = await provision({ db: plaintextDb(calls, safeSession, params), secrets: goodSecrets(calls), passwordTransport: 'plaintext-tls',
+  const result = await provision({ db: plaintextDb(calls, safeSession, params), secrets: goodSecrets(calls), passwordTransport: 'plaintext-tls', expectedHost: NEON_HOST,
     connectAsRuntime: runtimeLogin(calls), makePassword: () => goodPassword });
   assert.equal(result.verified, true);
   assert.equal(calls.some((x) => x.includes(goodPassword)), false, 'password in statement text');
@@ -269,7 +277,7 @@ test('plaintext-tls: the ALTER ROLE is built inside DO and failures are re-raise
 
 test('plaintext-tls: a failed ALTER rolls back the transaction, then NOLOGIN, without the password in any statement', async () => {
   const calls = []; const params = [];
-  await assert.rejects(provision({ db: plaintextDb(calls, safeSession, params, { failAlter: true }), secrets: goodSecrets(), passwordTransport: 'plaintext-tls',
+  await assert.rejects(provision({ db: plaintextDb(calls, safeSession, params, { failAlter: true }), secrets: goodSecrets(), passwordTransport: 'plaintext-tls', expectedHost: NEON_HOST,
     connectAsRuntime: runtimeLogin(), makePassword: () => goodPassword }), /Database provisioning failed/);
   assert.equal(calls.some((x) => x.includes(goodPassword)), false);
   assert.deepEqual(calls.slice(-2), ['ROLLBACK', 'ALTER ROLE oxkio_v3_runtime NOLOGIN']);
@@ -277,36 +285,75 @@ test('plaintext-tls: a failed ALTER rolls back the transaction, then NOLOGIN, wi
 });
 
 test('plaintext-tls: any setting that could record parameters or nested statements aborts before writing', async () => {
-  for (const unsafe of [{ tls: false }, { tls: null }, { log_statement: 'ddl' }, { log_statement: 'mod' }, { log_statement: 'all' },
+  for (const unsafe of [{ log_statement: 'ddl' }, { log_statement: 'mod' }, { log_statement: 'all' },
     { log_min_duration_statement: '0' }, { log_min_duration_sample: '0' }, { log_transaction_sample_rate: '0.01' },
     { log_min_duration_sample: undefined }, { log_transaction_sample_rate: undefined },
     { log_parameter_max_length_on_error: '-1' }, { log_parameter_max_length_on_error: '64' },
     { pgss: true, pgss_track: 'all' }]) {
     const calls = [];
     await assert.rejects(provision({ db: plaintextDb(calls, { ...safeSession, ...unsafe }), secrets: goodSecrets(), passwordTransport: 'plaintext-tls',
-      connectAsRuntime: runtimeLogin(), makePassword: () => goodPassword }), /not safe on this session/, JSON.stringify(unsafe));
+      expectedHost: NEON_HOST, connectAsRuntime: runtimeLogin(), makePassword: () => goodPassword }), /not safe on this session/, JSON.stringify(unsafe));
     assert.equal(calls.some((x) => x === 'BEGIN' || x.startsWith('ALTER ROLE') || x === ALTER_FROM_GUC_SQL), false, JSON.stringify(unsafe));
   }
   // Top-level tracking cannot see the nested ALTER; the DO text holds no password.
   for (const track of ['top', 'none']) checkPlaintextSafety({ ...safeSession, pgss: true, pgss_track: track });
+  assert.deepEqual(loggingBlockers(safeSession), []);
+  assert.deepEqual(loggingBlockers(null), ['session']);
+  assert.deepEqual(loggingBlockers({ ...safeSession, log_statement: 'all', log_transaction_sample_rate: undefined }),
+    ['log_statement', 'log_transaction_sample_rate']);
+});
+
+test('plaintext-tls: TLS is verified on the client socket, not on pg_stat_ssl', async () => {
+  // pg_stat_ssl=false behind a TLS-terminating proxy does not block a verified client socket...
+  for (const server_tls of [false, null, true]) {
+    verifyClientTls({ connection: { stream: verifiedSocket() } }, NEON_HOST);
+    checkPlaintextSafety({ ...safeSession, server_tls });
+  }
+  // ...while a missing, unverified, downgraded or foreign-host socket always does.
+  const unverified = [
+    ['no socket', null],
+    ['plain TCP socket', new (require('node:net').Socket)()],
+    ['duck-typed object', { encrypted: true, authorized: true, getProtocol: () => 'TLSv1.3', getPeerCertificate: () => ({ raw: Buffer.from('x') }) }],
+    ['not encrypted', verifiedSocket({ encrypted: false })],
+    ['chain not verified', verifiedSocket({ authorized: false })],
+    ['TLS 1.1', verifiedSocket({ getProtocol: () => 'TLSv1.1' })],
+    ['no protocol', verifiedSocket({ getProtocol: () => null })],
+    ['no peer certificate', verifiedSocket({ getPeerCertificate: () => ({}) })],
+    ['certificate for another host', verifiedSocket({ getPeerCertificate: () => ({ raw: Buffer.from('x'), subject: { CN: 'evil.example' }, subjectaltname: 'DNS:evil.example' }) })]
+  ];
+  for (const [label, stream] of unverified) {
+    assert.throws(() => verifyClientTls({ connection: { stream } }, NEON_HOST), /Client TLS is not verified/, label);
+    const calls = [];
+    await assert.rejects(provision({ db: plaintextDb(calls, safeSession, [], { stream }), secrets: goodSecrets(), passwordTransport: 'plaintext-tls',
+      expectedHost: NEON_HOST, connectAsRuntime: runtimeLogin(), makePassword: () => goodPassword }), /Client TLS is not verified/, label);
+    assert.equal(calls.some((x) => x === 'BEGIN' || x.startsWith('ALTER ROLE') || x === ALTER_FROM_GUC_SQL), false, label);
+  }
+  assert.throws(() => verifyClientTls({}, NEON_HOST), /Client TLS is not verified/, 'no connection');
+  for (const host of [undefined, '', 'ep-other.eu-west-2.aws.neon.tech.evil.example']) {
+    assert.throws(() => verifyClientTls({ connection: { stream: verifiedSocket() } }, host), /Client TLS is not verified/, String(host));
+  }
+  const calls = [];
+  await assert.rejects(provision({ db: plaintextDb(calls), secrets: goodSecrets(), passwordTransport: 'plaintext-tls',
+    connectAsRuntime: runtimeLogin(), makePassword: () => goodPassword }), /Client TLS is not verified/, 'expectedHost is required');
 });
 
 test('plaintext-tls resume reuses version 1 and default transport stays the SCRAM verifier', async () => {
   const calls = []; const params = [];
   const secrets = { getSecret: async () => ({}), accessSecretVersion: async () => [{ payload:{ data:Buffer.from(goodPassword) } }],
     createSecret: async () => { calls.push('CREATE_SECRET'); }, addSecretVersion: async () => { calls.push('ADD_VERSION'); } };
-  await provision({ db: plaintextDb(calls, safeSession, params), secrets, resume: true, passwordTransport: 'plaintext-tls', connectAsRuntime: runtimeLogin(calls) });
+  await provision({ db: plaintextDb(calls, safeSession, params), secrets, resume: true, passwordTransport: 'plaintext-tls', expectedHost: NEON_HOST, connectAsRuntime: runtimeLogin(calls) });
   assert.equal(calls.includes('CREATE_SECRET') || calls.includes('ADD_VERSION'), false);
   assert.ok(params.includes(goodPassword) && calls.includes(ALTER_FROM_GUC_SQL));
   await assert.rejects(provision({ db: fakeDb([]), secrets: goodSecrets(), passwordTransport: 'md5', connectAsRuntime: runtimeLogin() }), /Unknown password transport/);
 });
 
 const tlsPort = Number(process.env.OXKIO_V3_TEST_TLS_PORT);
-test('real PostgreSQL over TLS: gate blocks statement logging, plaintext ALTER then logs in without leaking the password', { skip: Number.isInteger(tlsPort) ? false : 'isolated TLS runner required' }, async (t) => {
+const tlsCa = process.env.OXKIO_V3_TEST_TLS_CA; // CA of the runner's certificate for 'localhost'
+test('real PostgreSQL over TLS: gate blocks statement logging, plaintext ALTER then logs in without leaking the password', { skip: Number.isInteger(tlsPort) && tlsCa ? false : 'isolated TLS runner required' }, async (t) => {
   const { Client } = require('pg');
   const fs = require('node:fs');
   const path = require('node:path');
-  const base = { host:'127.0.0.1', port: tlsPort, database:'oxkio_v3_it', ssl: { rejectUnauthorized: false } };
+  const base = { host:'localhost', port: tlsPort, database:'oxkio_v3_it', ssl: { ca: fs.readFileSync(tlsCa, 'utf8'), rejectUnauthorized: true } };
   const su = new Client({ ...base, user:'oxkio_v3_test' }); await su.connect();
   // Every session is closed even when an assertion fails (an open client keeps the runner alive).
   const resetDb = () => su.query('ALTER DATABASE oxkio_v3_it RESET ALL');
@@ -329,7 +376,7 @@ test('real PostgreSQL over TLS: gate blocks statement logging, plaintext ALTER t
     addSecretVersion: async ({ payload }) => { held = Buffer.from(payload.data); store.getSecret = async () => ({}); } };
   const connectAsRuntime = async (password) => { const c = new Client({ ...base, user:'oxkio_v3_runtime', password }); await c.connect(); return c; };
   // The cluster logs every statement: the gate must refuse after custody and before any ALTER.
-  await assert.rejects(provision({ db: owner, secrets: store, connectAsRuntime, passwordTransport: 'plaintext-tls' }), /not safe on this session/);
+  await assert.rejects(provision({ db: owner, secrets: store, connectAsRuntime, passwordTransport: 'plaintext-tls', expectedHost: 'localhost' }), /not safe on this session/);
   assert.equal((await su.query("SELECT rolcanlogin FROM pg_roles WHERE rolname='oxkio_v3_runtime'")).rows[0].rolcanlogin, false);
   // Statement logging off (like Neon's default) but error logging at its most verbose:
   // a failing ALTER (owner without ADMIN OPTION) must not leak the password anywhere.
@@ -338,11 +385,11 @@ test('real PostgreSQL over TLS: gate blocks statement logging, plaintext ALTER t
   await su.query("ALTER DATABASE oxkio_v3_it SET log_error_verbosity = 'verbose'");
   await su.query('REVOKE ADMIN OPTION FOR oxkio_v3_runtime FROM oxkio_neon_like_owner GRANTED BY oxkio_v3_test');
   owner = await ownerSession();
-  await assert.rejects(provision({ db: owner, secrets: store, connectAsRuntime, resume: true, passwordTransport: 'plaintext-tls' }), /Database provisioning failed/);
+  await assert.rejects(provision({ db: owner, secrets: store, connectAsRuntime, resume: true, passwordTransport: 'plaintext-tls', expectedHost: 'localhost' }), /Database provisioning failed/);
   assert.equal((await su.query("SELECT rolcanlogin FROM pg_roles WHERE rolname='oxkio_v3_runtime'")).rows[0].rolcanlogin, false);
   await su.query('GRANT oxkio_v3_runtime TO oxkio_neon_like_owner WITH ADMIN OPTION GRANTED BY oxkio_v3_test');
   owner = await ownerSession();
-  const result = await provision({ db: owner, secrets: store, connectAsRuntime, resume: true, passwordTransport: 'plaintext-tls' });
+  const result = await provision({ db: owner, secrets: store, connectAsRuntime, resume: true, passwordTransport: 'plaintext-tls', expectedHost: 'localhost' });
   assert.equal(result.verified, true);
   const password = held.toString('utf8');
   const { rows:[stored] } = await su.query("SELECT rolcanlogin, rolpassword FROM pg_authid WHERE rolname='oxkio_v3_runtime'");

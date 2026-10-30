@@ -3,6 +3,7 @@
 // execution environment with Google ADC and a dedicated Neon admin URL.
 // No credential is printed, persisted locally, or passed in CLI arguments.
 const { randomBytes, pbkdf2Sync, createHmac, createHash } = require('node:crypto');
+const tls = require('node:tls');
 const { Client } = require('pg');
 
 const PROJECT = 'oxkio-runtime-prod';
@@ -66,10 +67,12 @@ $oxkio$`;
 
 // Read-only gate, before any write. What could still record the password:
 // bind parameters (statement/duration/transaction sampling, or error logging)
-// and nested statements
-// (pg_stat_statements.track=all). TLS is required for the transport itself.
+// and nested statements (pg_stat_statements.track=all). server_tls is only
+// informational: behind Neon's proxy, which terminates TLS before the compute,
+// pg_stat_ssl reports false for every client. TLS is verified on the client
+// socket instead (verifyClientTls).
 const PLAINTEXT_SAFETY_SQL = `SELECT
-    (SELECT ssl FROM pg_stat_ssl WHERE pid = pg_backend_pid()) AS tls,
+    (SELECT ssl FROM pg_stat_ssl WHERE pid = pg_backend_pid()) AS server_tls,
     current_setting('log_statement') AS log_statement,
     current_setting('log_min_duration_statement') AS log_min_duration_statement,
     current_setting('log_min_duration_sample') AS log_min_duration_sample,
@@ -78,16 +81,45 @@ const PLAINTEXT_SAFETY_SQL = `SELECT
     EXISTS (SELECT 1 FROM pg_extension WHERE extname = 'pg_stat_statements') AS pgss,
     current_setting('pg_stat_statements.track', true) AS pgss_track`;
 
+// Names (never values) of the settings that block plaintext transport.
+function loggingBlockers(row) {
+  if (!row) return ['session'];
+  const blockers = [];
+  if (row.log_statement !== 'none') blockers.push('log_statement');
+  if (row.log_min_duration_statement !== '-1') blockers.push('log_min_duration_statement');
+  if (row.log_min_duration_sample !== '-1') blockers.push('log_min_duration_sample');
+  if (row.log_transaction_sample_rate == null || Number(row.log_transaction_sample_rate) !== 0) blockers.push('log_transaction_sample_rate');
+  if (row.log_parameter_max_length_on_error !== '0') blockers.push('log_parameter_max_length_on_error');
+  if (row.pgss && row.pgss_track === 'all') blockers.push('pg_stat_statements.track');
+  return blockers;
+}
+
 function checkPlaintextSafety(row) {
-  if (!row || row.tls !== true || row.log_statement !== 'none' || row.log_min_duration_statement !== '-1' || row.log_min_duration_sample !== '-1' ||
-      Number(row.log_transaction_sample_rate) !== 0 ||
-      row.log_parameter_max_length_on_error !== '0' || (row.pgss && row.pgss_track === 'all')) {
+  if (loggingBlockers(row).length) {
     throw new Error('Plaintext password transport is not safe on this session; role remains NOLOGIN');
   }
 }
 
+// TLS of node-postgres' own socket, independent of what the server reports:
+// encrypted, certificate chain verified (authorized), TLS 1.2+, and a peer
+// certificate valid for the host this client was told to reach.
+const CLIENT_TLS_PROTOCOLS = new Set(['TLSv1.2', 'TLSv1.3']);
+
+function verifyClientTls(db, expectedHost) {
+  const socket = db?.connection?.stream;
+  if (!(socket instanceof tls.TLSSocket) || socket.encrypted !== true || socket.authorized !== true ||
+      !CLIENT_TLS_PROTOCOLS.has(socket.getProtocol())) {
+    throw new Error('Client TLS is not verified; role remains NOLOGIN');
+  }
+  const cert = socket.getPeerCertificate();
+  if (typeof expectedHost !== 'string' || !expectedHost || !cert || !cert.raw ||
+      tls.checkServerIdentity(expectedHost, cert) !== undefined) {
+    throw new Error('Client TLS is not verified; role remains NOLOGIN');
+  }
+}
+
 async function provision({ db, secrets, connectAsRuntime, resume = false,
-  passwordTransport = 'scram-verifier',
+  passwordTransport = 'scram-verifier', expectedHost,
   makePassword = () => randomBytes(48).toString('base64url') }) {
   if (typeof connectAsRuntime !== 'function') throw new Error('Runtime login verifier required');
   if (!['scram-verifier', 'plaintext-tls'].includes(passwordTransport)) throw new Error('Unknown password transport');
@@ -136,7 +168,10 @@ async function provision({ db, secrets, connectAsRuntime, resume = false,
     }
   }
   // Before any ALTER ROLE: a failed gate leaves the role exactly as it was (NOLOGIN).
-  if (passwordTransport === 'plaintext-tls') checkPlaintextSafety((await db.query(PLAINTEXT_SAFETY_SQL)).rows[0]);
+  if (passwordTransport === 'plaintext-tls') {
+    verifyClientTls(db, expectedHost);
+    checkPlaintextSafety((await db.query(PLAINTEXT_SAFETY_SQL)).rows[0]);
+  }
   try {
     if (passwordTransport === 'plaintext-tls') {
       // The password is only a bind parameter; it never appears in statement text.
@@ -214,12 +249,12 @@ async function main() {
     throw new Error('Explicit --execute [--resume] [--plaintext-tls], approval flag and admin connection required');
   }
   const { SecretManagerServiceClient } = require('@google-cloud/secret-manager');
-  const db = new Client({ connectionString: verifiedAdminConnectionString(process.env.OXKIO_V3_PG_ADMIN_URL),
-    ssl: { rejectUnauthorized: true } });
+  const adminUrl = verifiedAdminConnectionString(process.env.OXKIO_V3_PG_ADMIN_URL);
+  const db = new Client({ connectionString: adminUrl, ssl: { rejectUnauthorized: true } });
   await db.connect();
   try {
     const result = await provision({ db, secrets: new SecretManagerServiceClient(), resume,
-      passwordTransport: plaintextTls ? 'plaintext-tls' : 'scram-verifier',
+      passwordTransport: plaintextTls ? 'plaintext-tls' : 'scram-verifier', expectedHost: new URL(adminUrl).hostname,
       connectAsRuntime: runtimeConnector(process.env.OXKIO_V3_PG_ADMIN_URL) });
     process.stdout.write(`Verified dedicated role and secret: ${result.secretName}\n`);
   } finally {
@@ -235,4 +270,4 @@ if (require.main === module) {
   });
 }
 
-module.exports = { checkRole, checkPlaintextSafety, verifiedAdminConnectionString, provision, scramVerifier, ROLE_STATE_SQL, PLAINTEXT_SAFETY_SQL, ALTER_FROM_GUC_SQL };
+module.exports = { checkRole, checkPlaintextSafety, loggingBlockers, verifyClientTls, verifiedAdminConnectionString, provision, scramVerifier, ROLE_STATE_SQL, PLAINTEXT_SAFETY_SQL, ALTER_FROM_GUC_SQL };
