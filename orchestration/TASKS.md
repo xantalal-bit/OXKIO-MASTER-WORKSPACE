@@ -1,6 +1,21 @@
 ﻿# OXKIO TASKS
 
-## Estado operativo vigente
+## Corte vigente auditado — 26/10/2026
+
+Proyeccion del registro unico [CONTINUITY-REGISTRY.json](CONTINUITY-REGISTRY.json), revision 39; el historial inferior se conserva como antecedente.
+
+- Main verificado: de95d751; PR62-66 fusionadas. Preparacion PostgreSQL V3 integrada; no acredita activacion Cloud.
+- PR67 (head 2df3e0fc, CI 40296108781) y PR68 (head 840ae698, CI 40382254929): 7/7 SUCCESS cada una; merge sujeto a decision humana. Main CI 40214451847 7/7 SUCCESS.
+- Auditoria local: 37 FAIL clasificados (34 por enlaces duros EPERM; dos por consulta de puerto denegada con arranque permisivo; un helper de test dependiente de CIM). 19 SKIP: seis PostgreSQL, once Firestore, uno Docker y uno senales Windows. Fuera del sandbox de Work, el ledger da 61 PASS / 0 FAIL / 1 SKIP: los 34 EPERM son del entorno.
+- Correccion del lanzador (falla cerrado si no puede inspeccionar el puerto) y del helper, en PR68 con CI verde. Merge de prueba PR67+PR68 sobre de95d751 sin conflictos; pruebas afectadas 58/58 PASS en maquina local. Ningun defecto del algoritmo del ledger demostrado.
+- PostgreSQL 18 efimero: inicializacion bloqueada en el entorno de Work; prueba local tras reinicio NO ejecutada. OXKIO_V3_PG_PASSWORD no existe en Secret Manager (solo metadatos); runtime local en 8aec849; prueba autenticada del owner pendiente. CI SQL anterior conservada. Cliente Cero Cloud BLOCKED/no acreditado.
+- Checkpoint 26/10 preservado, hash 665b1a50822a5197c627d90f53aea579e5cae4dd51dd133179667d29d35ac285; captura 8aec849 y no restaura main actual.
+- Siguiente: decision humana sobre el merge de PR67 y PR68; despues, sincronizar el runtime local y repetir la prueba autenticada del owner. Sin produccion, secretos, IAM, nuevas cuentas, despliegue ni gasto.
+- Evidencia: [clasificacion individual y hashes](../docs/audits/local-suite-triage-20261026.json); Drive V1 contrastado en lectura, sin certificar estado Cloud actual.
+
+## Historial anterior (no usar como estado actual)
+
+### Estado operativo registrado anteriormente
 
 - **Reconciliación 4F — 08/09/2026:** B6 / 5C.7B.3F CERRADA — PASS REAL
   (07/09/2026); 5C.7B.4 validada hasta 4E — PASS REAL en staging Cloud Run

@@ -316,13 +316,9 @@ async function waitUntil(conditionFn, { timeoutMs = 15000, intervalMs = 200 } = 
 }
 
 function isProcessAlive(pid) {
-  const check = spawnSync('powershell.exe', [
-    '-NoLogo',
-    '-NoProfile',
-    '-Command',
-    `[bool](Get-CimInstance Win32_Process -Filter "ProcessId=${Number(pid)}" -ErrorAction SilentlyContinue)`,
-  ], { env: createMinimalChildEnvironment(), encoding: 'utf8' });
-  return String(check.stdout || '').trim() === 'True';
+  // CIM denial must never be mistaken for a dead child. Only ESRCH proves exit.
+  try { process.kill(pid, 0); return true; }
+  catch (error) { if (error.code === 'ESRCH') return false; throw error; }
 }
 
 function assertSensitiveValuesHidden(result) {

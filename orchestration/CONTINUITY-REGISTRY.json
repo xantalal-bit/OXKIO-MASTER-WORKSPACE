@@ -1,7 +1,7 @@
 {
   "schema": "oxkio.continuity-registry/v1",
-  "revision": 33,
-  "updatedAt": "2026-10-18T13:51:44.866Z",
+  "revision": 39,
+  "updatedAt": "2026-10-26T19:37:54.806Z",
   "canon": {
     "path": "KNOWLEDGE-CURATOR/CLIENT-ZERO/XATAI-CLIENT-ZERO-CANON.md",
     "issue": "issue:49",
@@ -96,8 +96,8 @@
         "backend-tests (node 22)",
         "backend-tests (node 24)"
       ],
-      "version": 20,
-      "updatedAt": "2026-10-18T13:49:34.589Z",
+      "version": 22,
+      "updatedAt": "2026-10-26T18:53:30.417Z",
       "evidence": [
         {
           "ref": "ci:39041516033#backend-tests (node 22)",
@@ -282,6 +282,22 @@
           "observedAt": "2026-10-17T19:12:08Z",
           "source": "github-actions:main@30717ee",
           "summary": "backend-tests (node 22) success en push main @ 30717ee"
+        },
+        {
+          "ref": "ci:40214451847#backend-tests (node 24)",
+          "kind": "ci_green",
+          "result": "success",
+          "observedAt": "2026-10-26T18:53:30.417Z",
+          "source": "github-actions:main@de95d75",
+          "summary": "backend-tests (node 24) success en push main @ de95d75"
+        },
+        {
+          "ref": "ci:40214451847#backend-tests (node 22)",
+          "kind": "ci_green",
+          "result": "success",
+          "observedAt": "2026-10-26T18:53:30.417Z",
+          "source": "github-actions:main@de95d75",
+          "summary": "backend-tests (node 22) success en push main @ de95d75"
         }
       ]
     },
@@ -422,8 +438,8 @@
       "signals": [
         "approval-postgres-integration"
       ],
-      "version": 14,
-      "updatedAt": "2026-10-18T13:51:44.737Z",
+      "version": 15,
+      "updatedAt": "2026-10-26T18:53:30.417Z",
       "evidence": [
         {
           "ref": "ci:39048856582#approval-postgres-integration",
@@ -576,6 +592,14 @@
           "observedAt": "2026-10-18T11:45:31Z",
           "source": "github-actions:main@9b05eb5",
           "summary": "approval-postgres-integration en main: 19/19 contra postgres:18 efímero, 0 fail, 0 skipped (leído del log del job)."
+        },
+        {
+          "ref": "ci:40214451847#approval-postgres-integration",
+          "kind": "ci_green",
+          "result": "success",
+          "observedAt": "2026-10-26T18:53:30.417Z",
+          "source": "github-actions:main@de95d75",
+          "summary": "approval-postgres-integration success en push main @ de95d75"
         }
       ]
     },
@@ -728,13 +752,13 @@
       "priority": "P1",
       "decision": "Misión separada: parada controlada → actualización → arranque → smoke test → cierre. No se mezcla con la integración del canon.",
       "reopenCondition": "No aplica mientras esté abierta.",
-      "nextAction": "El owner repite en /executive-chat.html las preguntas de continuidad y una lectura de Approval. Si todo va bien, registrar la prueba real y cerrar; si algo falla, recuperar con R1 (commit anterior y copia fría verificada).",
-      "changes": "Dos ventanas locales autorizadas ejecutadas; la verificación técnica pasa; falta la prueba autenticada.",
+      "nextAction": "Tras integrar PR #67 y #68: sincronizar el runtime local con main (parada controlada → actualización → arranque → smoke test) y repetir la prueba autenticada del owner en /executive-chat.html. Activar la memoria PostgreSQL V3 (rol NOLOGIN, migración 006 y GRANT en Neon; secreto en Secret Manager; prueba escritura sintética → reinicio → recuperación → aislamiento → auditoría) requiere una puerta humana específica.",
+      "changes": "Corrección 26/10: se sustituyen los textos ligados a la rama de PR #68 y se restablece la puerta de prueba autenticada del owner.",
       "confidence": "high",
       "requiresRealTest": true,
-      "blockedBy": "puerta humana: prueba autenticada de Cliente Cero en el chat ejecutivo (memoria, continuidad y lectura de Approval)",
-      "version": 2,
-      "updatedAt": "2026-10-18T13:51:44.737Z",
+      "blockedBy": "Puerta humana: prueba autenticada de Cliente Cero en el chat ejecutivo (memoria, continuidad y lectura de Approval) sobre un runtime sincronizado con main. El runtime local sigue en 8aec849, sin actualizar a main. Memoria V3 PostgreSQL en Cloud no acreditada: OXKIO_V3_PG_PASSWORD no existe en Secret Manager, y la migración 006 y el rol oxkio_v3_runtime no constan aplicados en Neon (lectura del 25/10).",
+      "version": 5,
+      "updatedAt": "2026-10-26T19:37:54.806Z",
       "evidence": [
         {
           "ref": "git:local-main@adef97a",
@@ -767,6 +791,78 @@
           "observedAt": "2026-10-18T11:52:02Z",
           "source": "github-actions:main@9b05eb5",
           "summary": "La versión desplegada en local (9b05eb5) tiene los 5 jobs de CI en success en main."
+        },
+        {
+          "ref": "pr:62#merge",
+          "kind": "pr_merged",
+          "result": "success",
+          "observedAt": "2026-10-26T18:53:30.417Z",
+          "source": "GitHub connector read 2026-10-26",
+          "summary": "Arranque OXKIO: diagnóstico seguro actualizado sobre main; merge 78bb888cfbe24636b205f1ded0fac20f90e7bbba"
+        },
+        {
+          "ref": "pr:63#merge",
+          "kind": "pr_merged",
+          "result": "success",
+          "observedAt": "2026-10-26T18:53:30.417Z",
+          "source": "GitHub connector read 2026-10-26",
+          "summary": "fix(v3): conectar memoria PostgreSQL opt-in al servidor, con pruebas; merge 6094982454d2255c2d94a539bebbf651a509a321"
+        },
+        {
+          "ref": "pr:64#merge",
+          "kind": "pr_merged",
+          "result": "success",
+          "observedAt": "2026-10-26T18:53:30.417Z",
+          "source": "GitHub connector read 2026-10-26",
+          "summary": "test(v3): auditar privilegios mínimos del runtime PostgreSQL; merge 6d6b9f5dfa9aa150c25475b4c986468b84041a85"
+        },
+        {
+          "ref": "pr:65#merge",
+          "kind": "pr_merged",
+          "result": "success",
+          "observedAt": "2026-10-26T18:53:30.417Z",
+          "source": "GitHub connector read 2026-10-26",
+          "summary": "fix(v3): custodia de credencial PostgreSQL en Secret Manager al arrancar; merge 28211dde0cc318fe6f17d4724e917738d401a6f6"
+        },
+        {
+          "ref": "pr:66#merge",
+          "kind": "pr_merged",
+          "result": "success",
+          "observedAt": "2026-10-26T18:53:30.417Z",
+          "source": "GitHub connector read 2026-10-26",
+          "summary": "feat(v3): aprovisionamiento protegido Neon ↔ Secret Manager con verificación y cierre seguro; merge de95d751a4fc3730274ef7e12dcd5c47f5030e6d"
+        },
+        {
+          "ref": "audit:local-suite-20261026",
+          "kind": "observation",
+          "result": "info",
+          "observedAt": "2026-10-26T18:53:30.417Z",
+          "source": "docs/audits/local-suite-triage-20261026.json",
+          "summary": "37 FAIL classified: 34 hard-link EPERM, two launcher fail-open cases, one CIM-dependent test helper. 19 SKIP explained. Cloud unverified."
+        },
+        {
+          "ref": "pr:67#draft-2df3e0fc",
+          "kind": "observation",
+          "result": "info",
+          "observedAt": "2026-10-26T18:53:30.417Z",
+          "source": "GitHub connector read 2026-10-26",
+          "summary": "PR67 DRAFT/OPEN; CI 40296108781 seven SUCCESS; not merged."
+        },
+        {
+          "ref": "audit:local-host-20261026",
+          "kind": "observation",
+          "result": "info",
+          "observedAt": "2026-10-26T19:37:54.806Z",
+          "source": "Claude Code, máquina local fuera del sandbox de Work, merge de prueba #67+#68 sobre de95d751",
+          "summary": "Pruebas de registro, lanzador y arranque: 58/58 PASS, 0 SKIP. Ledger (3 archivos): 61 PASS, 0 FAIL, 1 SKIP (SIGSTOP en Windows); los 34 EPERM son del entorno de Work."
+        },
+        {
+          "ref": "gcp:oxkio-runtime-prod#secret-metadata-20261026",
+          "kind": "observation",
+          "result": "info",
+          "observedAt": "2026-10-26T19:37:54.806Z",
+          "source": "gcloud, solo metadatos, sin acceso a valores",
+          "summary": "Proyecto ACTIVE y Secret Manager habilitado; OXKIO_V3_PG_PASSWORD no existe."
         }
       ]
     },
@@ -1436,6 +1532,59 @@
       "name": "audit-closures-github",
       "result": "verified",
       "note": "7/7 cierres verificados contra GitHub"
+    },
+    {
+      "type": "preflight",
+      "at": "2026-10-26T18:47:44.253Z",
+      "missionDigest": "672b96b53eea14a2",
+      "targets": [],
+      "verdict": "PROCEED",
+      "canonSha256": "cf166bed5a3ae2dcdf1c47c21cacb2517b06bef0646421c3ef1e944f87628a15"
+    },
+    {
+      "type": "merged_duplicate",
+      "at": "2026-10-26T18:53:30.417Z",
+      "entry": "CZ-RUNTIME-SYNC"
+    },
+    {
+      "type": "state_changed",
+      "at": "2026-10-26T18:53:30.417Z",
+      "entry": "CZ-RUNTIME-SYNC",
+      "from": "BLOCKED",
+      "to": "BLOCKED",
+      "note": "Conciliacion 26/10: main de95d751 y PR62-66 integradas no equivalen a runtime actualizado ni memoria Cloud."
+    },
+    {
+      "type": "evidence_added",
+      "at": "2026-10-26T18:53:30.417Z",
+      "entry": "CZ-PG-RLS-REAL",
+      "ref": "ci:40214451847#approval-postgres-integration"
+    },
+    {
+      "type": "evidence_added",
+      "at": "2026-10-26T18:53:30.417Z",
+      "entry": "CZ-CI-NODE22-24",
+      "ref": "ci:40214451847#backend-tests (node 24)"
+    },
+    {
+      "type": "superseded_evidence",
+      "at": "2026-10-26T18:53:30.417Z",
+      "entry": "CZ-CI-NODE22-24",
+      "ref": "ci:40214451847#backend-tests (node 22)"
+    },
+    {
+      "type": "evidence_added",
+      "at": "2026-10-26T18:53:30.417Z",
+      "entry": "CZ-RUNTIME-SYNC",
+      "note": "Conciliado rev33 con PR62-66, main de95d751, PR67 draft y CI siete SUCCESS. Drive V1 contrastado. Checkpoint 26/10 preservado pero captura 8aec849; no restaura main actual. Sin cambios de estados CLOSED/BACKLOG."
+    },
+    {
+      "type": "state_changed",
+      "at": "2026-10-26T19:37:54.806Z",
+      "entry": "CZ-RUNTIME-SYNC",
+      "from": "BLOCKED",
+      "to": "BLOCKED",
+      "note": "Corrección 26/10: se sustituyen los textos ligados a la rama de PR #68 y se restablece la puerta de prueba autenticada del owner."
     }
   ]
 }

@@ -12,6 +12,9 @@ const { spawnSync } = require('node:child_process');
 const WRAPPER = path.join(__dirname, '../../scripts/Start-OxkioV3.ps1');
 const probe = process.platform === 'win32' ? spawnSync('powershell.exe', ['-NoProfile', '-Command', 'exit 0']) : { error: new Error('not windows') };
 const powershellBlocked = Boolean(probe.error) || probe.status !== 0;
+const supervisionProbe = powershellBlocked ? null : spawnSync('powershell.exe', ['-NoProfile', '-Command',
+  '$ErrorActionPreference="Stop"; Get-NetTCPConnection -ErrorAction Stop | Out-Null; Get-CimInstance Win32_Process -ErrorAction Stop | Select-Object -First 1 | Out-Null'], { encoding: 'utf8' });
+const supervisionUnavailable = !supervisionProbe || supervisionProbe.status !== 0;
 const STUB = [
   'param([switch]$ValidateOnly)',
   "foreach ($n in 'PORT','OXKIO_V3_ENABLED','OXKIO_V3_MEMORY_ROOT','OXKIO_V3_COHORT_UIDS') { $v = [Environment]::GetEnvironmentVariable($n, 'Process'); Write-Host (\"STUB {0} set={1}\" -f $n, (-not [string]::IsNullOrEmpty($v))) }",
@@ -79,11 +82,12 @@ const freePort = () => new Promise((resolve) => { const s = net.createServer().l
 const listening = (port) => new Promise((resolve) => { const c = net.connect(port, '127.0.0.1', () => { c.destroy(); resolve(true); }); c.on('error', () => resolve(false)); });
 async function waitFor(fn, ms = 30000) { const end = Date.now() + ms; while (Date.now() < end) { if (await fn()) return true; await new Promise(r => setTimeout(r, 200)); } return false; }
 const SERVER = "require('http').createServer((q,s)=>s.end('ok')).listen(Number(process.argv[2]),'127.0.0.1');require('fs').writeFileSync(process.argv[3],String(process.pid));";
-function serviceDir(port, launcher = STUB) {
+function serviceDir(port, launcher = STUB, syntheticProbe = '') {
   // Long path, as the task uses: CI temp dirs come as 8.3 short names
   // (RUNNER~1) while PowerShell resolves $PSScriptRoot to the long form.
   const dir = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), 'oxkio-v3-supervise-')));
   fs.copyFileSync(WRAPPER, path.join(dir, 'Start-OxkioV3.ps1'));
+  if (syntheticProbe) fs.writeFileSync(path.join(dir, 'Start-OxkioV3.ps1'), fs.readFileSync(WRAPPER, 'utf8').replace('# Windows PowerShell', syntheticProbe + '\n# Windows PowerShell'));
   fs.writeFileSync(path.join(dir, 'Start-Oxkio.ps1'), typeof launcher === 'function' ? launcher(dir) : launcher, 'utf8');
   fs.writeFileSync(path.join(dir, 'server.js'), SERVER, 'utf8');
   const logs = path.join(dir, 'logs'); fs.mkdirSync(logs);
@@ -100,6 +104,7 @@ const read = (f) => (fs.existsSync(f) ? fs.readFileSync(f, 'utf8') : '');
 const killPidFile = (f) => { try { process.kill(Number(fs.readFileSync(f, 'utf8')), 'SIGKILL'); } catch { /* gone */ } };
 
 test('service mode on a free port starts the launcher and records the start', async (t) => {
+  if (supervisionUnavailable) { t.skip('BLOCKED: TCP/CIM inspection denied by environment.'); return; }
   if (powershellBlocked) { t.skip('powershell.exe no disponible.'); return; }
   const s = serviceDir(await freePort());
   try {
@@ -112,6 +117,7 @@ test('service mode on a free port starts the launcher and records the start', as
 });
 
 test('a foreign process on the port: nothing starts and the live logs are not rotated', async (t) => {
+  if (supervisionUnavailable) { t.skip('BLOCKED: TCP/CIM inspection denied by environment.'); return; }
   if (powershellBlocked) { t.skip('powershell.exe no disponible.'); return; }
   const port = await freePort(); const s = serviceDir(port); const pidFile = path.join(s.dir, 'foreign.pid');
   const foreign = spawn(process.execPath, [path.join(s.dir, 'server.js'), String(port), pidFile], { stdio: 'ignore' });
@@ -127,6 +133,7 @@ test('a foreign process on the port: nothing starts and the live logs are not ro
 });
 
 test('OXKIO already running from this launcher: exits 0 without starting another instance or rotating logs', async (t) => {
+  if (supervisionUnavailable) { t.skip('BLOCKED: TCP/CIM inspection denied by environment.'); return; }
   if (powershellBlocked) { t.skip('powershell.exe no disponible.'); return; }
   const port = await freePort();
   // A stand-in launcher that keeps a Node server as its child, like the real one.
@@ -142,4 +149,21 @@ test('OXKIO already running from this launcher: exits 0 without starting another
     assert.equal(read(path.join(s.logs, 'oxkio-v3.out.log')), 'LIVE'); assert.equal(fs.existsSync(path.join(s.logs, 'oxkio-v3.out.log.1')), false);
     assert.match(read(path.join(s.logs, 'oxkio-v3.supervisor.log')), /already-running node=\d+/);
   } finally { killPidFile(pidFile); launcher.kill('SIGKILL'); fs.rmSync(s.dir, { recursive: true, force: true }); }
+});
+
+// Synthetic cmdlets exercise the decision without CIM privileges or real services.
+for (const scenario of ['denied', 'empty', 'foreign']) test('port inspection synthetic: ' + scenario, t => {
+  if (powershellBlocked) { t.skip('powershell.exe unavailable'); return; }
+  const probe = scenario === 'denied' ? "function Get-NetTCPConnection { [CmdletBinding()] param() throw 'synthetic inspection denied' }"
+    : scenario === 'empty' ? "function Get-NetTCPConnection { [CmdletBinding()] param() }"
+    : "function Get-NetTCPConnection { [CmdletBinding()] param() [pscustomobject]@{State='Listen';LocalPort=3999;OwningProcess=4242} }; function Get-CimInstance { [CmdletBinding()] param($ClassName,$Filter) $null }";
+  const s = serviceDir(3999, STUB, probe);
+  try {
+    const out = path.join(s.logs, 'oxkio-v3.out.log'); fs.writeFileSync(out, 'LIVE');
+    const r = runService(s);
+    assert.equal(r.status, scenario === 'denied' ? 1 : scenario === 'foreign' ? 2 : 0, r.output);
+    const supervisor = read(path.join(s.logs, 'oxkio-v3.supervisor.log'));
+    if (scenario === 'empty') { assert.match(read(out), /STUB/); assert.equal(read(out + '.1'), 'LIVE'); assert.match(supervisor, / start/); }
+    else { assert.equal(read(out), 'LIVE'); assert.equal(fs.existsSync(out + '.1'), false); assert.doesNotMatch(r.output, /STUB/); assert.match(supervisor, scenario === 'denied' ? /port-check-unavailable/ : /port-busy owner=4242/); }
+  } finally { fs.rmSync(s.dir, {recursive:true,force:true}); }
 });
