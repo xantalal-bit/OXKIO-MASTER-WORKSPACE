@@ -8,6 +8,9 @@
 #   bash setup-github-wif.sh open-db-window [--hours N]   # new temporary DB window (Neon admin URL + runtime password)
 #   bash setup-github-wif.sh close-db-window       # removes DB access now, before it expires
 #   bash setup-github-wif.sh rollback              # reverts only what this script created (asks for REVERTIR)
+#   bash setup-github-wif.sh plan-build-sa         # only reads; prints the dedicated Cloud Build account changes
+#   bash setup-github-wif.sh apply-build-sa        # only the dedicated Cloud Build account and its grants
+#                                                  # (no APIs, no WIF, no secrets, no DB window)
 #
 # Ownership: everything this script creates carries the marker below (service
 # account, pool and provider descriptions; secret label; the secret versions it
@@ -30,6 +33,10 @@ POOL="oxkio-github"
 PROVIDER="oxkio-main"
 SA_DB="oxkio-gha-db"
 SA_DEPLOY="oxkio-gha-deploy"
+# Dedicated Cloud Build identity (no keys, not federated). Builds never run as the Compute
+# Engine default account (roles/editor): actAs on it would let the deploy identity run
+# arbitrary build steps as a project editor.
+SA_BUILD="oxkio-gha-build"
 ENV_DB="oxkio-v3-db"
 ENV_DEPLOY="oxkio-v3-deploy"
 WF_DB=".github/workflows/oxkio-v3-db.yml"
@@ -46,6 +53,10 @@ DEPLOY_METADATA_SECRETS=(OXKIO_APPROVAL_PG_RUNTIME_URL OXKIO_MISSION_PG_RUNTIME_
   OXKIO_V3_INTEGRITY_KEY oxkio-google-client-secret oxkio-google-oauth-tokens OXKIO_V3_PG_PASSWORD)
 DEPLOY_PROJECT_ROLES=(roles/cloudbuild.builds.editor roles/serviceusage.serviceUsageConsumer roles/logging.viewer
   roles/iam.securityReviewer roles/run.viewer)
+# Build identity: only what one `docker build` + push to $AR_REPO needs. Project level is
+# only the log writer (Cloud Logging has no narrower grant); everything else is per resource.
+BUILD_PROJECT_ROLES=(roles/logging.logWriter)
+STAGING_BUCKET="gs://${PROJECT}_cloudbuild"
 # cloudresourcemanager: with federated credentials the quota project is $PROJECT, so the
 # deploy checks' `gcloud projects get-iam-policy` need this API enabled here (observed
 # 31/10/2026: check-real failed with SERVICE_DISABLED; the owner's gcloud did not notice).
@@ -61,10 +72,14 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 [[ "$HOURS" =~ ^[0-9]+$ ]] && (( HOURS >= 1 && HOURS <= 24 )) || { echo "--hours debe estar entre 1 y 24" >&2; exit 64; }
-case "$MODE" in plan|apply|verify|open-db-window|close-db-window|rollback) ;; *) echo "Modo desconocido: $MODE" >&2; exit 64 ;; esac
+case "$MODE" in plan|apply|verify|open-db-window|close-db-window|rollback|plan-build-sa|apply-build-sa) ;; *) echo "Modo desconocido: $MODE" >&2; exit 64 ;; esac
+# plan-build-sa / apply-build-sa reuse the plan/apply machinery restricted to the build account.
+SCOPE=all
+case "$MODE" in plan-build-sa) MODE=plan; SCOPE=build ;; apply-build-sa) MODE=apply; SCOPE=build ;; esac
 
 DB_EMAIL="${SA_DB}@${PROJECT}.iam.gserviceaccount.com"
 DEPLOY_EMAIL="${SA_DEPLOY}@${PROJECT}.iam.gserviceaccount.com"
+BUILD_EMAIL="${SA_BUILD}@${PROJECT}.iam.gserviceaccount.com"
 ATTRIBUTE_CONDITION="assertion.repository_id == '${REPO_ID}' && assertion.repository_owner_id == '${REPO_OWNER_ID}' && assertion.ref == 'refs/heads/main' && assertion.event_name == 'workflow_dispatch' && ((assertion.environment == '${ENV_DB}' && assertion.workflow_ref == '${REPO}/${WF_DB}@refs/heads/main') || (assertion.environment == '${ENV_DEPLOY}' && assertion.workflow_ref == '${REPO}/${WF_DEPLOY}@refs/heads/main'))"
 ATTRIBUTE_MAPPING="google.subject=assertion.sub,attribute.environment=assertion.environment,attribute.repository_id=assertion.repository_id"
 
@@ -205,9 +220,36 @@ assert_ownership() {
   if exists iam workload-identity-pools providers describe "$PROVIDER" --project="$PROJECT" --location=global --workload-identity-pool="$POOL"; then
     owned provider || refuse "el proveedor $PROVIDER"
   fi
-  for sa in "$DB_EMAIL" "$DEPLOY_EMAIL"; do
+  for sa in "$DB_EMAIL" "$DEPLOY_EMAIL" "$BUILD_EMAIL"; do
     if exists iam service-accounts describe "$sa" --project="$PROJECT"; then owned sa "$sa" || refuse "la cuenta $sa"; fi
   done
+}
+
+# Dedicated Cloud Build account. Grants, exactly:
+#   build  -> roles/artifactregistry.writer on $AR_REPO (push the image)
+#   build  -> roles/storage.objectViewer on $STAGING_BUCKET (read the uploaded source)
+#   build  -> roles/logging.logWriter on the project (CLOUD_LOGGING_ONLY build logs)
+#   deploy -> roles/iam.serviceAccountUser on the build account ONLY (actAs for builds.create)
+#   deploy -> roles/storage.legacyBucketReader on $STAGING_BUCKET (gcloud builds submit runs
+#             buckets.get on the staging bucket before uploading; objectAdmin lacks it)
+apply_build_sa() {
+  if [[ "$MODE" != plan ]]; then
+    owned sa "$DEPLOY_EMAIL" || { say "BLOQUEO: $DEPLOY_EMAIL no existe o no lo creó este script." >&2; exit 68; }
+    exists storage buckets describe "$STAGING_BUCKET" --project="$PROJECT" \
+      || { say "BLOQUEO: $STAGING_BUCKET no existe; la cuenta de build no se crea sin su bucket de staging." >&2; exit 69; }
+  fi
+  if exists iam service-accounts describe "$BUILD_EMAIL" --project="$PROJECT"; then
+    owned sa "$BUILD_EMAIL" || refuse "la cuenta $BUILD_EMAIL"; say "OK  $BUILD_EMAIL propia, se reutiliza"
+  else
+    run iam service-accounts create "$SA_BUILD" --project="$PROJECT" --display-name="OXKIO Cloud Build (no keys, not federated)" --description="$MARK"
+  fi
+  run iam service-accounts add-iam-policy-binding "$BUILD_EMAIL" --project="$PROJECT" --member="serviceAccount:$DEPLOY_EMAIL" --role=roles/iam.serviceAccountUser
+  run artifacts repositories add-iam-policy-binding "$AR_REPO" --project="$PROJECT" --location="$REGION" --member="serviceAccount:$BUILD_EMAIL" --role=roles/artifactregistry.writer
+  for role in "${BUILD_PROJECT_ROLES[@]}"; do
+    run projects add-iam-policy-binding "$PROJECT" --member="serviceAccount:$BUILD_EMAIL" --role="$role" --condition=None
+  done
+  run storage buckets add-iam-policy-binding "$STAGING_BUCKET" --project="$PROJECT" --member="serviceAccount:$BUILD_EMAIL" --role=roles/storage.objectViewer
+  run storage buckets add-iam-policy-binding "$STAGING_BUCKET" --project="$PROJECT" --member="serviceAccount:$DEPLOY_EMAIL" --role=roles/storage.legacyBucketReader
 }
 
 apply_all() {
@@ -254,6 +296,7 @@ apply_all() {
   for secret in "${DEPLOY_METADATA_SECRETS[@]}"; do
     run secrets add-iam-policy-binding "$secret" --project="$PROJECT" --member="serviceAccount:$DEPLOY_EMAIL" --role=roles/secretmanager.viewer
   done
+  if [[ "$MODE" == plan ]] || exists storage buckets describe "$STAGING_BUCKET" --project="$PROJECT"; then apply_build_sa; fi
 
   store_admin_url
   open_db_window
@@ -332,10 +375,35 @@ verify_all() {
   expect "$DEPLOY_EMAIL: serviceAccountUser sobre la cuenta de runtime" "$(printf '%s' "$policy" | member_roles "serviceAccount:$DEPLOY_EMAIL")" "roles/iam.serviceAccountUser|NONE"
   policy="$(gcloud artifacts repositories get-iam-policy "$AR_REPO" --project="$PROJECT" --location="$REGION" --format=json 2>/dev/null || true)"
   expect "$DB_EMAIL sin permisos en Artifact Registry" "$(printf '%s' "$policy" | member_roles "serviceAccount:$DB_EMAIL")" ""
+  expect "$DEPLOY_EMAIL en $AR_REPO: solo reader" "$(printf '%s' "$policy" | member_roles "serviceAccount:$DEPLOY_EMAIL")" "roles/artifactregistry.reader|NONE"
+  expect "$BUILD_EMAIL en $AR_REPO: solo writer" "$(printf '%s' "$policy" | member_roles "serviceAccount:$BUILD_EMAIL")" "roles/artifactregistry.writer|NONE"
+
+  # Dedicated build account: owned, keyless, only the deploy identity may act as it, exact grants.
+  owned sa "$BUILD_EMAIL" && pass "$BUILD_EMAIL propia" || fail "$BUILD_EMAIL ausente o no propia (apply-build-sa)"
+  expect "$BUILD_EMAIL sin claves de usuario" "$(gcloud iam service-accounts keys list --iam-account="$BUILD_EMAIL" --project="$PROJECT" --managed-by=user --format='value(name)' 2>/dev/null)" ""
+  policy="$(gcloud iam service-accounts get-iam-policy "$BUILD_EMAIL" --project="$PROJECT" --format=json 2>/dev/null || true)"
+  expect "$BUILD_EMAIL: $DEPLOY_EMAIL con serviceAccountUser" "$(printf '%s' "$policy" | member_roles "serviceAccount:$DEPLOY_EMAIL")" "roles/iam.serviceAccountUser|NONE"
+  expect "$BUILD_EMAIL: ningún otro principal (ni federación) con permisos sobre la cuenta" \
+    "$(printf '%s' "$policy" | python3 -c 'import json,sys; raw=sys.stdin.read().strip(); p=json.loads(raw) if raw else {}; print(sum(len(b.get("members",[])) for b in p.get("bindings",[])))')" "1"
+  policy="$(gcloud projects get-iam-policy "$PROJECT" --format=json 2>/dev/null || true)"
+  expect "$BUILD_EMAIL: roles de proyecto exactos (solo logWriter), sin condición" "$(printf '%s' "$policy" | member_roles "serviceAccount:$BUILD_EMAIL" | tr '\n' ' ')" \
+    "$(printf '%s|NONE\n' "${BUILD_PROJECT_ROLES[@]}" | sort | tr '\n' ' ')"
+  policy="$(gcloud storage buckets get-iam-policy "$STAGING_BUCKET" --project="$PROJECT" --format=json 2>/dev/null || true)"
+  expect "$BUILD_EMAIL en $STAGING_BUCKET: solo objectViewer" "$(printf '%s' "$policy" | member_roles "serviceAccount:$BUILD_EMAIL")" "roles/storage.objectViewer|NONE"
+  expect "$DEPLOY_EMAIL en $STAGING_BUCKET: objectAdmin + legacyBucketReader" "$(printf '%s' "$policy" | member_roles "serviceAccount:$DEPLOY_EMAIL" | tr '\n' ' ')" \
+    "roles/storage.legacyBucketReader|NONE roles/storage.objectAdmin|NONE "
+  policy="$(gcloud run services get-iam-policy "$SERVICE" --project="$PROJECT" --region="$REGION" --format=json 2>/dev/null || true)"
+  expect "$BUILD_EMAIL sin permisos en $SERVICE" "$(printf '%s' "$policy" | member_roles "serviceAccount:$BUILD_EMAIL")" ""
+  policy="$(gcloud iam service-accounts get-iam-policy "$RUNTIME_SA" --project="$PROJECT" --format=json 2>/dev/null || true)"
+  expect "$BUILD_EMAIL sin permisos sobre la cuenta de runtime" "$(printf '%s' "$policy" | member_roles "serviceAccount:$BUILD_EMAIL")" ""
+  # No privilege escalation through the Compute Engine default account (roles/editor).
+  policy="$(gcloud iam service-accounts get-iam-policy "${num}-compute@developer.gserviceaccount.com" --project="$PROJECT" --format=json 2>/dev/null || true)"
+  expect "$DEPLOY_EMAIL sin permisos sobre la cuenta Compute por defecto (sin actAs de editor)" "$(printf '%s' "$policy" | member_roles "serviceAccount:$DEPLOY_EMAIL")" ""
+  expect "$BUILD_EMAIL sin permisos sobre la cuenta Compute por defecto" "$(printf '%s' "$policy" | member_roles "serviceAccount:$BUILD_EMAIL")" ""
 
   # Every secret of the project: the DB identity only inside an unexpired window on its two
   # secrets; the deploy identity only metadata (viewer) and never the Neon admin URL.
-  local db_secrets="" deploy_secrets="" window_ok=1 expiry
+  local db_secrets="" deploy_secrets="" build_secrets="" window_ok=1 expiry
   for secret in $(gcloud secrets list --project="$PROJECT" --format='value(name)' 2>/dev/null | sed 's#.*/##' | sort); do
     policy="$(gcloud secrets get-iam-policy "$secret" --project="$PROJECT" --format=json 2>/dev/null || true)"
     lines="$(printf '%s' "$policy" | member_roles "serviceAccount:$DB_EMAIL")"
@@ -346,7 +414,10 @@ verify_all() {
     done <<< "$lines"
     lines="$(printf '%s' "$policy" | member_roles "serviceAccount:$DEPLOY_EMAIL")"
     while IFS='|' read -r role expiry; do [[ -n "$role" ]] && deploy_secrets+="$secret:$role:$expiry "; done <<< "$lines"
+    lines="$(printf '%s' "$policy" | member_roles "serviceAccount:$BUILD_EMAIL")"
+    while IFS='|' read -r role expiry; do [[ -n "$role" ]] && build_secrets+="$secret:$role "; done <<< "$lines"
   done
+  expect "$BUILD_EMAIL sin permisos en ningún secreto" "$(printf '%s\n' $build_secrets | sort | tr '\n' ' ' | xargs)" ""
   expected="$(printf '%s\n' "$ADMIN_URL_SECRET:roles/secretmanager.secretAccessor" "$PG_PASSWORD_SECRET:roles/secretmanager.secretAccessor" "$PG_PASSWORD_SECRET:roles/secretmanager.viewer" | sort | tr '\n' ' ')"
   expect "$DB_EMAIL: exactamente los 3 permisos de la ventana DB, en ningún otro secreto" "$(printf '%s\n' $db_secrets | sort | tr '\n' ' ')" "$expected"
   [[ "$window_ok" == 1 && -n "$db_secrets" ]] && pass "ventana DB vigente: todas las concesiones caducan (≤ 24 h) y ninguna ha caducado" \
@@ -410,10 +481,22 @@ rollback_all() {
     gcloud iam service-accounts remove-iam-policy-binding "$RUNTIME_SA" --project="$PROJECT" --member="serviceAccount:$DEPLOY_EMAIL" --role=roles/iam.serviceAccountUser --quiet >/dev/null 2>&1 || true
     gcloud artifacts repositories remove-iam-policy-binding "$AR_REPO" --project="$PROJECT" --location="$REGION" --member="serviceAccount:$DEPLOY_EMAIL" --role=roles/artifactregistry.reader --quiet >/dev/null 2>&1 || true
     gcloud storage buckets remove-iam-policy-binding "gs://${PROJECT}_cloudbuild" --project="$PROJECT" --member="serviceAccount:$DEPLOY_EMAIL" --role=roles/storage.objectAdmin --quiet >/dev/null 2>&1 || true
+    gcloud storage buckets remove-iam-policy-binding "$STAGING_BUCKET" --project="$PROJECT" --member="serviceAccount:$DEPLOY_EMAIL" --role=roles/storage.legacyBucketReader --quiet >/dev/null 2>&1 || true
     gcloud iam service-accounts delete "$DEPLOY_EMAIL" --project="$PROJECT" --quiet >/dev/null 2>&1 || true
     say "OK  $DEPLOY_EMAIL: permisos y cuenta eliminados"
   else
     say "--  $DEPLOY_EMAIL no es propia o no existe: no se toca"
+  fi
+  if owned sa "$BUILD_EMAIL"; then
+    gcloud artifacts repositories remove-iam-policy-binding "$AR_REPO" --project="$PROJECT" --location="$REGION" --member="serviceAccount:$BUILD_EMAIL" --role=roles/artifactregistry.writer --quiet >/dev/null 2>&1 || true
+    for role in "${BUILD_PROJECT_ROLES[@]}"; do
+      gcloud projects remove-iam-policy-binding "$PROJECT" --member="serviceAccount:$BUILD_EMAIL" --role="$role" --condition=None --quiet >/dev/null 2>&1 || true
+    done
+    gcloud storage buckets remove-iam-policy-binding "$STAGING_BUCKET" --project="$PROJECT" --member="serviceAccount:$BUILD_EMAIL" --role=roles/storage.objectViewer --quiet >/dev/null 2>&1 || true
+    gcloud iam service-accounts delete "$BUILD_EMAIL" --project="$PROJECT" --quiet >/dev/null 2>&1 || true
+    say "OK  $BUILD_EMAIL: permisos y cuenta eliminados"
+  else
+    say "--  $BUILD_EMAIL no es propia o no existe: no se toca"
   fi
   if owned provider; then
     gcloud iam workload-identity-pools providers delete "$PROVIDER" --project="$PROJECT" --location=global --workload-identity-pool="$POOL" --quiet >/dev/null 2>&1 || true
@@ -432,6 +515,14 @@ rollback_all() {
   done
   say "ROLLBACK: hecho. Las APIs habilitadas y los recursos sin marca $MARK no se han modificado."
 }
+
+if [[ "$SCOPE" == build ]]; then
+  [[ "$MODE" == plan ]] && say "MODO PLAN (cuenta de build): solo lecturas, no se cambia nada."
+  assert_ownership
+  apply_build_sa
+  [[ "$MODE" == apply ]] && say "APPLY-BUILD-SA: hecho. Ejecuta 'verify' para comprobarlo."
+  exit 0
+fi
 
 case "$MODE" in
   plan) say "MODO PLAN: solo lecturas, no se cambia nada."; apply_all ;;

@@ -75,8 +75,24 @@ const owned = [
   { all: ['workload-identity-pools'], code: 0, stdout: '' }
 ];
 
+const BUILD = `oxkio-gha-build@${P}.iam.gserviceaccount.com`;
+const COMPUTE = `${NUM}-compute@developer.gserviceaccount.com`;
+const BUCKET = `gs://${P}_cloudbuild`;
+const ownedBuild = { all: ['service-accounts describe', BUILD, 'description'], stdout: MARK };
+// The dedicated build account state, exactly as apply-build-sa leaves it.
+const BUILD_OK = {
+  buildPolicy: [{ role: 'roles/iam.serviceAccountUser', members: [`serviceAccount:${DEPLOY}`] }],
+  buildProjectRoles: ['roles/logging.logWriter'],
+  computePolicy: [],
+  bucket: [{ role: 'roles/storage.objectViewer', members: [`serviceAccount:${BUILD}`] },
+    { role: 'roles/storage.objectAdmin', members: [`serviceAccount:${DEPLOY}`] },
+    { role: 'roles/storage.legacyBucketReader', members: [`serviceAccount:${DEPLOY}`, 'projectViewer:oxkio-runtime-prod'] }],
+  buildOnSecret: null,
+  buildOwned: true
+};
 const APIS = ['iam.googleapis.com', 'iamcredentials.googleapis.com', 'sts.googleapis.com', 'cloudresourcemanager.googleapis.com'];
-function goodState({ dbBindings, deployOnAdmin = false, ghAuthed = true, reviewers = ['xantalal-bit'], apis = APIS } = {}) {
+function goodState({ dbBindings, deployOnAdmin = false, ghAuthed = true, reviewers = ['xantalal-bit'], apis = APIS, build = {} } = {}) {
+  const b = { ...BUILD_OK, ...build };
   const until = iso(Date.now() + 3 * 3600e3);
   const plan = run.lastPlanCondition;
   const db = dbBindings ?? {
@@ -88,6 +104,7 @@ function goodState({ dbBindings, deployOnAdmin = false, ghAuthed = true, reviewe
     'oxkio-google-client-secret', 'oxkio-google-oauth-tokens', 'OXKIO_V3_PG_PASSWORD'];
   const secrets = [...new Set([...metadata, 'OXKIO_V3_PG_ADMIN_URL', 'UNRELATED_SECRET'])];
   const rules = [
+    ...(b.buildOwned ? [ownedBuild] : [{ all: ['service-accounts describe', BUILD, 'description'], stdout: 'legacy' }]),
     ...owned.slice(0, 3),
     { all: ['providers describe', 'attributeCondition'], stdout: plan },
     ...owned.slice(3),
@@ -95,14 +112,19 @@ function goodState({ dbBindings, deployOnAdmin = false, ghAuthed = true, reviewe
     { all: ['services list', '--enabled'], stdout: apis.join('\n') },
     { all: ['service-accounts get-iam-policy', DB], stdout: policy({ role: 'roles/iam.workloadIdentityUser', members: [principal('oxkio-v3-db')] }) },
     { all: ['service-accounts get-iam-policy', DEPLOY], stdout: policy({ role: 'roles/iam.workloadIdentityUser', members: [principal('oxkio-v3-deploy')] }) },
+    { all: ['service-accounts get-iam-policy', BUILD], stdout: policy(...b.buildPolicy) },
+    { all: ['service-accounts get-iam-policy', COMPUTE], stdout: policy(...b.computePolicy) },
     { all: ['service-accounts get-iam-policy', `oxkio-runtime-prod@${P}`], stdout: policy({ role: 'roles/iam.serviceAccountUser', members: [`serviceAccount:${DEPLOY}`, 'user:jose@example.com'] }) },
     { all: ['projects get-iam-policy'], stdout: policy(...['roles/cloudbuild.builds.editor', 'roles/serviceusage.serviceUsageConsumer', 'roles/logging.viewer', 'roles/iam.securityReviewer', 'roles/run.viewer']
-      .map((role) => ({ role, members: [`serviceAccount:${DEPLOY}`] })), { role: 'roles/owner', members: ['user:jose@example.com'] }) },
+      .map((role) => ({ role, members: [`serviceAccount:${DEPLOY}`] })), ...b.buildProjectRoles.map((role) => ({ role, members: [`serviceAccount:${BUILD}`] })),
+      { role: 'roles/editor', members: [`serviceAccount:${COMPUTE}`] }, { role: 'roles/owner', members: ['user:jose@example.com'] }) },
     { all: ['run services get-iam-policy'], stdout: policy({ role: 'roles/run.developer', members: [`serviceAccount:${DEPLOY}`] }, { role: 'roles/run.invoker', members: [`serviceAccount:${DEPLOY}`] }) },
-    { all: ['artifacts repositories get-iam-policy'], stdout: policy({ role: 'roles/artifactregistry.reader', members: [`serviceAccount:${DEPLOY}`] }) },
+    { all: ['artifacts repositories get-iam-policy'], stdout: policy({ role: 'roles/artifactregistry.reader', members: [`serviceAccount:${DEPLOY}`] }, { role: 'roles/artifactregistry.writer', members: [`serviceAccount:${BUILD}`] }) },
+    { all: ['buckets get-iam-policy', BUCKET], stdout: policy(...b.bucket) },
     { all: ['secrets list'], stdout: secrets.map((s) => `projects/${NUM}/secrets/${s}`).join('\n') },
     ...secrets.map((s) => ({ all: ['secrets get-iam-policy', ` ${s} `], stdout: policy(...(db[s] || []),
       ...(metadata.includes(s) ? [{ role: 'roles/secretmanager.viewer', members: [`serviceAccount:${DEPLOY}`] }] : []),
+      ...(b.buildOnSecret === s ? [{ role: 'roles/secretmanager.secretAccessor', members: [`serviceAccount:${BUILD}`] }] : []),
       ...(deployOnAdmin && s === 'OXKIO_V3_PG_ADMIN_URL' ? [{ role: 'roles/secretmanager.secretAccessor', members: [`serviceAccount:${DEPLOY}`] }] : [])) })),
     { all: ['versions list', 'OXKIO_V3_PG_ADMIN_URL'], stdout: `projects/${NUM}/secrets/OXKIO_V3_PG_ADMIN_URL/versions/1` }
   ];
@@ -175,7 +197,7 @@ test('apply streams the admin URL over stdin only, records the version it create
   const r = run(dir, ['apply', '--hours', '2'], { input: ADMIN_URL + '\n', rules: [
     { all: ['secrets describe', 'annotations.oxkio-setup-versions'], stdout: '1' },
     { all: ['versions add'], stdout: `projects/${NUM}/secrets/OXKIO_V3_PG_ADMIN_URL/versions/3` },
-    { all: ['secrets describe'], code: 0 }, ...owned] });
+    { all: ['secrets describe'], code: 0 }, ownedBuild, ...owned] });
   assert.equal(r.status, 0, r.stderr);
   assert.equal(r.stdin, ADMIN_URL, 'value delivered to gcloud through stdin');
   assert.equal((r.stdout + r.stderr + JSON.stringify(r.calls)).includes('fake-admin-pw-123'), false, 'secret never in argv or output');
@@ -199,7 +221,7 @@ test('an unsafe admin URL is refused without echo; an existing version is never 
     assert.equal(r.stdin, null);
     assert.equal((r.stdout + r.stderr).includes('fake-admin-pw-123'), false);
   }
-  const r = run(dir, ['apply'], { rules: [{ all: ['versions list'], stdout: '1' }, { all: ['secrets describe'], code: 0 }, ...owned] });
+  const r = run(dir, ['apply'], { rules: [{ all: ['versions list'], stdout: '1' }, { all: ['secrets describe'], code: 0 }, ownedBuild, ...owned] });
   assert.equal(r.status, 0, r.stderr);
   assert.equal(r.stdin, null);
   assert.equal(r.gcloud.some((a) => a.some((x) => x.startsWith('--update-annotations'))), false, 'a pre-existing version is not recorded as own');
@@ -235,6 +257,18 @@ test('verify fails without an active window, with expired or unconditional grant
     ['deploy identity can read the Neon admin URL', goodState({ deployOnAdmin: true }), /FAIL  oxkio-gha-deploy@[^\n]*solo metadatos/],
     ['GitHub not verifiable', goodState({ ghAuthed: false }), /FAIL  GitHub no verificable/],
     ['Cloud Resource Manager API disabled (check-real SERVICE_DISABLED)', goodState({ apis: APIS.filter((a) => a !== 'cloudresourcemanager.googleapis.com') }), /FAIL  API cloudresourcemanager\.googleapis\.com no habilitada/],
+    ['ESCALATION: deploy identity can act as the Compute default account (editor)', goodState({ build: { computePolicy: [{ role: 'roles/iam.serviceAccountUser', members: [`serviceAccount:${DEPLOY}`] }] } }),
+      /FAIL  oxkio-gha-deploy@[^\n]*sin permisos sobre la cuenta Compute por defecto/],
+    ['ESCALATION: build account with a project role beyond logWriter', goodState({ build: { buildProjectRoles: ['roles/logging.logWriter', 'roles/editor'] } }),
+      /FAIL  oxkio-gha-build@[^\n]*roles de proyecto exactos/],
+    ['ESCALATION: build account impersonable from GitHub or by someone else', goodState({ build: { buildPolicy: [{ role: 'roles/iam.serviceAccountUser', members: [`serviceAccount:${DEPLOY}`] },
+      { role: 'roles/iam.workloadIdentityUser', members: [principal('oxkio-v3-deploy')] }] } }), /FAIL  oxkio-gha-build@[^\n]*ningún otro principal/],
+    ['ESCALATION: build account can read a secret', goodState({ build: { buildOnSecret: 'OXKIO_V3_PG_PASSWORD' } }), /FAIL  oxkio-gha-build@[^\n]*sin permisos en ningún secreto/],
+    ['build account may write the staging bucket', goodState({ build: { bucket: [...BUILD_OK.bucket, { role: 'roles/storage.objectAdmin', members: [`serviceAccount:${BUILD}`] }] } }),
+      /FAIL  oxkio-gha-build@[^\n]*solo objectViewer/],
+    ['deploy identity cannot read the staging bucket metadata (gcloud buckets.get)', goodState({ build: { bucket: BUILD_OK.bucket.map((x) => x.role === 'roles/storage.legacyBucketReader' ? { ...x, members: ['projectViewer:oxkio-runtime-prod'] } : x) } }),
+      /FAIL  oxkio-gha-deploy@[^\n]*objectAdmin \+ legacyBucketReader/],
+    ['build account missing or not owned', goodState({ build: { buildOwned: false } }), /FAIL  oxkio-gha-build@[^\n]*ausente o no propia/],
     ['environment without the required reviewer', goodState({ reviewers: [] }), /FAIL  entorno oxkio-v3-db: revisor obligatorio/]
   ];
   for (const [label, rules, expected] of cases) {
@@ -242,6 +276,62 @@ test('verify fails without an active window, with expired or unconditional grant
     assert.equal(r.status, 1, label);
     assert.match(r.stdout, expected, label);
     assert.match(r.stdout, /VERIFY: FAIL/, label);
+    assert.deepEqual(mutations(r), [], label);
+  }
+});
+
+// Exact mutations apply-build-sa may perform (nothing else: no API, WIF, secret, DB window or Compute account).
+const BUILD_MUTATIONS = [
+  ['iam', 'service-accounts', 'create', 'oxkio-gha-build'],
+  ['iam', 'service-accounts', 'add-iam-policy-binding', BUILD, `--member=serviceAccount:${DEPLOY}`, '--role=roles/iam.serviceAccountUser'],
+  ['artifacts', 'repositories', 'add-iam-policy-binding', 'oxkio-staging', `--member=serviceAccount:${BUILD}`, '--role=roles/artifactregistry.writer'],
+  ['projects', 'add-iam-policy-binding', P, `--member=serviceAccount:${BUILD}`, '--role=roles/logging.logWriter', '--condition=None'],
+  ['storage', 'buckets', 'add-iam-policy-binding', BUCKET, `--member=serviceAccount:${BUILD}`, '--role=roles/storage.objectViewer'],
+  ['storage', 'buckets', 'add-iam-policy-binding', BUCKET, `--member=serviceAccount:${DEPLOY}`, '--role=roles/storage.legacyBucketReader']
+];
+const matchesMutation = (a, m) => m.every((x) => a.includes(x));
+
+test('plan-build-sa only reads and shows exactly the dedicated build account grants', { skip }, (t) => {
+  const dir = setup(t);
+  const r = run(dir, ['plan-build-sa']);
+  assert.equal(r.status, 0, r.stderr);
+  assert.deepEqual(mutations(r), [], 'plan executes only reads');
+  const planned = r.stdout.split('\n').filter((l) => l.startsWith('PLAN: gcloud '));
+  assert.equal(planned.length, BUILD_MUTATIONS.length, r.stdout);
+  for (const m of BUILD_MUTATIONS) assert.ok(planned.some((l) => m.every((x) => l.includes(x))), m.join(' '));
+  assert.doesNotMatch(r.stdout, /secrets|workload-identity|services enable|-compute@|roles\/editor|roles\/owner|tokenCreator|set-iam-policy|keys create|allUsers/);
+});
+
+test('apply-build-sa performs only the build account grants and never touches DB, secrets, WIF or the Compute account', { skip }, (t) => {
+  const dir = setup(t);
+  const r = run(dir, ['apply-build-sa'], { rules: [{ all: ['service-accounts describe', BUILD], code: 1 },
+    { all: ['buckets describe', BUCKET], code: 0 }, ...owned] });
+  assert.equal(r.status, 0, r.stdout + r.stderr);
+  const muts = mutations(r);
+  assert.equal(muts.length, BUILD_MUTATIONS.length, JSON.stringify(muts));
+  for (const m of BUILD_MUTATIONS) assert.ok(muts.some((a) => matchesMutation(a, m)), m.join(' '));
+  // Not even a read of secrets or of the Compute account; WIF and APIs are only read (ownership), never changed.
+  assert.equal(r.gcloud.some((a) => a[0] === 'secrets' || a.some((x) => x.includes('-compute@'))), false);
+  assert.equal(muts.some((a) => a.includes('workload-identity-pools') || a[0] === 'services'), false);
+  assert.equal(r.gcloud.some((a) => a.some((x) => /roles\/(editor|owner|iam\.serviceAccountTokenCreator|iam\.workloadIdentityUser)/.test(x))), false);
+  assert.equal(r.stdin, null, 'no admin URL prompt');
+  // The deploy identity gets actAs on the build account only.
+  const actAs = muts.filter((a) => a.includes('--role=roles/iam.serviceAccountUser'));
+  assert.deepEqual(actAs.map((a) => a[3]), [BUILD]);
+});
+
+test('apply-build-sa refuses a foreign build account, a missing deploy identity or a missing staging bucket, changing nothing', { skip }, (t) => {
+  const dir = setup(t);
+  const cases = [
+    ['foreign build account', [{ all: ['service-accounts describe', BUILD, 'description'], stdout: 'legacy' }, { all: ['service-accounts describe', BUILD] },
+      { all: ['buckets describe', BUCKET], code: 0 }, ...owned], 68, /no lo creó este script/],
+    ['deploy identity not owned', [{ all: ['service-accounts describe', DEPLOY, 'description'], stdout: 'legacy' }, { all: ['buckets describe', BUCKET], code: 0 }], 68, /oxkio-gha-deploy@/],
+    ['no staging bucket', [{ all: ['service-accounts describe', BUILD], code: 1 }, ...owned], 69, /no existe/]
+  ];
+  for (const [label, rules, code, msg] of cases) {
+    const r = run(dir, ['apply-build-sa'], { rules });
+    assert.equal(r.status, code, label + ': ' + r.stdout + r.stderr);
+    assert.match(r.stderr, msg, label);
     assert.deepEqual(mutations(r), [], label);
   }
 });
@@ -256,8 +346,14 @@ test('rollback reverts only own resources and only the secret versions this scri
   const r = run(dir, ['rollback'], { input: 'REVERTIR\n', rules: [
     { all: ['workload-identity-pools describe', 'description'], stdout: 'created by someone else' },
     { all: ['secrets describe', 'annotations.oxkio-setup-versions'], stdout: '3' },
-    { all: ['versions list'], stdout: '1\n3' }, ...owned] });
+    { all: ['versions list'], stdout: '1\n3' }, ownedBuild, ...owned] });
   assert.equal(r.status, 0, r.stderr);
+  assert.ok(r.gcloud.some((a) => a.includes('service-accounts') && a.includes('delete') && a.includes(BUILD)), 'own build account deleted');
+  for (const [res, role] of [['repositories', 'roles/artifactregistry.writer'], ['projects', 'roles/logging.logWriter'], ['buckets', 'roles/storage.objectViewer']]) {
+    assert.ok(r.gcloud.some((a) => a.includes(res) && a.includes('remove-iam-policy-binding') && a.includes(`--member=serviceAccount:${BUILD}`) && a.includes(`--role=${role}`)), role);
+  }
+  assert.ok(r.gcloud.some((a) => a.includes('buckets') && a.includes('remove-iam-policy-binding') && a.includes(`--member=serviceAccount:${DEPLOY}`) && a.includes('--role=roles/storage.legacyBucketReader')));
+  assert.equal(r.gcloud.some((a) => a.some((x) => x.includes('-compute@'))), false, 'Compute default account never touched');
   const disabled = r.gcloud.filter((a) => a.includes('versions') && a.includes('disable')).map((a) => a[a.indexOf('disable') + 1]);
   assert.deepEqual(disabled, ['3'], 'only the version this script added');
   assert.equal(r.gcloud.some((a) => a.includes('destroy') || (a[0] === 'secrets' && a[1] === 'delete')), false);
