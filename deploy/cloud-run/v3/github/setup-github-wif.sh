@@ -96,21 +96,71 @@ window_condition() {
   printf 'expression=request.time < timestamp("%s"),title=%s-%s,description=Temporary GitHub DB window' "$until" "$WINDOW_TITLE_PREFIX" "$(date -u +%Y%m%dT%H%M%SZ)"
 }
 
-# Bindings of the DB identity only exist on these two secrets and only for an owned account.
+# Bindings of the DB identity on a secret policy (stdin), one per line:
+#   OWN|FOREIGN <TAB> role <TAB> condition JSON (or -)
+# OWN = conditional binding whose title starts with the window prefix (created by open-db-window).
+db_grants() {
+  python3 -c '
+import json, sys
+member, prefix = sys.argv[1], sys.argv[2] + "-"
+raw = sys.stdin.read().strip()
+policy = json.loads(raw) if raw else {}
+for b in policy.get("bindings", []):
+    if member not in b.get("members", []):
+        continue
+    c = b.get("condition")
+    own = bool(c) and str(c.get("title", "")).startswith(prefix)
+    print("OWN" if own else "FOREIGN", b.get("role", ""), json.dumps(c, separators=(",", ":")) if c else "-", sep="\t")
+' "serviceAccount:$DB_EMAIL" "$WINDOW_TITLE_PREFIX" | tr -d '\r'
+}
+
+# Removes the window grants of the DB identity on the two DB secrets by their EXACT condition
+# (`remove-iam-policy-binding --all` is refused by gcloud on conditional policies in
+# non-interactive mode). Bindings of other principals and grants not created by a window are
+# never touched. Errors are not hidden: returns 70 if a removal fails, a policy cannot be read,
+# or ANY binding of the DB identity remains on either secret afterwards.
 close_db_window() {
-  local secret role
+  local secret policy grants kind role cond file failed=0
   for secret in "$ADMIN_URL_SECRET" "$PG_PASSWORD_SECRET"; do
-    for role in roles/secretmanager.secretAccessor roles/secretmanager.viewer; do
-      if [[ "$MODE" == plan ]]; then say "PLAN: gcloud secrets remove-iam-policy-binding $secret --project=$PROJECT --member=serviceAccount:$DB_EMAIL --role=$role --all"
-      else gcloud secrets remove-iam-policy-binding "$secret" --project="$PROJECT" --member="serviceAccount:$DB_EMAIL" --role="$role" --all --quiet >/dev/null 2>&1 || true; fi
-    done
+    if [[ "$MODE" == plan ]]; then
+      say "PLAN: retirar de $secret las concesiones de $DB_EMAIL con condición ${WINDOW_TITLE_PREFIX}-* (por su condición exacta) y comprobar que no queda ninguna"
+      continue
+    fi
+    if ! policy="$(gcloud secrets get-iam-policy "$secret" --project="$PROJECT" --format=json)" ||
+       ! grants="$(printf '%s' "$policy" | db_grants)"; then
+      say "FAIL  no se pudo leer la política IAM de $secret" >&2; return 70
+    fi
+    while IFS=$'\t' read -r kind role cond; do
+      [[ "$kind" == OWN ]] || continue
+      file="$(mktemp)"; printf '%s' "$cond" > "$file"
+      if gcloud secrets remove-iam-policy-binding "$secret" --project="$PROJECT" --member="serviceAccount:$DB_EMAIL" \
+           --role="$role" --condition-from-file="$file" --quiet >/dev/null; then
+        say "OK  $secret: retirada la concesión de ventana $role"
+      else
+        say "FAIL  $secret: no se pudo retirar la concesión de ventana $role" >&2; failed=1
+      fi
+      rm -f "$file"
+    done <<< "$grants"
+    # Re-read: no binding of the DB identity may remain on this secret.
+    if ! policy="$(gcloud secrets get-iam-policy "$secret" --project="$PROJECT" --format=json)" ||
+       ! grants="$(printf '%s' "$policy" | db_grants)"; then
+      say "FAIL  no se pudo releer la política IAM de $secret" >&2; return 70
+    fi
+    while IFS=$'\t' read -r kind role cond; do
+      [[ -n "$kind" ]] || continue
+      if [[ "$kind" == OWN ]]; then say "FAIL  $secret: $DB_EMAIL conserva $role (ventana)" >&2
+      else say "FAIL  $secret: $DB_EMAIL conserva $role, concesión no creada por open-db-window (no se toca; revisar)" >&2; fi
+      failed=1
+    done <<< "$grants"
   done
+  (( failed == 0 )) || return 70
 }
 
 open_db_window() {
   if [[ "$MODE" != plan ]] && ! owned sa "$DB_EMAIL"; then say "BLOQUEO: $DB_EMAIL no existe o no lo creó este script." >&2; exit 68; fi
   local cond; cond="$(window_condition)"
-  close_db_window
+  # A new window is only opened once the previous one is verifiably gone (no accumulation).
+  close_db_window || { say "BLOQUEO: la ventana anterior no se ha podido cerrar; no se abre otra." >&2; exit 70; }
   # Runtime password: read version 1 (--resume) and its metadata (getSecret). Admin URL: read only.
   run secrets add-iam-policy-binding "$PG_PASSWORD_SECRET" --project="$PROJECT" --member="serviceAccount:$DB_EMAIL" --role=roles/secretmanager.secretAccessor --condition="$cond"
   run secrets add-iam-policy-binding "$PG_PASSWORD_SECRET" --project="$PROJECT" --member="serviceAccount:$DB_EMAIL" --role=roles/secretmanager.viewer --condition="$cond"
@@ -333,7 +383,7 @@ rollback_all() {
   read -r -p "Esto revierte solo lo creado por este script. Escribe REVERTIR: " answer
   [[ "$answer" == "REVERTIR" ]] || { echo "Cancelado." >&2; exit 67; }
   if owned sa "$DB_EMAIL"; then
-    close_db_window
+    close_db_window || { say "BLOQUEO: la ventana DB no se ha podido cerrar; $DB_EMAIL no se elimina." >&2; exit 70; }
     gcloud iam service-accounts delete "$DB_EMAIL" --project="$PROJECT" --quiet >/dev/null 2>&1 || true
     say "OK  $DB_EMAIL: permisos y cuenta eliminados"
   else
@@ -341,7 +391,7 @@ rollback_all() {
   fi
   if owned sa "$DEPLOY_EMAIL"; then
     for secret in "${DEPLOY_METADATA_SECRETS[@]}"; do
-      gcloud secrets remove-iam-policy-binding "$secret" --project="$PROJECT" --member="serviceAccount:$DEPLOY_EMAIL" --role=roles/secretmanager.viewer --quiet >/dev/null 2>&1 || true
+      gcloud secrets remove-iam-policy-binding "$secret" --project="$PROJECT" --member="serviceAccount:$DEPLOY_EMAIL" --role=roles/secretmanager.viewer --condition=None --quiet >/dev/null 2>&1 || true
     done
     for role in "${DEPLOY_PROJECT_ROLES[@]}"; do
       gcloud projects remove-iam-policy-binding "$PROJECT" --member="serviceAccount:$DEPLOY_EMAIL" --role="$role" --condition=None --quiet >/dev/null 2>&1 || true
@@ -380,6 +430,6 @@ case "$MODE" in
   apply) apply_all; say "APPLY: hecho. Ejecuta 'verify' para comprobarlo." ;;
   verify) verify_all ;;
   open-db-window) open_db_window ;;
-  close-db-window) owned sa "$DB_EMAIL" || { say "BLOQUEO: $DB_EMAIL no es propia." >&2; exit 68; }; close_db_window; say "Ventana DB cerrada." ;;
+  close-db-window) owned sa "$DB_EMAIL" || { say "BLOQUEO: $DB_EMAIL no es propia." >&2; exit 68; }; close_db_window || { say "CIERRE: FAIL (la ventana DB no está cerrada; ver líneas FAIL)." >&2; exit 70; }; say "Ventana DB cerrada (verificado: $DB_EMAIL sin concesiones en $ADMIN_URL_SECRET ni $PG_PASSWORD_SECRET)." ;;
   rollback) rollback_all ;;
 esac

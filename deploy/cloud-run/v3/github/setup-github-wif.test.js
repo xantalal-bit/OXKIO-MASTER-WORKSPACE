@@ -27,9 +27,18 @@ const policy = (...bindings) => JSON.stringify({ bindings });
 const FAKE = `#!/usr/bin/env node
 const fs = require('fs'); const path = require('path');
 const tool = path.basename(process.argv[1]); const args = process.argv.slice(2); const line = args.join(' ');
-fs.appendFileSync(process.env.FAKE_LOG, JSON.stringify({ tool, args }) + '\\n');
+const condFile = args.find((a) => a.startsWith('--condition-from-file='));
+const cond = condFile ? JSON.parse(fs.readFileSync(condFile.slice('--condition-from-file='.length), 'utf8')) : undefined;
+fs.appendFileSync(process.env.FAKE_LOG, JSON.stringify({ tool, args, cond }) + '\\n');
 const rules = JSON.parse(fs.readFileSync(process.env.FAKE_RULES, 'utf8'));
-const rule = rules.find((r) => (r.tool || 'gcloud') === tool && r.all.every((s) => line.includes(s)));
+let rule = rules.find((r) => (r.tool || 'gcloud') === tool && r.all.every((s) => line.includes(s)));
+// stdouts: successive answers of the same rule (e.g. a policy before and after a removal).
+if (rule && rule.stdouts) {
+  const counter = process.env.FAKE_RULES + '.' + rules.indexOf(rule);
+  const n = fs.existsSync(counter) ? Number(fs.readFileSync(counter, 'utf8')) : 0;
+  fs.writeFileSync(counter, String(n + 1));
+  rule = { ...rule, stdout: rule.stdouts[Math.min(n, rule.stdouts.length - 1)] };
+}
 if (tool === 'gcloud' && line.includes('versions add')) fs.writeFileSync(process.env.FAKE_STDIN, fs.readFileSync(0, 'utf8'));
 if (rule) { if (rule.stdout) process.stdout.write(rule.stdout + '\\n'); process.exit(rule.code || 0); }
 if (tool === 'gh') process.exit(1);
@@ -46,11 +55,13 @@ function setup(t) {
 function run(dir, args, { input = '', rules = [] } = {}) {
   const log = path.join(dir, 'calls.log'); const stdinFile = path.join(dir, 'stdin.txt'); const rulesFile = path.join(dir, 'rules.json');
   fs.writeFileSync(log, ''); fs.rmSync(stdinFile, { force: true });
+  for (const f of fs.readdirSync(dir).filter((n) => n.startsWith('rules.json.'))) fs.rmSync(path.join(dir, f));
   fs.writeFileSync(rulesFile, JSON.stringify([{ all: ['projects describe'], stdout: NUM }, ...rules]));
   const r = spawnSync('bash', [SCRIPT, ...args], { input, encoding: 'utf8',
     env: { PATH: `${dir}:${process.env.PATH}`, HOME: dir, FAKE_LOG: log, FAKE_STDIN: stdinFile, FAKE_RULES: rulesFile } });
   const calls = fs.readFileSync(log, 'utf8').split('\n').filter(Boolean).map((l) => JSON.parse(l));
-  return { ...r, calls, gcloud: calls.filter((c) => c.tool === 'gcloud').map((c) => c.args), stdin: fs.existsSync(stdinFile) ? fs.readFileSync(stdinFile, 'utf8') : null };
+  return { ...r, calls, removals: calls.filter((c) => c.tool === 'gcloud' && c.args.includes('remove-iam-policy-binding')),
+    gcloud: calls.filter((c) => c.tool === 'gcloud').map((c) => c.args), stdin: fs.existsSync(stdinFile) ? fs.readFileSync(stdinFile, 'utf8') : null };
 }
 
 const MUTATING = /^(create|create-oidc|update-oidc|update|add-iam-policy-binding|remove-iam-policy-binding|delete|enable|disable|add|set-iam-policy|set|destroy)$/;
@@ -255,4 +266,108 @@ test('rollback reverts only own resources and only the secret versions this scri
   const none = run(dir, ['rollback'], { input: 'REVERTIR\n', rules: [{ all: ['describe', 'description'], stdout: 'legacy' }, { all: ['describe'] }] });
   assert.equal(none.status, 0, none.stderr);
   assert.deepEqual(mutations(none), []);
+});
+
+// ---------------------------------------------------------------- DB window closing (regression)
+// gcloud refuses `remove-iam-policy-binding --all` on conditional policies in non-interactive
+// mode; the old close hid that error and reported the window as closed while it stayed open.
+const ACC = 'roles/secretmanager.secretAccessor';
+const VIEW = 'roles/secretmanager.viewer';
+const TITLE = 'oxkio-db-window-20261031T091954Z';
+const win = (role, title = TITLE) => ({ role, members: [`serviceAccount:${DB}`],
+  condition: { expression: `request.time < timestamp("${iso(Date.now() + 3600e3)}")`, title, description: 'Temporary GitHub DB window' } });
+const RUNTIME_MEMBER = `serviceAccount:oxkio-runtime-prod@${P}.iam.gserviceaccount.com`;
+const FOREIGN_PG = [{ role: ACC, members: [RUNTIME_MEMBER] }, { role: VIEW, members: [`serviceAccount:${DEPLOY}`] }];
+const OPEN_ADMIN = policy(win(ACC));
+const OPEN_PG = policy(win(ACC), win(VIEW), ...FOREIGN_PG);
+const CLOSED_ADMIN = JSON.stringify({ etag: 'ACAB' });
+const CLOSED_PG = policy(...FOREIGN_PG);
+const secretPolicies = (admin, pg) => [
+  { all: ['secrets get-iam-policy', ' OXKIO_V3_PG_ADMIN_URL '], stdouts: admin },
+  { all: ['secrets get-iam-policy', ' OXKIO_V3_PG_PASSWORD '], stdouts: pg }];
+const removalOf = (c) => ({ secret: c.args[2], role: c.args.find((a) => a.startsWith('--role=')).slice(7),
+  member: c.args.find((a) => a.startsWith('--member=')).slice(9), cond: c.cond });
+
+test('close-db-window removes each window grant by its exact condition and verifies nothing remains', { skip }, (t) => {
+  const dir = setup(t);
+  const r = run(dir, ['close-db-window'], { rules: [...secretPolicies([OPEN_ADMIN, CLOSED_ADMIN], [OPEN_PG, CLOSED_PG]), ...owned] });
+  assert.equal(r.status, 0, r.stderr);
+  assert.match(r.stdout, /Ventana DB cerrada \(verificado/);
+  const removed = r.removals.map(removalOf);
+  assert.deepEqual(removed.map((x) => `${x.secret} ${x.role}`).sort(),
+    [`OXKIO_V3_PG_ADMIN_URL ${ACC}`, `OXKIO_V3_PG_PASSWORD ${ACC}`, `OXKIO_V3_PG_PASSWORD ${VIEW}`]);
+  for (const x of removed) {
+    assert.equal(x.member, `serviceAccount:${DB}`, 'only the DB identity is touched');
+    assert.equal(x.cond.title, TITLE);
+    assert.match(x.cond.expression, /^request\.time < timestamp\("[^"]+"\)$/, 'exact condition, quotes intact');
+  }
+  assert.equal(r.gcloud.some((a) => a.includes('--all')), false, 'no --all');
+});
+
+test('close-db-window is idempotent: an already closed window changes nothing and passes', { skip }, (t) => {
+  const dir = setup(t);
+  for (let i = 0; i < 2; i += 1) {
+    const r = run(dir, ['close-db-window'], { rules: [...secretPolicies([CLOSED_ADMIN], [CLOSED_PG]), ...owned] });
+    assert.equal(r.status, 0, r.stderr);
+    assert.deepEqual(r.removals, []);
+    assert.match(r.stdout, /Ventana DB cerrada/);
+  }
+});
+
+test('close-db-window preserves grants it did not create and then fails instead of reporting closed', { skip }, (t) => {
+  const dir = setup(t);
+  const manual = { role: ACC, members: [`serviceAccount:${DB}`] };
+  const otherCondition = win(VIEW, 'manual-grant');
+  const before = policy(win(ACC), manual, otherCondition, { role: ACC, members: [RUNTIME_MEMBER] });
+  const after = policy(manual, otherCondition, { role: ACC, members: [RUNTIME_MEMBER] });
+  const r = run(dir, ['close-db-window'], { rules: [...secretPolicies([before, after], [CLOSED_PG]), ...owned] });
+  assert.equal(r.status, 70);
+  assert.deepEqual(r.removals.map(removalOf).map((x) => [x.secret, x.role, x.cond.title]), [['OXKIO_V3_PG_ADMIN_URL', ACC, TITLE]],
+    'only the window grant is removed; unconditional, foreign-condition and other principals untouched');
+  assert.match(r.stderr, /conserva roles\/secretmanager\.secretAccessor, concesión no creada por open-db-window/);
+  assert.match(r.stderr, /conserva roles\/secretmanager\.viewer, concesión no creada por open-db-window/);
+  assert.doesNotMatch(r.stdout, /Ventana DB cerrada/);
+});
+
+test('close-db-window fails on removal errors, unreadable policies and grants that survive a removal', { skip }, (t) => {
+  const dir = setup(t);
+  const cases = [
+    ['removal refused', [{ all: ['remove-iam-policy-binding'], code: 1 }, ...secretPolicies([OPEN_ADMIN], [OPEN_PG])], /no se pudo retirar la concesión de ventana/],
+    ['policy unreadable', [{ all: ['secrets get-iam-policy'], code: 1 }], /no se pudo leer la política IAM/],
+    ['grant still present after a reported success', secretPolicies([OPEN_ADMIN], [OPEN_PG]), /conserva roles\/secretmanager\.secretAccessor \(ventana\)/]
+  ];
+  for (const [label, rules, expected] of cases) {
+    const r = run(dir, ['close-db-window'], { rules: [...rules, ...owned] });
+    assert.equal(r.status, 70, label);
+    assert.match(r.stderr, expected, label);
+    assert.match(r.stderr, /CIERRE: FAIL/, label);
+    assert.doesNotMatch(r.stdout, /Ventana DB cerrada/, label);
+  }
+});
+
+test('open-db-window reopens without accumulation and never opens over a window it cannot close', { skip }, (t) => {
+  const dir = setup(t);
+  const r = run(dir, ['open-db-window', '--hours', '4'], { rules: [...secretPolicies([OPEN_ADMIN, CLOSED_ADMIN], [OPEN_PG, CLOSED_PG]), ...owned] });
+  assert.equal(r.status, 0, r.stderr);
+  const idx = (pred) => r.calls.map((c, i) => (pred(c) ? i : -1)).filter((i) => i >= 0);
+  const removals = idx((c) => c.args.includes('remove-iam-policy-binding'));
+  const adds = idx((c) => c.args.includes('add-iam-policy-binding'));
+  assert.equal(removals.length, 3, 'previous window removed by exact condition');
+  assert.equal(adds.length, 3, 'exactly the three new grants');
+  assert.ok(Math.max(...removals) < Math.min(...adds), 'old window gone before the new one is added');
+
+  const blocked = run(dir, ['open-db-window', '--hours', '4'], { rules: [{ all: ['remove-iam-policy-binding'], code: 1 },
+    ...secretPolicies([OPEN_ADMIN], [OPEN_PG]), ...owned] });
+  assert.equal(blocked.status, 70);
+  assert.match(blocked.stderr, /no se abre otra/);
+  assert.equal(blocked.gcloud.some((a) => a.includes('add-iam-policy-binding')), false, 'no new grant on top of an open window');
+});
+
+test('rollback does not delete the DB identity while its window cannot be closed', { skip }, (t) => {
+  const dir = setup(t);
+  const r = run(dir, ['rollback'], { input: 'REVERTIR\n', rules: [{ all: ['remove-iam-policy-binding'], code: 1 },
+    ...secretPolicies([OPEN_ADMIN], [OPEN_PG]), ...owned] });
+  assert.equal(r.status, 70);
+  assert.match(r.stderr, /no se elimina/);
+  assert.equal(r.gcloud.some((a) => a.includes('service-accounts') && a.includes('delete')), false);
 });
