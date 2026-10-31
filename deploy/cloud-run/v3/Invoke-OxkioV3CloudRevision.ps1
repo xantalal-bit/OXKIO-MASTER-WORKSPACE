@@ -402,9 +402,34 @@ function Invoke-Git([string[]]$Arguments) {
     Assert-True ($r.ExitCode -eq 0 -and -not $r.TimedOut) ('git fallo: '+$r.StdErr)
     return [string]$r.Value
 }
+# Cloud Run reconcilia status de forma asincrona: hasta que status.observedGeneration alcanza
+# metadata.generation, status.traffic describe la generacion ANTERIOR. Run 41216052594: tras el
+# ReplaceService del paso 3 (gen 19, trafico fijado por nombre) la relectura vio aun la gen 18
+# (latestRevision=true) y Assert-Traffic dio "Trafico no fijado a revision"; Cloud Run reconcilio
+# 18 s despues. Nunca se valida un status sin reconciliar.
+function Test-ServiceReconciled($Service,[long]$MinGeneration=0) {
+    $generation=[long](Get-Prop (Get-Prop $Service 'metadata') 'generation' 0)
+    $status=Get-Prop $Service 'status'
+    Assert-True ($generation -gt 0 -and $generation -ge $MinGeneration) 'Generacion del servicio inesperada'
+    if([long](Get-Prop $status 'observedGeneration' 0) -ne $generation){ return $false }
+    $ready=@(@(Get-Prop $status 'conditions' @()) | Where-Object { [string](Get-Prop $_ 'type' '') -ceq 'Ready' })
+    if($ready.Count -ne 1){ return $false }
+    $readyStatus=[string](Get-Prop $ready[0] 'status' '')
+    Assert-True ($readyStatus -cne 'False') 'Servicio no Ready tras reconciliar'
+    return ($readyStatus -ceq 'True')
+}
+function Wait-ServiceReconciled([scriptblock]$Describe,[long]$MinGeneration=0,[int]$TimeoutSeconds=300,[int]$PollSeconds=5) {
+    $deadline=[datetime]::UtcNow.AddSeconds($TimeoutSeconds)
+    while($true) {
+        $candidate=& $Describe
+        if(Test-ServiceReconciled $candidate $MinGeneration){ return $candidate }
+        Assert-True ([datetime]::UtcNow -lt $deadline) 'Cloud Run no reconcilio el servicio a tiempo'
+        Start-Sleep -Seconds $PollSeconds
+    }
+}
 function Read-CloudState {
     $loc="--region=$script:Region"
-    $service=Invoke-Gcloud @('run','services','describe',$script:Service,$loc,'--format=json') | ConvertFrom-Json
+    $service=Wait-ServiceReconciled { Invoke-Gcloud @('run','services','describe',$script:Service,"--region=$script:Region",'--format=json') | ConvertFrom-Json }
     $original=Invoke-Gcloud @('run','revisions','describe',$script:ExpectedRevision,$loc,'--format=json') | ConvertFrom-Json
     $bindings={param($Policy) @(@(Get-Prop $Policy 'bindings' @()) | ForEach-Object { [ordered]@{role=$_.role;members=@($_.members | Sort-Object)} } | Sort-Object { $_.role })}
     $serviceIam=Invoke-Gcloud @('run','services','get-iam-policy',$script:Service,$loc,'--format=json') | ConvertFrom-Json
@@ -444,6 +469,11 @@ function Invoke-ServiceReplace($Document,[switch]$DryRun) {
         throw "Cloud Run ReplaceService fallo (dryRun=$([bool]$DryRun)): $message"
     } finally { $token=$null }
     Assert-True ($response.metadata.name -ceq $script:Service) 'Respuesta de ReplaceService inesperada'
+    if(-not $DryRun){
+        # Toda lectura posterior (paso 3, wrapper CI, remove-tag, rollback) ve la generacion escrita.
+        $written=[long](Get-Prop $response.metadata 'generation' 0)
+        Wait-ServiceReconciled { Invoke-Gcloud @('run','services','describe',$script:Service,"--region=$script:Region",'--format=json') | ConvertFrom-Json } $written | Out-Null
+    }
     return $response
 }
 function New-BuildContext([string]$Destination) {
