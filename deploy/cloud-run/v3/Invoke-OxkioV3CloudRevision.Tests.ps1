@@ -258,5 +258,34 @@ Check 'Build arguments refuse a non-dedicated build account' {
     $saved=$script:BuildServiceAccount;$script:BuildServiceAccount='123456789012-compute@developer.gserviceaccount.com'
     try{New-BuildSubmitArguments 'C:\ctx' 'C:\cfg.json'}finally{$script:BuildServiceAccount=$saved}
 } $true
+# Regresion run 41216052594: status de la gen 18 (latestRevision=true) leido justo despues de
+# escribir la gen 19 con el trafico fijado por nombre. Documentos con la forma real de Cloud Run.
+function New-ServiceStatus([long]$Generation,[long]$Observed,[string]$Ready,[switch]$Stale) {
+    $traffic=if($Stale){ '[{"revisionName":"oxkio-api-staging-00018-9xl","percent":100,"latestRevision":true}]' }
+             else { '[{"revisionName":"oxkio-api-staging-00018-9xl","percent":100},{"revisionName":"oxkio-api-staging-v3r-9e598e1","tag":"v3-real-9e598e1"}]' }
+    ('{"metadata":{"name":"oxkio-api-staging","generation":'+$Generation+'},"status":{"observedGeneration":'+$Observed+
+     ',"conditions":[{"type":"Ready","status":"'+$Ready+'"}],"traffic":'+$traffic+'}}') | ConvertFrom-Json
+}
+function New-DescribeQueue([object[]]$Items) {
+    $script:DescribeQueue=[System.Collections.Generic.Queue[object]]::new(); foreach($i in $Items){ $script:DescribeQueue.Enqueue($i) }
+    { $script:DescribeQueue.Dequeue() }
+}
+Check 'Regression 41216052594: unreconciled status trips the post-step-3 traffic check' {Assert-Traffic (ConvertTo-TrafficModel (New-ServiceStatus 19 18 'True' -Stale))} $true
+Check 'Unreconciled status (observedGeneration behind) is not accepted' {Assert-True (-not (Test-ServiceReconciled (New-ServiceStatus 19 18 'True' -Stale) 19)) 'stale accepted'}
+Check 'Wait returns only the reconciled generation, which passes without AllowLatest' {
+    $d=New-DescribeQueue @((New-ServiceStatus 19 18 'True' -Stale),(New-ServiceStatus 19 19 'Unknown'),(New-ServiceStatus 19 19 'True'))
+    $s=Wait-ServiceReconciled $d 19 -TimeoutSeconds 30 -PollSeconds 0
+    Assert-True ($script:DescribeQueue.Count -eq 0 -and $s.status.observedGeneration -eq 19) 'not reconciled'
+    $t=ConvertTo-TrafficModel $s; Assert-Traffic $t
+    Assert-True (@($t | Where-Object { $_.latestRevision }).Count -eq 0 -and @($t | Where-Object { $_.tag -ceq 'v3-real-9e598e1' -and $_.percent -eq 0 }).Count -eq 1) 'traffic'
+}
+Check 'Wait times out fail-closed on a status that never reconciles' {$d={New-ServiceStatus 19 18 'True' -Stale};Wait-ServiceReconciled $d 19 -TimeoutSeconds 0 -PollSeconds 0} $true
+Check 'Reconciled but not Ready is refused' {$d=New-DescribeQueue @((New-ServiceStatus 19 19 'False'));Wait-ServiceReconciled $d 19 -TimeoutSeconds 30 -PollSeconds 0} $true
+Check 'Generation older than the written one is refused' {Test-ServiceReconciled (New-ServiceStatus 18 18 'True') 19} $true
+Check 'Real ReplaceService and every state read wait for reconciliation; dry-run does not' {
+    $replace=(Get-Command Invoke-ServiceReplace).ScriptBlock.ToString(); $read=(Get-Command Read-CloudState).ScriptBlock.ToString()
+    Assert-True ($replace -match '(?s)if\(-not \$DryRun\)\{.*Wait-ServiceReconciled') 'replace does not wait'
+    Assert-True ($read -match 'Wait-ServiceReconciled') 'Read-CloudState does not wait'
+}
 Check 'Evidence lives outside the repository' {Assert-True (-not $script:Evidence.StartsWith($script:RepoLocal,[StringComparison]::OrdinalIgnoreCase)) 'evidence in repo'}
 [pscustomobject]@{Kind='LOCAL_SYNTHETIC_ONLY';Passed=$script:Results.Count;Failed=0;CloudCommandsExecuted=0;Tests=$script:Results} | ConvertTo-Json -Depth 8
