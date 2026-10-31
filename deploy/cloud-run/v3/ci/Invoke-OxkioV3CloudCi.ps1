@@ -134,8 +134,9 @@ function Test-PrivateIdTokenPath {
         $token=New-PrivateIdToken $url
         $status=Get-HttpStatus 'GET' "$url/health" @{Authorization="Bearer $token"}
     } finally { $token=$null }
-    $result=[ordered]@{IdTokenIssued=$true;IamAcceptedServiceAudience=($status -ne 401 -and $status -ne 403 -and $status -gt 0)}
-    $result.Passed=$result.IamAcceptedServiceAudience
+    # Solo 200 prueba token aceptado y servicio sano; 401/403 (IAM), 404/5xx o -1 (red) bloquean.
+    $result=[ordered]@{IdTokenIssued=$true;ServiceHealth200=($status -eq 200)}
+    $result.Passed=$result.ServiceHealth200
     return $result
 }
 # Revision privada: el servicio sigue sin acceso anonimo (403 de IAM sin token).
@@ -311,12 +312,13 @@ function Invoke-IdTokenSelfTest {
     function New-PrivateIdToken([string]$Audience){ "tok:$Audience" }
     function Get-HttpStatus([string]$Method,[string]$Url,[hashtable]$Headers=@{}) {
         $auth=[string]$Headers['Authorization']
+        if($null -ne $script:StPreflight -and $Url -ceq "$($script:StSvc)/health"){ return $script:StPreflight }
         if(-not $auth){ return $script:StAnon }
         if($auth -notlike 'Bearer tok:*' -or $auth.Substring(11) -notin $script:StAccepted){ return 401 }
         if($Url -like '*/health' -or $Url -like '*/ready'){ return 200 }
         return 401
     }
-    $script:StAnon=403
+    $script:StAnon=403; $script:StPreflight=$null
     $script:StAccepted=@($script:StSvc); $r=Invoke-PrivateSmoke
     Assert-True ($r.Passed -and $r.TokenAudience -ceq 'service_url' -and $r.AnonymousDeniedByIAM -and $r.ForgedTokenDenied -and $r.Health200 -and $r.Ready200 -and $r.ApiWithoutFirebase401 -and $r.ChatWithoutFirebase401) 'Prueba privada: audiencia del servicio'
     $script:StAccepted=@($script:StTag); $r=Invoke-PrivateSmoke
@@ -326,9 +328,16 @@ function Invoke-IdTokenSelfTest {
     $script:StAccepted=@($script:StSvc); $script:StAnon=200; $r=Invoke-PrivateSmoke
     Assert-True (-not $r.Passed -and -not $r.AnonymousDeniedByIAM) 'Prueba privada: acceso anonimo debe fallar'
     $script:StAnon=403; $p=Test-PrivateIdTokenPath
-    Assert-True ($p.Passed) 'Comprobacion previa del token'
+    Assert-True ($p.Passed -and $p.ServiceHealth200) 'Comprobacion previa del token'
     $script:StAccepted=@(); $p=Test-PrivateIdTokenPath
     Assert-True (-not $p.Passed) 'Comprobacion previa: IAM rechaza el token'
+    # /health exige 200 exacto: 401/403 (IAM), 404, 500 y -1 (error de red en Get-HttpStatus) bloquean.
+    $script:StAccepted=@($script:StSvc)
+    foreach($code in @(200,401,403,404,500,-1)){
+        $script:StPreflight=$code; $p=Test-PrivateIdTokenPath
+        Assert-True ([bool]$p.Passed -eq ($code -eq 200)) "Comprobacion previa con HTTP $code"
+    }
+    $script:StPreflight=$null
     $json=ConvertTo-Json -InputObject (ConvertTo-PublicSummary $r) -Depth 4
     Assert-True ($json.Contains('service_url') -and -not $json.Contains('tok:')) 'Resumen publico de la prueba privada'
 }
