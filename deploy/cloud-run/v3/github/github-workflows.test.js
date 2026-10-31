@@ -78,6 +78,14 @@ test('the DB workflow reuses the existing scripts and the deploy workflow the ex
   assert.match(wrapper, /\. \(Join-Path \$PSScriptRoot '\.\.\\Invoke-OxkioV3CloudRevision\.ps1'\) -Mode Validate -Variant Real/);
   assert.match(read('oxkio-v3-deploy.yml'), /Invoke-OxkioV3CloudCi\.ps1 -Operation/);
   assert.doesNotMatch(wrapper, /add-iam-policy-binding|set-iam-policy|allUsers/, 'the deploy path never changes exposure');
+  // Run 41219259414: with WIF, gcloud cannot mint audience ID tokens; the wrapper does STS + generateIdToken
+  // for the deploy account the workflow names, and no code line calls print-identity-token.
+  const deployStep = YAML.parse(read('oxkio-v3-deploy.yml')).jobs.deploy.steps.find((s) => s.shell === 'pwsh');
+  assert.equal(deployStep.env.OXKIO_GCP_DEPLOY_SA, '${{ vars.OXKIO_GCP_DEPLOY_SA }}');
+  const code = wrapper.split(/\r?\n/).filter((l) => !/^\s*#/.test(l)).join('\n');
+  assert.doesNotMatch(code, /print-identity-token/);
+  assert.match(code, /:generateIdToken"/);
+  assert.match(code, /https:\/\/sts\.googleapis\.com\/v1\/token/);
 });
 
 const shell = ['pwsh', 'powershell'].find((s) => spawnSync(s, ['-NoProfile', '-Command', '$PSVersionTable.PSVersion.Major']).status === 0);

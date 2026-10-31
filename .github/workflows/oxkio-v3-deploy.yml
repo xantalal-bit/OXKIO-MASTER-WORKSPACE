@@ -92,6 +92,8 @@ jobs:
           OPERATION: ${{ inputs.operation }}
           OXKIO_V3_PG_HOST: ${{ vars.OXKIO_V3_PG_HOST }}
           OXKIO_V3_OWNER_UID: ${{ secrets.OXKIO_V3_OWNER_UID }}
+          # El wrapper emite el ID token IAM de esta cuenta (STS + generateIdToken), sin claves.
+          OXKIO_GCP_DEPLOY_SA: ${{ vars.OXKIO_GCP_DEPLOY_SA }}
         run: |
           $map=@{'check-real'='CheckReal';'private-revision'='PrivateRevision';'remove-tag'='RemoveTag'}
           & ./deploy/cloud-run/v3/ci/Invoke-OxkioV3CloudCi.ps1 -Operation $map[$env:OPERATION]
