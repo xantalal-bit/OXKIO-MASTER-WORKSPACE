@@ -26,6 +26,10 @@ $ciEvidence=Join-Path ([IO.Path]::GetTempPath()) ('oxkio-v3-ci-'+$ciCommit.Subst
 function ConvertTo-PublicSummary($Value) {
     if($null -eq $Value){ return $null }
     if($Value -is [bool] -or $Value -is [int] -or $Value -is [decimal] -or $Value -is [double]){ return $Value }
+    # pwsh 7 ConvertFrom-Json turns ISO strings into [datetime]; walking its properties
+    # (DateTime.Date is a DateTime) recursed until "call depth overflow" (run 41198177233).
+    if($Value -is [datetime]){ return $Value.ToUniversalTime().ToString('o') }
+    if($Value -is [datetimeoffset]){ return $Value.UtcDateTime.ToString('o') }
     if($Value -is [string]){
         # Solo formas cerradas: un UID de Firebase (alfanumerico libre) nunca encaja en ninguna.
         if($Value -cmatch '^(OK|PASS|FAIL|BLOCKED|[a-z]+(_[a-z]+)+(:[A-Za-z0-9_.-]+)?|oxkio-api-staging-[0-9a-z]+(-[0-9a-z]+)*|v3-real-[0-9a-f]{7}|sha256:[0-9a-f]{64}|[0-9a-f]{40}|[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9:.]+(Z|[+-][0-9:]+)?)$'){ return $Value }
@@ -151,6 +155,10 @@ function Invoke-SelfTest {
     $json=ConvertTo-Json -InputObject (ConvertTo-PublicSummary $sample) -Depth 8
     Assert-True (-not $json.Contains($secretUid)) 'El resumen publico contiene el UID'
     Assert-True ($json.Contains('oxkio-api-staging-v3r-abcdef0') -and $json.Contains('secret_missing:OXKIO_V3_PG_PASSWORD')) 'El resumen perdio campos publicos'
+    # Dates as pwsh 7 reads them back from JSON (Invoke-Check: IsolationProofAtUtc) and as [datetime]/[datetimeoffset].
+    $dates=[ordered]@{FromJson=('{"AtUtc":"2026-10-31T11:50:16.9439554Z"}' | ConvertFrom-Json).AtUtc;Now=[datetime]::UtcNow;Offset=[datetimeoffset]::UtcNow}
+    $out=ConvertTo-PublicSummary $dates
+    foreach($k in $dates.Keys){ Assert-True ([string]$out[$k] -cmatch '^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9:.]+Z$') "Fecha no publicada como ISO UTC: $k" }
     'SELFTEST OK'
 }
 
