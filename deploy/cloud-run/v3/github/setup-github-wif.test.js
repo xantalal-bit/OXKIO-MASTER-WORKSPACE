@@ -75,7 +75,8 @@ const owned = [
   { all: ['workload-identity-pools'], code: 0, stdout: '' }
 ];
 
-function goodState({ dbBindings, deployOnAdmin = false, ghAuthed = true, reviewers = ['xantalal-bit'] } = {}) {
+const APIS = ['iam.googleapis.com', 'iamcredentials.googleapis.com', 'sts.googleapis.com', 'cloudresourcemanager.googleapis.com'];
+function goodState({ dbBindings, deployOnAdmin = false, ghAuthed = true, reviewers = ['xantalal-bit'], apis = APIS } = {}) {
   const until = iso(Date.now() + 3 * 3600e3);
   const plan = run.lastPlanCondition;
   const db = dbBindings ?? {
@@ -91,6 +92,7 @@ function goodState({ dbBindings, deployOnAdmin = false, ghAuthed = true, reviewe
     { all: ['providers describe', 'attributeCondition'], stdout: plan },
     ...owned.slice(3),
     { all: ['keys list'], stdout: '' },
+    { all: ['services list', '--enabled'], stdout: apis.join('\n') },
     { all: ['service-accounts get-iam-policy', DB], stdout: policy({ role: 'roles/iam.workloadIdentityUser', members: [principal('oxkio-v3-db')] }) },
     { all: ['service-accounts get-iam-policy', DEPLOY], stdout: policy({ role: 'roles/iam.workloadIdentityUser', members: [principal('oxkio-v3-deploy')] }) },
     { all: ['service-accounts get-iam-policy', `oxkio-runtime-prod@${P}`], stdout: policy({ role: 'roles/iam.serviceAccountUser', members: [`serviceAccount:${DEPLOY}`, 'user:jose@example.com'] }) },
@@ -185,6 +187,7 @@ test('apply streams the admin URL over stdin only, records the version it create
     assert.ok(until > before + 1.9 * 3600e3 && until < before + 2.1 * 3600e3);
   }
   assert.ok(r.gcloud.findIndex((a) => a.includes('remove-iam-policy-binding')) < r.gcloud.findIndex((a) => a === windows[0]), 'old windows removed first');
+  for (const api of APIS) assert.ok(r.gcloud.some((a) => a[0] === 'services' && a[1] === 'enable' && a[2] === api), 'apply enables ' + api);
   assert.equal(r.gcloud.some((a) => a[0] === 'config' || (a.includes('keys') && a.includes('create'))), false);
 });
 
@@ -231,6 +234,7 @@ test('verify fails without an active window, with expired or unconditional grant
       UNRELATED_SECRET: [windowBinding('roles/secretmanager.secretAccessor', `serviceAccount:${DB}`, soon)] } }), /FAIL  oxkio-gha-db@[^\n]*exactamente los 3 permisos/],
     ['deploy identity can read the Neon admin URL', goodState({ deployOnAdmin: true }), /FAIL  oxkio-gha-deploy@[^\n]*solo metadatos/],
     ['GitHub not verifiable', goodState({ ghAuthed: false }), /FAIL  GitHub no verificable/],
+    ['Cloud Resource Manager API disabled (check-real SERVICE_DISABLED)', goodState({ apis: APIS.filter((a) => a !== 'cloudresourcemanager.googleapis.com') }), /FAIL  API cloudresourcemanager\.googleapis\.com no habilitada/],
     ['environment without the required reviewer', goodState({ reviewers: [] }), /FAIL  entorno oxkio-v3-db: revisor obligatorio/]
   ];
   for (const [label, rules, expected] of cases) {

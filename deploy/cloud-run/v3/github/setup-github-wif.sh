@@ -46,7 +46,10 @@ DEPLOY_METADATA_SECRETS=(OXKIO_APPROVAL_PG_RUNTIME_URL OXKIO_MISSION_PG_RUNTIME_
   OXKIO_V3_INTEGRITY_KEY oxkio-google-client-secret oxkio-google-oauth-tokens OXKIO_V3_PG_PASSWORD)
 DEPLOY_PROJECT_ROLES=(roles/cloudbuild.builds.editor roles/serviceusage.serviceUsageConsumer roles/logging.viewer
   roles/iam.securityReviewer roles/run.viewer)
-APIS=(iam.googleapis.com iamcredentials.googleapis.com sts.googleapis.com)
+# cloudresourcemanager: with federated credentials the quota project is $PROJECT, so the
+# deploy checks' `gcloud projects get-iam-policy` need this API enabled here (observed
+# 31/10/2026: check-real failed with SERVICE_DISABLED; the owner's gcloud did not notice).
+APIS=(iam.googleapis.com iamcredentials.googleapis.com sts.googleapis.com cloudresourcemanager.googleapis.com)
 WINDOW_TITLE_PREFIX="oxkio-db-window"
 
 MODE="${1:-plan}"; shift || true
@@ -299,6 +302,11 @@ verify_all() {
   owned provider && pass "proveedor $PROVIDER propio" || fail "proveedor $PROVIDER ausente o no propio"
   expect "condición OIDC exacta (repo id, owner id, main, workflow_dispatch, entorno+workflow)" \
     "$(gcloud iam workload-identity-pools providers describe "$PROVIDER" --project="$PROJECT" --location=global --workload-identity-pool="$POOL" --format='value(attributeCondition)' 2>/dev/null)" "$ATTRIBUTE_CONDITION"
+
+  local enabled_apis; enabled_apis="$(gcloud services list --enabled --project="$PROJECT" --format='value(config.name)' 2>/dev/null | tr -d '\r' || true)"
+  for api in "${APIS[@]}"; do
+    grep -Fxq "$api" <<< "$enabled_apis" && pass "API $api habilitada" || fail "API $api no habilitada en $PROJECT"
+  done
 
   for pair in "$DB_EMAIL:$ENV_DB" "$DEPLOY_EMAIL:$ENV_DEPLOY"; do
     local email="${pair%%:*}" env="${pair##*:}"
