@@ -236,5 +236,27 @@ Check 'Real deployment accepts a fresh green CheckReal for this commit' {
     try{Write-PrivateFile $script:CheckRealPath (ConvertTo-Json @{Commit=$script:ExpectedCommit;AtUtc=[datetime]::UtcNow.ToString('o');Passed=$true;Blockers=@()});Assert-RecentCheckReal}
     finally{Remove-Item -LiteralPath $script:CheckRealPath -ErrorAction SilentlyContinue;$script:CheckRealPath=$saved}
 }
+Check 'Build runs as the dedicated build account with explicit config, never --tag nor the Compute default' {
+    $a=New-BuildSubmitArguments 'C:\ctx' 'C:\ctx.cloudbuild.json'
+    Assert-True ($a[0] -ceq 'builds' -and $a[1] -ceq 'submit' -and $a[2] -ceq 'C:\ctx') 'submit ctx'
+    Assert-True (@($a | Where-Object { $_ -ceq '--service-account=projects/oxkio-runtime-prod/serviceAccounts/oxkio-gha-build@oxkio-runtime-prod.iam.gserviceaccount.com' }).Count -eq 1) 'service account'
+    Assert-True (@($a | Where-Object { $_ -ceq '--config=C:\ctx.cloudbuild.json' }).Count -eq 1) 'config'
+    Assert-True (@($a | Where-Object { $_ -ceq '--region=europe-west3' }).Count -eq 1 -and ($a -contains '--async')) 'region/async'
+    Assert-True (@($a | Where-Object { $_ -like '--tag*' -or $_ -like '*-compute@*' -or $_ -like '*developer.gserviceaccount.com*' }).Count -eq 0) 'no --tag / compute default'
+}
+Check 'Build config: docker build of the exact commit tag, image pushed, logs only in Cloud Logging' {
+    $tag=$script:ImageRepo+':'+$script:ShortCommit
+    $c=ConvertTo-Json (New-BuildConfig $tag) -Depth 6 | ConvertFrom-Json
+    Assert-True ($c.options.logging -ceq 'CLOUD_LOGGING_ONLY') 'logging'
+    Assert-True (@($c.images).Count -eq 1 -and @($c.images)[0] -ceq $tag) 'images'
+    Assert-True (@($c.steps).Count -eq 1 -and $c.steps[0].name -ceq 'gcr.io/cloud-builders/docker') 'one docker step'
+    Assert-True ((@($c.steps[0].args) -join ' ') -ceq "build --network cloudbuild --no-cache -t $tag .") 'docker build args'
+    Assert-True (-not ($c.PSObject.Properties.Name -contains 'serviceAccount') -and -not ($c.PSObject.Properties.Name -contains 'logsBucket')) 'no SA/logs bucket override in config'
+}
+Check 'Build config refuses any other image tag' {New-BuildConfig ($script:ImageRepo+':latest')} $true
+Check 'Build arguments refuse a non-dedicated build account' {
+    $saved=$script:BuildServiceAccount;$script:BuildServiceAccount='123456789012-compute@developer.gserviceaccount.com'
+    try{New-BuildSubmitArguments 'C:\ctx' 'C:\cfg.json'}finally{$script:BuildServiceAccount=$saved}
+} $true
 Check 'Evidence lives outside the repository' {Assert-True (-not $script:Evidence.StartsWith($script:RepoLocal,[StringComparison]::OrdinalIgnoreCase)) 'evidence in repo'}
 [pscustomobject]@{Kind='LOCAL_SYNTHETIC_ONLY';Passed=$script:Results.Count;Failed=0;CloudCommandsExecuted=0;Tests=$script:Results} | ConvertTo-Json -Depth 8

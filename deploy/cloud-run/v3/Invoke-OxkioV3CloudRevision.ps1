@@ -37,6 +37,9 @@ $script:ShortCommit=$script:ExpectedCommit.Substring(0,7)
 $script:TestTag='v3-synth-'+$script:ShortCommit
 $script:TestRevision='oxkio-api-staging-v3s-'+$script:ShortCommit
 $script:ServiceAccount='oxkio-runtime-prod@oxkio-runtime-prod.iam.gserviceaccount.com'
+# Cuenta dedicada de Cloud Build (setup-github-wif.sh apply-build-sa). Nunca la cuenta Compute
+# por defecto (roles/editor): actAs sobre ella daria a quien construye permisos de editor.
+$script:BuildServiceAccount='oxkio-gha-build@oxkio-runtime-prod.iam.gserviceaccount.com'
 $script:OwnerUid=[string]$OwnerUid
 $script:RealTag='v3-real-'+$script:ShortCommit
 $script:RealRevision='oxkio-api-staging-v3r-'+$script:ShortCommit
@@ -455,6 +458,22 @@ function New-BuildContext([string]$Destination) {
     Assert-True ($r.ExitCode -eq 0) 'Extraccion del contexto fallida'
     return $Destination
 }
+# Build explicito equivalente a `gcloud builds submit --tag` (docker build + push del tag),
+# con logs solo en Cloud Logging: una cuenta de build propia exige configurar los logs
+# (sin bucket de logs heredado) y gcloud builds submit no tiene opcion para ello.
+function New-BuildConfig([string]$ImageTag) {
+    Assert-True ($ImageTag -ceq ($script:ImageRepo+':'+$script:ShortCommit)) 'Tag de imagen inesperado'
+    [ordered]@{
+        steps=@([ordered]@{name='gcr.io/cloud-builders/docker';args=@('build','--network','cloudbuild','--no-cache','-t',$ImageTag,'.')})
+        images=@($ImageTag)
+        options=[ordered]@{logging='CLOUD_LOGGING_ONLY'}
+    }
+}
+function New-BuildSubmitArguments([string]$Context,[string]$ConfigPath) {
+    Assert-True ($script:BuildServiceAccount -cmatch '^oxkio-gha-build@oxkio-runtime-prod\.iam\.gserviceaccount\.com$') 'Cuenta de build no dedicada'
+    @('builds','submit',$Context,"--region=$script:Region","--config=$ConfigPath",
+      "--service-account=projects/$script:Project/serviceAccounts/$script:BuildServiceAccount",'--timeout=600s','--async','--format=json')
+}
 function Assert-IsolationProof {
     Assert-True (Test-Path -LiteralPath $script:IsolationProofPath) 'Falta prueba de aislamiento (Mode ProveIsolation)'
     $proof=Get-Content -LiteralPath $script:IsolationProofPath -Raw | ConvertFrom-Json
@@ -569,9 +588,15 @@ $script:CloudAdapter={param($Operation,$Payload)
         'PersistLedger' { Save-Journal $script:CurrentState; return (& $ok $true) }
         'BuildExactCommit' {
             $ctx=New-BuildContext (Join-Path $env:TEMP ('oxkio-build-'+$script:ShortCommit+'-'+[guid]::NewGuid().ToString('N')))
+            # La configuracion queda fuera del contexto: no se sube con el codigo.
+            $cfg=$ctx+'.cloudbuild.json'
             try {
-                $submitted=Invoke-Gcloud @('builds','submit',$ctx,$loc,"--tag=$($script:ImageRepo):$($script:ShortCommit)",'--timeout=600s','--async','--format=json') 600 | ConvertFrom-Json
-            } finally { Remove-Item -LiteralPath $ctx -Recurse -Force -ErrorAction SilentlyContinue }
+                Write-PrivateFile $cfg (ConvertTo-Json (New-BuildConfig "$($script:ImageRepo):$($script:ShortCommit)") -Depth 6)
+                $submitted=Invoke-Gcloud (New-BuildSubmitArguments $ctx $cfg) 600 | ConvertFrom-Json
+            } finally {
+                Remove-Item -LiteralPath $ctx -Recurse -Force -ErrorAction SilentlyContinue
+                Remove-Item -LiteralPath $cfg -Force -ErrorAction SilentlyContinue
+            }
             $Payload.BuildId=$submitted.id; Save-Journal $Payload
             $deadline=[datetime]::UtcNow.AddSeconds(900); $build=$null
             do {

@@ -98,6 +98,24 @@ existiendo pero la cuenta no puede leer ningún secreto.
 | Proyecto | `cloudbuild.builds.editor`, `serviceusage.serviceUsageConsumer` | Build del commit exacto |
 | Proyecto | `run.viewer`, `iam.securityReviewer`, `logging.viewer` | Lecturas de estado, IAM e invariantes que ya hace el script; logs de la revisión |
 | 7 secretos usados por el runtime | `secretmanager.viewer` | Metadatos y versiones (no el valor), como exige `Read-CloudState`/`CheckReal` |
+| Cuenta de build `oxkio-gha-build` | `iam.serviceAccountUser` | `actAs` para lanzar el build **solo** como esa cuenta (nunca la de Compute por defecto) |
+| Bucket `oxkio-runtime-prod_cloudbuild` | `storage.legacyBucketReader` | `gcloud builds submit` hace `buckets.get` del bucket de staging antes de subir (`objectAdmin` no lo incluye) |
+
+**`oxkio-gha-build`** — cuenta de Cloud Build dedicada (`setup-github-wif.sh apply-build-sa`):
+sin claves, sin federación; solo `oxkio-gha-deploy` puede actuar como ella. Los builds se
+lanzan con `--service-account` y `options.logging=CLOUD_LOGGING_ONLY` (configuración
+explícita equivalente a `--tag`). No se usa la cuenta Compute por defecto: tiene
+`roles/editor` y `actAs` sobre ella permitiría ejecutar pasos de build arbitrarios como editor.
+
+| Recurso | Rol | Por qué |
+|---|---|---|
+| Artifact Registry `oxkio-staging` | `artifactregistry.writer` | Subir la imagen del commit |
+| Bucket `oxkio-runtime-prod_cloudbuild` | `storage.objectViewer` | Leer el código subido |
+| Proyecto | `logging.logWriter` | Logs del build en Cloud Logging (no hay concesión más estrecha) |
+
+`verify` falla si `oxkio-gha-deploy` o `oxkio-gha-build` tienen cualquier permiso sobre la
+cuenta Compute por defecto, si la cuenta de build tiene otro rol de proyecto, acceso a algún
+secreto, al servicio o a la cuenta de runtime, o si alguien más (incluida la federación) puede actuar como ella.
 
 ## Logs públicos: medidas que no dependen del enmascaramiento
 
@@ -187,10 +205,10 @@ Riesgos residuales que la fase 3 debe asumir o mitigar expresamente:
 Las pruebas de esta PR usan `gcloud`/`gh` simulados y procesos locales. Solo una
 ejecución real puede demostrar lo siguiente, y hasta entonces sigue **pendiente**:
 
-1. **Permisos reales del primer build.** Si `gcloud builds submit` exige además
-   `iam.serviceAccountUser` sobre la cuenta con la que corre Cloud Build, o si el
-   bucket `oxkio-runtime-prod_cloudbuild` no existe todavía. `verify` no puede
-   saberlo sin lanzar un build.
+1. **Permisos reales del primer build.** Resuelto en diseño (31/10/2026): `buckets.get`
+   del bucket de staging (`legacyBucketReader`) y `actAs` limitado a `oxkio-gha-build`.
+   Solo el primer build real demuestra que no falta nada más (p. ej. que el builder
+   `gcr.io/cloud-builders/docker` o la imagen base se descarguen con esa cuenta).
 2. **Autenticación WIF en Windows.** Que `google-github-actions/auth` + `gcloud.cmd`
    funcionen con credenciales federadas en `windows-latest`, incluido
    `gcloud auth print-identity-token --audiences` para la prueba privada (si falla,
