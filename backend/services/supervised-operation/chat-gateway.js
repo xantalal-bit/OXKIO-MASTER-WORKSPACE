@@ -62,6 +62,9 @@ function createChatGateway({runtime,membershipProvider,adapterFactory=null,store
    return [...checked,...lines].join('\n')+'\n'+(state.connectionRequests.some(g=>g.connectable)?RESUME:'He guardado esta tarea, pero no podré continuarla mientras esa conexión no esté disponible para tu cuenta.');
   }
   if(state.status==='WAITING_RESOURCE')return 'El recurso de razonamiento no está disponible ahora (límite, cuota, presupuesto o fallo del proveedor) y no hay alternativa autorizada. La misión y sus fuentes quedan guardadas en este punto; di "continúa" para reanudarla. No he ejecutado nada externo.';
+  // A closed mission read again from the store: its mail and agenda text was
+  // not kept (P0 privacy, 01/11/2026), so nothing is rebuilt from empty items.
+  if(state.result?.items?.some(v=>v&&v.minimized))return 'Esa consulta ya terminó. Para proteger la privacidad no guardo el contenido de tu correo ni de tu agenda; pídemelo de nuevo y lo consultaré actualizado. No he realizado envíos ni cambios externos.';
   if(state.status==='COMPLETED'&&state.result?.localAnalysis)return localText(state.result,state.planSources||[]);
   if(state.status==='NEEDS_CAPABILITY'&&state.diagnosis?.class==='analysis_unavailable'&&state.result)return partialText(state.result);
   if(state.status==='COMPLETED'&&state.result?.synthesis)return synthesisText(state.result);

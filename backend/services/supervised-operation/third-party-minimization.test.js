@@ -122,3 +122,15 @@ test('I: las categorías especiales de un asunto o extracto (salud) no persisten
   assert.match(disk, /"provenance":"GMAIL"/); assert.match(disk, /"type":"calendar"/);
  } finally { fs.rmSync(s.root, { recursive: true, force: true }); }
 });
+
+test('C2: consultar el estado de una tarea cerrada no reconstruye frases vacías con el contenido minimizado', async () => {
+ const s = setup();
+ try {
+  const first = await s.ask(ORDER, { conversationId: 'conversation-st-1' });
+  assert.equal(first.data.details.status, 'COMPLETED'); assert.match(first.data.response, /ZZEVENTO/);
+  const later = await s.ask('', { conversationId: 'conversation-st-1', action: 'status' });
+  assert.equal(later.status, 200, later.data.code);
+  assert.match(later.data.response, /^Esa consulta ya terminó\. Para proteger la privacidad no guardo el contenido de tu correo ni de tu agenda/);
+  assert.doesNotMatch(later.data.response, THIRD_RE); assert.doesNotMatch(later.data.response, /de ,|: \.|«»/);
+ } finally { fs.rmSync(s.root, { recursive: true, force: true }); }
+});
