@@ -108,6 +108,8 @@ jobs:
         env:
           OPERATION: ${{ inputs.operation }}
           OXKIO_V3_REASONING_MODE: ${{ inputs.reasoning }}
+          # Revision que sirve el 100 %; solo cambia tras una promocion autorizada (vacia = 00018-9xl).
+          OXKIO_V3_SERVING_REVISION: ${{ vars.OXKIO_V3_SERVING_REVISION }}
           OXKIO_V3_PG_HOST: ${{ vars.OXKIO_V3_PG_HOST }}
           OXKIO_V3_OWNER_UID: ${{ secrets.OXKIO_V3_OWNER_UID }}
           # El wrapper emite el ID token IAM de esta cuenta (STS + generateIdToken), sin claves.

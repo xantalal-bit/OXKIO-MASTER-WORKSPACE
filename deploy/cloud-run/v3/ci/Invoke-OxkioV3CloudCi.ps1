@@ -21,8 +21,10 @@ if($ciCommit -cnotmatch '^[0-9a-f]{40}$'){ throw 'GITHUB_SHA requerido' }
 $ciEvidence=Join-Path ([IO.Path]::GetTempPath()) ('oxkio-v3-ci-'+$ciCommit.Substring(0,7)+'-'+[guid]::NewGuid().ToString('N'))
 # Razonamiento V3 (Issue #85): entrada del workflow; vacia u 'off' = Off.
 $ciReasoning=switch -CaseSensitive ([string]$env:OXKIO_V3_REASONING_MODE){ '' {'Off'} 'off' {'Off'} 'internal-egress' {'InternalEgress'} default { throw 'OXKIO_V3_REASONING_MODE invalido' } }
+# Revision servida (variable de repositorio OXKIO_V3_SERVING_REVISION tras una promocion); vacia = valor por defecto del script.
+$ciServing=@{}; if([string]$env:OXKIO_V3_SERVING_REVISION){ $ciServing.ServingRevision=[string]$env:OXKIO_V3_SERVING_REVISION }
 . (Join-Path $PSScriptRoot '..\Invoke-OxkioV3CloudRevision.ps1') -Mode Validate -Variant Real -Commit $ciCommit `
-    -EvidenceRoot $ciEvidence -PgHost ([string]$env:OXKIO_V3_PG_HOST) -OwnerUid ([string]$env:OXKIO_V3_OWNER_UID) -V3Reasoning $ciReasoning
+    -EvidenceRoot $ciEvidence -PgHost ([string]$env:OXKIO_V3_PG_HOST) -OwnerUid ([string]$env:OXKIO_V3_OWNER_UID) -V3Reasoning $ciReasoning @ciServing
 
 # Contrato de conversacion (Issue #85): una revision sin razonamiento V3 nunca puede declararse
 # conversacional. Con InternalEgress la prueba exige la linea de arranque 'V3 Reasoning: ready'

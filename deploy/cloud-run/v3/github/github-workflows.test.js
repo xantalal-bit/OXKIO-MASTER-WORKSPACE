@@ -102,7 +102,10 @@ test('the deploy workflow keeps V3 reasoning off unless chosen with its own conf
   assert.match(guard, /remove-tag\)\s+test "\$REASONING" = "off"/);
   const deployStep = wf.jobs.deploy.steps.find((s) => s.shell === 'pwsh');
   assert.equal(deployStep.env.OXKIO_V3_REASONING_MODE, '${{ inputs.reasoning }}');
+  // Issue #86: the serving revision is a repository variable, changed only after an authorized promotion.
+  assert.equal(deployStep.env.OXKIO_V3_SERVING_REVISION, '${{ vars.OXKIO_V3_SERVING_REVISION }}');
   const wrapper = fs.readFileSync(path.join(root, 'deploy/cloud-run/v3/ci/Invoke-OxkioV3CloudCi.ps1'), 'utf8');
+  assert.match(wrapper, /if\(\[string\]\$env:OXKIO_V3_SERVING_REVISION\)\{ \$ciServing\.ServingRevision=/);
   assert.match(wrapper, /'internal-egress' \{'InternalEgress'\} default \{ throw 'OXKIO_V3_REASONING_MODE invalido' \}/);
   assert.match(wrapper, /-V3Reasoning \$ciReasoning/);
   const script = fs.readFileSync(path.join(root, 'deploy/cloud-run/v3/Invoke-OxkioV3CloudRevision.ps1'), 'utf8');

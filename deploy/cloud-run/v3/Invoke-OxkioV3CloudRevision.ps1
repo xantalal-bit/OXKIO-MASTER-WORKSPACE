@@ -23,12 +23,14 @@ param([ValidateSet('Validate','Simulate','ProveIsolation','Check','CheckReal','C
       # Cloud/Rollback: Synthetic (sin secretos) o Real (PostgreSQL + Secret Manager, requiere CheckReal en verde).
       [ValidateSet('Synthetic','Real')][string]$Variant='Synthetic',
       # Variante Real: razonamiento V3 (Issue #85). Off por defecto; InternalEgress exige autorizacion humana expresa.
-      [ValidateSet('Off','InternalEgress')][string]$V3Reasoning='Off')
+      [ValidateSet('Off','InternalEgress')][string]$V3Reasoning='Off',
+      # Revision que sirve el 100 % (cambia solo tras una promocion autorizada; ver Issue #86).
+      [ValidatePattern('^oxkio-api-staging-[0-9a-z]+(-[0-9a-z]+)*$')][string]$ServingRevision='oxkio-api-staging-00018-9xl')
 Set-StrictMode -Version Latest
 $ErrorActionPreference='Stop'
 $script:RepoLocal=(Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..\..\..')).ProviderPath
 if(-not $Commit){ $Commit=(& git.exe -C $script:RepoLocal rev-parse HEAD).Trim() }
-$script:ExpectedRevision='oxkio-api-staging-00018-9xl'
+$script:ExpectedRevision=$ServingRevision
 $script:ExpectedCommit=$Commit
 $script:LimitEUR=[decimal]2
 $script:Project='oxkio-runtime-prod'
