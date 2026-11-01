@@ -611,3 +611,10 @@ button:disabled {
     min-width: 52px;
   }
 }
+
+.connect-google {
+  display: grid;
+  gap: 6px;
+  justify-items: start;
+  margin-top: 10px;
+}

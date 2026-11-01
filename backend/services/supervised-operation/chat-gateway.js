@@ -13,6 +13,8 @@ const IGNORED_CLIENT_HINTS = ['calendar','gmail'];
 // conversation (always keyed by the authenticated uid) so follow-ups work.
 const DEFAULT_CONVERSATION = 'executive-default';
 const FOLLOW_UP = /^(contin[uú]a|sigue|adelante|reanuda|reint[eé]ntalo|vuelve a intentarlo|ya est[aá] conectad[oa]|ya lo he conectado|ya he conectado.*|listo|hecho|hazlo)[.!\s]*$/i;
+// Connection providers authorized through the existing Google OAuth flow.
+const GOOGLE_PROVIDERS = ['calendar','mail'];
 const PERMISSIONS = { 'mail.read':'leer tu correo','calendar.read':'leer tu agenda','documents.read':'consultar tus documentos','public.search':'buscar información pública','public.fetch':'leer páginas públicas' };
 function createChatGateway({runtime,membershipProvider,adapterFactory=null,storeFactory,approvalFactory,planner,conversationDecider,reasoner,catalog,budget,connectable,privacyPolicy,projectContinuity}={}){
  const r=runtime||createSupervisedRuntime({membershipProvider,storeFactory,approvalFactory,planner,conversationDecider,reasoner,catalog,budget,connectable,privacyPolicy,projectContinuity});
@@ -46,7 +48,11 @@ function createChatGateway({runtime,membershipProvider,adapterFactory=null,store
   // The task is named; whether its connection now works is told by its state.
   const response=(target?.missionId?'Retomo la tarea «'+target.task+'» desde donde la dejamos.\n':'')+describe(state);
   if(typeof r.recordTurn==='function'&&action!=='status'){const previous=action==='start'?null:r.turnContext(session,conversationId);const query=action==='start'?body.query:previous?.lastUser;if(typeof query==='string')await r.recordTurn(session,conversationId,{query,response,state,...(target?.objective?{objective:target.objective}:{})});}
-  return freeze({ok:true,response,conversationId,missionId:state.id||null,outcome:state.outcome||state.status||null,executionEnabled:false,...(body.includeDetails===true?{details:state}:{})});
+  // The interface offers the existing Google authorization only when the
+  // missing connection is Google's (agenda or correo) and this account can
+  // actually connect it; it is an offer to the person, never an action.
+  const connect=state.status==='NEEDS_CONNECTION'&&(state.connectionRequests||[]).some(g=>g&&g.connectable&&GOOGLE_PROVIDERS.includes(g.provider))?{connect:'google'}:{};
+  return freeze({ok:true,response,conversationId,missionId:state.id||null,outcome:state.outcome||state.status||null,executionEnabled:false,...connect,...(body.includeDetails===true?{details:state}:{})});
  }
  function describe(state){
   if(state.message)return state.message;
