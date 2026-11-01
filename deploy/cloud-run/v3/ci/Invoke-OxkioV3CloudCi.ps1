@@ -19,8 +19,21 @@ $ErrorActionPreference='Stop'
 $ciCommit=if($Operation -ceq 'SelfTest'){ '0'*40 } else { [string]$env:GITHUB_SHA }
 if($ciCommit -cnotmatch '^[0-9a-f]{40}$'){ throw 'GITHUB_SHA requerido' }
 $ciEvidence=Join-Path ([IO.Path]::GetTempPath()) ('oxkio-v3-ci-'+$ciCommit.Substring(0,7)+'-'+[guid]::NewGuid().ToString('N'))
+# Razonamiento V3 (Issue #85): entrada del workflow; vacia u 'off' = Off.
+$ciReasoning=switch -CaseSensitive ([string]$env:OXKIO_V3_REASONING_MODE){ '' {'Off'} 'off' {'Off'} 'internal-egress' {'InternalEgress'} default { throw 'OXKIO_V3_REASONING_MODE invalido' } }
 . (Join-Path $PSScriptRoot '..\Invoke-OxkioV3CloudRevision.ps1') -Mode Validate -Variant Real -Commit $ciCommit `
-    -EvidenceRoot $ciEvidence -PgHost ([string]$env:OXKIO_V3_PG_HOST) -OwnerUid ([string]$env:OXKIO_V3_OWNER_UID)
+    -EvidenceRoot $ciEvidence -PgHost ([string]$env:OXKIO_V3_PG_HOST) -OwnerUid ([string]$env:OXKIO_V3_OWNER_UID) -V3Reasoning $ciReasoning
+
+# Contrato de conversacion (Issue #85): una revision sin razonamiento V3 nunca puede declararse
+# conversacional. Con InternalEgress la prueba exige la linea de arranque 'V3 Reasoning: ready'
+# con el modelo y la region revisados; con Off exige 'not configured' y Conversational=false.
+function Test-V3ReasoningLog($Entries) {
+    $lines=@($Entries | ForEach-Object { [string](Get-Prop $_ 'textPayload' '') })
+    $ready=@($lines | Where-Object { $_.Contains($script:V3ReasoningReadyLog) }).Count -gt 0
+    $off=@($lines | Where-Object { $_.Contains($script:V3ReasoningOffLog) }).Count -gt 0
+    if($script:V3Reasoning -ceq 'InternalEgress'){ return [ordered]@{V3ReasoningReady=($ready -and -not $off);Conversational=($ready -and -not $off)} }
+    return [ordered]@{V3ReasoningOffAsDeclared=($off -and -not $ready)}
+}
 
 # Lista blanca de campos publicables. Todo lo demas se descarta.
 function ConvertTo-PublicSummary($Value) {
@@ -175,6 +188,8 @@ function Invoke-PrivateSmoke {
     $checks.V3EnabledForCohort=(@($entries | Where-Object { [string](Get-Prop $_ 'textPayload' '') -match 'V3: enabled for cohort' }).Count -gt 0)
     $checks.NoV3Refusal=(@($entries | Where-Object { [string](Get-Prop $_ 'textPayload' '') -match 'OXKIO V3\] not enabled' }).Count -eq 0)
     $checks.NoErrorsOr5xx=(@($entries | Where-Object { ((Get-Prop $_ 'severity' '') -in @('ERROR','CRITICAL','ALERT','EMERGENCY')) -or ((Get-Prop $_ 'httpRequest') -and [int](Get-Prop $_.httpRequest 'status' 0) -ge 500) }).Count -eq 0)
+    $reasoning=Test-V3ReasoningLog $entries
+    foreach($k in $reasoning.Keys){ $checks[$k]=$reasoning[$k] }
     $checks.Passed=-not ($checks.Values -contains $false)
     return $checks
 }
@@ -199,7 +214,9 @@ function Invoke-PrivateRevision {
         $smoke=Invoke-PrivateSmoke
         Write-PublicSummary 'Prueba privada' $smoke
         Assert-True ([bool]$smoke.Passed) 'Prueba privada fallida'
-        Write-PublicSummary 'Resultado' ([ordered]@{Revision=$script:RealRevision;Tag=$script:RealTag;TrafficPercent=0;ServingRevision=$script:ExpectedRevision;Status='PASS'})
+        # PASS de infraestructura; solo es conversacional si el razonamiento V3 se pidio y arranco.
+        Write-PublicSummary 'Resultado' ([ordered]@{Revision=$script:RealRevision;Tag=$script:RealTag;TrafficPercent=0;ServingRevision=$script:ExpectedRevision;Status='PASS'
+            Conversational=($script:V3Reasoning -ceq 'InternalEgress' -and [bool]$smoke['Conversational'])})
     } catch {
         $reason=[string]$_.Exception.Message
         if($attempted -ge 3){
@@ -245,7 +262,29 @@ function Invoke-SelfTest {
     $out=ConvertTo-PublicSummary $dates
     foreach($k in $dates.Keys){ Assert-True ([string]$out[$k] -cmatch '^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9:.]+Z$') "Fecha no publicada como ISO UTC: $k" }
     Invoke-IdTokenSelfTest
+    Invoke-ReasoningContractSelfTest
     'SELFTEST OK'
+}
+# Contrato de conversacion (Issue #85): sin la linea de arranque exacta no hay PASS conversacional.
+function Invoke-ReasoningContractSelfTest {
+    $saved=$script:V3Reasoning
+    $log={ param([string[]]$Lines) @($Lines | ForEach-Object { [pscustomobject]@{textPayload=$_} }) }
+    $readyLine=$script:V3ReasoningReadyLog; $offLine=$script:V3ReasoningOffLog
+    try {
+        $script:V3Reasoning='InternalEgress'
+        $r=Test-V3ReasoningLog (& $log @('V3: enabled for cohort',$readyLine))
+        Assert-True ($r.V3ReasoningReady -and $r.Conversational) 'Razonamiento listo no reconocido'
+        foreach($bad in @(@('V3: enabled for cohort',$offLine),@('V3: enabled for cohort'),@($readyLine,$offLine),
+                          @('V3 Reasoning: ready (openai:gpt-5.6-terra, region eu)'),@('V3 Reasoning: ready (openai:gpt-5.6-luna, region global)'))){
+            $r=Test-V3ReasoningLog (& $log $bad)
+            Assert-True (-not $r.V3ReasoningReady -and -not $r.Conversational) "PASS conversacional sin el proveedor revisado: $($bad -join ' | ')"
+        }
+        $script:V3Reasoning='Off'
+        $r=Test-V3ReasoningLog (& $log @('V3: enabled for cohort',$offLine))
+        Assert-True ($r.V3ReasoningOffAsDeclared -and -not $r.Contains('Conversational')) 'Off debe declararse sin conversacion'
+        $r=Test-V3ReasoningLog (& $log @('V3: enabled for cohort',$readyLine))
+        Assert-True (-not $r.V3ReasoningOffAsDeclared) 'Razonamiento activo en una revision Off'
+    } finally { $script:V3Reasoning=$saved }
 }
 function New-TestJwt($Claims) {
     $enc={ param($s) [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($s)).TrimEnd('=').Replace('+','-').Replace('/','_') }
@@ -306,7 +345,7 @@ function Invoke-IdTokenSelfTest {
         if($Arguments[0] -ceq 'run' -and $Arguments[1] -ceq 'services'){
             return ('{"status":{"url":"'+$script:StSvc+'","traffic":[{"revisionName":"oxkio-api-staging-00018-9xl","percent":100},{"revisionName":"'+$script:RealRevision+'","tag":"'+$script:RealTag+'","url":"'+$script:StTag+'"}]}}') }
         # Un solo objeto: PS 5.1 no despliega arrays JSON en la tuberia (el runner usa pwsh 7).
-        if($Arguments[0] -ceq 'logging'){ return '{"textPayload":"V3: enabled for cohort"}' }
+        if($Arguments[0] -ceq 'logging'){ return (ConvertTo-Json -Compress @{textPayload=($script:StReasoningLine+"`n"+'V3: enabled for cohort')}) }
         throw 'gcloud inesperado'
     }
     function New-PrivateIdToken([string]$Audience){ "tok:$Audience" }
@@ -318,9 +357,20 @@ function Invoke-IdTokenSelfTest {
         if($Url -like '*/health' -or $Url -like '*/ready'){ return 200 }
         return 401
     }
-    $script:StAnon=403; $script:StPreflight=$null
+    $script:StAnon=403; $script:StPreflight=$null; $script:StReasoningLine=$script:V3ReasoningOffLog
+    $savedReasoning=$script:V3Reasoning; $script:V3Reasoning='Off'
     $script:StAccepted=@($script:StSvc); $r=Invoke-PrivateSmoke
     Assert-True ($r.Passed -and $r.TokenAudience -ceq 'service_url' -and $r.AnonymousDeniedByIAM -and $r.ForgedTokenDenied -and $r.Health200 -and $r.Ready200 -and $r.ApiWithoutFirebase401 -and $r.ChatWithoutFirebase401) 'Prueba privada: audiencia del servicio'
+    Assert-True ($r.V3ReasoningOffAsDeclared -and -not $r.Contains('Conversational')) 'Prueba privada: Off nunca es conversacional'
+    # Issue #85: con razonamiento pedido, PASS solo si arranco el proveedor revisado.
+    $script:V3Reasoning='InternalEgress'
+    $r=Invoke-PrivateSmoke
+    Assert-True (-not $r.Passed -and -not $r.Conversational) 'Prueba privada: razonamiento pedido pero no configurado debe fallar'
+    $script:StReasoningLine=$script:V3ReasoningReadyLog; $r=Invoke-PrivateSmoke
+    Assert-True ($r.Passed -and $r.V3ReasoningReady -and $r.Conversational) 'Prueba privada: razonamiento listo'
+    $script:V3Reasoning='Off'; $r=Invoke-PrivateSmoke
+    Assert-True (-not $r.Passed) 'Prueba privada: razonamiento activo en revision Off debe fallar'
+    $script:V3Reasoning='Off'; $script:StReasoningLine=$script:V3ReasoningOffLog
     $script:StAccepted=@($script:StTag); $r=Invoke-PrivateSmoke
     Assert-True ($r.Passed -and $r.TokenAudience -ceq 'tag_url') 'Prueba privada: audiencia de la etiqueta'
     $script:StAccepted=@(); $r=Invoke-PrivateSmoke
@@ -340,6 +390,7 @@ function Invoke-IdTokenSelfTest {
     $script:StPreflight=$null
     $json=ConvertTo-Json -InputObject (ConvertTo-PublicSummary $r) -Depth 4
     Assert-True ($json.Contains('service_url') -and -not $json.Contains('tok:')) 'Resumen publico de la prueba privada'
+    $script:V3Reasoning=$savedReasoning
 }
 
 switch($Operation) {

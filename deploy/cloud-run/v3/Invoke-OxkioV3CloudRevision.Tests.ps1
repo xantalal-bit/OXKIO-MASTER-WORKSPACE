@@ -226,6 +226,39 @@ Check 'Real-variant guard refuses traffic on the new revision' {Assert-RealRevis
 Check 'Real-variant guard refuses a missing secret reference' {Assert-RealRevision (New-RealRevisionModel {param($d) $c=@($d.spec.template.spec.containers)[0]; $c.env=@($c.env | Where-Object { $_.name -cne 'OXKIO_V3_PG_PASSWORD' })})} $true
 Check 'Real-variant guard refuses a plaintext V3 secret' {Assert-RealRevision (New-RealRevisionModel {param($d) $c=@($d.spec.template.spec.containers)[0]; $c.env=@($c.env | Where-Object { $_.name -cne 'OXKIO_V3_INTEGRITY_KEY' })+@([pscustomobject]@{name='OXKIO_V3_INTEGRITY_KEY';value=('k'*64)})})} $true
 Check 'Real-variant guard refuses a cohort other than the owner' {Assert-RealRevision (New-RealRevisionModel {param($d) $c=@($d.spec.template.spec.containers)[0]; ($c.env | Where-Object { $_.name -ceq 'OXKIO_V3_COHORT_UIDS' }).value='SomeoneElse000000000000'})} $true
+# Issue #85: V3 reasoning only by explicit InternalEgress, reviewed values, key by existing reference.
+function New-ReasoningServiceJson { $svc=New-RealServiceJson; $c=@($svc.spec.template.spec.containers)[0]
+    $c.env=@($c.env)+@([pscustomobject]@{name='OXKIO_REASONING_API_KEY';valueFrom=[pscustomobject]@{secretKeyRef=[pscustomobject]@{name='OXKIO_REASONING_API_KEY';key='latest'}}}); return $svc }
+function Use-Reasoning([string]$Mode,[scriptblock]$Body){ $saved=$script:V3Reasoning; $script:V3Reasoning=$Mode; try { & $Body } finally { $script:V3Reasoning=$saved } }
+function New-ReasoningRevisionModel([scriptblock]$Mutate={param($d)}) {
+    $d=New-RealV3ServiceDocument (New-ReasoningServiceJson) $realDigest; & $Mutate $d
+    $rev=[pscustomobject]@{metadata=$d.spec.template.metadata;spec=$d.spec.template.spec;status=[pscustomobject]@{imageDigest=$realDigest}}
+    $traffic=@($d.spec.traffic | ForEach-Object { [pscustomobject]@{revisionName=$_.revisionName;percent=[int]$_.percent;latestRevision=$false;tag=(Get-Prop $_ 'tag' '')} })
+    ConvertTo-RevisionModel $rev $traffic $script:ExpectedCommit
+}
+Check 'Default reasoning mode is Off' {Assert-True ($script:V3Reasoning -ceq 'Off') 'default'}
+Check 'InternalEgress document adds only the reviewed reasoning values and reuses the key reference' {Use-Reasoning 'InternalEgress' {
+    $d=New-RealV3ServiceDocument (New-ReasoningServiceJson) $realDigest
+    $c=@($d.spec.template.spec.containers)[0]; $env=@{}; foreach($e in $c.env){ $env[$e.name]=$e }
+    foreach($e in $script:V3ReasoningEnv.GetEnumerator()){ Assert-True ($env[$e.Key].value -ceq $e.Value) "value $($e.Key)" }
+    Assert-True ($env['OXKIO_V3_REASONING_BASE_URL'].value -ceq 'https://eu.api.openai.com/v1') 'EU residency'
+    Assert-True ($env['OXKIO_REASONING_API_KEY'].valueFrom.secretKeyRef.name -ceq 'OXKIO_REASONING_API_KEY' -and $null -eq (Get-Prop $env['OXKIO_REASONING_API_KEY'] 'value')) 'key by reference only'
+    Assert-True (@($c.env | Where-Object { $_.name -match 'API_KEY' -and -not (Get-Prop $_ 'valueFrom') }).Count -eq 0) 'no plaintext key'
+    Assert-True (@($c.env | Where-Object { $_.name -match '^OXKIO_V3_REASONING_' }).Count -eq 7) 'exactly the reviewed fields'
+    Assert-RealRevision (New-ReasoningRevisionModel) }}
+Check 'InternalEgress refuses a template without the existing key reference (no new secret)' {Use-Reasoning 'InternalEgress' {New-RealV3ServiceDocument (New-RealServiceJson) $realDigest}} $true
+Check 'Off document drops inherited V3 reasoning variables' {Use-Reasoning 'Off' {
+    $svc=New-ReasoningServiceJson; $c=@($svc.spec.template.spec.containers)[0]
+    $c.env=@($c.env)+@([pscustomobject]@{name='OXKIO_V3_REASONING_PROVIDER';value='openai'},[pscustomobject]@{name='OXKIO_V3_PLANNER_DAILY_BUDGET_USD';value='9'})
+    $d=New-RealV3ServiceDocument $svc $realDigest
+    Assert-True (@(@($d.spec.template.spec.containers)[0].env | Where-Object { $_.name -match '^OXKIO_V3_REASONING_|^OXKIO_V3_PLANNER_' }).Count -eq 0) 'inherited reasoning removed' }}
+Check 'Off guard refuses a revision carrying V3 reasoning' {$m=Use-Reasoning 'InternalEgress' {New-ReasoningRevisionModel}; Use-Reasoning 'Off' {Assert-RealRevision $m}} $true
+Check 'InternalEgress guard refuses another model' {Use-Reasoning 'InternalEgress' {Assert-RealRevision (New-ReasoningRevisionModel {param($d) $c=@($d.spec.template.spec.containers)[0]; ($c.env | Where-Object { $_.name -ceq 'OXKIO_V3_REASONING_MODEL' }).value='gpt-5.6-terra'})}} $true
+Check 'InternalEgress guard refuses the global endpoint' {Use-Reasoning 'InternalEgress' {Assert-RealRevision (New-ReasoningRevisionModel {param($d) $c=@($d.spec.template.spec.containers)[0]; ($c.env | Where-Object { $_.name -ceq 'OXKIO_V3_REASONING_BASE_URL' }).value='https://api.openai.com/v1'})}} $true
+Check 'InternalEgress guard refuses egress switched off' {Use-Reasoning 'InternalEgress' {Assert-RealRevision (New-ReasoningRevisionModel {param($d) $c=@($d.spec.template.spec.containers)[0]; $c.env=@($c.env | Where-Object { $_.name -cne 'OXKIO_V3_REASONING_INTERNAL_EGRESS' })})}} $true
+Check 'InternalEgress guard refuses an unreviewed reasoning variable' {Use-Reasoning 'InternalEgress' {Assert-RealRevision (New-ReasoningRevisionModel {param($d) $c=@($d.spec.template.spec.containers)[0]; $c.env=@($c.env)+@([pscustomobject]@{name='OXKIO_V3_REASONING_CONFIDENTIAL_EGRESS';value='true'})})}} $true
+Check 'InternalEgress guard refuses a plaintext provider key' {Use-Reasoning 'InternalEgress' {Assert-RealRevision (New-ReasoningRevisionModel {param($d) $c=@($d.spec.template.spec.containers)[0]; $c.env=@($c.env | Where-Object { $_.name -cne 'OXKIO_REASONING_API_KEY' })+@([pscustomobject]@{name='OXKIO_REASONING_API_KEY';value='sk-fixture'})})}} $true
+Check 'InternalEgress guard refuses a plaintext V3 key alias' {Use-Reasoning 'InternalEgress' {Assert-RealRevision (New-ReasoningRevisionModel {param($d) $c=@($d.spec.template.spec.containers)[0]; $c.env=@($c.env)+@([pscustomobject]@{name='OXKIO_V3_REASONING_API_KEY';value='sk-fixture'})})}} $true
 Check 'Real deployment refuses a CheckReal that still lists blockers' {
     $saved=$script:CheckRealPath;$script:CheckRealPath=Join-Path $env:TEMP ('check-real-'+[guid]::NewGuid().ToString('N')+'.json')
     try{Write-PrivateFile $script:CheckRealPath (ConvertTo-Json @{Commit=$script:ExpectedCommit;AtUtc=[datetime]::UtcNow.ToString('o');Passed=$false;Blockers=@('secret_missing:OXKIO_V3_PG_PASSWORD')});Assert-RecentCheckReal}

@@ -21,7 +21,9 @@ param([ValidateSet('Validate','Simulate','ProveIsolation','Check','CheckReal','C
       [ValidatePattern('^(latest|[1-9][0-9]*)$')][string]$IntegrityKeyVersion='latest',
       [ValidatePattern('^[1-9][0-9]*$')][string]$PgPasswordVersion='1',
       # Cloud/Rollback: Synthetic (sin secretos) o Real (PostgreSQL + Secret Manager, requiere CheckReal en verde).
-      [ValidateSet('Synthetic','Real')][string]$Variant='Synthetic')
+      [ValidateSet('Synthetic','Real')][string]$Variant='Synthetic',
+      # Variante Real: razonamiento V3 (Issue #85). Off por defecto; InternalEgress exige autorizacion humana expresa.
+      [ValidateSet('Off','InternalEgress')][string]$V3Reasoning='Off')
 Set-StrictMode -Version Latest
 $ErrorActionPreference='Stop'
 $script:RepoLocal=(Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..\..\..')).ProviderPath
@@ -55,6 +57,21 @@ $script:CheckPath=Join-Path $script:Evidence ('check-'+$script:ShortCommit+'.jso
 $script:CheckRealPath=Join-Path $script:Evidence ('check-real-'+$script:ShortCommit+'.json')
 # La variante Real reutiliza la secuencia 0..6 con su propia revision, etiqueta y journal.
 $script:Variant=$Variant
+# Razonamiento V3 de la revision real (Issue #85). Off: la revision no conversa (solo vocabulario
+# determinista) y lo declara. InternalEgress: la configuracion que funcionaba en el runtime local de
+# Cliente Cero (proveedor, modelo y precios revisados el 04/10) con residencia UE. Solo lo INTERNAL
+# puede salir al proveedor (Autorizacion B); lo CONFIDENTIAL y lo derivado de memoria, correo o agenda
+# no sale nunca (Privacy Gate). La clave se reutiliza por referencia (OXKIO_REASONING_API_KEY, ya
+# montada en la plantilla vigente): ni secretos ni permisos nuevos.
+$script:V3Reasoning=$V3Reasoning
+$script:V3ReasoningEnv=[ordered]@{OXKIO_V3_REASONING_PROVIDER='openai';OXKIO_V3_REASONING_MODEL='gpt-5.6-luna'
+    OXKIO_V3_REASONING_BASE_URL='https://eu.api.openai.com/v1';OXKIO_V3_REASONING_INPUT_USD_PER_MILLION='0.20'
+    OXKIO_V3_REASONING_OUTPUT_USD_PER_MILLION='1.20';OXKIO_V3_REASONING_PRICING_REVIEWED_AT='2026-10-04'
+    OXKIO_V3_REASONING_INTERNAL_EGRESS='true';OXKIO_V3_PLANNER_DAILY_BUDGET_USD='0.90'}
+$script:V3ReasoningKeySecret='OXKIO_REASONING_API_KEY'
+# Linea de arranque de server.js que demuestra el proveedor V3 listo (modelId y region).
+$script:V3ReasoningReadyLog='V3 Reasoning: ready (openai:gpt-5.6-luna, region eu)'
+$script:V3ReasoningOffLog='V3 Reasoning: not configured'
 if($script:Variant -ceq 'Real'){ $script:TestTag=$script:RealTag; $script:TestRevision=$script:RealRevision; $script:JournalPath=Join-Path $script:Evidence 'journal-real.json' }
 $script:BuildContextFiles=@('Dockerfile','.dockerignore','package.json','package-lock.json','backend','app','orchestration/CONTINUITY-REGISTRY.json')
 
@@ -151,7 +168,14 @@ function Assert-RealRevision($Revision) {
     Assert-True ($Revision.Env.OXKIO_V3_MEMORY_BACKEND -ceq 'postgres' -and $Revision.Env.OXKIO_V3_APPROVAL_BACKEND -ceq 'postgres') 'Memoria o aprobaciones no durables'
     Assert-True ($Revision.Env.OXKIO_V3_PG_USER -ceq 'oxkio_v3_runtime' -and $Revision.Env.OXKIO_V3_PG_HOST -ceq $script:PgHost) 'Conexion PostgreSQL inesperada'
     foreach($s in $script:RealV3Secrets){ Assert-True ($s -in @($Revision.SecretMounts)) "Falta la referencia $s" }
-    foreach($name in $Revision.Env.Keys){ Assert-True ($name -notin $script:RealV3Secrets -and $name -notmatch '^OXKIO_V3_REASONING_') "Variable no permitida en claro: $name" }
+    foreach($name in $Revision.Env.Keys){ Assert-True ($name -notin $script:RealV3Secrets -and $name -notmatch '_API_KEY$') "Variable no permitida en claro: $name" }
+    if($script:V3Reasoning -ceq 'InternalEgress'){
+        foreach($e in $script:V3ReasoningEnv.GetEnumerator()){ Assert-True ([string]$Revision.Env[$e.Key] -ceq $e.Value) "Razonamiento V3 distinto del revisado: $($e.Key)" }
+        foreach($name in $Revision.Env.Keys){ Assert-True ($name -notmatch '^OXKIO_V3_REASONING_|^OXKIO_V3_PLANNER_' -or $script:V3ReasoningEnv.Contains($name)) "Variable de razonamiento no revisada: $name" }
+        Assert-True ($script:V3ReasoningKeySecret -in @($Revision.SecretMounts)) 'La clave del proveedor solo puede ir por referencia de Secret Manager'
+    } else {
+        foreach($name in $Revision.Env.Keys){ Assert-True ($name -notmatch '^OXKIO_V3_REASONING_|^OXKIO_V3_PLANNER_') "Razonamiento V3 no autorizado: $name" }
+    }
 }
 function Assert-TestResult($Test) {
     Assert-True ($Test.Authenticated -and $Test.ExistingIAM -and $Test.SyntheticOnly) 'Identidad o datos no permitidos'
@@ -256,7 +280,7 @@ function New-UntaggedServiceDocument($Service) {
 # Revision V3 real: parte de la plantilla vigente (variables, referencias de secretos,
 # recursos y cuenta de servicio intactos) y anade V3 con memoria y aprobaciones en
 # PostgreSQL. Credenciales solo como referencias de Secret Manager, nunca valores.
-# Razonamiento V3 no se activa aqui (habilitacion gradual). Trafico: 100 % a 00018
+# Razonamiento V3 solo con -V3Reasoning InternalEgress (autorizacion expresa). Trafico: 100 % a 00018
 # por nombre y 0 % etiquetado a la nueva revision.
 $script:RealV3Secrets=@('OXKIO_V3_INTEGRITY_KEY','OXKIO_V3_PG_PASSWORD')
 function New-RealV3ServiceDocument($Service,[string]$ImageRef) {
@@ -274,7 +298,13 @@ function New-RealV3ServiceDocument($Service,[string]$ImageRef) {
         OXKIO_V3_MEMORY_BACKEND='postgres';OXKIO_V3_PG_HOST=$script:PgHost;OXKIO_V3_PG_PORT='5432'
         OXKIO_V3_PG_DATABASE=$script:PgDatabase;OXKIO_V3_PG_USER='oxkio_v3_runtime';OXKIO_V3_APPROVAL_BACKEND='postgres'}
     $refs=[ordered]@{OXKIO_V3_INTEGRITY_KEY=$script:IntegrityKeyVersion;OXKIO_V3_PG_PASSWORD=$script:PgPasswordVersion}
-    $kept=@($current | Where-Object { $_.name -notin @($v3.Keys) -and $_.name -notin @($refs.Keys) })
+    if($script:V3Reasoning -ceq 'InternalEgress'){
+        # Custodia existente: la plantilla ya monta la clave del proveedor por referencia. Si no, no se crea nada.
+        Assert-True (@($current | Where-Object { $_.name -ceq $script:V3ReasoningKeySecret -and (Get-Prop $_ 'valueFrom') }).Count -eq 1) 'Falta la referencia existente a la clave del proveedor: no se crea ningun secreto'
+        foreach($e in $script:V3ReasoningEnv.GetEnumerator()){ $v3[$e.Key]=$e.Value }
+    }
+    # Ninguna variable de razonamiento V3 heredada de la plantilla: solo las revisadas, y solo si se autorizan.
+    $kept=@($current | Where-Object { $_.name -notin @($v3.Keys) -and $_.name -notin @($refs.Keys) -and $_.name -notmatch '^OXKIO_V3_REASONING_|^OXKIO_V3_PLANNER_' })
     $added=@($v3.GetEnumerator() | ForEach-Object { [pscustomobject][ordered]@{name=$_.Key;value=[string]$_.Value} })
     $added+=@($refs.GetEnumerator() | ForEach-Object { [pscustomobject][ordered]@{name=$_.Key;valueFrom=[pscustomobject]@{secretKeyRef=[pscustomobject]@{name=$_.Key;key=$_.Value}}} })
     $container | Add-Member -NotePropertyName env -NotePropertyValue @($kept+$added) -Force

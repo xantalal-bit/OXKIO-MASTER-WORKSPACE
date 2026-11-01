@@ -12,7 +12,7 @@ const YAML = require('yaml');
 const root = path.join(__dirname, '..', '..', '..', '..');
 const WORKFLOWS = {
   'oxkio-v3-db.yml': { environment: 'oxkio-v3-db', sa: 'OXKIO_GCP_DB_SA', phrases: ['ACTIVAR-LOGIN-oxkio_v3_runtime'] },
-  'oxkio-v3-deploy.yml': { environment: 'oxkio-v3-deploy', sa: 'OXKIO_GCP_DEPLOY_SA', phrases: ['CREAR-REVISION-PRIVADA', 'QUITAR-ETIQUETA'] }
+  'oxkio-v3-deploy.yml': { environment: 'oxkio-v3-deploy', sa: 'OXKIO_GCP_DEPLOY_SA', phrases: ['CREAR-REVISION-PRIVADA', 'QUITAR-ETIQUETA', 'CREAR-REVISION-PRIVADA-CON-RAZONAMIENTO'] }
 };
 const read = (file) => fs.readFileSync(path.join(root, '.github/workflows', file), 'utf8');
 
@@ -86,6 +86,29 @@ test('the DB workflow reuses the existing scripts and the deploy workflow the ex
   assert.doesNotMatch(code, /print-identity-token/);
   assert.match(code, /:generateIdToken"/);
   assert.match(code, /https:\/\/sts\.googleapis\.com\/v1\/token/);
+});
+
+// Issue #85: V3 reasoning is an explicit, separately confirmed choice; off by default.
+test('the deploy workflow keeps V3 reasoning off unless chosen with its own confirmation phrase', () => {
+  const wf = YAML.parse(read('oxkio-v3-deploy.yml'));
+  const input = wf.on.workflow_dispatch.inputs.reasoning;
+  assert.equal(input.type, 'choice');
+  assert.deepEqual(input.options, ['off', 'internal-egress']);
+  assert.equal(input.default, 'off');
+  const guard = wf.jobs.guard.steps.map((s) => s.run || '').join('\n');
+  assert.equal(wf.jobs.guard.steps.find((s) => s.run).env.REASONING, '${{ inputs.reasoning }}');
+  assert.match(guard, /if \[ "\$REASONING" = "internal-egress" \]; then\s+test "\$CONFIRM" = "CREAR-REVISION-PRIVADA-CON-RAZONAMIENTO"/);
+  assert.match(guard, /off\|internal-egress\) ;;\s+\*\) echo "Modo de razonamiento no admitido"; exit 1 ;;/);
+  assert.match(guard, /remove-tag\)\s+test "\$REASONING" = "off"/);
+  const deployStep = wf.jobs.deploy.steps.find((s) => s.shell === 'pwsh');
+  assert.equal(deployStep.env.OXKIO_V3_REASONING_MODE, '${{ inputs.reasoning }}');
+  const wrapper = fs.readFileSync(path.join(root, 'deploy/cloud-run/v3/ci/Invoke-OxkioV3CloudCi.ps1'), 'utf8');
+  assert.match(wrapper, /'internal-egress' \{'InternalEgress'\} default \{ throw 'OXKIO_V3_REASONING_MODE invalido' \}/);
+  assert.match(wrapper, /-V3Reasoning \$ciReasoning/);
+  const script = fs.readFileSync(path.join(root, 'deploy/cloud-run/v3/Invoke-OxkioV3CloudRevision.ps1'), 'utf8');
+  assert.match(script, /\[ValidateSet\('Off','InternalEgress'\)\]\[string\]\$V3Reasoning='Off'/);
+  assert.match(script, /OXKIO_V3_REASONING_BASE_URL='https:\/\/eu\.api\.openai\.com\/v1'/);
+  assert.doesNotMatch(script, /OXKIO_V3_REASONING_CONFIDENTIAL|OXKIO_V3_REASONING_API_KEY=/);
 });
 
 const shell = ['pwsh', 'powershell'].find((s) => spawnSync(s, ['-NoProfile', '-Command', '$PSVersionTable.PSVersion.Major']).status === 0);
