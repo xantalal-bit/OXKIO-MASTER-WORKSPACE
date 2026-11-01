@@ -30,7 +30,7 @@ const action = (tokens, words, plain) => !QUESTION.test(plain.replace(/^[^a-z0-9
 const SOURCES = Object.freeze({
  'calendar.read': ['agenda', 'cita', 'citas', 'reunion', 'reuniones', 'calendario', 'evento', 'eventos', 'compromiso'],
  'gmail.read': ['correo', 'correos', 'email', 'emails', 'mail', 'mails', 'bandeja', 'inbox', 'factura'],
- 'memory.search': ['recuerdas', 'acuerdas', 'recupera', 'memoria', 'dije', 'dijiste', 'conte', 'apuntaste', 'guardaste', 'anotaste'],
+ 'memory.search': ['recuerdas', 'acuerdas', 'recupera', 'memoria', 'dije', 'dijiste', 'conte', 'apuntaste', 'guardaste', 'anotaste', 'guarde', 'apunte', 'anote', 'guardado', 'apuntado', 'anotado'],
  'documents.read': ['documento', 'archivo', 'fichero'],
 });
 const WEB_VERBS = ['investiga', 'investigar', 'averigua', 'busca', 'buscar', 'buscame'];

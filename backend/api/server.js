@@ -676,7 +676,7 @@ if (pathname === "/app/release.json" && req.method === "GET") {
   res.end(fs.readFileSync(releasePath));
   return;
 }
-if (req.url === "/") {
+if (pathname === "/") {
 
   const fs = require("fs");
   const path = require("path");
@@ -691,7 +691,7 @@ if (req.url === "/") {
 
   return;
 }
-if (req.url === "/approvals") {
+if (pathname === "/approvals") {
 
   const fs = require("fs");
   const path = require("path");
@@ -706,7 +706,7 @@ if (req.url === "/approvals") {
 
   return;
 }
-if (req.url === "/executive-dashboard.html") {
+if (pathname === "/executive-dashboard.html") {
 
   const fs = require("fs");
   const path = require("path");
@@ -721,7 +721,7 @@ if (req.url === "/executive-dashboard.html") {
 
   return;
 }
-if (req.url === "/executive-chat.html") {
+if (pathname === "/executive-chat.html") {
 
   const fs = require("fs");
   const path = require("path");
@@ -736,7 +736,7 @@ if (req.url === "/executive-chat.html") {
 
   return;
 }
-if (req.url === "/business-hunter-dashboard.html") {
+if (pathname === "/business-hunter-dashboard.html") {
 
   const fs = require("fs");
   const path = require("path");
@@ -751,7 +751,7 @@ if (req.url === "/business-hunter-dashboard.html") {
 
   return;
 }
-if (req.url === "/js/executive-chat.js") {
+if (pathname === "/js/executive-chat.js") {
 
   const fs = require("fs");
   const path = require("path");
@@ -766,7 +766,7 @@ if (req.url === "/js/executive-chat.js") {
 
   return;
 }
-if (req.url === "/js/business-hunter-dashboard.js") {
+if (pathname === "/js/business-hunter-dashboard.js") {
 
   const fs = require("fs");
   const path = require("path");
@@ -781,7 +781,7 @@ if (req.url === "/js/business-hunter-dashboard.js") {
 
   return;
 }
-if (req.url === "/js/firebase-authenticated-fetch.js") {
+if (pathname === "/js/firebase-authenticated-fetch.js") {
   const fs = require("fs");
   const path = require("path");
   const scriptPath = path.join(__dirname, "../../app/js/firebase-authenticated-fetch.js");
@@ -792,7 +792,7 @@ if (req.url === "/js/firebase-authenticated-fetch.js") {
   res.end(fs.readFileSync(scriptPath));
   return;
 }
-if (req.url === "/css/executive-chat.css") {
+if (pathname === "/css/executive-chat.css") {
 
   const fs = require("fs");
   const path = require("path");
@@ -807,7 +807,7 @@ if (req.url === "/css/executive-chat.css") {
 
   return;
 }
-if (req.url === "/css/business-hunter-dashboard.css") {
+if (pathname === "/css/business-hunter-dashboard.css") {
 
   const fs = require("fs");
   const path = require("path");
@@ -822,7 +822,7 @@ if (req.url === "/css/business-hunter-dashboard.css") {
 
   return;
 }
-if (req.url === "/app/logo.png") {
+if (pathname === "/app/logo.png") {
 
   const fs = require("fs");
   const path = require("path");
@@ -837,7 +837,7 @@ if (req.url === "/app/logo.png") {
 
   return;
 }
-if (req.url === "/logo.png") {
+if (pathname === "/logo.png") {
 
   const fs = require("fs");
   const path = require("path");
@@ -852,7 +852,7 @@ if (req.url === "/logo.png") {
 
   return;
 }
-if (req.url === "/app/favicon.png") {
+if (pathname === "/app/favicon.png") {
 
   const fs = require("fs");
   const path = require("path");
@@ -867,7 +867,7 @@ if (req.url === "/app/favicon.png") {
 
   return;
 }
-if (req.url === "/favicon.png") {
+if (pathname === "/favicon.png") {
 
   const fs = require("fs");
   const path = require("path");
@@ -882,7 +882,7 @@ if (req.url === "/favicon.png") {
 
   return;
 }
-if (req.url === "/manifest.webmanifest") {
+if (pathname === "/manifest.webmanifest") {
 
   const fs = require("fs");
   const path = require("path");
@@ -898,9 +898,9 @@ if (req.url === "/manifest.webmanifest") {
 
   return;
 }
-if (req.url === "/icons/icon-192.png" ||
-    req.url === "/icons/icon-512.png" ||
-    req.url === "/icons/apple-touch-icon.png") {
+if (pathname === "/icons/icon-192.png" ||
+    pathname === "/icons/icon-512.png" ||
+    pathname === "/icons/apple-touch-icon.png") {
 
   const fs = require("fs");
   const path = require("path");
@@ -909,7 +909,7 @@ if (req.url === "/icons/icon-192.png" ||
     "/icons/icon-512.png": "icon-512.png",
     "/icons/apple-touch-icon.png": "apple-touch-icon.png"
   };
-  const iconPath = path.join(__dirname, "../../app/icons", iconFiles[req.url]);
+  const iconPath = path.join(__dirname, "../../app/icons", iconFiles[pathname]);
 
   res.writeHead(200, {
     "Content-Type": "image/png",
@@ -921,7 +921,7 @@ if (req.url === "/icons/icon-192.png" ||
   return;
 }
 
-if (req.url === "/modules/projects/projectManager.js") {
+if (pathname === "/modules/projects/projectManager.js") {
   const fs = require("fs");
   const path = require("path");
   const modulePath = path.join(
@@ -936,12 +936,12 @@ if (req.url === "/modules/projects/projectManager.js") {
   return;
 }
 
-if (req.url.startsWith("/modules/strategic-intelligence/")) {
+if (pathname.startsWith("/modules/strategic-intelligence/")) {
 
   const fs = require("fs");
   const path = require("path");
 
-  const requestedFile = req.url.replace("/modules/strategic-intelligence/", "");
+  const requestedFile = pathname.replace("/modules/strategic-intelligence/", "");
   const allowedFiles = [
     "strategicAnalyzer.js",
     "strategicSuggestions.js",
@@ -970,12 +970,12 @@ if (req.url.startsWith("/modules/strategic-intelligence/")) {
   return;
 }
 
-if (req.url.startsWith("/modules/documents/")) {
+if (pathname.startsWith("/modules/documents/")) {
 
   const fs = require("fs");
   const path = require("path");
 
-  const requestedFile = req.url.replace("/modules/documents/", "");
+  const requestedFile = pathname.replace("/modules/documents/", "");
 
   const allowedFiles = [
   "documentClassifier.js",
@@ -1006,12 +1006,12 @@ if (req.url.startsWith("/modules/documents/")) {
   return;
 }
 
-if (req.url.startsWith("/modules/memory/")) {
+if (pathname.startsWith("/modules/memory/")) {
 
   const fs = require("fs");
   const path = require("path");
 
-  const requestedFile = req.url.replace("/modules/memory/", "");
+  const requestedFile = pathname.replace("/modules/memory/", "");
   const allowedFiles = [
     "memoryOperational.js",
     "memoryStrategic.js",

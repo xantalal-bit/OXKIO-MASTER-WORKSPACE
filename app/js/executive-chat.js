@@ -184,6 +184,49 @@ function appendQualityFeedback(exchange, data) {
   exchange.appendChild(details);
 }
 
+// The server says a task is waiting for the person's Google authorization
+// (agenda or correo). The button starts the same flow as «Conectar Google» in
+// the main panel (GET /oauth/google with the Firebase session); only Google's
+// own consent page is accepted as destination. After consenting, the person
+// says «continúa» and the saved task resumes.
+const GOOGLE_CONSENT_HOST = 'accounts.google.com';
+
+function isGoogleConsentUrl(value) {
+  try {
+    const url = new URL(value);
+    return url.protocol === 'https:' && url.hostname === GOOGLE_CONSENT_HOST;
+  } catch (error) {
+    return false;
+  }
+}
+
+function appendGoogleConnect(container) {
+  const wrap = createElement('div', 'connect-google');
+  const button = createElement('button', 'connect-google-button', 'Conectar Google');
+  const note = createElement('p', 'message-meta', 'Después de autorizar, vuelve aquí y escribe «continúa».');
+  button.type = 'button';
+  button.addEventListener('click', async () => {
+    button.disabled = true;
+    button.textContent = 'Conectando...';
+    try {
+      const response = await window.oxkioAuthenticatedFetch('/oauth/google');
+      const data = await response.json();
+      if (data && data.ok === true && isGoogleConsentUrl(data.authUrl)) {
+        window.location.href = data.authUrl;
+        return;
+      }
+      note.textContent = 'No he podido iniciar la conexión con Google. Inténtalo de nuevo.';
+    } catch (error) {
+      note.textContent = 'No he podido iniciar la conexión con Google. Inténtalo de nuevo.';
+    }
+    button.disabled = false;
+    button.textContent = 'Conectar Google';
+  });
+  wrap.appendChild(button);
+  wrap.appendChild(note);
+  container.appendChild(wrap);
+}
+
 function renderExchange(query, data) {
   clearEmptyState();
 
@@ -202,6 +245,10 @@ function renderExchange(query, data) {
 
   if (confidenceLabel) {
     assistantMessage.appendChild(createElement('p', 'message-meta', confidenceLabel));
+  }
+
+  if (data.connect === 'google') {
+    appendGoogleConnect(assistantMessage);
   }
 
   exchange.appendChild(userMessage);

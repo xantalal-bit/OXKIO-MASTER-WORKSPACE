@@ -14,9 +14,14 @@ on:
         options: [check-real, private-revision, remove-tag]
         default: check-real
       confirm:
-        description: 'Para private-revision: CREAR-REVISION-PRIVADA. Para remove-tag: QUITAR-ETIQUETA'
+        description: 'Para private-revision: CREAR-REVISION-PRIVADA (con razonamiento: CREAR-REVISION-PRIVADA-CON-RAZONAMIENTO). Para remove-tag: QUITAR-ETIQUETA'
         type: string
         default: ''
+      reasoning:
+        description: 'Razonamiento V3 (Issue #85): off, o internal-egress (solo INTERNAL al proveedor revisado en la UE; exige autorizacion humana expresa)'
+        type: choice
+        options: [off, internal-egress]
+        default: 'off'
 
 permissions: {}
 
@@ -36,6 +41,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           OPERATION: ${{ inputs.operation }}
           CONFIRM: ${{ inputs.confirm }}
+          REASONING: ${{ inputs.reasoning }}
         run: |
           set -euo pipefail
           test "$GITHUB_REF" = "refs/heads/main" || { echo "Solo desde main"; exit 1; }
@@ -44,9 +50,20 @@ jobs:
             || { echo "El entorno oxkio-v3-deploy no tiene revisor obligatorio"; exit 1; }
           echo "$env_json" | jq -e '.deployment_branch_policy.custom_branch_policies == true' > /dev/null \
             || { echo "El entorno oxkio-v3-deploy no restringe ramas"; exit 1; }
+          case "$REASONING" in
+            off|internal-egress) ;;
+            *) echo "Modo de razonamiento no admitido"; exit 1 ;;
+          esac
           case "$OPERATION" in
-            private-revision) test "$CONFIRM" = "CREAR-REVISION-PRIVADA" || { echo "Falta la frase de confirmación"; exit 1; } ;;
-            remove-tag) test "$CONFIRM" = "QUITAR-ETIQUETA" || { echo "Falta la frase de confirmación"; exit 1; } ;;
+            private-revision)
+              if [ "$REASONING" = "internal-egress" ]; then
+                test "$CONFIRM" = "CREAR-REVISION-PRIVADA-CON-RAZONAMIENTO" || { echo "Falta la frase de confirmación del razonamiento"; exit 1; }
+              else
+                test "$CONFIRM" = "CREAR-REVISION-PRIVADA" || { echo "Falta la frase de confirmación"; exit 1; }
+              fi ;;
+            remove-tag)
+              test "$REASONING" = "off" || { echo "remove-tag no admite razonamiento"; exit 1; }
+              test "$CONFIRM" = "QUITAR-ETIQUETA" || { echo "Falta la frase de confirmación"; exit 1; } ;;
           esac
 
   deploy:
@@ -90,6 +107,9 @@ jobs:
         shell: pwsh
         env:
           OPERATION: ${{ inputs.operation }}
+          OXKIO_V3_REASONING_MODE: ${{ inputs.reasoning }}
+          # Revision que sirve el 100 %; solo cambia tras una promocion autorizada (vacia = 00018-9xl).
+          OXKIO_V3_SERVING_REVISION: ${{ vars.OXKIO_V3_SERVING_REVISION }}
           OXKIO_V3_PG_HOST: ${{ vars.OXKIO_V3_PG_HOST }}
           OXKIO_V3_OWNER_UID: ${{ secrets.OXKIO_V3_OWNER_UID }}
           # El wrapper emite el ID token IAM de esta cuenta (STS + generateIdToken), sin claves.

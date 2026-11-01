@@ -18,11 +18,11 @@ function readPngSize(filePath) {
 }
 
 test('serves the single manifest and its public icons through exact routes', () => {
-  assert.match(serverSource, /req\.url === "\/manifest\.webmanifest"/);
+  assert.match(serverSource, /pathname === "\/manifest\.webmanifest"/);
   assert.match(serverSource, /"Content-Type": "application\/manifest\+json; charset=utf-8"/);
-  assert.match(serverSource, /req\.url === "\/icons\/icon-192\.png"/);
-  assert.match(serverSource, /req\.url === "\/icons\/icon-512\.png"/);
-  assert.match(serverSource, /req\.url === "\/icons\/apple-touch-icon\.png"/);
+  assert.match(serverSource, /pathname === "\/icons\/icon-192\.png"/);
+  assert.match(serverSource, /pathname === "\/icons\/icon-512\.png"/);
+  assert.match(serverSource, /pathname === "\/icons\/apple-touch-icon\.png"/);
   assert.doesNotMatch(serverSource, /startsWith\("\/app\/"\)/);
 });
 
@@ -155,7 +155,7 @@ test('Business Hunter loads the shared Firebase bootstrap before its authenticat
   assert.match(bootstrap, /window\.oxkioAuthReady = new Promise/);
   assert.match(bootstrap, /window\.oxkioAuthenticatedFetch = async function/);
   assert.doesNotMatch(html, /initializeApp\(|firebase-app\.js|firebase-auth\.js/);
-  assert.match(serverSource, /req\.url === "\/js\/firebase-authenticated-fetch\.js"/);
+  assert.match(serverSource, /pathname === "\/js\/firebase-authenticated-fetch\.js"/);
   assert.match(serverSource, /app\/js\/firebase-authenticated-fetch\.js|app", "js", "firebase-authenticated-fetch\.js/);
 });
 

@@ -1,7 +1,7 @@
 {
   "schema": "oxkio.continuity-registry/v1",
-  "revision": 33,
-  "updatedAt": "2026-10-18T13:51:44.866Z",
+  "revision": 35,
+  "updatedAt": "2026-11-01T16:06:13.777Z",
   "canon": {
     "path": "KNOWLEDGE-CURATOR/CLIENT-ZERO/XATAI-CLIENT-ZERO-CANON.md",
     "issue": "issue:49",
@@ -1023,6 +1023,105 @@
       "blockedBy": "puerta humana: prueba autenticada de Cliente Cero",
       "version": 1,
       "updatedAt": "2026-10-18T13:51:44.737Z"
+    },
+    {
+      "aliases": [
+        "baseline cloud",
+        "razonamiento cloud",
+        "revision privada v3",
+        "issue 85",
+        "acceso online cliente cero",
+        "portal oxkio"
+      ],
+      "evidence": [
+        {
+          "ref": "commit:82ad311",
+          "kind": "commit",
+          "result": "info",
+          "observedAt": "2026-11-01T14:03:07Z",
+          "source": "git origin/main",
+          "summary": "PR #82 integrada (minimización de correo y agenda)."
+        },
+        {
+          "ref": "run:41308779764",
+          "kind": "observation",
+          "result": "info",
+          "observedAt": "2026-11-01T14:03:55Z",
+          "source": "GitHub Actions oxkio-v3-deploy",
+          "summary": "private-revision PASS de infraestructura: revisión v3r-82ad311 Ready, 0 % de tráfico, IAM sin cambios."
+        },
+        {
+          "ref": "log:v3r-82ad311-startup",
+          "kind": "defect",
+          "result": "failure",
+          "observedAt": "2026-11-01T14:03:25Z",
+          "source": "Cloud Logging de la revisión",
+          "summary": "'V3 Reasoning: not configured': las preguntas naturales reciben la aclaración genérica."
+        },
+        {
+          "ref": "run:41315474743",
+          "kind": "ci_green",
+          "result": "success",
+          "observedAt": "2026-11-01T14:23:48Z",
+          "source": "GitHub Actions CI PR #83",
+          "summary": "8/8 en verde (rutas con query string)."
+        },
+        {
+          "ref": "run:41317395523",
+          "kind": "ci_green",
+          "result": "success",
+          "observedAt": "2026-11-01T14:48:21Z",
+          "source": "GitHub Actions CI PR #84",
+          "summary": "8/8 en verde (vocabulario de memoria y Conectar Google en el chat)."
+        },
+        {
+          "ref": "audit:r0-20261101",
+          "kind": "observation",
+          "result": "info",
+          "observedAt": "2026-11-01T15:30:00Z",
+          "source": "gcloud solo lectura (owner)",
+          "summary": "R0: gen 24; 00018-9xl 100 % (sha256:499e8470…); v3r-82ad311 0 % (sha256:f8d4d36a…); Artifact Registry sin política de limpieza, digests presentes; IAM solo cuenta de despliegue; secretos solo por versión."
+        },
+        {
+          "ref": "audit:neon-backup-20261101",
+          "kind": "defect",
+          "result": "failure",
+          "observedAt": "2026-11-01T15:35:00Z",
+          "source": "repositorio y Secret Manager (solo lectura)",
+          "summary": "Sin respaldo de Neon verificado: sin acceso a la consola ni a la API de Neon; backup-runner offline y solo Approval. Restauración de datos bloqueada (Issue #86)."
+        },
+        {
+          "ref": "docker:candidate-b1a56b3",
+          "kind": "observation",
+          "result": "info",
+          "observedAt": "2026-11-01T15:45:00Z",
+          "source": "Docker local, entorno sintético",
+          "summary": "Imagen candidata: V3 enabled for cohort, razonamiento Off declarado, rutas con y sin query 200, /api y chat 401 (también con token falso), callback sin state 403."
+        },
+        {
+          "ref": "xshop:fd638fa",
+          "kind": "commit",
+          "result": "info",
+          "observedAt": "2026-11-01T16:05:48Z",
+          "source": "XANTALALSHOP rama agent/oxkio-portal-20261101 (repositorio privado)",
+          "summary": "Portal OXKIO V1 (8 páginas) + menú + CMS; bloqueo legal activo; Acceder en estado «en activación» sin enlace; CMS 33/33 fieles; móvil/tableta/escritorio sin desbordamiento; web publicada == fefd83f."
+        }
+      ],
+      "id": "CZ-V3-CLOUD-BASELINE",
+      "project": "OXKIO",
+      "scope": "cloud-run",
+      "title": "Baseline V3 en Cloud Run para Cliente Cero (razonamiento, memoria y acceso)",
+      "priority": "P0",
+      "state": "BLOCKED",
+      "confidence": "high",
+      "requiresRealTest": true,
+      "blockedBy": "puerta humana: autorizar el razonamiento V3 en la nube (egress INTERNAL al proveedor revisado en la UE), merge de la candidata y private-revision con reasoning=internal-egress",
+      "decision": "Referencia verificada: main 82ad311, imagen sha256:f8d4d36a (etiqueta AR 82ad311), revision oxkio-api-staging-v3r-82ad311 al 0 % con etiqueta privada v3-real-82ad311; 00018-9xl sirve el 100 %. PASS de infraestructura (403 anonimo, 401 sin Firebase, health/ready 200), memoria y aprobaciones en PostgreSQL. NO conversacional: arranca con 'V3 Reasoning: not configured'. Una revision solo es conversacional si la prueba privada ve 'V3 Reasoning: ready (openai:gpt-5.6-luna, region eu)'.",
+      "reopenCondition": "No aplica mientras esté abierta.",
+      "nextAction": "José autoriza: merge de la candidata (PR #83, #84 y razonamiento), private-revision con reasoning=internal-egress y la prueba real de Cliente Cero (pregunta natural que devuelve el marcador de PG sin escribirlo en la pregunta). Reversión: remove-tag (QUITAR-ETIQUETA); 00018-9xl no cambia.",
+      "changes": "Alta del baseline con referencias verificadas y el contrato de conversación.",
+      "version": 2,
+      "updatedAt": "2026-11-01T16:06:13.777Z"
     }
   ],
   "events": [
@@ -1436,6 +1535,17 @@
       "name": "audit-closures-github",
       "result": "verified",
       "note": "7/7 cierres verificados contra GitHub"
+    },
+    {
+      "type": "created",
+      "at": "2026-11-01T15:02:18.497Z",
+      "entry": "CZ-V3-CLOUD-BASELINE",
+      "to": "BLOCKED"
+    },
+    {
+      "type": "merged_duplicate",
+      "at": "2026-11-01T16:06:13.777Z",
+      "entry": "CZ-V3-CLOUD-BASELINE"
     }
   ]
 }
