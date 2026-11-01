@@ -813,8 +813,11 @@ test('MU2 concurrent cross-owner interleaving: every foreign operation fails, ev
   const results = await Promise.all(attacks);
   assert.ok(results.every((code) => code === 'mission_not_found'), JSON.stringify(results));
   const convA = JSON.stringify(await r.conversation(a, 'conv-shared')); const convB = JSON.stringify(await r.conversation(b, 'conv-shared'));
-  assert.ok(convA.includes('PRIVATE_A') && !convA.includes('PRIVATE_B'));
-  assert.ok(convB.includes('PRIVATE_B') && !convB.includes('PRIVATE_A'));
+  // Each owner's own answer carries only its own mail; the other's never appears.
+  own.forEach((s, i) => { const text = JSON.stringify(s); if (i % 4 < 2) assert.ok(text.includes(i % 2 === 0 ? 'PRIVATE_A' : 'PRIVATE_B')); assert.ok(!text.includes(i % 2 === 0 ? 'PRIVATE_B' : 'PRIVATE_A')); });
+  // P0 privacy (01/11/2026): an answer built on mail is not kept as conversation context.
+  assert.ok(!convA.includes('PRIVATE_A') && !convA.includes('PRIVATE_B'));
+  assert.ok(!convB.includes('PRIVATE_B') && !convB.includes('PRIVATE_A'));
   own.forEach((s) => assert.notEqual(s.status, 'CANCELLED'));
 });
 

@@ -19,6 +19,26 @@ const REGISTRAR = 'tool:supervised-operation';
 const TERMINAL = ['COMPLETED','FAILED','CANCELLED'];
 const stepResultId=taskId=>'sr-'+createHash('sha256').update(String(taskId)).digest('hex').slice(0,40);
 const PUBLIC_PROVENANCE = ['PUBLIC_DISCOVERY','PUBLIC_WEB'];
+// P0 privacy (01/11/2026): mail and agenda content carries third parties' data
+// (senders, subjects, snippets, event titles, places). It serves the request
+// that needs it, in memory, but is never written to the sealed store: persisted
+// items keep id, provenance, origin and the closed signals only, as soon as the
+// mission can no longer resume (closed() in the runtime). A mission that can
+// still resume keeps its sealed reads: it resumes at the same point, never
+// re-reading, and its evidence is integrity-verified on restore.
+const MINIMIZED_PROVENANCE = ['GMAIL','CALENDAR'];
+const minimizeItem=v=>v&&MINIMIZED_PROVENANCE.includes(v.provenance)?{...v,text:'',minimized:true}:v;
+function minimizeOutput(o){
+ if(!o||!Array.isArray(o.items))return o;
+ const items=o.items.map(minimizeItem);const hidden=new Set(items.filter(v=>v&&v.minimized).map(v=>v.id));
+ // A finding that cites a minimized item would carry its words: claim and quote go too.
+ const synthesis=o.synthesis&&hidden.size?{...o.synthesis,findings:(o.synthesis.findings||[]).map(f=>(f.sourceIds||[]).some(id=>hidden.has(id))?{...f,claim:'',quote:'',minimized:true}:f)}:o.synthesis;
+ return {...o,items,...(o.synthesis?{synthesis}:{})};
+}
+function minimizeState(state){
+ if(!state||!Array.isArray(state.tasks))return state;
+ return {...state,tasks:state.tasks.map(t=>{if(typeof t.output!=='string')return t;let o;try{o=JSON.parse(t.output);}catch{return t;}return {...t,output:JSON.stringify(minimizeOutput(o))};})};
+}
 // Sources are the reads of a plan, the places where information can be found;
 // an analysis, a proposal or a memory write is not one. Labels are plain words.
 const isSource=id=>{const d=DEFINITIONS[id];return !!d&&d.provenance!=='DERIVED'&&!d.explicitRequest&&!d.approval;};
@@ -105,7 +125,9 @@ function createSupervisedRuntime({membershipProvider,planner=null,conversationDe
  // Only queued/running missions stay in memory; everything else reloads from
  // the owner's sealed store, so memory is bounded by the scheduler limits.
  function release(m){if(!m.busy&&missions.get(m.id)===m)missions.delete(m.id);}
- function persist(m){store.put(m.handle,'mission',m.id,{id:m.id,conversationId:m.conversationId,intention:m.intention,query:m.query,searchTerms:m.searchTerms||[],namedSources:m.namedSources||[],rememberContent:m.rememberContent||null,priority:m.priority,plan:m.plan,status:m.status,trace:m.trace,cancelled:m.cancelled,paused:m.paused,gaps:m.gaps||[],result:m.result||null,approvalId:m.approvalId||null,diagnosis:m.diagnosis||null,state:m.state||null,createdAt:m.createdAt});}
+ function persist(m){store.put(m.handle,'mission',m.id,{id:m.id,conversationId:m.conversationId,intention:m.intention,query:m.query,searchTerms:m.searchTerms||[],namedSources:m.namedSources||[],rememberContent:m.rememberContent||null,priority:m.priority,plan:m.plan,status:m.status,trace:m.trace,cancelled:m.cancelled,paused:m.paused,gaps:m.gaps||[],result:(closed(m)?minimizeOutput(m.result):m.result)||null,approvalId:m.approvalId||null,diagnosis:m.diagnosis||null,state:(closed(m)?minimizeState(m.state):m.state)||null,createdAt:m.createdAt});}
+ // Once a mission can never run again, mail and agenda text is minimized.
+ function closed(m){return TERMINAL.includes(m.status)||!!m.cancelled||closedPartial(m);}
  function check(m){ if(m.cancelled)fail('cancelled');if(m.paused)fail('paused'); }
  function snapshot(m){const cost=ledger.mission(m.handle,m.id);return freeze(copy({id:m.id,conversationId:m.conversationId,status:m.status,outcome:m.status==='COMPLETED'?OUTCOMES.CAN_EXECUTE:m.status,result:m.result||null,approvalId:m.approvalId||null,connectionRequests:m.gaps||[],diagnosis:m.diagnosis||null,planSources:labelsOf((m.plan||[]).map(s=>s.capability)),executionEnabled:false,estimatedCostUsd:cost.chargedUsd,actualCostUsd:null,cost,trace:m.trace||[]}));}
  function trace(m,event,fields={}){m.trace.push({event,at:now(),...fields});if(m.trace.length>150)m.trace.shift();}
@@ -486,10 +508,13 @@ function createSupervisedRuntime({membershipProvider,planner=null,conversationDe
   // cannot fall back to an older objective; its context never leaves.
   if(state.outcome===OUTCOMES.BLOCKED){store.put(handle,'conversation',id,{objective:null,lastUser:'',lastResponse:'',derivedFromPrivate:true,missionId:null,status:'BLOCKED',mode:null,audit:[...(prev?.audit||[]),{id:null,at:now(),mode:'OPERATION',outcome:OUTCOMES.BLOCKED,evidence:null,cost:null,trace:[]}].slice(-8),expiresAt:new Date(Date.parse(now())+contextTtlMs).toISOString()});return;}const follow=FOLLOW.test(normalize(query).trim())||REFERENCE.test(normalize(query));
   const privateSources=state.result?.items?.some(v=>!PUBLIC_PROVENANCE.includes(v.provenance));
+  // An answer built on mail or agenda names third parties: it is not kept as
+  // context (a private context never reaches a reasoning resource anyway).
+  const mailOrAgenda=!!state.result?.items?.some(v=>MINIMIZED_PROVENANCE.includes(v.provenance));
   // A mission resumed from another conversation brings its own objective,
   // with that objective's privacy, instead of the bare "continúa".
   const sensitive=identifiesPerson(query)||classifyEgress(query).privacyClass!=='PUBLIC'||privateSources||!!(follow&&prev?.derivedFromPrivate)||(typeof objective==='string'&&(identifiesPerson(objective)||classifyEgress(objective).privacyClass!=='PUBLIC'));
-  store.put(handle,'conversation',id,{objective:typeof objective==='string'?objective.slice(0,2000):follow&&prev?prev.objective:query.slice(0,2000),lastUser:query.slice(0,2000),lastResponse:response.slice(0,3000),derivedFromPrivate:!!sensitive,missionId:state.id||null,status:state.outcome==='NEEDS_APPROVAL'?'NEEDS_APPROVAL':state.status||state.outcome,mode:state.mode||null,audit:[...(prev?.audit||[]),{id:state.id||state.turnId||null,at:now(),mode:state.mode||'OPERATION',outcome:state.outcome||state.status,evidence:state.evidence||null,cost:state.cost||null,trace:state.trace||[]}].slice(-8),...(state.choices?{choices:[...state.choices]}:{}),expiresAt:new Date(Date.parse(now())+contextTtlMs).toISOString()});
+  store.put(handle,'conversation',id,{objective:typeof objective==='string'?objective.slice(0,2000):follow&&prev?prev.objective:query.slice(0,2000),lastUser:query.slice(0,2000),lastResponse:mailOrAgenda?'':response.slice(0,3000),derivedFromPrivate:!!sensitive,missionId:state.id||null,status:state.outcome==='NEEDS_APPROVAL'?'NEEDS_APPROVAL':state.status||state.outcome,mode:state.mode||null,audit:[...(prev?.audit||[]),{id:state.id||state.turnId||null,at:now(),mode:state.mode||'OPERATION',outcome:state.outcome||state.status,evidence:state.evidence||null,cost:state.cost||null,trace:state.trace||[]}].slice(-8),...(state.choices?{choices:[...state.choices]}:{}),expiresAt:new Date(Date.parse(now())+contextTtlMs).toISOString()});
  }
  // The capabilities a decider or planner may see for this request: the owner's
  // catalogue refined by connections, Self Repair and the Privacy Gate. It is
