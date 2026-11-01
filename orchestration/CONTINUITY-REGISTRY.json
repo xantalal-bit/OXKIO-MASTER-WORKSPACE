@@ -1062,7 +1062,7 @@
           "ref": "run:41315474743",
           "kind": "ci_green",
           "result": "success",
-          "observedAt": "2026-11-01T14:50:00Z",
+          "observedAt": "2026-11-01T14:23:48Z",
           "source": "GitHub Actions CI PR #83",
           "summary": "8/8 en verde (rutas con query string)."
         },
@@ -1070,7 +1070,7 @@
           "ref": "run:41317395523",
           "kind": "ci_green",
           "result": "success",
-          "observedAt": "2026-11-01T15:20:00Z",
+          "observedAt": "2026-11-01T14:48:21Z",
           "source": "GitHub Actions CI PR #84",
           "summary": "8/8 en verde (vocabulario de memoria y Conectar Google en el chat)."
         },
@@ -1078,7 +1078,7 @@
           "ref": "audit:r0-20261101",
           "kind": "observation",
           "result": "info",
-          "observedAt": "2026-11-01T16:40:00Z",
+          "observedAt": "2026-11-01T15:30:00Z",
           "source": "gcloud solo lectura (owner)",
           "summary": "R0: gen 24; 00018-9xl 100 % (sha256:499e8470…); v3r-82ad311 0 % (sha256:f8d4d36a…); Artifact Registry sin política de limpieza, digests presentes; IAM solo cuenta de despliegue; secretos solo por versión."
         },
@@ -1086,7 +1086,7 @@
           "ref": "audit:neon-backup-20261101",
           "kind": "defect",
           "result": "failure",
-          "observedAt": "2026-11-01T16:45:00Z",
+          "observedAt": "2026-11-01T15:35:00Z",
           "source": "repositorio y Secret Manager (solo lectura)",
           "summary": "Sin respaldo de Neon verificado: sin acceso a la consola ni a la API de Neon; backup-runner offline y solo Approval. Restauración de datos bloqueada (Issue #86)."
         },
@@ -1094,7 +1094,7 @@
           "ref": "docker:candidate-b1a56b3",
           "kind": "observation",
           "result": "info",
-          "observedAt": "2026-11-01T17:00:00Z",
+          "observedAt": "2026-11-01T15:45:00Z",
           "source": "Docker local, entorno sintético",
           "summary": "Imagen candidata: V3 enabled for cohort, razonamiento Off declarado, rutas con y sin query 200, /api y chat 401 (también con token falso), callback sin state 403."
         },
@@ -1102,7 +1102,7 @@
           "ref": "xshop:fd638fa",
           "kind": "commit",
           "result": "info",
-          "observedAt": "2026-11-01T18:00:00Z",
+          "observedAt": "2026-11-01T16:05:48Z",
           "source": "XANTALALSHOP rama agent/oxkio-portal-20261101 (repositorio privado)",
           "summary": "Portal OXKIO V1 (8 páginas) + menú + CMS; bloqueo legal activo; Acceder en estado «en activación» sin enlace; CMS 33/33 fieles; móvil/tableta/escritorio sin desbordamiento; web publicada == fefd83f."
         }
